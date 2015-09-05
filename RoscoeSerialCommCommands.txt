@@ -1,0 +1,63 @@
+M and G Codes issued to Arduino processing board via serial port for ROSCOE:
+
+These are the relevant commands for the Arduino attached board that issues serial commands to the motor
+controller and receives and disseminates status reports and ultrasonic sensings. The commands are issued
+over the serial port with the relemant M and G codes
+
+Motor:
+G5 - Absolute command motor C<Channel> P<motor power -1000 to 1000>
+G4  - dwell P or S P[milliseconds] S[seconds] so G4 S1 waits 1 second
+
+
+On a motor problem the following header is published. The vaues require consulting the manual
+<motorfault>
+1 [fault code]
+
+Ultrasonics:
+There are 2, lower and that in the Parrt head. Lower unit is ardunio attached, upper comes over UDP.
+The header is 
+<ultrasonic>
+1 [value]
+M301 P22 - Starts the ultrasonic sensing on port 22, NOTE: Port 22 is currently the ultrasonic lower front port of ROSCOE.
+M300 P22 - Pulses the ultrasonic sensing
+
+Battery:
+M444 V[voltage*10] - sets the warning threshold for motor batter level to the 'V' value, REMEMBER, TIMES 10!
+when the message starts publisheng, the battery has fallen below the preset level and the following message occurs:
+<battery>
+1 [voltage]
+
+EEPROM:
+M500 Store settings in EEPROM
+M501 Read settings from EEPROM
+M502 Revert to default settings
+M503 print settings currently in memory
+
+Status:
+M700 - retrieve general status - avail mem, etc.
+M798 - motor control status
+<motorcontrol>
+1 [voltage]
+2 [amps]
+3 [fault]
+4 [status]
+5 [counter brushless 1]
+6 [counter brushless 2]
+7 [brushless speed 1]
+8 [brushless speed 2]
+
+Control:
+M799 - Command Emergency stop
+M802 - Acquire analog pin data M802 Pnn Sxxx Mxxx P=Pin number, S=number readings, M=microseconds per reading
+<analogpin>
+1 [value]
+M115 - Firmware rev
+M85 S[seconds] - set max inactive time
+M45 - Analog write pin - set up PWM P[pin] S[analog val] T[timer mode 0-3] R[resolution 8,9,10 bits] X[prescale 0-7]
+M42 - Write digital pin P<pin> S<val>
+M43 P[pin] -Read from digital pin P<pin>
+<digitalpin>
+1 [value]
+M44 P[pin] -Read digital pin with pullup: M44 P[pin]
+
+
