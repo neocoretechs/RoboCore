@@ -58,6 +58,7 @@ M42 - Write digital pin P<pin> S<val>
 M43 P[pin] -Read from digital pin P<pin>
 <digitalpin>
 1 [value]
-M44 P[pin] -Read digital pin with pullup: M44 P[pin]
+M44 P[pin] - Read digital pin with pullup: M44 P[pin]
+M226 P[pin number] S[pin state] - Wait until the specified pin reaches the state required. State is 0 low, 1 High, -1 for the opposite of current state.
 
 
