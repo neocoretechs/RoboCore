@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore;
 
+import java.util.List;
+
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -11,6 +13,7 @@ import sensor_msgs.Range;
 import com.neocoretechs.talker.VoxHumana;
 
 import diagnostic_msgs.DiagnosticStatus;
+import diagnostic_msgs.KeyValue;
 
 /**
  * StatusAlerts comprise robocore/status - Which has 'List' of Key/Value messages in diagnostic_msgs.DiagnosticStatus
@@ -19,7 +22,7 @@ import diagnostic_msgs.DiagnosticStatus;
  *
  */
 public class StatusAlertSubs extends AbstractNodeMain {
-	private static boolean speak = false;
+	private static boolean speak = true;
 	public static VoxHumana speaker = null;
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -43,6 +46,10 @@ public class StatusAlertSubs extends AbstractNodeMain {
 				System.out.println("Status "+message.getMessage());
 				if( speak )
 					speaker.doSpeak(message.getMessage());
+				List<KeyValue> diagMsgs = message.getValues();
+				for( KeyValue msg : diagMsgs) {
+					speaker.doSpeak(msg.getValue());
+				}
 			}
 			catch (Throwable e)
 			{
