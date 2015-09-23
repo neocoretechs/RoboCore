@@ -22,6 +22,7 @@ import diagnostic_msgs.KeyValue;
  *
  */
 public class StatusAlertSubs extends AbstractNodeMain {
+	private static boolean DEBUG = false;
 	private static boolean speak = true;
 	public static VoxHumana speaker = null;
 	@Override
@@ -44,11 +45,17 @@ public class StatusAlertSubs extends AbstractNodeMain {
 			try
 			{
 				System.out.println("Status "+message.getMessage());
-				if( speak )
-					speaker.doSpeak(message.getMessage());
-				List<KeyValue> diagMsgs = message.getValues();
-				for( KeyValue msg : diagMsgs) {
-					speaker.doSpeak(msg.getValue());
+				if( speak ) {
+					StringBuilder sb = new StringBuilder();
+					sb.append(message.getMessage()+"\r\n");
+					List<KeyValue> diagMsgs = message.getValues();
+					if( diagMsgs != null ) {
+						for( KeyValue msg : diagMsgs) {
+							sb.append(msg.getValue()+"\r\n");
+							//speaker.doSpeak(msg.getValue());
+						}
+					}
+					speaker.doSpeak(sb.toString());
 				}
 			}
 			catch (Throwable e)
@@ -63,7 +70,8 @@ public class StatusAlertSubs extends AbstractNodeMain {
 			@Override
 			public void onNewMessage(Range message) {
 				float range = message.getRange();
-				System.out.println("Floor Range "+range);
+				if( DEBUG )
+					System.out.println("Floor Range "+range);
 				try {
 					if(speak && (message.getRange() < 300.0) ) {
 						speaker.doSpeak("Excuse me but you are "+(int)range+" centimeters too close to my feet");
@@ -78,7 +86,8 @@ public class StatusAlertSubs extends AbstractNodeMain {
 			@Override
 			public void onNewMessage(Range message) {
 				float range = message.getRange();
-				System.out.println("Head Range "+range);
+				if( DEBUG )
+					System.out.println("Head Range "+range);
 				try {
 					if( speak && message.getRange() < 350.0 ) {
 						speaker.doSpeak("Excuse me but you are "+(int)range+" centimeters too close to my head");
