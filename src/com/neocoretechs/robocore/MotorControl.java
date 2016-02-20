@@ -11,7 +11,7 @@ import com.microcaliperdevices.saje.GCodeUp;
  * @author jg
  *
  */
-public class MotorControl implements org.ros.ardrone.MotorControlInterface2D {
+public class MotorControl implements MotorControlInterface2D {
 	float yawIMURads;
 	int yawTargetDegrees;
 	int targetDistance;
