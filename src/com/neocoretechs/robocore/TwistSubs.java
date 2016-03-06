@@ -16,7 +16,7 @@ import org.ros.node.topic.Subscriber;
  *
  */
 public class TwistSubs extends AbstractNodeMain {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private String motorControlHost = null;
 	NavListenerMotorControlInterface navListener = null;
 	private boolean isMoving;
