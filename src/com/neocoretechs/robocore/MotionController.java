@@ -92,6 +92,21 @@ public class MotionController extends AbstractNodeMain {
 		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("ardrone/temperature", sensor_msgs.Temperature._TYPE);
 		Subscriber<sensor_msgs.FluidPressure> subspress = connectedNode.newSubscriber("ardrone/pressure", sensor_msgs.FluidPressure._TYPE);
 		Subscriber<geometry_msgs.Quaternion> substag = connectedNode.newSubscriber("ardrone/image_tag", geometry_msgs.Quaternion._TYPE);
+		Subscriber<sensor_msgs.PointCloud> subsrange = connectedNode.newSubscriber("robocore/kinect", sensor_msgs.PointCloud._TYPE);
+
+		subsrange.addMessageListener(new MessageListener<sensor_msgs.PointCloud>() {
+			@Override
+			public void onNewMessage(sensor_msgs.PointCloud message) {
+				List<geometry_msgs.Point32> cloud = message.getPoints();
+				if( DEBUG )
+					System.out.println("Kinect.."+cloud.size()+" points..");
+				try {
+			
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}	
+			}
+		});
 		
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 		@Override

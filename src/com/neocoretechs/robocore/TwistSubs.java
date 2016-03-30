@@ -48,21 +48,7 @@ public class TwistSubs extends AbstractNodeMain {
 		
 		//final Log log = connectedNode.getLog();
 		Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
-		Subscriber<sensor_msgs.PointCloud> subsrange = connectedNode.newSubscriber("ardrone/range", sensor_msgs.PointCloud._TYPE);
 
-		subsrange.addMessageListener(new MessageListener<sensor_msgs.PointCloud>() {
-			@Override
-			public void onNewMessage(sensor_msgs.PointCloud message) {
-				List<geometry_msgs.Point32> range = message.getPoints();
-				if( DEBUG )
-					System.out.println("Floor Range "+range);
-				try {
-			
-				} catch (Throwable e) {
-					e.printStackTrace();
-				}	
-			}
-		});
 		
 		/**
 		 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
