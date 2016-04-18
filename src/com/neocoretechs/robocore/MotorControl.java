@@ -1,10 +1,12 @@
 package com.neocoretechs.robocore;
 
-import com.microcaliperdevices.saje.CoreContainer;
-import com.microcaliperdevices.saje.GCodeUp;
+import java.io.IOException;
+
+import com.microcaliperdevices.saje.io.machine.dataport.ByteSerialDataPort;
 /**
- * The motor control endpoint before standalone server that controls serial data.
- * This class opens a socket to the remote standalone serial server that manages
+ * The motor control endpoint that controls serial data.
+ * This class talks to the serial drivers that communicate with the attached USB SBC. In fact, this is code that talks to the
+ * RS232 board that converts to TTL that talks to the SBC that runs the embedded code that manages
  * the comm to the motor controller.
  * The relevant methods generate Twist messages that can be multiplexed to the Ros bus
  * and sent further on.
@@ -61,25 +63,11 @@ public class MotorControl implements MotorControlInterface2D {
 	SetPointInfo leftWheel, rightWheel;
 	OdomInfo odomInfo;
 	TwistInfo twistInfo;
-
-	String remoteMotorControlHost = "localhost";
 	
-	public MotorControl(String remoteMotorControlHost) { 
-		this.remoteMotorControlHost = remoteMotorControlHost;
+	public MotorControl() { 
 		init(); 
 	}
-	/**
-	 * Updates from encoders or IMU, forward velocity
-	 * @param x
-	 */
-	public void setX(float x) {
-		leftWheel.prevX = leftWheel.X;
-		leftWheel.X = x;
 
-		rightWheel.prevX = rightWheel.X;
-		rightWheel.X = x;
-		updateSpeed();
-	}
 	
 	/* Convert meters per second to ticks per time frame */
 	private int SpeedToTicks(float v) {
@@ -96,8 +84,9 @@ public class MotorControl implements MotorControlInterface2D {
 	 * if x and theta not 0 its rotation about a point in space
 	 *  @param x The radius from the center point of the arc about which we are rotating, if 0 turn in place
 	 *  @param th The 2PI polar measure of arc segment we are traversing, if 0 pure forward/back motion
+	 * @throws IOException 
 	 */
-	public void setMotorSpeed(float x, float th) {
+	public void setMotorSpeed(float x, float th) throws IOException {
 
 		float spd_left, spd_right;
   
@@ -107,11 +96,9 @@ public class MotorControl implements MotorControlInterface2D {
 		if (x == 0 && th == 0) {
 			moving = false;
 			String motorCommand = "G5 C1 P0";
-			CoreContainer.RemoteClient cc = new CoreContainer.RemoteClient(remoteMotorControlHost, GCodeUp.getPort());
-			cc.put(motorCommand);
-			cc = new CoreContainer.RemoteClient(remoteMotorControlHost, GCodeUp.getPort());
+			ByteSerialDataPort.getInstance().writeLine(motorCommand);
 			motorCommand = "G5 C2 P0";
-			cc.put(motorCommand);
+			ByteSerialDataPort.getInstance().writeLine(motorCommand);
 			return;
 		}
 
@@ -149,8 +136,8 @@ public class MotorControl implements MotorControlInterface2D {
 		/* Convert speeds to ticks per frame */
 		leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
 		rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
-		
-		setX(x); // calls updatePID, (which calls doPID on each channel), then sets motor speed
+
+		updateSpeed();
 	}
 
 	/**
@@ -185,7 +172,7 @@ public class MotorControl implements MotorControlInterface2D {
 	}
 
 	/* Read the encoder values and call the PID routine */
-	protected void updateSpeed() {
+	protected void updateSpeed() throws IOException {
 		/* Read the encoders */
 		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
 		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
@@ -206,12 +193,12 @@ public class MotorControl implements MotorControlInterface2D {
 		System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
 		// we invert channel 1 since its a mirror of the orientation of channel 2
 		leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
+		
 		String motorCommand = "G5 C1 P"+String.valueOf((int)leftWheel.TargetSpeed);
-		CoreContainer.RemoteClient cc = new CoreContainer.RemoteClient(remoteMotorControlHost, GCodeUp.getPort());
-		cc.put(motorCommand);
-		cc = new CoreContainer.RemoteClient(remoteMotorControlHost, GCodeUp.getPort());
+		ByteSerialDataPort.getInstance().writeLine(motorCommand);
+		
 		motorCommand = "G5 C2 P"+String.valueOf((int)rightWheel.TargetSpeed);
-		cc.put(motorCommand);
+		ByteSerialDataPort.getInstance().writeLine(motorCommand);
 	}
 
 	private void clearPID() {
@@ -230,7 +217,7 @@ public class MotorControl implements MotorControlInterface2D {
 		//encoders.YAxisReset();
 	}
 	
-	public void commandStop() {
+	public void commandStop() throws IOException {
 		setMotorSpeed(0.0f, 0.0f);
 	}
 
@@ -265,11 +252,11 @@ public class MotorControl implements MotorControlInterface2D {
 		//nh.subscribe(cmdVelSub);
 	}
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		if( args.length < 1 ) {
-			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MotorControl <remote motor control host>");
+			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MotorControl");
 		}
-		MotorControl mc = new MotorControl(args[0]);
+		MotorControl mc = new MotorControl();
 		//mc.setMotorSpeed(100.0f, 1f);
 		/*
 		mc.moveRobotAbsolute(.5f, 45, 100, 1);
@@ -279,11 +266,11 @@ public class MotorControl implements MotorControlInterface2D {
 		mc.moveRobotAbsolute(.0f, 0, 100, 1);
 		*/
 		
-		mc.moveRobotRelative(.5f, 45, 100, 1);
-		mc.moveRobotRelative(-.25f, 45, 100, 1);
-		mc.moveRobotRelative(.25f, 45, 100, 1);
-		mc.moveRobotRelative(-.25f, 225, 100, 1);
-		mc.moveRobotRelative(.0f, 0, 100, 1);
+		mc.moveRobotRelative(.5f, 45, 100);
+		mc.moveRobotRelative(-.25f, 45, 100);
+		mc.moveRobotRelative(.25f, 45, 100);
+		mc.moveRobotRelative(-.25f, 225, 100);
+		mc.moveRobotRelative(.0f, 0, 100);
 
 	}
 	/**
@@ -296,8 +283,9 @@ public class MotorControl implements MotorControlInterface2D {
 	 * @param targetDistance target distance to travel in mm
 	 * @param targetTime time in which to travel desired distance in seconds
 	 * 	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
+	 * @throws IOException 
 	 */
-	public TwistInfo moveRobotAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance, int targetTime) {
+	public TwistInfo moveRobotAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
 
 	        //while (true) {
 
@@ -358,8 +346,9 @@ public class MotorControl implements MotorControlInterface2D {
 	 * @param targetDistance target distance to travel in mm
 	 * @param targetTime time in which to travel desired distance in seconds
 	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
+	 * @throws IOException 
 	 */
-	public TwistInfo moveRobotRelative(float yawIMURads, int yawTargetDegrees, int targetDistance, int targetTime) {
+	public TwistInfo moveRobotRelative(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
 	        //while (true) {
 
 	                //leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
@@ -409,7 +398,7 @@ public class MotorControl implements MotorControlInterface2D {
 	        //}
 	}
 	
-	public float yawDegrees(float yaw) {
+	public static float yawDegrees(float yaw) {
 		float yaw_degrees = (float) (yaw * 180.0 / Math.PI); // conversion to degrees
 		if( yaw_degrees < 0 ) yaw_degrees += 360.0; // convert negative to positive angles
 		return yaw_degrees;
@@ -420,15 +409,15 @@ public class MotorControl implements MotorControlInterface2D {
 	 * and reduce motor rate by intermittent commandStop until values are acceptable.
 	 * The ARDrone US seems to flatten everything to 0 when objects 200mm closer or less
 	 * this is called by the chain or responsibility emanating from the cmd_vel topic.
+	 * @throws IOException 
 	 */
 	@Override
-	public boolean move2DAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance, int targetTime, float[] accelDeltas, int[] ranges) {
+	public boolean move2DAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException {
 		System.out.println("Motion control Move 2D Abs: "+yawTargetDegrees);
 		synchronized( mutex ) {
 			this.yawIMURads = yawIMURads;
 			this.yawTargetDegrees = yawTargetDegrees;
 			this.targetDistance = targetDistance;
-			this.targetTime = targetTime;
 			this.accelDeltas = accelDeltas;
 			this.ranges = ranges;
 		}
@@ -456,7 +445,7 @@ public class MotorControl implements MotorControlInterface2D {
 				this.targetDistance = 0;
 			}
 		}
-		moveRobotAbsolute(this.yawIMURads, this.yawTargetDegrees, this.targetDistance, this.targetTime);	
+		moveRobotAbsolute(this.yawIMURads, this.yawTargetDegrees, this.targetDistance);	
 		return true;
 	}
 	/**
@@ -464,15 +453,15 @@ public class MotorControl implements MotorControlInterface2D {
 	 * and reduce motor rate by intermittent commandStop until values are acceptable.
 	 * The ARDrone US seems to flatten everything to 0 when objects 200mm closer or less
 	 * this is called by the chain or responsibility emanating from the cmd_vel topic.
+	 * @throws IOException 
 	 */
 	@Override
-	public boolean move2DRelative(float yawIMURads, int yawTargetDegrees, int targetDistance, int targetTime, float[] accelDeltas, int[] ranges) {
+	public boolean move2DRelative(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException {
 		System.out.println("Motion control Move 2D Rel: "+yawTargetDegrees);
 		synchronized( mutex ) {
 			this.yawIMURads = yawIMURads;
 			this.yawTargetDegrees = yawTargetDegrees;
 			this.targetDistance = targetDistance;
-			this.targetTime = targetTime;
 			this.accelDeltas = accelDeltas;
 			this.ranges = ranges;
 		}
@@ -502,7 +491,7 @@ public class MotorControl implements MotorControlInterface2D {
 			this.targetDistance = 0;
 		}
 		System.out.println("MotorControl moving robot relative:"+this.yawIMURads+" "+this.yawTargetDegrees+" "+this.targetDistance+" "+this.targetTime);
-		moveRobotRelative(this.yawIMURads, this.yawTargetDegrees, this.targetDistance, this.targetTime);	
+		moveRobotRelative(this.yawIMURads, this.yawTargetDegrees, this.targetDistance);	
 		return true;
 	}
 

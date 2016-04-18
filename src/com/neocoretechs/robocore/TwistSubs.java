@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -17,7 +18,8 @@ import org.ros.node.topic.Subscriber;
  */
 public class TwistSubs extends AbstractNodeMain {
 	private static boolean DEBUG = true;
-	private String motorControlHost = null;
+	//private String motorControlHost = null;
+	private MotorControlInterface2D motorControlHost;
 	NavListenerMotorControlInterface navListener = null;
 	private boolean isMoving;
 	
@@ -38,6 +40,7 @@ public class TwistSubs extends AbstractNodeMain {
 		}
 		*/
 		// Look for the __motorcontrol:=host on the special remappings of the command line
+		/*
 		Map<String,String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.get("__motorcontrol") != null )
 			motorControlHost = remaps.get("__motorcontrol");
@@ -45,7 +48,8 @@ public class TwistSubs extends AbstractNodeMain {
 			motorControlHost = "127.0.0.1";
 		
 		System.out.println("Motor control host set to "+motorControlHost);	
-		
+		*/
+		motorControlHost = new MotorControl();
 		//final Log log = connectedNode.getLog();
 		Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 
@@ -59,13 +63,27 @@ public class TwistSubs extends AbstractNodeMain {
 		 * in that case is the linear travel, otherwise the distance is the diameter of the arc segment.
 		 * If we get commands on the cmd_vel topic we assume we are moving, if we do not get the corresponding IMU readings, we have a problem
 		 * If we get a 0,0 on the X,yaw move we stop. If we dont see stable IMU again we have a problem, Houston.
+		 * 'targetDist' is x. if x = 0 we are going to turn in place.
+		 *  If we are turning in place and th < 0, turn left. if th >= 0 turn right
+		 *  If x != 0 and th = 0 its a forward or backward motion
+		 *  If x != 0 and th != 0 its a rotation around a point in space with forward motion, describing an arc.
+		 *  theta is th and gets calculated as difference of last imu and wheel theta.
+		 * // Rotation about a point in space
+		 *		if( th < 0 ) { // left
+		 *			spd_left = (float) (x - th * wheelTrack / 2.0);
+		 *			spd_right = (float) (x + th * wheelTrack / 2.0);
+		 *		} else {
+		 *			spd_right = (float) (x - th * wheelTrack / 2.0);
+		 *			spd_left = (float) (x + th * wheelTrack / 2.0);
+		 *		}
 		 */
 		substwist.addMessageListener(new MessageListener<geometry_msgs.Twist>() {
 		@Override
 		public void onNewMessage(geometry_msgs.Twist message) {
 			geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 			val = message.getLinear();
-			float targetPitch = (float) val.getX();
+			int targetPitch = (int) val.getX();
+			int targetDist = (int) val.getY();
 			val = message.getAngular();
 			float targetYaw = (float) val.getZ();
 
@@ -73,9 +91,15 @@ public class TwistSubs extends AbstractNodeMain {
 					isMoving = false;
 			else
 					isMoving = true;
-	
-			System.out.println("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw+" euler:"+targetPitch);
+			if( DEBUG )
+				System.out.println("Robot commanded to moveLINY:" + targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
 			//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
+			try {
+				motorControlHost.moveRobotRelative(targetYaw, targetPitch, targetDist);
+			} catch (IOException e) {
+				System.out.println("there was a problem communicating with motor controller:"+e);
+				e.printStackTrace();
+			}
 		}
 		});
 	}

@@ -151,7 +151,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					rangemsg.setRange(range.floatValue());
 					rangepub.publish(rangemsg);
 					Thread.sleep(1);
-					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange());
+					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange()+" size:"+UltrasonicListener.data.size());
 					upSeq = true;
 				}				
 			

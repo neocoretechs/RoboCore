@@ -104,8 +104,8 @@ public class VideoRanger extends AbstractNodeMain
 		    
 			// search center line from offsets
 			// look for contrast diff
-			int colmin = 321;
-			int colmax = 324;
+			int colmin = 329;
+			int colmax = 331;
 			int pixmaxR = 0;
 			int pixmaxG = 0;
 			int pixmaxB = 0;
@@ -113,7 +113,7 @@ public class VideoRanger extends AbstractNodeMain
 			int maxry = 0;
 			int rowMax = 0;
 			int colMax = 0;
-			for(int row = 187; row < 380; row++) {
+			for(int row = 180; row < 380; row++) {
 				for(int col = colmin; col < colmax; col++) {
 					int imgstart = row*3*W + 3*col;
 					int bimgstart = ibuf[imgstart];
@@ -125,9 +125,13 @@ public class VideoRanger extends AbstractNodeMain
 					
 					maxry = toGrey(bimgstart, bimgstart1, bimgstart2);
 					
+					System.out.println("row: "+row+" col:"+col+" scale:"+maxry);
+					
 					//Gray = ( Max(Red, Green, Blue) + Min(Red, Green, Blue) ) / 2
 					
 					if( maxry > pixmaxry ) {
+						/*
+					}
 						// check 4 quadrants for same basic pix value
 						int colm = row*3*W + 3*(col-1);
 						int colp = row*3*W + 3*(col+1);
@@ -168,13 +172,15 @@ public class VideoRanger extends AbstractNodeMain
 						
 						if( Math.abs(maxry-maxryp0) < 5 && Math.abs(maxry-maxryp1) < 5 && 
 							Math.abs(maxry-maxryp2) < 5 && Math.abs(maxry-maxryp3) < 5) {
+							*/
+						
 								pixmaxB = bimgstart;
 								pixmaxG = bimgstart1;
 								pixmaxR = bimgstart2;
 								rowMax = row;
 								colMax = col;
 								pixmaxry = maxry;
-						}
+						//}
 					}
 				}
  			}
@@ -183,7 +189,9 @@ public class VideoRanger extends AbstractNodeMain
 
 	        // Calculate range in cm based on bright pixel location, and setup specific constants
 	        range = h_cm / Math.tan(pixels_from_center * gain + offset);
-
+	        // check invalid value
+	        if( range < 0 )
+	        	return;
 			System.out.println("Range:"+range+". Brightest @ "+rowMax+","+colMax+" pixel:"+pixmaxB+","+pixmaxG+","+pixmaxR+" grey:"+pixmaxry);
 			
 			if( mode.equals("display")) {
@@ -211,12 +219,12 @@ public class VideoRanger extends AbstractNodeMain
 
 	private int toGrey(int b, int g, int r) {
 		// standard: 
-		return (int) (b + g + (r*2))/3;
+		//return (int) (b + g + (r*2))/3;
 		// desaturated: return (Math.max(Math.max(p32, p31), p30) +(Math.min(Math.min(p32, p31), p30)))/2;
 		// R-Y algorithm to convert color image to grayscale. The conversion coefficients are:
 		//	Red: 0.5;
 		//	Green: 0.419;
 		//	Blue: 0.081.
-		//return (int) (b *.419 + g * .081 + r * .7);
+		return (int) (b *.419 + g * .081 + r * .5);
 	}
 }
