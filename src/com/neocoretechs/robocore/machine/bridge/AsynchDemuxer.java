@@ -119,11 +119,13 @@ public class AsynchDemuxer implements Runnable {
 						}
 						int reading = AbstractMachine.getReadingNumber(readLine);
 						int data =  AbstractMachine.getReadingValueInt(readLine);
-						//if( Props.DEBUG ) System.out.println(readLine);
+						if( DEBUG ) 
+							System.out.println("Ultrasonic retrieveData:"+readLine);
 						MachineReading mr = new MachineReading(1, reading, reading+1, data);
 						mb.add(mr);
 				}
-				//if( Props.DEBUG) System.out.println("Signal end ultrasonic...");
+				if( DEBUG) 
+					System.out.println("Signal end ultrasonic...");
 				mb.signalEnd();
 			}
 		});

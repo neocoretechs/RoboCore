@@ -23,7 +23,9 @@ import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
+import org.ros.node.topic.Subscriber;
 import org.ros.internal.loader.CommandLineLoader;
+import org.ros.message.MessageListener;
 import org.ros.message.Time;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
@@ -40,6 +42,9 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
+	private MotorControlInterface2D motorControlHost;
+	NavListenerMotorControlInterface navListener = null;
+	private boolean isMoving;
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -101,6 +106,61 @@ public void onStart(final ConnectedNode connectedNode) {
 		e.printStackTrace();
 		return;
 	}
+	
+	motorControlHost = new MotorControl();
+	
+	Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
+
+	
+	/**
+	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
+	 * angular Z (yaw) and send them to motor control. This results in motion planning computing a turn which
+	 * involves rotation about a point in space located at a distance related to speed and angular velocity. The distance
+	 * is used to compute the radius of the arc segment traversed by the wheel track to make the turn. If not moving we can
+	 * make the distance 0 and rotate about a point in space, otherwise we must inscribe an appropriate arc. The distance
+	 * in that case is the linear travel, otherwise the distance is the diameter of the arc segment.
+	 * If we get commands on the cmd_vel topic we assume we are moving, if we do not get the corresponding IMU readings, we have a problem
+	 * If we get a 0,0 on the X,yaw move we stop. If we dont see stable IMU again we have a problem, Houston.
+	 * 'targetDist' is x. if x = 0 we are going to turn in place.
+	 *  If we are turning in place and th < 0, turn left. if th >= 0 turn right
+	 *  If x != 0 and th = 0 its a forward or backward motion
+	 *  If x != 0 and th != 0 its a rotation around a point in space with forward motion, describing an arc.
+	 *  theta is th and gets calculated as difference of last imu and wheel theta.
+	 * // Rotation about a point in space
+	 *		if( th < 0 ) { // left
+	 *			spd_left = (float) (x - th * wheelTrack / 2.0);
+	 *			spd_right = (float) (x + th * wheelTrack / 2.0);
+	 *		} else {
+	 *			spd_right = (float) (x - th * wheelTrack / 2.0);
+	 *			spd_left = (float) (x + th * wheelTrack / 2.0);
+	 *		}
+	 */
+	
+	substwist.addMessageListener(new MessageListener<geometry_msgs.Twist>() {
+	@Override
+	public void onNewMessage(geometry_msgs.Twist message) {
+		geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		val = message.getLinear();
+		int targetPitch = (int) val.getX();
+		int targetDist = (int) val.getY();
+		val = message.getAngular();
+		float targetYaw = (float) val.getZ();
+
+		if( targetPitch == 0.0 && targetYaw == 0.0 )
+				isMoving = false;
+		else
+				isMoving = true;
+		if( DEBUG )
+			System.out.println("Robot commanded to moveLINY:" + targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
+		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
+		try {
+			motorControlHost.moveRobotRelative(targetYaw, targetPitch, targetDist);
+		} catch (IOException e) {
+			System.out.println("there was a problem communicating with motor controller:"+e);
+			e.printStackTrace();
+		}
+	}
+	});
 	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();

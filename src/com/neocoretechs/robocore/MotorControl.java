@@ -2,7 +2,9 @@ package com.neocoretechs.robocore;
 
 import java.io.IOException;
 
-import com.microcaliperdevices.saje.io.machine.dataport.ByteSerialDataPort;
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
+
+
 /**
  * The motor control endpoint that controls serial data.
  * This class talks to the serial drivers that communicate with the attached USB SBC. In fact, this is code that talks to the

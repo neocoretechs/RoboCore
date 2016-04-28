@@ -4,17 +4,16 @@
 package com.neocoretechs.robocore.machine.bridge;
 
 import java.util.concurrent.ArrayBlockingQueue;
-
 import com.neocoretechs.robocore.ThreadPoolManager;
-
 
 /**
  * @author jg
  *
  */
 public class UltrasonicListener implements Runnable {
+	public static boolean DEBUG = true;
 	public static ArrayBlockingQueue<Integer> data = new ArrayBlockingQueue<Integer>(1024);
-	public static int deleteThreshold = 25; // number of readings before clear
+	public static int deleteThreshold = 1024; // number of readings before clear
 	private static UltrasonicListener instance = null;
 	public static UltrasonicListener getInstance() { 
 		if(instance == null)
@@ -39,6 +38,8 @@ public class UltrasonicListener implements Runnable {
 			try {
 					MachineReading mr = MachineBridge.getInstance("ultrasonic").take();
 					if( mr != null ) {
+						if( DEBUG )
+							System.out.println(mr);
 						data.add(new Integer(mr.getReadingValInt()));
 					}
 			} catch(IndexOutOfBoundsException ioobe) {}
