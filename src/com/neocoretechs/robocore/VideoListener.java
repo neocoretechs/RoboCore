@@ -3,24 +3,24 @@ package com.neocoretechs.robocore;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
-//import java.awt.image.MemoryImageSource;
 import java.awt.image.WritableRaster;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 
-import org.jboss.netty.buffer.ChannelBuffer;
+
+
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.twilight.h264.decoder.AVFrame;
-import com.twilight.h264.player.FrameUtils;
 import com.twilight.h264.player.PlayerFrame;
 
 import sensor_msgs.Image;
@@ -37,7 +37,7 @@ import sensor_msgs.Image;
  */
 public class VideoListener extends AbstractNodeMain 
 {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
     private BufferedImage image = null;
     private PlayerFrame displayPanel;
     JFrame frame;
@@ -75,22 +75,37 @@ public class VideoListener extends AbstractNodeMain
 
 		@Override
 		public void onNewMessage(Image img) {
-			ChannelBuffer cb = img.getData();
+			ByteBuffer cb = img.getData();
 			byte[] buffer = cb.array(); // 3 byte BGR
-			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
-			WritableRaster raster = (WritableRaster) image.getRaster();
-			if( ibuf == null )
-				ibuf = new int[buffer.length];
-			boolean isame = true;
-			for(int i = 0; i < buffer.length; i++) {
-				if( ibuf[i] != buffer[i] )
-					isame = false;
-				ibuf[i] = buffer[i];
+			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
+			if( DEBUG ) {
+				System.out.println("New image "+img.getWidth()+","+img.getHeight()+" size:"+buffer.length/*ib.limit()*/);
 			}
-			if( isame )
-				return;
+			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
+			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
+			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+			WritableRaster raster = (WritableRaster) image.getRaster();
+			int ibsize = img.getHeight() * img.getWidth();
+			if( ibuf == null )
+				ibuf = new int[ibsize * 4];
+			int iup = 0;
+			int ip = 0;
+			for(int i = 0; i < ibsize; i++) {
+				int ialph = 255; //(ib.get(i) >> 24) & 0x0ff;
+				//int ired = (ib.get(i) >> 16) & 0x0ff; 
+				//int igreen = (ib.get(i) >> 8 ) & 0x0ff;
+				//int iblue = (ib.get(i) & 0x0ff);
+				int iblue = buffer[ip++];
+				int igreen = buffer[ip++];
+				int ired = buffer[ip++];
+				ibuf[iup++] = ired;
+				ibuf[iup++] = igreen;
+				ibuf[iup++] = iblue;
+				ibuf[iup++] = ialph;
+			}
+			//System.out.println(ibuf.length+" "+raster.getWidth()+" "+raster.getHeight()+" "+raster.getMinX()+" "+raster.getMinY());
 		    raster.setPixels(0, 0, img.getWidth(), img.getHeight(), ibuf);
-		    
+			
 			if( mode.equals("display")) {
 				displayPanel.lastFrame = image;
 				//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth

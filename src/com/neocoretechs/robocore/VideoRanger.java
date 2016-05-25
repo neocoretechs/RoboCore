@@ -44,7 +44,7 @@ public class VideoRanger extends AbstractNodeMain
 	String mode = "display";
 	String outDir = "/";
 	int frames = 0;
-	byte[] ibuf = null;
+	int[] ibuf = null;
 	
 	// Values used for calculating range from captured image data
 	// these values are only for a specific camera and laser setup
@@ -85,12 +85,16 @@ public class VideoRanger extends AbstractNodeMain
 		@Override
 		public void onNewMessage(Image img) {
 			ChannelBuffer cb = img.getData();
-			byte[] buffer = cb.array(); // 3 byte BGR
+			int[] buffer = cb.toByteBuffer().asIntBuffer().array();
+			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
+			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
+			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+			WritableRaster raster = (WritableRaster) image.getRaster();
 			int W = img.getWidth();
 			int H = img.getHeight();
 			//System.out.println("Image reports W="+W+" H="+H);
 			if( ibuf == null )
-				ibuf = new byte[buffer.length];
+				ibuf = new int[buffer.length];
 			boolean isame = true;
 			for(int i = 0; i < buffer.length; i++) {
 				if( ibuf[i] != buffer[i] )
@@ -115,7 +119,7 @@ public class VideoRanger extends AbstractNodeMain
 			int colMax = 0;
 			for(int row = 180; row < 380; row++) {
 				for(int col = colmin; col < colmax; col++) {
-					int imgstart = row*3*W + 3*col;
+					int imgstart = row*W + col;
 					int bimgstart = ibuf[imgstart];
 					int bimgstart1 = ibuf[imgstart+1];
 					int bimgstart2 = ibuf[imgstart+2];
@@ -198,10 +202,9 @@ public class VideoRanger extends AbstractNodeMain
 				int dwidth = img.getWidth();
 				int dheight = img.getHeight();
 				//System.out.println("Image size "+dwidth+","+dheight);
-				image = new BufferedImage(dwidth, dheight, BufferedImage.TYPE_3BYTE_BGR);
-				WritableRaster raster = (WritableRaster) image.getRaster();		
+				image = new BufferedImage(dwidth, dheight, BufferedImage.TYPE_INT_ARGB);
+				raster = (WritableRaster) image.getRaster();		
 				int[] nibuff = new int[ibuf.length];
-				for(int i = 0; i < ibuf.length; i++) nibuff[i] = (ibuf[i]&255);
 				raster.setPixels(0, 0, dwidth, dheight, nibuff);
 				if( rowMax < 390 )
 					raster.setPixels(colMax, rowMax, 10, 10, xbuf);

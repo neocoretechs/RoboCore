@@ -120,7 +120,7 @@ public class AsynchDemuxer implements Runnable {
 						int reading = AbstractMachine.getReadingNumber(readLine);
 						int data =  AbstractMachine.getReadingValueInt(readLine);
 						if( DEBUG ) 
-							System.out.println("Ultrasonic retrieveData:"+readLine);
+							System.out.println("Ultrasonic retrieveData:"+readLine+"| converted:"+reading+" "+data);
 						MachineReading mr = new MachineReading(1, reading, reading+1, data);
 						mb.add(mr);
 				}

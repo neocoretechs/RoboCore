@@ -12,6 +12,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
@@ -99,12 +100,22 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Publisher<sensor_msgs.Range> rangepub = 
 		connectedNode.newPublisher("robocore/range", sensor_msgs.Range._TYPE);
 	// Start reading from serial port
-	try {
-		AsynchDemuxer.getInstance().config();
-	} catch (IOException e) {
-		System.out.println("Could not start process to read attached serial port.."+e);
-		e.printStackTrace();
-		return;
+	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
+	// ONLY DO IT ONCE ON INIT!
+	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	String mode="";
+	if( remaps.containsKey("__mode") )
+		mode = remaps.get("__mode");
+	if( mode.equals("startup")) {
+		try {
+			AsynchDemuxer.getInstance().config();
+		} catch (IOException e) {
+			System.out.println("Could not start process to read attached serial port.."+e);
+			e.printStackTrace();
+			return;
+		}
+	} else {
+		AsynchDemuxer.getInstance();	
 	}
 	
 	motorControlHost = new MotorControl();
