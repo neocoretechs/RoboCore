@@ -78,7 +78,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	public MegaPubs() {}
 	
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("robocore");
+		return GraphName.of("pubs_robocore");
 	}
 
 /**
@@ -105,7 +105,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 
 	final Publisher<sensor_msgs.Range> rangepub = 
-		connectedNode.newPublisher("robocore/range", sensor_msgs.Range._TYPE);
+		connectedNode.newPublisher("range/ultrasonic/robocore", sensor_msgs.Range._TYPE);
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
 	// ONLY DO IT ONCE ON INIT!

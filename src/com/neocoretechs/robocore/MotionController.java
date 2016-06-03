@@ -16,7 +16,7 @@ import org.ros.node.topic.Subscriber;
 
 
 /**
- * This class is used as a ROS subscriber to the ardrone through messages on ardrone/range and ardrone/navdata
+ * This class is used as a ROS subscriber to the ardrone through messages on range/ultrasonic/ardrone and ardrone/navdata
  * Sensor data is fused and decisions made about motion are publish as TWIST directives on the cmd_vel topic.
  * Twist messages are constructed and sent to cmd_vel topic where they ultimately activate motor control
  * through the process that manages serial data to the motor controller.
@@ -86,8 +86,8 @@ public class MotionController extends AbstractNodeMain {
 		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
 		
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("ardrone/navdata", sensor_msgs.Imu._TYPE);
-		Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("ardrone/range", sensor_msgs.Range._TYPE);
-		Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("robocore/range", sensor_msgs.Range._TYPE);
+		Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("range/ultrasonic/ardrone", sensor_msgs.Range._TYPE);
+		Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("range/ultrasonic/robocore", sensor_msgs.Range._TYPE);
 		Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("ardrone/magnetic_field", sensor_msgs.MagneticField._TYPE);
 		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("ardrone/temperature", sensor_msgs.Temperature._TYPE);
 		Subscriber<sensor_msgs.FluidPressure> subspress = connectedNode.newSubscriber("ardrone/pressure", sensor_msgs.FluidPressure._TYPE);

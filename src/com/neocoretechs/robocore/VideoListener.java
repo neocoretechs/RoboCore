@@ -52,7 +52,7 @@ public class VideoListener extends AbstractNodeMain
 	
 	@Override
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("video_feed");
+		return GraphName.of("subs_video");
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {

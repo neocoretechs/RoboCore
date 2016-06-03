@@ -45,7 +45,7 @@ import org.ros.node.topic.Publisher;
 		ShortBuffer data;
 		@Override
 		public GraphName getDefaultNodeName() {
-			return GraphName.of("kinect");
+			return GraphName.of("pubs_kinect");
 		}
 		
 		@Override

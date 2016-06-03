@@ -1,17 +1,10 @@
-/**
- * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
- * voltage, etc and all that is acquired from the attached USB of an aux board such as Mega2560 via RS-232
- * @author jg
- */
 package com.neocoretechs.robocore;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
@@ -25,8 +18,10 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
-
-
+/**
+ * Publishes user constructed Twist messages on the cmd_vel topic.
+ * @author jg
+ */
 public class TwistPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
 	float volts;

@@ -25,7 +25,7 @@ public class SpeechSubs extends AbstractNodeMain {
 	public static VoxHumana speaker = null;
 	@Override
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("subs_status");
+		return GraphName.of("subs_speech");
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {

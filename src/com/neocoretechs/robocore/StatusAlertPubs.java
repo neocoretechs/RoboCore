@@ -1,6 +1,5 @@
 package com.neocoretechs.robocore;
 
-import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.ros.concurrent.CancellableLoop;
@@ -13,18 +12,17 @@ import org.ros.node.topic.Subscriber;
 
 import sensor_msgs.Range;
 
-import com.neocoretechs.talker.VoxHumana;
-
-import diagnostic_msgs.DiagnosticStatus;
-import diagnostic_msgs.KeyValue;
 
 /**
+ * 
+ * Publish to the robocore/status topic, based on subscribing to forward ultrasonic rangers.
+ * This is a nice test example to abstract away some of the functionality on the bus.
  * StatusAlerts comprise robocore/status - Which has 'List' of Key/Value messages in diagnostic_msgs.DiagnosticStatus
- * robocore/range has integer range val in sensor_msgs.Range. The option to activate the speech option is also provided.
+ * range/ultrasonic/* has integer range val in sensor_msgs.Range. The option to activate the speech option is also provided.
  * @author jg
  *
  */
-public class StatusAlertSubs extends AbstractNodeMain {
+public class StatusAlertPubs extends AbstractNodeMain {
 	private static boolean DEBUG = false;
 	private static boolean speak = true;
 	ConcurrentLinkedQueue<String> cbq = new ConcurrentLinkedQueue<String>();
@@ -43,8 +41,8 @@ public class StatusAlertSubs extends AbstractNodeMain {
 		//Subscriber<diagnostic_msgs.DiagnosticStatus> subsbat = connectedNode.newSubscriber("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-		Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("robocore/range", sensor_msgs.Range._TYPE);
-		Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("ardrone/range", sensor_msgs.Range._TYPE);
+		Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("range/ultrasonic/robocore", sensor_msgs.Range._TYPE);
+		Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("range/ultrasonic/ardrone", sensor_msgs.Range._TYPE);
 	
 		//subsbat.addMessageListener(new MessageListener<diagnostic_msgs.DiagnosticStatus>() {
 		//@Override

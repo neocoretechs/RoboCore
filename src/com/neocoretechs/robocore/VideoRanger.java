@@ -5,24 +5,19 @@ import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 //import java.awt.image.MemoryImageSource;
 import java.awt.image.WritableRaster;
-import java.io.File;
-import java.io.IOException;
+
 import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
+
 import java.util.Map;
 
-import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 
-import org.jboss.netty.buffer.ChannelBuffer;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.twilight.h264.decoder.AVFrame;
-import com.twilight.h264.player.FrameUtils;
 import com.twilight.h264.player.PlayerFrame;
 
 import sensor_msgs.Image;
@@ -57,7 +52,7 @@ public class VideoRanger extends AbstractNodeMain
 	
 	@Override
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("video_feed");
+		return GraphName.of("subs_range");
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
@@ -84,8 +79,8 @@ public class VideoRanger extends AbstractNodeMain
 		imgsub.addMessageListener(new MessageListener<sensor_msgs.Image>() {
 		@Override
 		public void onNewMessage(Image img) {
-			ChannelBuffer cb = img.getData();
-			int[] buffer = cb.toByteBuffer().asIntBuffer().array();
+			ByteBuffer cb = img.getData();
+			int[] buffer = cb.asIntBuffer().array();
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
 			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
