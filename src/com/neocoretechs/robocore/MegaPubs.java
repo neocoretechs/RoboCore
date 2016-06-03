@@ -1,8 +1,3 @@
-/**
- * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
- * voltage, etc and all that is acquired from the attached USB of an aux board such as Mega2560 via RS-232
- * @author jg
- */
 package com.neocoretechs.robocore;
 
 import java.io.File;
@@ -34,7 +29,19 @@ import com.neocoretechs.robocore.machine.bridge.BatteryListener;
 import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
 import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 
-
+/**
+ * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
+ * voltage, etc and all that is acquired from the attached USB of an aux board such as Mega2560 via RS-232.
+ * 
+ * Subscribe to dta on the cmd_vel standard ROS topic to receive motor control commands as TWIST messages and
+ * send them on to the controller.
+ * 
+ * Publish various warnings over the 'robocore/status' topic.
+ * 
+ * Essentially this is the main interface to the attached Mega2560 and on to all GPIO
+ * and motor control functions which are activated via a serial board TTL to RS232 attached to Mega2560
+ * @author jg
+ */
 public class MegaPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
 	float volts;

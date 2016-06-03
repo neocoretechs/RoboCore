@@ -4,14 +4,18 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
+
+
 
 
 
@@ -83,6 +87,7 @@ public class VideoListener extends AbstractNodeMain
 			}
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
+			/*
 			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
 			WritableRaster raster = (WritableRaster) image.getRaster();
 			int ibsize = img.getHeight() * img.getWidth();
@@ -105,6 +110,14 @@ public class VideoListener extends AbstractNodeMain
 			}
 			//System.out.println(ibuf.length+" "+raster.getWidth()+" "+raster.getHeight()+" "+raster.getMinX()+" "+raster.getMinY());
 		    raster.setPixels(0, 0, img.getWidth(), img.getHeight(), ibuf);
+			*/
+			InputStream in = new ByteArrayInputStream(buffer);
+			try {
+				image = ImageIO.read(in);
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 			
 			if( mode.equals("display")) {
 				displayPanel.lastFrame = image;
