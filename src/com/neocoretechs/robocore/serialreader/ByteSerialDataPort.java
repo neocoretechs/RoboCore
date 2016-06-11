@@ -30,7 +30,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    private static Object readMx = new Object();// mutex
 	    private static Object writeMx = new Object();
 	    private static boolean EOT = false;
-	    private boolean writeable = false;
+	 
 	    private static int[] readBuffer = new int[32767];
 	    private static int[] writeBuffer = new int[32767];
 	    private static int readBufferHead = 0;
@@ -67,7 +67,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    }
 	    
 	    public void connect(boolean writeable) throws IOException {
-	    	this.writeable = writeable;
+	    	
 	    	//if( Props.DEBUG ) System.out.println("Trying connect to serial port "+portName);
 	        try {
 	            // Obtain a CommPortIdentifier object for the port you want to open
@@ -131,9 +131,9 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    public void write(int c) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("write "+c);
 	    	synchronized(writeMx) {
-	    		if( writeBufferTail == writeBuffer.length)
-	    			writeBufferTail = 0;
+	    		checkWriteBuffer();
 	    		writeBuffer[writeBufferTail++] = c;
+	    		checkWriteBuffer();
     			writeBuffer[writeBufferTail++] = -1;
 	    		writeMx.notify();
 	    	}
@@ -144,14 +144,21 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	synchronized(writeMx) {
 	    		byte[] bytes = bytesToWrite.getBytes();
 	    		for(int i = 0 ; i < bytes.length; i++) {
-	    			if( writeBufferTail == writeBuffer.length)
-	    				writeBufferTail = 0;
+	    			checkWriteBuffer();
 	    			writeBuffer[writeBufferTail++] = bytes[i];
 	    		}
     			writeBuffer[writeBufferTail++] = 13;
+    			checkWriteBuffer();
     			writeBuffer[writeBufferTail++] = -1;
+    			checkWriteBuffer();
 	    		writeMx.notify();
 	    	}
+	    }
+	    
+	    private void checkWriteBuffer() {
+	    	if( writeBufferTail >= writeBuffer.length) {	
+    				writeBufferTail = 0;
+			}
 	    }
 	    
 	    public int read() throws IOException {
@@ -372,14 +379,18 @@ public class ByteSerialDataPort implements DataPortInterface {
 	                		synchronized(writeMx) {
 	                			if( writeBufferHead == writeBuffer.length)
 	                				writeBufferHead = 0;
-	                			if( writeBufferHead == writeBufferTail )
+	                			if( writeBufferHead == writeBufferTail ) {
+	                				System.out.println("Enter wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                    			writeMx.wait();
+	                    			System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
+	                			}
 	                			//System.out.println("SerialWriter="+(char)(writeBuffer[writeBufferHead]));
 	                			this.out.write(writeBuffer[writeBufferHead++]);
+	                			writeMx.notify();
 	                		}
 	                	}
 	                	catch ( IOException ioe ) {
-							System.out.println(ioe);
+							System.out.println("Write exception on serial write:"+ioe);
 	                	} 
 	                	catch (InterruptedException e) {
 	                	}

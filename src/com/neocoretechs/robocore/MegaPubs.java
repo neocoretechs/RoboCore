@@ -43,7 +43,7 @@ import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
  * @author jg
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
@@ -52,7 +52,8 @@ public class MegaPubs extends AbstractNodeMain  {
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	private MotorControlInterface2D motorControlHost;
 	NavListenerMotorControlInterface navListener = null;
-	private boolean isMoving;
+	private boolean isMoving = false;
+	private boolean shouldMove = true;
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -96,7 +97,6 @@ public NodeConfiguration build()  {
   return nodeConfiguration;
 }
 
-
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	//final RosoutLogger log = (Log) connectedNode.getLog();
@@ -106,6 +106,7 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	final Publisher<sensor_msgs.Range> rangepub = 
 		connectedNode.newPublisher("range/ultrasonic/robocore", sensor_msgs.Range._TYPE);
+
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
 	// ONLY DO IT ONCE ON INIT!
@@ -127,8 +128,12 @@ public void onStart(final ConnectedNode connectedNode) {
 	
 	motorControlHost = new MotorControl();
 	
-	Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
-
+	final Subscriber<geometry_msgs.Twist> substwist = 
+			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
+	
+	// subscribe to image tag input for emergency stop signal
+	final Subscriber<geometry_msgs.Quaternion> tagsub = 
+			connectedNode.newSubscriber("ardrone/image_tag", geometry_msgs.Quaternion._TYPE);
 	
 	/**
 	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
@@ -153,7 +158,6 @@ public void onStart(final ConnectedNode connectedNode) {
 	 *			spd_left = (float) (x + th * wheelTrack / 2.0);
 	 *		}
 	 */
-	
 	substwist.addMessageListener(new MessageListener<geometry_msgs.Twist>() {
 	@Override
 	public void onNewMessage(geometry_msgs.Twist message) {
@@ -172,12 +176,39 @@ public void onStart(final ConnectedNode connectedNode) {
 			System.out.println("Robot commanded to moveLINY:" + targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
 		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
 		try {
-			motorControlHost.moveRobotRelative(targetYaw, targetPitch, targetDist);
+			if( shouldMove )
+				motorControlHost.moveRobotRelative(targetYaw, targetPitch, targetDist);
+			else
+				System.out.println("Emergency stop directive in effect, no move to "+targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
 		} catch (IOException e) {
 			System.out.println("there was a problem communicating with motor controller:"+e);
 			e.printStackTrace();
 		}
 	}
+	});
+	/*
+	 * Provide an emergency stop via image recognition facility
+	 */
+	tagsub.addMessageListener(new MessageListener<geometry_msgs.Quaternion>() {
+		@Override
+		public void onNewMessage(geometry_msgs.Quaternion message) {
+			try {
+				//if( DEBUG )
+					System.out.println("Emergency directive:"+message.getW());
+				if( (message.getW() >= 0.0 && message.getW() <= 180.0) ) {
+					motorControlHost.commandStop();
+					isMoving = false;
+					shouldMove = false;
+					System.out.println("Command stop issued for "+message.getW());
+				} else {
+					shouldMove = true;
+					System.out.println("Movement reinstated for "+message.getW());
+				}
+			} catch (IOException e) {
+				System.out.println("Cannot issue motor stop! "+e);
+				e.printStackTrace();
+			}
+		}
 	});
 	
 	// tell the waiting constructors that we have registered publishers

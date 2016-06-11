@@ -12,7 +12,6 @@ import org.ros.node.topic.Subscriber;
 
 import sensor_msgs.Range;
 
-
 /**
  * 
  * Publish to the robocore/status topic, based on subscribing to forward ultrasonic rangers.
@@ -33,7 +32,6 @@ public class StatusAlertPubs extends AbstractNodeMain {
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-		
 		//if( speak ) {
 		//	speaker = VoxHumana.getInstance();
 		//}

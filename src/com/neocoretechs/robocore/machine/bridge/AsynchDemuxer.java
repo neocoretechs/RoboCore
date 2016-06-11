@@ -160,7 +160,7 @@ public class AsynchDemuxer implements Runnable {
 			int i;
 			try {
 				if((i=ByteSerialDataPort.getInstance().read()) != '<' ) {
-					System.out.println("Looking for directive but found "+i);
+					System.out.println("Looking for directive but found "+i+" "+Character.toChars(i)[0]);
 					continue;
 				}
 				while((r = ByteSerialDataPort.getInstance().read()) != '>') {

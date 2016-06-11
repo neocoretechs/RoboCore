@@ -1,9 +1,7 @@
 package com.neocoretechs.robocore;
 
-
 //import org.apache.commons.logging.Log;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.ros.concurrent.CancellableLoop;

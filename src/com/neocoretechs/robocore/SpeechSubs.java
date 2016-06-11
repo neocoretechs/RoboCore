@@ -8,7 +8,6 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-
 import com.neocoretechs.talker.VoxHumana;
 
 import diagnostic_msgs.DiagnosticStatus;
