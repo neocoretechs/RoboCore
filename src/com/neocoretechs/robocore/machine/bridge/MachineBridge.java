@@ -3,9 +3,7 @@ package com.neocoretechs.robocore.machine.bridge;
 
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -17,7 +15,6 @@ import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
 
 
  	/**
@@ -39,7 +36,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 		@XmlJavaTypeAdapter(RawDataXmlAdapter.class)
 		//@XmlElementWrapper()
 		//@XmlAnyElement(lax=true)
-    	List<MachineReading> machineReadings = new ArrayList<MachineReading>();
+    	CircularBlockingDeque<MachineReading> machineReadings = new CircularBlockingDeque<MachineReading>(512);
    
 		private String group;
     	private static MachineBridge[] instance = null;
@@ -59,34 +56,22 @@ import com.neocoretechs.robocore.ThreadPoolManager;
         public MachineBridge() { }
         public MachineBridge(String group) { this.group = group; }
         
-        public List<MachineReading> get() { return machineReadings; }
+        public CircularBlockingDeque<MachineReading> get() { return machineReadings; }
         
-		public MachineReading get(int readNum) {
-			synchronized(machineReadings) {
-				return machineReadings.get(readNum);
-			}
-		}
 		
 		public MachineReading take() {
-			synchronized(machineReadings) {
-				return machineReadings.remove(0);
-			}
+				try {
+					return machineReadings.takeFirst();
+				} catch (InterruptedException e) {
+					return null;
+				}
 		}
-		public void set(int readNum, MachineReading entry) {
-			synchronized(machineReadings) {
-				machineReadings.add(readNum, entry);
-			}
-		}
+	
 		public void add(MachineReading entry) {
-			synchronized(machineReadings) {
-				machineReadings.add(entry);
-				machineReadings.notifyAll();
-			}
+				machineReadings.addLast(entry);
 		}
 		public void init() {
-			synchronized(machineReadings) {
-				machineReadings.clear();
-			}
+			machineReadings = new CircularBlockingDeque<MachineReading>(512);		
 		}
 		
 		public String getGroup() { return group; }
@@ -95,81 +80,14 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 		 * @param preVal The value to retrieve, updates this value to the next for re-use
 		 * @return
 		 */
-		public MachineReading waitForNewReading(AtomicInteger preVal) {
-			//if( Props.DEBUG)
-			//	System.out.println("Bridge waiting..");
-			synchronized(machineReadings) {
-				if( preVal.get() == machineReadings.size() ) {
+		public MachineReading waitForNewReading() {
 					try {
-						machineReadings.wait();
+						return machineReadings.takeFirst();
 					} catch (InterruptedException e) {
 						return null; // premature end
 					}
-				}
-				//if( Props.DEBUG)
-				//	System.out.println("bridge wait exiting..");				
-				return machineReadings.get(preVal.getAndIncrement());
-			}
 		}
 		
-		/**
-		 * Wait with timeout
-		 * @param millis
-		 */
-		public MachineReading waitForNewReading(AtomicInteger preVal, long millis) {
-			if( DEBUG)
-				System.out.println("Bridge waiting millis.."+millis);
-			synchronized(machineReadings) {
-				if( preVal.get() == machineReadings.size() ) {
-					try {
-						machineReadings.wait(millis);
-					} catch (InterruptedException e) {}
-				}
-				if( DEBUG)
-					System.out.println("bridge wait exiting..");
-				return machineReadings.get(preVal.getAndIncrement());
-			}
-		}
-		
-		/**
-		 * For external call functionality the null placed at the end to signal end will not be counted if present
-		 * @return
-		 */
-		public int size() {
-			synchronized(machineReadings)  {
-				if( machineReadings.size() == 0)
-					return 0;
-				if( machineReadings.get(machineReadings.size()-1) == null )
-					return machineReadings.size()-1;
-				return machineReadings.size();
-			}
-		}
-		
-		public void waitForEnd() {
-			synchronized(machineReadings) {
-				while(true) {
-					try {
-						machineReadings.wait();
-					} catch (InterruptedException e) {}
-					if( machineReadings.get(machineReadings.size()-1) == null ) {
-						return;
-					}
-				}
-			}
-		}
-			
-		public void signalEnd() {
-			//if( Props.DEBUG )
-			//	System.out.println("..End signal to Bridge");
-			synchronized(machineReadings) {
-				machineReadings.add(null);
-				machineReadings.notifyAll();
-			}
-			ThreadPoolManager.getInstance().notifyGroup(group);	
-			//if( Props.DEBUG)
-			//	System.out.println("signalEnd exiting..");
-		}
-	
 		public static void fromXml(String xml, String group) {
 			//MachineBridge mb = MachineBridge.getInstance();
 			StringReader reader = new StringReader(xml);

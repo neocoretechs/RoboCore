@@ -28,7 +28,7 @@ public class AsynchDemuxer implements Runnable {
 		return instance;
 	}
 	private Map<String, TopicList> topics = new HashMap<String, TopicList>();
-	private static String[] topicNames = new String[]{"dataset","battery","motorfault","ultrasonic"};
+	private static String[] topicNames = new String[]{"dataset","battery","motorfault","ultrasonic","digitalpin","analogpin"};
 	
 	public static String[] getTopicNames() { return topicNames; }
 	
@@ -50,9 +50,8 @@ public class AsynchDemuxer implements Runnable {
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
+					ThreadPoolManager.getInstance().notifyGroup("dataset");
 				}
-				//if( Props.DEBUG) System.out.println("Signal end dataset...");
-				mb.signalEnd();
 			}		
 		});
 		// listeners for dataset are in individual run instances
@@ -62,20 +61,18 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData() {
 		        MachineBridge mb = MachineBridge.getInstance("battery");
 			    //mb.init();
-			    String readLine;
-				while( (readLine = ByteSerialDataPort.getInstance().readLine()) != null ) {
-						if( readLine.length() == 0 ) {
+			    String readLine = ByteSerialDataPort.getInstance().readLine();
+				if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							continue;
-						}
-						int reading = AbstractMachine.getReadingNumber(readLine);
-						int data =  AbstractMachine.getReadingValueInt(readLine);
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(1, reading, reading+1, data);
-						mb.add(mr);
+							return;
 				}
-				//if( Props.DEBUG) System.out.println("Signal end battery...");
-				mb.signalEnd();
+				int reading = AbstractMachine.getReadingNumber(readLine);
+				int data =  AbstractMachine.getReadingValueInt(readLine);
+				//if( Props.DEBUG ) System.out.println(readLine);
+				MachineReading mr = new MachineReading(1, reading, reading+1, data);
+				mb.add(mr);
+				ThreadPoolManager.getInstance().notifyGroup("battery");
+
 			}
 		});
 		// start the listener thread for this topic
@@ -88,8 +85,9 @@ public class AsynchDemuxer implements Runnable {
 				MachineBridge mb = MachineBridge.getInstance("motorfault");
 				//mb.init();
 				String readLine;
-				while( (readLine = ByteSerialDataPort.getInstance().readLine()) != null ) {
-					if( readLine.length() == 0 ) {
+				for(int i = 0; i < 8; i++) {
+					readLine = ByteSerialDataPort.getInstance().readLine();
+					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						continue;
 					}
@@ -98,9 +96,9 @@ public class AsynchDemuxer implements Runnable {
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
+					ThreadPoolManager.getInstance().notifyGroup("motorfault");
 				}
-				//if( Props.DEBUG) System.out.println("Signal end motorfault...");
-				mb.signalEnd();
+
 			}
 		});
 		MotorFaultListener.getInstance();
@@ -112,25 +110,97 @@ public class AsynchDemuxer implements Runnable {
 				MachineBridge mb = MachineBridge.getInstance("ultrasonic");
 				//mb.init();
 				String readLine;
-				while( (readLine = ByteSerialDataPort.getInstance().readLine()) != null ) {
-						if( readLine.length() == 0 ) {
+				readLine = ByteSerialDataPort.getInstance().readLine();
+				if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							continue;
-						}
-						int reading = AbstractMachine.getReadingNumber(readLine);
-						int data =  AbstractMachine.getReadingValueInt(readLine);
-						if( DEBUG ) 
-							System.out.println("Ultrasonic retrieveData:"+readLine+"| converted:"+reading+" "+data);
-						MachineReading mr = new MachineReading(1, reading, reading+1, data);
-						mb.add(mr);
+						return;
 				}
+				int reading = AbstractMachine.getReadingNumber(readLine);
+				int data =  AbstractMachine.getReadingValueInt(readLine);
+				if( DEBUG ) 
+						System.out.println("Ultrasonic retrieveData:"+readLine+"| converted:"+reading+" "+data);
+				MachineReading mr = new MachineReading(1, reading, reading+1, data);
+				mb.add(mr);
 				if( DEBUG) 
 					System.out.println("Signal end ultrasonic...");
-				mb.signalEnd();
+				ThreadPoolManager.getInstance().notifyGroup("ultrasonic");
 			}
 		});
 		// start an ultrasonic listener
 		UltrasonicListener.getInstance();
+		
+		MachineBridge.getInstance("analogpin").init();
+		topics.put("analogpin", new TopicList() {
+			@Override
+			public void retrieveData() {
+				MachineBridge mb = MachineBridge.getInstance("analogpin");
+				//mb.init();
+				String readLine;
+				int pin = 0;
+				readLine = ByteSerialDataPort.getInstance().readLine();
+				if( readLine == null || readLine.length() == 0 ) {
+					return;
+				}
+				int reading = AbstractMachine.getReadingNumber(readLine);
+				int data =  AbstractMachine.getReadingValueInt(readLine);
+				if( DEBUG ) 
+						System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
+				pin = data;
+				readLine = ByteSerialDataPort.getInstance().readLine();
+				if( readLine == null || readLine.length() == 0 ) {
+					return;
+				}
+				reading = AbstractMachine.getReadingNumber(readLine);
+				data =  AbstractMachine.getReadingValueInt(readLine);
+				if( DEBUG ) 
+					System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
+				MachineReading mr = new MachineReading(1, pin, reading, data);
+				mb.add(mr);		
+				if( DEBUG) 
+					System.out.println("Signal end analogpin...");
+				ThreadPoolManager.getInstance().notifyGroup("analogpin");
+			}
+		});
+		// start an analog pin listener
+		AnalogPinListener.getInstance();
+		
+		MachineBridge.getInstance("digitalpin").init();
+		topics.put("digitalpin", new TopicList() {
+			@Override
+			public void retrieveData() {
+				MachineBridge mb = MachineBridge.getInstance("digitalpin");
+				//mb.init();
+				String readLine;
+				int pin = 0;
+				readLine = ByteSerialDataPort.getInstance().readLine();
+				if( readLine == null || readLine.length() == 0 ) {
+					System.out.println("premature return digitalpin retrieveData");
+					return;
+				}
+				int reading = AbstractMachine.getReadingNumber(readLine);
+				int data =  AbstractMachine.getReadingValueInt(readLine);
+				if( DEBUG ) 
+						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
+				pin = data;
+				readLine = ByteSerialDataPort.getInstance().readLine();
+				if( readLine == null || readLine.length() == 0 ) {
+					System.out.println("premature return digitalpin retrieveData");
+					return;
+				}
+				reading = AbstractMachine.getReadingNumber(readLine);
+				data =  AbstractMachine.getReadingValueInt(readLine);
+				if( DEBUG ) 
+						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);	
+				MachineReading mr = new MachineReading(1, pin, reading, data);
+				mb.add(mr);	
+				
+				if( DEBUG) 
+					System.out.println("Signal end digitalpin...");
+				ThreadPoolManager.getInstance().notifyGroup("digitalpin");
+			}
+		});
+		// start a digital pin listener
+		DigitalPinListener.getInstance();
 	}
 	
 	/**
@@ -160,7 +230,10 @@ public class AsynchDemuxer implements Runnable {
 			int i;
 			try {
 				if((i=ByteSerialDataPort.getInstance().read()) != '<' ) {
-					System.out.println("Looking for directive but found "+i+" "+Character.toChars(i)[0]);
+					if( i == -1)
+						System.out.println("Looking for directive but found EOF");
+					else
+						System.out.println("Looking for directive but found "+i+" "+Character.toChars(i)[0]);
 					continue;
 				}
 				while((r = ByteSerialDataPort.getInstance().read()) != '>') {
@@ -171,7 +244,12 @@ public class AsynchDemuxer implements Runnable {
 							continue;
 						}
 				}
-				//System.out.println("op:"+op.toString());
+				// Soak up c/r
+				ByteSerialDataPort.getInstance().read();
+				// soak up l/f
+				ByteSerialDataPort.getInstance().read();
+				if(DEBUG)
+					System.out.println("op:"+op.toString());
 				if( op.length() == 0 )
 					continue;
 			} catch (IOException ioe) {
@@ -190,6 +268,19 @@ public class AsynchDemuxer implements Runnable {
 	
 	private static interface TopicList {
 		public void retrieveData();
+	}
+	
+	public static void main(String[] args) throws Exception {
+		// start demux
+		AsynchDemuxer.getInstance();
+		// the L H and T values represent those to EXCLUDE
+		// So we are looking for state 0 on digital pin and value not between L and H analog
+		ByteSerialDataPort.getInstance().writeLine("M303 P54 L470 H510");
+		ByteSerialDataPort.getInstance().writeLine("M303 P55 L470 H510");
+		ByteSerialDataPort.getInstance().writeLine("M305 P30 T1");
+		ByteSerialDataPort.getInstance().writeLine("M305 P46 T1");
+		ByteSerialDataPort.getInstance().writeLine("M305 P47 T1");
+		ByteSerialDataPort.getInstance().writeLine("M305 P49 T1");
 	}
 
 }

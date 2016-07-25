@@ -133,8 +133,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	synchronized(writeMx) {
 	    		checkWriteBuffer();
 	    		writeBuffer[writeBufferTail++] = c;
-	    		checkWriteBuffer();
-    			writeBuffer[writeBufferTail++] = -1;
+	    		//checkWriteBuffer();
+    			//writeBuffer[writeBufferTail++] = -1;
 	    		writeMx.notify();
 	    	}
 	    }
@@ -146,11 +146,12 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		for(int i = 0 ; i < bytes.length; i++) {
 	    			checkWriteBuffer();
 	    			writeBuffer[writeBufferTail++] = bytes[i];
+	    			writeMx.notify();
 	    		}
-    			writeBuffer[writeBufferTail++] = 13;
-    			checkWriteBuffer();
-    			writeBuffer[writeBufferTail++] = -1;
-    			checkWriteBuffer();
+	    		checkWriteBuffer();
+    			writeBuffer[writeBufferTail++] = 13;	
+    			//writeBuffer[writeBufferTail++] = -1;
+    			//checkWriteBuffer();
 	    		writeMx.notify();
 	    	}
 	    }
@@ -208,13 +209,20 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
-				while( (c = read()) != -1 && c != 10 && c != 13) {
+				while( (c = read()) != -1 && c != '\r' ) {
+					//if( DEBUG )
+					//	System.out.print("["+Character.toChars(c)[0]+"]");
 					sb.append((char)c);
 				}
+				if( c == '\r' )
+					read(); // soak up c/r lf
 			} catch (IOException e) {
 			}
-	    	if( c == -1 )
+	    	if( c == -1 ) {
+	    		//if( DEBUG )
+	    		//	System.out.println();
 	    		return null;
+	    	}
 	    	return sb.toString();
 	    }
 	    
@@ -332,7 +340,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 					{
 						try {
 							inChar = this.in.read();
-							//System.out.println("SerialReader="+inChar+" "+(char)inChar);
+							System.out.println("SR="+inChar+" "+(char)inChar);
 							// rxtx returns -1 on timeout of port
 							if( inChar == 255 ) {
 								EOT = true;
@@ -380,11 +388,11 @@ public class ByteSerialDataPort implements DataPortInterface {
 	                			if( writeBufferHead == writeBuffer.length)
 	                				writeBufferHead = 0;
 	                			if( writeBufferHead == writeBufferTail ) {
-	                				System.out.println("Enter wait writer:"+writeBufferHead+" "+writeBufferTail);
+	                				//System.out.println("Enter wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                    			writeMx.wait();
-	                    			System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
+	                    			//System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                			}
-	                			//System.out.println("SerialWriter="+(char)(writeBuffer[writeBufferHead]));
+	                			//System.out.println("SW:"+(char)(writeBuffer[writeBufferHead]));
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();
 	                		}

@@ -3,18 +3,14 @@
  */
 package com.neocoretechs.robocore.machine.bridge;
 
-import java.util.concurrent.ArrayBlockingQueue;
-
 import com.neocoretechs.robocore.ThreadPoolManager;
-
 /**
  * Motor control status returned as a string describing condition
  * @author jg
  *
  */
 public class MotorFaultListener implements Runnable {
-	public static ArrayBlockingQueue<String> data = new ArrayBlockingQueue<String>(1024);
-	public static int deleteThreshold = 24; // number of readings before clear, 8 possible fields in response
+	public static CircularBlockingDeque<String> data = new CircularBlockingDeque<String>(16);
 	private static MotorFaultListener instance = null;
 	public static MotorFaultListener getInstance() {
 		if( instance == null )
@@ -31,10 +27,6 @@ public class MotorFaultListener implements Runnable {
 	public void run() {
 		while(true) {
 			ThreadPoolManager.getInstance().waitGroup("motorfault");
-				if( data.size() > deleteThreshold ) {
-					for(int i = 0; i < deleteThreshold; i++)
-						if( data.size() > 0) data.remove();
-				}
 				try {
 					// put everything on the publish queue
 					/*
@@ -53,7 +45,7 @@ public class MotorFaultListener implements Runnable {
 					if( mr != null ) {
 						String sdata = mr.getReadingValString();
 						if( sdata != null )
-							data.add(sdata);
+							data.addLast(sdata);
 					}
 				} catch(IndexOutOfBoundsException ioobe) {}
 		}

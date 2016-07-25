@@ -1,12 +1,7 @@
-/**
- * 
- */
 package com.neocoretechs.robocore.machine.bridge;
 
 import java.util.List;
-
 import javax.xml.bind.annotation.adapters.XmlAdapter;
-
 
 /**
  * This class is called by JAXB by installing it as an adapter to control serialization/deserialization

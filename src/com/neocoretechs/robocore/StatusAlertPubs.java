@@ -78,7 +78,7 @@ public class StatusAlertPubs extends AbstractNodeMain {
 				try {
 					if(speak && (message.getRange() < 300.0) ) {
 						//speaker.doSpeak
-						cbq.add("Excuse me but you are "+(int)range+" centimeters too close to my feet");
+						cbq.add((int)range+" centimeters from feet");
 					}
 				} catch (Throwable e) {
 					e.printStackTrace();
@@ -95,7 +95,7 @@ public class StatusAlertPubs extends AbstractNodeMain {
 				try {
 					if( speak && message.getRange() < 350.0 ) {
 						//speaker.doSpeak
-						cbq.add("Excuse me but you are "+(int)range+" centimeters too close to my head");
+						cbq.add((int)range+" centimeters from head");
 					}
 				} catch (Throwable e) {
 					e.printStackTrace();

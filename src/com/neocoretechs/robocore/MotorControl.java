@@ -4,7 +4,6 @@ import java.io.IOException;
 
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
-
 /**
  * The motor control endpoint that controls serial data.
  * This class talks to the serial drivers that communicate with the attached USB SBC. In fact, this is code that talks to the
@@ -16,6 +15,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  *
  */
 public class MotorControl implements MotorControlInterface2D {
+	public static boolean DEBUG = true;
 	float yawIMURads;
 	int yawTargetDegrees;
 	int targetDistance;
@@ -24,15 +24,16 @@ public class MotorControl implements MotorControlInterface2D {
 	int[] ranges;
 	boolean init = true;
 	Object mutex = new Object();
-	//public static int MAXOUTPUT = 1000; // normal
-	public static int MAXOUTPUT = 50; // indoor
+	public static final int MAXOUTPUT = 1000; // normal
+	public static final boolean indoor = true; // div power by ten indoor mode
+	//public static int MAXOUTPUT = 50; // indoor
 	/* Stop the robot if it hasn't received a movement command in this number of milliseconds */
 	public static int AUTO_STOP_INTERVAL = 2000;
 	long lastMotorCommand = AUTO_STOP_INTERVAL;
 	/* The base and odometry frames */
 	//String baseFrame = "/base_link";
 	//String odomFrame = "/odom";
-	float TWOPI = (float) (Math.PI * 2.0f);
+	static final float TWOPI = (float) (Math.PI * 2.0f);
 	/* PID Parameters */
 	int Kp = 20;
 	int Kd = 12;
@@ -42,11 +43,21 @@ public class MotorControl implements MotorControlInterface2D {
 	/* Define the robot parameters */
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.
-	int cpr = 500; // ticks per revolution, if IMU reports .5 m/s as 500 mm/s then 500, else we have to dynamically change based on speed
-	float wheelDiameter = 406.4f; // millimeters, 16"
-	float wheelTrack = 304.8f; // millimeters, 12"
+	static final int cpr = 500; // ticks per revolution, if IMU reports .5 m/s as 500 mm/s then 500, else we have to dynamically change based on speed
+	static final float wheelDiameter = 406.4f; // millimeters, 16"
+	static final float wheelTrack = 304.8f; // millimeters, 12"
 	float ticksPerMeter = (float) (cpr / (Math.PI * wheelDiameter));
 	boolean moving = false; // is the base in motion?
+
+	// - fPivYLimt  : The threshold at which the pivot action starts
+	//	                This threshold is measured in units on the Y-axis
+	//	                away from the X-axis (Y=0). A greater value will assign
+	//	                more of the joystick's range to pivot actions.
+	//	                Allowable range: (0..+1000)
+	float fPivYLimit = 250.0f;
+
+	int     nPivSpeed;      // Pivot Speed                          (-1000..+999)
+	float   fPivScale;      // Balance scale b/w drive and pivot    (   0..1   )
 
 	float total_mm;
 	float clicks_per_mm;
@@ -88,7 +99,7 @@ public class MotorControl implements MotorControlInterface2D {
 	 *  @param th The 2PI polar measure of arc segment we are traversing, if 0 pure forward/back motion
 	 * @throws IOException 
 	 */
-	public void setMotorSpeed(float x, float th) throws IOException {
+	public synchronized void setMotorSpeed(float x, float th) throws IOException {
 
 		float spd_left, spd_right;
   
@@ -108,12 +119,14 @@ public class MotorControl implements MotorControlInterface2D {
 		moving = true;
 
 		if (x == 0) {
-			// Turn in place
+			// Turn in place, rotate the proper wheel forward, the other backward for a spin
 			if( th < 0 ) { // left
-				spd_right = (float) (th * wheelTrack / 2.0);
+				//spd_right = (float) (th * wheelTrack / 2.0);
+				spd_right = x;
 			} else {
-				spd_right = -((float) (th * wheelTrack / 2.0));
-			}
+				//spd_right = -((float) (th * wheelTrack / 2.0));
+				spd_right = -x;
+			}	
 			spd_left = -spd_right;
 		} else {
 			if (th == 0) {	
@@ -121,31 +134,52 @@ public class MotorControl implements MotorControlInterface2D {
 				spd_left = spd_right = x;
 			} else {
 				// Rotation about a point in space
-				if( th < 0 ) { // left
-					spd_left = (float) (x - th * wheelTrack / 2.0);
-					spd_right = (float) (x + th * wheelTrack / 2.0);
+				// Calculate Drive Turn output due to X input
+				if (x > 0) {
+				  // Forward
+				  spd_left = ( th > 0 ) ? MAXOUTPUT : (MAXOUTPUT + th);
+				  spd_right = ( th > 0 ) ? (MAXOUTPUT - th) : MAXOUTPUT;
 				} else {
-					spd_right = (float) (x - th * wheelTrack / 2.0);
-					spd_left = (float) (x + th * wheelTrack / 2.0);
+				  // Reverse
+				  spd_left = (th > 0 ) ? (MAXOUTPUT - th) : MAXOUTPUT;
+				  spd_right = (th > 0 ) ? MAXOUTPUT : (MAXOUTPUT + th);
 				}
+
+				// Scale Drive output due to X input (throttle)
+				spd_left = spd_left * x / MAXOUTPUT;
+				spd_right = spd_right *  x / MAXOUTPUT;
+				
+				// Now calculate pivot amount
+				// - Strength of pivot (nPivSpeed) based on  X input
+				// - Blending of pivot vs drive (fPivScale) based on Y input
+				nPivSpeed = (int) th;
+				// if th beyond pivlimit scale in 
+				fPivScale = (float) ((Math.abs(x)>fPivYLimit)? 0.0 : (1.0 - Math.abs(x)/fPivYLimit));
+
+				// Calculate final mix of Drive and Pivot
+				/* Set the target speeds in meters per second */
+				spd_left = (float) ((1.0-fPivScale)*spd_left + fPivScale*( nPivSpeed));
+				spd_right = (float) ((1.0-fPivScale)*spd_right + fPivScale*(-nPivSpeed));
 			}
 		}
 
-		/* Set the target speeds in meters per second */
-		leftWheel.TargetSpeed = spd_left;
-		rightWheel.TargetSpeed = spd_right;
-
+		// Calculate final mix of Drive and Pivot
+		// Set the target speeds in wheel rotation command units -1000, 1000 and if indoor mode div by ten
+		leftWheel.TargetSpeed = indoor ? spd_left/10 : spd_left;
+		rightWheel.TargetSpeed = indoor ? spd_right/10 : spd_right;
+		if( DEBUG )
+			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+leftWheel.TargetSpeed+" R:"+rightWheel.TargetSpeed);
 		/* Convert speeds to ticks per frame */
 		leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
 		rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
 
 		updateSpeed();
-	}
+		}
 
 	/**
 	 *  PID routine to compute the next motor commands 
 	 */
-	private void doPID(SetPointInfo p) {
+	private synchronized void doPID(SetPointInfo p) {
 		/*
 		int Perror;
 		int output;
@@ -171,10 +205,11 @@ public class MotorControl implements MotorControlInterface2D {
 			p.TargetSpeed = MAXOUTPUT;
 		else if (p.TargetSpeed <= -MAXOUTPUT)
 			p.TargetSpeed = -MAXOUTPUT;	
-	}
+		}
 
 	/* Read the encoder values and call the PID routine */
-	protected void updateSpeed() throws IOException {
+	protected synchronized void updateSpeed() throws IOException {
+
 		/* Read the encoders */
 		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
 		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
@@ -192,7 +227,8 @@ public class MotorControl implements MotorControlInterface2D {
 		doPID(rightWheel);
 
 		/* Set the motor speeds accordingly */
-		System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
+		//if( DEBUG )
+		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
 		// we invert channel 1 since its a mirror of the orientation of channel 2
 		leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
 		
@@ -201,9 +237,10 @@ public class MotorControl implements MotorControlInterface2D {
 		
 		motorCommand = "G5 C2 P"+String.valueOf((int)rightWheel.TargetSpeed);
 		ByteSerialDataPort.getInstance().writeLine(motorCommand);
+		
 	}
 
-	private void clearPID() {
+	private synchronized void clearPID() {
 		moving = false;
 		leftWheel.PrevErr = 0;
 		leftWheel.Ierror = 0;
@@ -213,17 +250,17 @@ public class MotorControl implements MotorControlInterface2D {
 		rightWheel.output = 0;
 	}
 
-	private void clearAll() {
+	private synchronized void clearAll() {
 		clearPID();
 		//encoders.XAxisReset();
 		//encoders.YAxisReset();
 	}
 	
-	public void commandStop() throws IOException {
+	public synchronized void commandStop() throws IOException {
 		setMotorSpeed(0.0f, 0.0f);
 	}
 
-	private void init() {
+	private synchronized void init() {
 		leftWheel = new SetPointInfo();
 		rightWheel = new SetPointInfo();
 		odomInfo = new OdomInfo();
@@ -287,7 +324,7 @@ public class MotorControl implements MotorControlInterface2D {
 	 * 	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
 	 * @throws IOException 
 	 */
-	public TwistInfo moveRobotAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
+	public synchronized TwistInfo moveRobotAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
 
 	        //while (true) {
 
@@ -325,14 +362,9 @@ public class MotorControl implements MotorControlInterface2D {
 	                // modified by current speed to make a gentle curve.
 	                // if theta is 0, move linear
 	                //stasis(fabs(wheel_theta),fabs(imu_theta));
-	                System.out.println(twistInfo);
+	                if( DEBUG )
+	                	System.out.println(twistInfo);
 	                setMotorSpeed(targetDistance, twistInfo.robotTheta);
-	                try {
-						Thread.sleep(50);
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
 	                return twistInfo;//twistInfo.robotTheta;
 	        //}
 	}
@@ -350,7 +382,7 @@ public class MotorControl implements MotorControlInterface2D {
 	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
 	 * @throws IOException 
 	 */
-	public TwistInfo moveRobotRelative(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
+	public synchronized TwistInfo moveRobotRelative(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
 	        //while (true) {
 
 	                //leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
@@ -388,14 +420,9 @@ public class MotorControl implements MotorControlInterface2D {
 	                // if theta is 0, move linear in x
 	                // if x and theta not 0 its rotation about a point in space
 	                //stasis(fabs(wheel_theta),fabs(imu_theta));
-	                System.out.println(twistInfo);
+	                if( DEBUG )
+	                	System.out.println(twistInfo);
 	                setMotorSpeed(targetDistance, twistInfo.wheelTheta);
-	                try {
-						Thread.sleep(50);
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
 	                return twistInfo;//twistInfo.robotTheta;
 	        //}
 	}
@@ -414,33 +441,36 @@ public class MotorControl implements MotorControlInterface2D {
 	 * @throws IOException 
 	 */
 	@Override
-	public boolean move2DAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException {
-		System.out.println("Motion control Move 2D Abs: "+yawTargetDegrees);
-		synchronized( mutex ) {
+	public synchronized boolean move2DAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException {
+		if( DEBUG )
+			System.out.println("Motion control Move 2D Abs: "+yawTargetDegrees);
 			this.yawIMURads = yawIMURads;
 			this.yawTargetDegrees = yawTargetDegrees;
 			this.targetDistance = targetDistance;
 			this.accelDeltas = accelDeltas;
 			this.ranges = ranges;
-		}
 		if( yawTargetDegrees == 0 && targetDistance == 0) {
-			System.out.println("0,0 command stop");
+			if( DEBUG )
+				System.out.println("0,0 command stop");
 			commandStop();
 			return false;
 		}
 		// if any deltas > about 100, there is lateral force sufficient to raise wheels
 		// if any ranges close than about 200mm
 		if( accelDeltas[0] > 500.0f || accelDeltas[1] > 500.0f || accelDeltas[2] > 500.0f) {
+			if( DEBUG )
 				System.out.println("MotorControl issuing stop based on accel deltas");
 				commandStop(); // pick up further motion on subsequent commands when accel deltas are nicer
 				return false;
 		}
 		if( ranges[0] < 225 || ranges[1] < 200 ) {
 			if( ranges[0] < 200 || ranges[1] < 100 ) {
+				if( DEBUG )
 				System.out.println("<<<<<<Backing up!");
 				this.targetDistance = -50;
 				this.yawTargetDegrees = 0;
 			} else {
+				if( DEBUG )
 				System.out.println("Altering course for obstacle");
 				this.yawTargetDegrees += 30;
 				if( this.yawTargetDegrees > 360 ) this.yawTargetDegrees -= 360;
@@ -458,41 +488,45 @@ public class MotorControl implements MotorControlInterface2D {
 	 * @throws IOException 
 	 */
 	@Override
-	public boolean move2DRelative(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException {
-		System.out.println("Motion control Move 2D Rel: "+yawTargetDegrees);
-		synchronized( mutex ) {
+	public synchronized boolean move2DRelative(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException {
+		if( DEBUG )
+			System.out.println("Motion control Move 2D Rel: "+yawTargetDegrees);
 			this.yawIMURads = yawIMURads;
 			this.yawTargetDegrees = yawTargetDegrees;
 			this.targetDistance = targetDistance;
 			this.accelDeltas = accelDeltas;
 			this.ranges = ranges;
-		}
 		if( yawTargetDegrees == 0 && targetDistance == 0) {
-			System.out.println("0,0 command stop");
+			if( DEBUG )
+				System.out.println("0,0 command stop");
 			commandStop();
 			return false;
 		}
 		// if any deltas > about 100, there is lateral force sufficient to raise wheels
 		// if any ranges close than about 200mm
 		if( accelDeltas[0] > 500.0f || accelDeltas[1] > 500.0f || accelDeltas[2] > 500.0f) {
-			System.out.println("MotorControl issuing stop based on accel deltas "+accelDeltas[0]+" "+accelDeltas[1]+" "+accelDeltas[2]);
+			if( DEBUG )
+				System.out.println("MotorControl issuing stop based on accel deltas "+accelDeltas[0]+" "+accelDeltas[1]+" "+accelDeltas[2]);
 				commandStop(); // pick up further motion on subsequent commands when accel deltas are nicer
 				return false;
 		} 
 		// something in front, turn 30 degrees in place
 		if( ranges[0] < 225 || ranges[1] < 200 ) {
 			if( ranges[0] < 200 || ranges[1] < 100 ) {
-				System.out.println("<<<<<<Backing up!");
+				if( DEBUG )
+					System.out.println("<<<<<<Backing up!");
 				this.targetDistance = -50;
 				this.yawTargetDegrees = 0;
 			} else {
-				System.out.println("MotorControl issuing 30 degr. rotation based on obstacle detection "+ranges[0]+" "+ranges[1]);
+				if( DEBUG )
+					System.out.println("MotorControl issuing 30 degr. rotation based on obstacle detection "+ranges[0]+" "+ranges[1]);
 				if( yawTargetDegrees < 30 )
 					this.yawTargetDegrees = 30;
 			}
 			this.targetDistance = 0;
 		}
-		System.out.println("MotorControl moving robot relative:"+this.yawIMURads+" "+this.yawTargetDegrees+" "+this.targetDistance+" "+this.targetTime);
+		if( DEBUG )
+			System.out.println("MotorControl moving robot relative:"+this.yawIMURads+" "+this.yawTargetDegrees+" "+this.targetDistance+" "+this.targetTime);
 		moveRobotRelative(this.yawIMURads, this.yawTargetDegrees, this.targetDistance);	
 		return true;
 	}
@@ -508,7 +542,7 @@ public class MotorControl implements MotorControlInterface2D {
 		float X; /* bot X position in mm */
 		float Y;/* bot Y position in mm */
 		public String toString() {
-         return "Yaw d:"+yawDegrees+" Yaw target"+wheelTheta+
+         return "TWIST Yaw d:"+yawDegrees+" Yaw target:"+wheelTheta+
         		" IMU t:"+imuTheta+" Delta t:"+deltaTheta+" Robot t:"+robotTheta+" X:"+X+" Y:"+Y;
 		}
 	}

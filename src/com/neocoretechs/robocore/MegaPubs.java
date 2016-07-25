@@ -173,11 +173,11 @@ public void onStart(final ConnectedNode connectedNode) {
 		else
 				isMoving = true;
 		if( DEBUG )
-			System.out.println("Robot commanded to moveLINY:" + targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
+			System.out.println("Robot commanded to move LIN:" + targetPitch + " ANG:" + targetYaw);
 		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
 		try {
 			if( shouldMove )
-				motorControlHost.moveRobotRelative(targetYaw, targetPitch, targetDist);
+				motorControlHost.setMotorSpeed(targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
 			else
 				System.out.println("Emergency stop directive in effect, no move to "+targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
 		} catch (IOException e) {
@@ -232,7 +232,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			sensor_msgs.Range rangemsg = rangepub.newMessage();
 
 				if( !BatteryListener.data.isEmpty() ) {
-					Float batt = BatteryListener.data.take();
+					Float batt = BatteryListener.data.takeFirst();
 					volts = batt.floatValue();
 					statmsg.setName("battery");
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
@@ -247,7 +247,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				}		
 	
 				if( !UltrasonicListener.data.isEmpty() ) {
-					Integer range = UltrasonicListener.data.take();
+					Integer range = UltrasonicListener.data.takeFirst();
 					ihead.setSeq(sequenceNumber);
 					Time tst = connectedNode.getCurrentTime();
 					ihead.setStamp(tst);
@@ -260,13 +260,13 @@ public void onStart(final ConnectedNode connectedNode) {
 					rangemsg.setRange(range.floatValue());
 					rangepub.publish(rangemsg);
 					Thread.sleep(1);
-					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange()+" size:"+UltrasonicListener.data.size());
+					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange());
 					upSeq = true;
 				}				
 			
 	
 				if( !MotorFaultListener.data.isEmpty() ) {
-					String mfd = MotorFaultListener.data.take();
+					String mfd = MotorFaultListener.data.takeFirst();
 					statmsg.setName("motor");
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setMessage("Motor fault warning "+mfd);
