@@ -1,6 +1,3 @@
-/**
- * 
- */
 package com.neocoretechs.robocore.machine.bridge;
 
 import java.io.IOException;
@@ -11,11 +8,33 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 /**
+ * This class is the primary interface between real time data and the other subsystems.
+ * Its primary function is to demultiplex the input stream coming from data sources such as the attached
+ * microcontroller Mega2560 etc that utilize a protocol with '<header>',line number, data value.
+ * Each 'topic' described by the demultiplexed header as it flows in with its associated data is expected to have:
+ * OPTIONAL:
+ * 1) A thread that services the final processing listener class and deque for the given topic '<header>'
+ * 2) A listener class that is serviced by the above thread that takes raw MachineReadings and transforms them if necessary
+ * MANDATORY:
+ * 3) A 'TopicList' class in the hash table with its associated 'header'
+ * 4) An instance of 'MachineBridge' that operates on the raw data for a given topic 'header'
+ * The optional items are necessary for data streamed at high rates. Notice in the code that 'dataset' has no
+ * associated listener since it is a low volume data item. In this case the item is retrieved from the MachineBridge deque itself
+ * rather than the associated listener deque.
+ * As the various topics are demuxxed by the thread servicing this class, the 'retrieveData' for each 'TopicList' 
+ * is invoked to place the 'MachineReading' element in the deque associated with the MachineBridge for that topic.
+ * The listener waits for a take from that particular MachineBridge and massages the data to be placed in its own deque
+ * in the format and with the proper additions and exclusions from the raw MachineReading.
+ * When an element in the listener is present and ready for a 'take' from that deque the item is considered ready for use
+ * in the system.
+ * The size of each listener circular deque is determined during invocation of the 'init' method of the MachineBridge for that topic.
+ * This demuxxer runs in its own thread as well such that it may operate unimpeded while the listeners can take their time
+ * processing the data. In this way a near realtime response is preserved.
  * @author jg
  *
  */
 public class AsynchDemuxer implements Runnable {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private boolean shouldRun = true;
 	private static AsynchDemuxer instance = null;
 	private AsynchDemuxer() {}
@@ -32,13 +51,16 @@ public class AsynchDemuxer implements Runnable {
 	
 	public static String[] getTopicNames() { return topicNames; }
 	
+	public static boolean isController = false; // if we get an M2 in startup.gcode assume smart motor controller
+	
 	private void init() {
 		ThreadPoolManager.init(topicNames);
-        MachineBridge.getInstance("dataset").init();
+		
+        MachineBridge.getInstance("dataset").init(16);
 		topics.put("dataset", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("dataset");
 			@Override
-			public void retrieveData() {
-		        MachineBridge mb = MachineBridge.getInstance("dataset");
+			public void retrieveData() {  
 		        String readLine;
 				while( (readLine = ByteSerialDataPort.getInstance().readLine()) != null ) {
 					if( readLine.length() == 0 ) {
@@ -50,17 +72,15 @@ public class AsynchDemuxer implements Runnable {
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
-					ThreadPoolManager.getInstance().notifyGroup("dataset");
 				}
 			}		
 		});
-		// listeners for dataset are in individual run instances
-        MachineBridge.getInstance("battery").init();
+
+        MachineBridge.getInstance("battery").init(16);
 		topics.put("battery",new TopicList() {
+	        MachineBridge mb = MachineBridge.getInstance("battery");
 			@Override
 			public void retrieveData() {
-		        MachineBridge mb = MachineBridge.getInstance("battery");
-			    //mb.init();
 			    String readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
@@ -71,19 +91,16 @@ public class AsynchDemuxer implements Runnable {
 				//if( Props.DEBUG ) System.out.println(readLine);
 				MachineReading mr = new MachineReading(1, reading, reading+1, data);
 				mb.add(mr);
-				ThreadPoolManager.getInstance().notifyGroup("battery");
-
 			}
 		});
 		// start the listener thread for this topic
 		BatteryListener.getInstance();
 		
-		MachineBridge.getInstance("motorfault").init();
+		MachineBridge.getInstance("motorfault").init(16);
 		topics.put("motorfault", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("motorfault");
 			@Override
 			public void retrieveData() {
-				MachineBridge mb = MachineBridge.getInstance("motorfault");
-				//mb.init();
 				String readLine;
 				for(int i = 0; i < 8; i++) {
 					readLine = ByteSerialDataPort.getInstance().readLine();
@@ -96,18 +113,16 @@ public class AsynchDemuxer implements Runnable {
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
-					ThreadPoolManager.getInstance().notifyGroup("motorfault");
 				}
-
 			}
 		});
 		MotorFaultListener.getInstance();
 		
-		MachineBridge.getInstance("ultrasonic").init();
+		MachineBridge.getInstance("ultrasonic").init(16);
 		topics.put("ultrasonic", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("ultrasonic");
 			@Override
-			public void retrieveData() {
-				MachineBridge mb = MachineBridge.getInstance("ultrasonic");
+			public void retrieveData() {	
 				//mb.init();
 				String readLine;
 				readLine = ByteSerialDataPort.getInstance().readLine();
@@ -121,19 +136,16 @@ public class AsynchDemuxer implements Runnable {
 						System.out.println("Ultrasonic retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, reading, reading+1, data);
 				mb.add(mr);
-				if( DEBUG) 
-					System.out.println("Signal end ultrasonic...");
-				ThreadPoolManager.getInstance().notifyGroup("ultrasonic");
 			}
 		});
 		// start an ultrasonic listener
 		UltrasonicListener.getInstance();
 		
-		MachineBridge.getInstance("analogpin").init();
+		MachineBridge.getInstance("analogpin").init(16);
 		topics.put("analogpin", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("analogpin");
 			@Override
 			public void retrieveData() {
-				MachineBridge mb = MachineBridge.getInstance("analogpin");
 				//mb.init();
 				String readLine;
 				int pin = 0;
@@ -156,20 +168,16 @@ public class AsynchDemuxer implements Runnable {
 					System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);		
-				if( DEBUG) 
-					System.out.println("Signal end analogpin...");
-				ThreadPoolManager.getInstance().notifyGroup("analogpin");
 			}
 		});
 		// start an analog pin listener
 		AnalogPinListener.getInstance();
 		
-		MachineBridge.getInstance("digitalpin").init();
+		MachineBridge.getInstance("digitalpin").init(16);
 		topics.put("digitalpin", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("digitalpin");
 			@Override
 			public void retrieveData() {
-				MachineBridge mb = MachineBridge.getInstance("digitalpin");
-				//mb.init();
 				String readLine;
 				int pin = 0;
 				readLine = ByteSerialDataPort.getInstance().readLine();
@@ -189,14 +197,10 @@ public class AsynchDemuxer implements Runnable {
 				}
 				reading = AbstractMachine.getReadingNumber(readLine);
 				data =  AbstractMachine.getReadingValueInt(readLine);
-				if( DEBUG ) 
+				//if( DEBUG ) 
 						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);	
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);	
-				
-				if( DEBUG) 
-					System.out.println("Signal end digitalpin...");
-				ThreadPoolManager.getInstance().notifyGroup("digitalpin");
 			}
 		});
 		// start a digital pin listener
@@ -214,10 +218,12 @@ public class AsynchDemuxer implements Runnable {
 			for(String s : starts) {
 				System.out.println("Startup GCode:"+s);
 				ByteSerialDataPort.getInstance().writeLine(s+"\r");
+				if( s.equals("M2") ) isController = true;
+				Thread.sleep(100);
 			}
 		} catch (IOException e) {
 			if( DEBUG) System.out.println("No startup.gcode file detected..");
-		}
+		} catch (InterruptedException e) {}
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()

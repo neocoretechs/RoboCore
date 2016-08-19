@@ -11,6 +11,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  */
 public class MotorFaultListener implements Runnable {
 	public static CircularBlockingDeque<String> data = new CircularBlockingDeque<String>(16);
+	private static MachineBridge bridge;
 	private static MotorFaultListener instance = null;
 	public static MotorFaultListener getInstance() {
 		if( instance == null )
@@ -19,6 +20,7 @@ public class MotorFaultListener implements Runnable {
 	}
 	public MotorFaultListener() {
 		ThreadPoolManager.getInstance().spin(this, "motorfault");
+		bridge = MachineBridge.getInstance("motorfault");
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()
@@ -26,7 +28,6 @@ public class MotorFaultListener implements Runnable {
 	@Override
 	public void run() {
 		while(true) {
-			ThreadPoolManager.getInstance().waitGroup("motorfault");
 				try {
 					// put everything on the publish queue
 					/*
@@ -41,7 +42,7 @@ public class MotorFaultListener implements Runnable {
 						}
 					}
 					*/
-					MachineReading mr = MachineBridge.getInstance("motorfault").take();
+					MachineReading mr = bridge.take();
 					if( mr != null ) {
 						String sdata = mr.getReadingValString();
 						if( sdata != null )

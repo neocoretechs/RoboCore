@@ -3,13 +3,16 @@ package com.neocoretechs.robocore.machine.bridge;
 import com.neocoretechs.robocore.ThreadPoolManager;
 
 /**
+ * Retrieve the real time analog pin data from attached microcontroller and place in 2 element array
+ * of pin, value
  * @author jg
  *
  */
 public class AnalogPinListener implements Runnable {
-	public static boolean DEBUG = true;
-	public static CircularBlockingDeque<MachineReading> data = new CircularBlockingDeque<MachineReading>(16);
+	public static boolean DEBUG = false;
+	public static CircularBlockingDeque<int[]> data = new CircularBlockingDeque<int[]>(4);
 	private static AnalogPinListener instance = null;
+	private static MachineBridge bridge;
 	
 	// analog inputs on pins 55,56 of Mega2560 as defined in startup.gcode for AsynchDemuxer
 	public final static int joystickPinY = 55;
@@ -26,6 +29,7 @@ public class AnalogPinListener implements Runnable {
 	}
 	private AnalogPinListener() {
 		ThreadPoolManager.getInstance().spin(this, "analogpin");
+		bridge = MachineBridge.getInstance("analogpin");
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()
@@ -33,9 +37,8 @@ public class AnalogPinListener implements Runnable {
 	@Override
 	public void run() {
 		while(true) {
-			ThreadPoolManager.getInstance().waitGroup("analogpin");
 			try {
-					MachineReading mr = MachineBridge.getInstance("analogpin").take();
+					MachineReading mr = bridge.take();
 					if( mr != null ) {
 						if( DEBUG )
 							System.out.println(mr);
@@ -48,8 +51,7 @@ public class AnalogPinListener implements Runnable {
 									continue;
 							}
 						}
-						data.addLast(mr);
-						
+						data.addLast(new int[]{ mr.getRawSeq(), mr.getReadingValInt() });	
 					}
 			} catch(IndexOutOfBoundsException ioobe) {}
 

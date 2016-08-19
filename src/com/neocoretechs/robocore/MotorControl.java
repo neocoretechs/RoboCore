@@ -25,7 +25,7 @@ public class MotorControl implements MotorControlInterface2D {
 	boolean init = true;
 	Object mutex = new Object();
 	public static final int MAXOUTPUT = 1000; // normal
-	public static final boolean indoor = true; // div power by ten indoor mode
+	public static boolean indoor = true; // div power by ten indoor mode
 	//public static int MAXOUTPUT = 50; // indoor
 	/* Stop the robot if it hasn't received a movement command in this number of milliseconds */
 	public static int AUTO_STOP_INTERVAL = 2000;
@@ -44,10 +44,10 @@ public class MotorControl implements MotorControlInterface2D {
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.
 	static final int cpr = 500; // ticks per revolution, if IMU reports .5 m/s as 500 mm/s then 500, else we have to dynamically change based on speed
-	static final float wheelDiameter = 406.4f; // millimeters, 16"
-	static final float wheelTrack = 304.8f; // millimeters, 12"
-	float ticksPerMeter = (float) (cpr / (Math.PI * wheelDiameter));
-	boolean moving = false; // is the base in motion?
+	protected static float wheelDiameter = 406.4f; // millimeters, 16"
+	protected static float wheelTrack = 304.8f; // millimeters, 12"
+	protected float ticksPerMeter = (float) (cpr / (Math.PI * wheelDiameter));
+	protected boolean moving = false; // is the base in motion?
 
 	// - fPivYLimt  : The threshold at which the pivot action starts
 	//	                This threshold is measured in units on the Y-axis
@@ -83,7 +83,7 @@ public class MotorControl implements MotorControlInterface2D {
 
 	
 	/* Convert meters per second to ticks per time frame */
-	private int SpeedToTicks(float v) {
+	protected int SpeedToTicks(float v) {
 		return (int) (v * cpr / (PID_RATE * Math.PI * wheelDiameter));
 	}
 
@@ -122,10 +122,10 @@ public class MotorControl implements MotorControlInterface2D {
 			// Turn in place, rotate the proper wheel forward, the other backward for a spin
 			if( th < 0 ) { // left
 				//spd_right = (float) (th * wheelTrack / 2.0);
-				spd_right = x;
+				spd_right = th;
 			} else {
 				//spd_right = -((float) (th * wheelTrack / 2.0));
-				spd_right = -x;
+				spd_right = -th;
 			}	
 			spd_left = -spd_right;
 		} else {
@@ -175,11 +175,14 @@ public class MotorControl implements MotorControlInterface2D {
 
 		updateSpeed();
 		}
+	
+	public void setForward() throws IOException {}
+	public void setReverse() throws IOException {}
 
 	/**
 	 *  PID routine to compute the next motor commands 
 	 */
-	private synchronized void doPID(SetPointInfo p) {
+	protected synchronized void doPID(SetPointInfo p) {
 		/*
 		int Perror;
 		int output;
@@ -260,7 +263,7 @@ public class MotorControl implements MotorControlInterface2D {
 		setMotorSpeed(0.0f, 0.0f);
 	}
 
-	private synchronized void init() {
+	protected synchronized void init() {
 		leftWheel = new SetPointInfo();
 		rightWheel = new SetPointInfo();
 		odomInfo = new OdomInfo();

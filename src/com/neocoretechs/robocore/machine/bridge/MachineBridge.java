@@ -15,8 +15,6 @@ import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
-
-
  	/**
  	 * Bridges machine ops and model implementation. The manner in which this acts as a bridge is that this is
  	 * a passive behavioral construct that acts in a thread safe manner in between two active threads; one
@@ -36,7 +34,7 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 		@XmlJavaTypeAdapter(RawDataXmlAdapter.class)
 		//@XmlElementWrapper()
 		//@XmlAnyElement(lax=true)
-    	CircularBlockingDeque<MachineReading> machineReadings = new CircularBlockingDeque<MachineReading>(512);
+    	CircularBlockingDeque<MachineReading> machineReadings = new CircularBlockingDeque<MachineReading>(16);
    
 		private String group;
     	private static MachineBridge[] instance = null;
@@ -70,8 +68,15 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 		public void add(MachineReading entry) {
 				machineReadings.addLast(entry);
 		}
-		public void init() {
-			machineReadings = new CircularBlockingDeque<MachineReading>(512);		
+		/**
+		 * Initialize the blocking queue to receive data for the associated topic.
+		 * The queue is a circular deque so the size must be chosen to represent
+		 * the most current values but not so large as to deliver obsolete values
+		 * 16 seems a good value for rapidly accumulating data.
+		 * @param queuesize
+		 */
+		public void init(int queuesize) {
+			machineReadings = new CircularBlockingDeque<MachineReading>(queuesize);		
 		}
 		
 		public String getGroup() { return group; }

@@ -1,39 +1,70 @@
-M and G Codes issued to Arduino processing board via serial port for ROSCOE:
+1.) Object oriented C++ version of Mega2560 M and G code front end processing via USB port of Arduino.
 
-These are the relevant commands for the Arduino attached board that issues serial commands to the motor
+a.) A means to control low level robotics via serial communications to a Mega2560 board and provide an interface to the higher level busses.
+
+The attached Mega 2560 board provides the low level realtime data acquisition and control from the devices
+and controllers so attached to it.
+
+Much like 3D printers process M and G codes for generating movement and action, the attached board functions in the same way.
+A fully object oriented version of Arduino wiring allows access to all the timers and pins in a compact subsystem.
+
+In conjunction with this, project RoboCore provides Java demultiplexing of the responses from the Mega2560 via the RXTX 
+serial library to process the data acquisition and box it up for publishing on the ROS topic.
+
+the converse functions are to issue the commands derived from subscriber messages translated to the proper M and G codes.
+
+Of course, you can always open a terminal session to the USB port, typically /dev/ttyACM0 or /dev/ttyUSB0, at 115200 baud, 8 bits
+no parity, 2 stop bits, and issue commands directly to the device. Minicom works well under ubuntu. minicom -F /dev/ttyACM0 -b 115200.
+
+2.) M and G Codes issued to the Mega2560 processing board via the USB port for robotic control in the related projects:
+
+a.) These are the relevant commands for the Arduino attached board that issues serial commands to the motor
 controller and receives and disseminates status reports and ultrasonic sensings. The commands are issued
-over the serial port with the relemant M and G codes
+over the serial port with the relevant M and G codes as described above. The full listing can be found in the source.
 
-Motor:
+b.) Motor:
 G5 - Absolute command motor C<Channel> P<motor power -1000 to 1000>
-G4  - dwell P or S P[milliseconds] S[seconds] so G4 S1 waits 1 second
+G4 - dwell P or S P[milliseconds] S[seconds] so G4 S1 waits 1 second
+M2 - Indicate a smart controller is present and values such as <battery> <motorfault> <motorcontrol> may be sent when they occur.
 
-
-On a motor problem the following header is published. The vaues require consulting the manual
+On a motor problem the following header is published. The values require consulting the manual.
 <motorfault>
 1 [fault code]
 
-Ultrasonics:
-There are 2, lower and that in the Parrt head. Lower unit is ardunio attached, upper comes over UDP.
-The header is 
+c.) Ultrasonics:
+The header is:
 <ultrasonic>
 1 [value]
-M301 P22 - Starts the ultrasonic sensing on port 22, NOTE: Port 22 is currently the ultrasonic lower front port of ROSCOE.
-M300 P22 - Pulses the ultrasonic sensing
+M301 P22 - Starts the ultrasonic sensing on port 22, NOTE: Port 22 is currently the ultrasonic lower front port of the ROSCOE robot.
+M300 P22 - Pulses the ultrasonic sensing for a one-shot
 
-Battery:
+d.) Analog pins:
+M303 P56 L670 H710
+This will start the streaming of analog readings from pin 56, excluding anything between the L and H values
+<analogpin>
+0 [pin]
+1 [value]
+
+e.) Digital pins:
+M305 P30 T1
+This sets up the designated digital pin to report when the target value T is encountered.
+<digitalpin>
+0 [pin]
+1 [value]
+
+f.) Battery:
 M444 V[voltage*10] - sets the warning threshold for motor batter level to the 'V' value, REMEMBER, TIMES 10!
 when the message starts publisheng, the battery has fallen below the preset level and the following message occurs:
 <battery>
 1 [voltage]
 
-EEPROM:
+g.) EEPROM:
 M500 Store settings in EEPROM
 M501 Read settings from EEPROM
 M502 Revert to default settings
 M503 print settings currently in memory
 
-Status:
+h.) Status:
 M700 - retrieve general status - avail mem, etc.
 M798 - motor control status
 <motorcontrol>
@@ -46,19 +77,30 @@ M798 - motor control status
 7 [brushless speed 1]
 8 [brushless speed 2]
 
-Control:
+i.) Control:
 M799 - Command Emergency stop
+
 M802 - Acquire analog pin data M802 Pnn Sxxx Mxxx P=Pin number, S=number readings, M=microseconds per reading
 <analogpin>
 1 [value]
+
 M115 - Firmware rev
+
 M85 S[seconds] - set max inactive time
+
 M45 - Analog write pin - set up PWM P[pin] S[analog val] T[timer mode 0-3] R[resolution 8,9,10 bits] X[prescale 0-7]
-M42 - Write digital pin P<pin> S<val>
+** Everything after the 'S' is optional, default is mode 2, 8 bits, prescale 0
+
+M41 - Write digitaql pin HIGH P<pin>
+
+M42 - Write digital pin LOW P<pin>
+
 M43 P[pin] -Read from digital pin P<pin>
 <digitalpin>
 1 [value]
+
 M44 P[pin] - Read digital pin with pullup: M44 P[pin]
+
 M226 P[pin number] S[pin state] - Wait until the specified pin reaches the state required. State is 0 low, 1 High, -1 for the opposite of current state.
 
 

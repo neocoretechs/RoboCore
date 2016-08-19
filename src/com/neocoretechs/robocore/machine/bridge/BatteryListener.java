@@ -9,6 +9,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 public class BatteryListener implements Runnable {
 	public static CircularBlockingDeque<Float> data = new CircularBlockingDeque<Float>(16);
 	private static BatteryListener instance = null;
+	private static MachineBridge bridge;
 	public static BatteryListener getInstance() {
 		if( instance == null ) {
 			instance = new BatteryListener();
@@ -17,6 +18,7 @@ public class BatteryListener implements Runnable {
 	}
 	private BatteryListener() {
 		ThreadPoolManager.getInstance().spin(this, "battery");
+		bridge = MachineBridge.getInstance("battery");
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()
@@ -24,9 +26,8 @@ public class BatteryListener implements Runnable {
 	@Override
 	public void run() {
 		while(true) {
-			ThreadPoolManager.getInstance().waitGroup("battery");
 				try {
-					MachineReading mr = MachineBridge.getInstance("battery").take();
+					MachineReading mr = bridge.take();
 					if( mr != null ) {
 						data.addLast(new Float(((float)mr.getReadingValInt())/10.0));
 					}

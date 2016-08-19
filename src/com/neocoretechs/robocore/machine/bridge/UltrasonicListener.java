@@ -9,14 +9,17 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 public class UltrasonicListener implements Runnable {
 	public static boolean DEBUG = true;
 	public static CircularBlockingDeque<Integer> data = new CircularBlockingDeque<Integer>(16);
+	private MachineBridge bridge;
 	private static UltrasonicListener instance = null;
 	public static UltrasonicListener getInstance() { 
 		if(instance == null)
 			instance = new UltrasonicListener();
 		return instance;		
 	}
+
 	private UltrasonicListener() {
 		ThreadPoolManager.getInstance().spin(this, "ultrasonic");
+		bridge = MachineBridge.getInstance("ultrasonic");
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()
@@ -24,9 +27,8 @@ public class UltrasonicListener implements Runnable {
 	@Override
 	public void run() {
 		while(true) {
-			ThreadPoolManager.getInstance().waitGroup("ultrasonic");
 			try {
-					MachineReading mr = MachineBridge.getInstance("ultrasonic").take();
+					MachineReading mr = bridge.take();
 					if( mr != null ) {
 						if( DEBUG )
 							System.out.println(mr);

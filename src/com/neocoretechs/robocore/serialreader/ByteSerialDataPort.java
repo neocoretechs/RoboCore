@@ -340,7 +340,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 					{
 						try {
 							inChar = this.in.read();
-							System.out.println("SR="+inChar+" "+(char)inChar);
+							//System.out.println("SR="+inChar+" "+(char)inChar);
 							// rxtx returns -1 on timeout of port
 							if( inChar == 255 ) {
 								EOT = true;

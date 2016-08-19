@@ -32,18 +32,32 @@ import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 /**
  * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
  * voltage, etc and all that is acquired from the attached USB of an aux board such as Mega2560 via RS-232.
+ * As input from the board is received the AsynchDemuxer decodes the header and prepares the data for publication
+ * to the Ros bus. If the 'M2' code is issued the data from the controller is enabled.
+ * The ByteSerialDataPort and its associates read the base level data organized as a header and followed by each successive line
+ * of parameter number and value.
  * 
- * Subscribe to dta on the cmd_vel standard ROS topic to receive motor control commands as TWIST messages and
+ * Subscribe to messages on the cmd_vel standard ROS topic to receive motor control commands as TWIST messages and
  * send them on to the controller.
  * 
  * Publish various warnings over the 'robocore/status' topic.
  * 
  * Essentially this is the main interface to the attached Mega2560 and on to all GPIO
- * and motor control functions which are activated via a serial board TTL to RS232 attached to Mega2560
+ * and high level motor control functions which are activated via a serial board TTL to RS-232 attached to Mega2560
+ * UART aux port or low level motor driver H bridge which is issued a series of M codes to activate the
+ * PWM and GPIO direction pins on the Mega. 
+ * Controller:
+ * G5 C<channel> P<power> - Issue move command to controller on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
+ * a negative value on power means reverse.
+ * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
+ * H Bridge Driver:
+ * M45 P<pin> S<0-255> - start PWM on pin P with value S, many optional arguments for timer setup
+ * M41 P<pin> - Set digital pin P high forward
+ * M42 P<pin> - Set digital pin P low reverse
  * @author jg
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = false;
+	private static final boolean DEBUG = true;
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
@@ -109,7 +123,6 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
-	// ONLY DO IT ONCE ON INIT!
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 	String mode="";
 	if( remaps.containsKey("__mode") )
@@ -126,7 +139,14 @@ public void onStart(final ConnectedNode connectedNode) {
 		AsynchDemuxer.getInstance();	
 	}
 	
-	motorControlHost = new MotorControl();
+	// set the proper instance of motor control host
+	// do we have a smart controller or simple H bridge
+	// If the M2 command has been issued at startup in AsynchDemuxer assume a smart controller
+	if( AsynchDemuxer.isController) {
+		motorControlHost = new MotorControl();
+	} else {
+		motorControlHost = new MotorControlPWM();
+	}
 	
 	final Subscriber<geometry_msgs.Twist> substwist = 
 			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
@@ -228,12 +248,13 @@ public void onStart(final ConnectedNode connectedNode) {
 			boolean upSeq = false;
 			std_msgs.Header ihead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 
-			diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
-			sensor_msgs.Range rangemsg = rangepub.newMessage();
+			diagnostic_msgs.DiagnosticStatus statmsg = null;
+			sensor_msgs.Range rangemsg = null;
 
 				if( !BatteryListener.data.isEmpty() ) {
 					Float batt = BatteryListener.data.takeFirst();
 					volts = batt.floatValue();
+					statmsg = statpub.newMessage();
 					statmsg.setName("battery");
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
 					statmsg.setMessage("Battery voltage warning "+((int)volts)+" volts");
@@ -252,6 +273,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					Time tst = connectedNode.getCurrentTime();
 					ihead.setStamp(tst);
 					ihead.setFrameId("0");
+					rangemsg = rangepub.newMessage();
 					rangemsg.setHeader(ihead);
 					rangemsg.setFieldOfView(30);
 					rangemsg.setMaxRange(600);
@@ -267,6 +289,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	
 				if( !MotorFaultListener.data.isEmpty() ) {
 					String mfd = MotorFaultListener.data.takeFirst();
+					statmsg = statpub.newMessage();
 					statmsg.setName("motor");
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setMessage("Motor fault warning "+mfd);
@@ -280,7 +303,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		
 			if( upSeq )
 				++sequenceNumber;
-			Thread.sleep(1);
+			Thread.sleep(5);
 		}
 	});  
 

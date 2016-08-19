@@ -8,7 +8,7 @@ import java.io.IOException;
 /**
  * Functions as any DataPort, but reads from file.
  * Provides raw data to/from and abstracted IO channel.
- * Intent is to read a .prn and extract vals, putting them to the device
+ * Intent is to read an ascii file and extract vals, putting them to the device
  * @author jg
  *
  */
