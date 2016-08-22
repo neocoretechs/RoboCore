@@ -1,19 +1,19 @@
 package com.neocoretechs.robocore;
 
-import geometry_msgs.Twist;
 
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
+import java.io.FileReader;
+
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
+
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+
 import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
-import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.namespace.NameResolver;
 import org.ros.node.AbstractNodeMain;
@@ -22,14 +22,10 @@ import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
-import org.ros.node.topic.Subscriber;
 import org.ros.internal.loader.CommandLineLoader;
 
-import com.neocoretechs.robocore.machine.bridge.AnalogPinListener;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.DigitalPinListener;
-import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+
 
 /**
  * Publishes user constructed Twist messages on the cmd_vel topic. Takes the demuxxed values
@@ -39,31 +35,21 @@ import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
  */
 public class TwistPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
-	
 	float volts;
-	float rangetop, rangebot;
-	
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
-	Object rngMutex1 = new Object();
-	Object rngMutex2 = new Object();
-	Object rngbot = new Object();
-	Object rngtop = new Object();
-	
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	geometry_msgs.Twist twistmsg = null;
+	public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 	//private static int[] data = new int[]{-10,10,100};
 
-	final static int joystickMin = 0;
-	final static int joystickMax = 1024;
+	//final static int joystickMin = 0;
+	//final static int joystickMax = 1024;
 	final static int motorSpeedMax = 1000;
-
 	// scale it to motor speed
-	final static int sf = motorSpeedMax / (joystickMax/2);
-	
-	
+	//final static int sf = motorSpeedMax / (joystickMax/2);
 	
 	public TwistPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -110,89 +96,30 @@ public NodeConfiguration build()  {
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {
+	fileReader reader = new fileReader();
+	ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	
 	final Publisher<geometry_msgs.Twist> twistpub =
 		connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
-	//final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-	//final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-	//final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
-	
-	//Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("ardrone/navdata", sensor_msgs.Imu._TYPE);
-	Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("range/ultrasonic/ardrone", sensor_msgs.Range._TYPE);
-	Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("range/ultrasonic/robocore", sensor_msgs.Range._TYPE);
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
 	// ONLY DO IT ONCE ON INIT!
-	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-	String mode="";
-	if( remaps.containsKey("__mode") )
-		mode = remaps.get("__mode");
-	if( mode.equals("startup")) {
-		try {
-			AsynchDemuxer.getInstance().config();
-		} catch (IOException e) {
-			System.out.println("Could not start process to read attached serial port.."+e);
-			e.printStackTrace();
-			return;
-		}
-	} else {
-		AsynchDemuxer.getInstance();	
-	}
-	/*
-	subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
-		@Override
-		public void onNewMessage(sensor_msgs.Imu message) {
-			synchronized(navMutex) {
-				try {
-				angular.setX(message.getAngularVelocity().getX());
-				angular.setY(message.getAngularVelocity().getY());
-				angular.setZ(message.getAngularVelocity().getZ());
-				linear.setX(message.getLinearAcceleration().getX());
-				linear.setY(message.getLinearAcceleration().getY());
-				linear.setZ(message.getLinearAcceleration().getZ());
-				orientation.setX(message.getOrientation().getX());
-				orientation.setY(message.getOrientation().getY());
-				orientation.setZ(message.getOrientation().getZ());
-				orientation.setW(message.getOrientation().getW());
-				//if( DEBUG )
-				//	System.out.println("Got nav message:"+message);
-				} catch (Throwable e) {
-					System.out.println("Nav subs exception:"+e.getMessage());
-					e.printStackTrace();
-				}
-			}
-		}
-
-		});
-		*/
-		subsrangetop.addMessageListener(new MessageListener<sensor_msgs.Range>() {
-		@Override
-		public void onNewMessage(sensor_msgs.Range message) {
-			synchronized(rngMutex1) {
-				try {
-					rangetop = message.getRange();
-				} catch (Throwable e) {
-					System.out.println("Range top subs exception:"+e.getMessage());
-					e.printStackTrace();
-				}
-			}
-		}
-		});
-
-		subsrangebot.addMessageListener(new MessageListener<sensor_msgs.Range>() {
-		@Override
-		public void onNewMessage(sensor_msgs.Range message) {
-			synchronized(rngMutex2) {
-				try {
-					rangebot = message.getRange();
-				} catch (Throwable e) {
-					System.out.println("Range bottom subs exception:"+e.getMessage());
-					e.printStackTrace();
-				}
-			}
-		}
-		});
+	//Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	//String mode="";
+	//if( remaps.containsKey("__mode") )
+	//	mode = remaps.get("__mode");
+	//if( mode.equals("startup")) {
+	//	try {
+	//		AsynchDemuxer.getInstance().config();
+	//	} catch (IOException e) {
+	//		System.out.println("Could not start process to read attached serial port.."+e);
+	//		e.printStackTrace();
+	//		return;
+	//	}
+	//} else {
+	//	AsynchDemuxer.getInstance();	
+	//}
 	// This CancellableLoop will be canceled automatically when the node shuts
 	// down.
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
@@ -204,58 +131,16 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
-			// look for digital pin override to pivot left/right
-			if( !DigitalPinListener.data.isEmpty()) {
-				int[] mr = DigitalPinListener.data.peekFirst();
-				if( mr[0] == DigitalPinListener.leftPivotPin) { 
-					DigitalPinListener.data.takeFirst();
-					if( twistmsg == null )
-						twistmsg = twistpub.newMessage();
-					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					//val.setZ(-motorSpeedMax/2);
-					val.setZ(32767);
-					twistmsg.setAngular(val);
-					geometry_msgs.Vector3 valx = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					valx.setX(0);
-					twistmsg.setLinear(valx);	
-				} else {
-					if( mr[0] == DigitalPinListener.rightPivotPin) {
-						DigitalPinListener.data.takeFirst();
-						if( twistmsg == null )
-							twistmsg = twistpub.newMessage();
-						geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-						//val.setZ(motorSpeedMax/2);
-						val.setZ(-32767);
-						twistmsg.setAngular(val);
-						geometry_msgs.Vector3 valx = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-						valx.setX(0);
-						twistmsg.setLinear(valx);	
-					} else {
-						if( mr[0] == DigitalPinListener.stopPin) {
-							DigitalPinListener.data.takeFirst();
-							if( twistmsg == null )
-								twistmsg = twistpub.newMessage();
-							geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-							val.setZ(0);
-							twistmsg.setAngular(val);
-							geometry_msgs.Vector3 valx = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-							valx.setX(0);
-							twistmsg.setLinear(valx);
-						}
-					}
-				}
-			}
-			
 			//synchronized(data) {
-			//for(int i = 0; i < 2; i++) {
+			/*
 			if( !AnalogPinListener.data.isEmpty() ) {
-				int[] mr = AnalogPinListener.data.peekFirst();
+				MachineReading mr = AnalogPinListener.data.peekFirst();
 				// wait for our pins to be displayed as we are potentially demuxxing numerous analogpin messages
 				// look for Y input (throttle)
-				if( mr[0] == AnalogPinListener.joystickPinY) {// linear pin
+				if( mr.getRawSeq() == AnalogPinListener.joystickPinY) {// linear pin
 					AnalogPinListener.data.takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					int r = mr[1];
+					int r = mr.getReadingValInt();
 					r = (r - (joystickMax/2)) * -1;	
 					r *= sf;
 					// should be set to +- joystick scaled to motor max +-
@@ -265,13 +150,13 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( twistmsg == null )
 						twistmsg = twistpub.newMessage();
 					twistmsg.setLinear(val);
-					if( DEBUG) System.out.println("Set twist linear "+val.getX()+" raw:"+mr[1]);
+					if( DEBUG) System.out.println("Set twist linear "+val.getX()+" raw:"+mr.getReadingValInt());
 				}
 				// look for x input (pivot)
-				if( mr[0] == AnalogPinListener.joystickPinX) {// angular pin
+				if( mr.getRawSeq() == AnalogPinListener.joystickPinX) {// angular pin
 					AnalogPinListener.data.takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					int r = mr[1];
+					int r = mr.getReadingValInt();
 					r = (r - (joystickMax/2));
 					// scale it to motor speed
 					r *= sf;
@@ -282,45 +167,56 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( twistmsg == null )
 						twistmsg = twistpub.newMessage();
 					twistmsg.setAngular(val);
-					if( DEBUG) System.out.println("Set twist angular "+val.getZ()+" raw:"+mr[1]);
+					if( DEBUG) System.out.println("Set twist angular "+val.getZ()+" raw:"+mr.getReadingValInt());
 				}
+			}*/
+			if( !pubdata.isEmpty() ) {
+				int[] pubc = pubdata.takeFirst();
+				geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+				val.setX(pubc[0]);
+				val.setY(0);
+				val.setZ(0);
+				if( twistmsg == null )
+					twistmsg = twistpub.newMessage();
+				twistmsg.setLinear(val);
+
+				if( DEBUG) System.out.println("Set twist linear "+val.getX());
+				geometry_msgs.Vector3 vala = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+				vala.setZ(pubc[1]);
+				vala.setX(0);
+				vala.setY(0);
+				if( twistmsg == null )
+					twistmsg = twistpub.newMessage();
+				twistmsg.setAngular(vala);
+				if( DEBUG) System.out.println("Set twist angular "+val.getZ());	
 			}
-			//}
 			// If we have a full set of coords publish, if we only get a partial then one of them
 			// we in the deadband but that should not preclude a publication of valid coord plus deadband center
 			// thus leaving no dead stick
 			if( twistmsg != null && twistmsg.getLinear() != null && twistmsg.getAngular() != null) {
 				twistpub.publish(twistmsg);
-				if( DEBUG ) {
-					System.out.println("Published:"+twistmsg.getLinear().getX()+","+twistmsg.getAngular().getZ());
-					//printGyro(linear, angular, orientation);
-				}
+				if( DEBUG )
+					System.out.println("Published:"+twistmsg);
 				twistmsg = null;
-			} else {
+			} /*else {
 				if( twistmsg != null && twistmsg.getLinear() != null) {
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 					val.setZ((joystickMax/2));
 					twistmsg.setAngular(val);
-					twistpub.publish(twistmsg);
-					if( DEBUG ) {
-						System.out.println("Published fillin angular:"+twistmsg.getLinear().getX()+","+twistmsg.getAngular().getZ());
-						//printGyro(linear, angular, orientation);
-					}
+					if( DEBUG )
+						System.out.println("Published fillin angular:"+twistmsg);
 					twistmsg = null;
-				} /*else {
+				} else {
 					if( twistmsg != null && twistmsg.getAngular() != null) {
 						geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 						val.setX((joystickMax/2));
 						twistmsg.setLinear(val);
-						twistpub.publish(twistmsg);
-						if( DEBUG ) {
-							System.out.println("Published fillin linear:"+twistmsg.getLinear().getX()+","+twistmsg.getAngular().getZ());
-							//printGyro(linear, angular, orientation);
-						}
+						if( DEBUG )
+							System.out.println("Published fillin linear:"+twistmsg);
 						twistmsg = null;
 					}
-				}*/
-			}
+				}
+			}*/
 				//mc.moveRobotRelative(.5f, 45, 100);
 				//mc.moveRobotRelative(-.25f, 45, 100);
 				//mc.moveRobotRelative(.25f, 45, 100);
@@ -340,20 +236,33 @@ public void onStart(final ConnectedNode connectedNode) {
 
 }
 
-private void printGyro(geometry_msgs.Vector3 angular, geometry_msgs.Vector3 linear, geometry_msgs.Quaternion orientation) {
-	synchronized(navMutex) {
-		System.out.println("Angular x:"+angular.getX());
-		System.out.println("Angular y:"+angular.getY());
-		System.out.println("Angular z:"+angular.getZ());
-		System.out.println("Linear x:"+linear.getX());
-		System.out.println("Linear y:"+linear.getY());
-		System.out.println("Linear z:"+linear.getZ());
-		System.out.println("Gyro x:"+orientation.getX());
-		System.out.println("Gyro y:"+orientation.getY());
-		System.out.println("gyro z:"+orientation.getZ());
-		System.out.println("gyro w:"+orientation.getW());
-		System.out.println("Range top"+rangetop+" bottom:"+rangebot);
+class fileReader implements Runnable {
+	public boolean shouldRun = true;
+	
+	@Override
+	public void run() {
+		while(shouldRun) {
+		try {
+			FileReader fis = new FileReader("/home/jg/coords");
+			BufferedReader br = new BufferedReader(fis);
+			String s = br.readLine();
+			br.close();
+			fis.close();
+			System.out.println(s);
+			
+			String left = s.substring(0,s.indexOf(","));
+			String right = s.substring(s.indexOf(",")+1);
+			System.out.println(left+","+right);
+			int l = Integer.parseInt(left,10);
+			int r = Integer.parseInt(right,10);
+			pubdata.addLast(new int[]{l,r});
+			Thread.sleep(5);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		}
 	}
+	
 }
-
 }

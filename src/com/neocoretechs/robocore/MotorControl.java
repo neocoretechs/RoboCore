@@ -97,9 +97,10 @@ public class MotorControl implements MotorControlInterface2D {
 	 * if x and theta not 0 its rotation about a point in space
 	 *  @param x The radius from the center point of the arc about which we are rotating, if 0 turn in place
 	 *  @param th The 2PI polar measure of arc segment we are traversing, if 0 pure forward/back motion
+	 * @return 
 	 * @throws IOException 
 	 */
-	public synchronized void setMotorSpeed(float x, float th) throws IOException {
+	public synchronized int[] setMotorSpeed(float x, float th) throws IOException {
 
 		float spd_left, spd_right;
   
@@ -108,11 +109,7 @@ public class MotorControl implements MotorControlInterface2D {
 
 		if (x == 0 && th == 0) {
 			moving = false;
-			String motorCommand = "G5 C1 P0";
-			ByteSerialDataPort.getInstance().writeLine(motorCommand);
-			motorCommand = "G5 C2 P0";
-			ByteSerialDataPort.getInstance().writeLine(motorCommand);
-			return;
+			return new int[]{0,0};
 		}
 
 		/* Indicate that we are moving */
@@ -172,9 +169,25 @@ public class MotorControl implements MotorControlInterface2D {
 		/* Convert speeds to ticks per frame */
 		leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
 		rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
+		/* Read the encoders */
+		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
+		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
 
-		updateSpeed();
-		}
+		/* Record the time that the readings were taken */
+		odomInfo.lastOdomTime = System.currentTimeMillis();
+		//odomInfo.encoderStamp = nh.now;
+
+		/* Compute PID update for each motor */
+		doPID(leftWheel);
+		doPID(rightWheel);
+
+		/* Set the motor speeds accordingly */
+		//if( DEBUG )
+		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
+		// we invert channel 1 since its a mirror of the orientation of channel 2
+		leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
+		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
+	}
 	
 	public void setForward() throws IOException {}
 	public void setReverse() throws IOException {}
@@ -210,39 +223,16 @@ public class MotorControl implements MotorControlInterface2D {
 			p.TargetSpeed = -MAXOUTPUT;	
 		}
 
-	/* Read the encoder values and call the PID routine */
-	protected synchronized void updateSpeed() throws IOException {
 
-		/* Read the encoders */
-		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
-		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
-
-		/* Record the time that the readings were taken */
-		odomInfo.lastOdomTime = System.currentTimeMillis();
-		//odomInfo.encoderStamp = nh.now;
-
-		/* If we're not moving there is nothing more to do */
-		if (!moving)
-			return;
-
-		/* Compute PID update for each motor */
-		doPID(leftWheel);
-		doPID(rightWheel);
-
-		/* Set the motor speeds accordingly */
-		//if( DEBUG )
-		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
-		// we invert channel 1 since its a mirror of the orientation of channel 2
-		leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
-		
+	@Override
+	public void updateSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException {
 		String motorCommand = "G5 C1 P"+String.valueOf((int)leftWheel.TargetSpeed);
 		ByteSerialDataPort.getInstance().writeLine(motorCommand);
 		
 		motorCommand = "G5 C2 P"+String.valueOf((int)rightWheel.TargetSpeed);
-		ByteSerialDataPort.getInstance().writeLine(motorCommand);
-		
+		ByteSerialDataPort.getInstance().writeLine(motorCommand);	
 	}
-
+	
 	private synchronized void clearPID() {
 		moving = false;
 		leftWheel.PrevErr = 0;
@@ -568,7 +558,7 @@ public class MotorControl implements MotorControlInterface2D {
 		int Ierror;                    // integrated error
 		int output;                    // last motor setting
 	}
-	}
+}
 
 
 

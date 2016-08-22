@@ -37,195 +37,82 @@ public class MotorControlPWM extends MotorControl {
 	 * @throws IOException 
 	 */
 	@Override
-	public synchronized void setMotorSpeed(float x, float th) throws IOException {
+	public synchronized int[] setMotorSpeed(float x, float th) throws IOException {
 
-		float spd_left, spd_right;
+		//float spd_left, spd_right;
   
 		/* Reset the auto stop timer */
 		lastMotorCommand = System.currentTimeMillis();
 
 		if (x == 0 && th == 0) {
 			moving = false;
-			String motorCommand = "M45 P"+String.valueOf(leftPWMPin)+" S0";
-			ByteSerialDataPort.getInstance().writeLine(motorCommand);
 			if( DEBUG )
-				System.out.println(motorCommand);
-			motorCommand = "M45 P"+String.valueOf(rightPWMPin)+" S0";
-			ByteSerialDataPort.getInstance().writeLine(motorCommand);
-			if( DEBUG )
-				System.out.println(motorCommand);
-			return;
+				System.out.println("STOP!!");
+			return new int[]{ 0,0 };
 		}
-
 		/* Indicate that we are moving */
 		moving = true;
-
-		if (x == 0) {
-			if( th == 32767 ) {
-				setForward();
-				return;
-			} else {
-				if( th == -32767 ) {
-					setReverse();
-					return;
-				}
-			}
-			// Turn in place, rotate the proper wheel forward, the other backward for a spin
-			if( th < 0 ) { // left
-				//spd_right = (float) (th * wheelTrack / 2.0);
-				spd_right = th;
-			} else {
-				//spd_right = -((float) (th * wheelTrack / 2.0));
-				spd_right = -th;
-			}	
-			spd_left = -spd_right;
-		} else {
-			if (th == 0) {	
-				// Pure forward/backward motion
-				spd_left = spd_right = x;
-			} else {
-				// Rotation about a point in space
-				// Calculate Drive Turn output due to X input
-				if (x > 0) {
-				  // Forward
-				  spd_left = ( th > 0 ) ? MAXOUTPUT : (MAXOUTPUT + th);
-				  spd_right = ( th > 0 ) ? (MAXOUTPUT - th) : MAXOUTPUT;
-				} else {
-				  // Reverse
-				  spd_left = (th > 0 ) ? (MAXOUTPUT - th) : MAXOUTPUT;
-				  spd_right = (th > 0 ) ? MAXOUTPUT : (MAXOUTPUT + th);
-				}
-
-				// Scale Drive output due to X input (throttle)
-				spd_left = spd_left * x / MAXOUTPUT;
-				spd_right = spd_right *  x / MAXOUTPUT;
-				
-				// Now calculate pivot amount
-				// - Strength of pivot (nPivSpeed) based on  X input
-				// - Blending of pivot vs drive (fPivScale) based on Y input
-				nPivSpeed = (int) th;
-				// if th beyond pivlimit scale in 
-				fPivScale = (float) ((Math.abs(x)>fPivYLimit)? 0.0 : (1.0 - Math.abs(x)/fPivYLimit));
-
-				// Calculate final mix of Drive and Pivot
-				/* Set the target speeds in meters per second */
-				spd_left = (float) ((1.0-fPivScale)*spd_left + fPivScale*( nPivSpeed));
-				spd_right = (float) ((1.0-fPivScale)*spd_right + fPivScale*(nPivSpeed));
-			}
-		}
-
-		// Calculate final mix of Drive and Pivot
-		// Set the target speeds in wheel rotation command units -1000, 1000 and if indoor mode div by ten
-		leftWheel.TargetSpeed = indoor ? spd_left/10 : spd_left;
-		rightWheel.TargetSpeed = indoor ? spd_right/10 : spd_right;
-		if( DEBUG )
-			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+leftWheel.TargetSpeed+" R:"+rightWheel.TargetSpeed);
-		/* Convert speeds to ticks per frame */
-		leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
-		rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
-
-		updateSpeed();
-		}
-
-	public void setForward() throws IOException {
+		return new int[]{(int)x/scale, (int)th/scale};
+	}
+	
+	
+	private void setLeftForward() throws IOException {
 		String motorCommand = "M41 P"+String.valueOf(leftDirPin); // forward, set pin high
 		ByteSerialDataPort.getInstance().writeLine(motorCommand);
 		if( DEBUG )
 			System.out.println(motorCommand);
-		motorCommand = "M41 P"+String.valueOf(rightDirPin); // forward, set pin high
+	}
+	
+	private void setRightForward() throws IOException {
+		String motorCommand = "M41 P"+String.valueOf(rightDirPin); // forward, set pin high
 		ByteSerialDataPort.getInstance().writeLine(motorCommand);
 		if( DEBUG )
 				System.out.println(motorCommand);
-	
+
 	}
 	
-	public void setReverse() throws IOException {
+	private void setLeftReverse() throws IOException {
 		String motorCommand = "M42 P"+String.valueOf(leftDirPin); // reverse
 		ByteSerialDataPort.getInstance().writeLine(motorCommand);
 		if( DEBUG )
 			System.out.println(motorCommand);
-		motorCommand = "M42 P"+String.valueOf(rightDirPin); // reverse
-		ByteSerialDataPort.getInstance().writeLine(motorCommand);
-		if( DEBUG )
-				System.out.println(motorCommand);
-	}
-	@Override
-	protected synchronized void updateSpeed() throws IOException {
-
-		/* Read the encoders */
-		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
-		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
-
-		/* Record the time that the readings were taken */
-		odomInfo.lastOdomTime = System.currentTimeMillis();
-		//odomInfo.encoderStamp = nh.now;
-
-		/* If we're not moving there is nothing more to do */
-		if (!moving)
-			return;
-
-		/* Compute PID update for each motor */
-		doPID(leftWheel);
-		doPID(rightWheel);
-
-		/* Set the motor speeds accordingly */
-		//if( DEBUG )
-		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
-		//
-		// we invert channel 1 since its a mirror of the orientation of channel 2
-		// WE ONLY NEED THIS WHERE THE MOTOR WAS NOT DESIGNED FOR THE SIDE ITS ON
-		// BUT FLIPPED FROM THE OTHER SIDE
-		//leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
-		//
-		// scale the usual motor range of -1000 to 1000 to 0 to 255 with pin state changes for direction
-		leftWheel.TargetSpeed /= scale;
-		rightWheel.TargetSpeed /= scale;
-		if( leftWheel.TargetSpeed < 0 ) { // reverse
-			//String motorCommand = "M42 P"+String.valueOf(leftDirPin); // reverse
-			//ByteSerialDataPort.getInstance().writeLine(motorCommand);	
-			// reverse and currently reversing
-			String motorCommand = "M45 P"+String.valueOf(leftPWMPin)+" S"+String.valueOf((int)-leftWheel.TargetSpeed);
-			ByteSerialDataPort.getInstance().writeLine(motorCommand);
-			if( DEBUG )
-				System.out.println(motorCommand);
-		} else {
-			 // forward/stop
-				//String motorCommand = "M41 P"+String.valueOf(leftDirPin); // forward, set pin high
-				//ByteSerialDataPort.getInstance().writeLine(motorCommand);
-				//if( DEBUG )
-				//	System.out.println(motorCommand);
-				// forward and currently forwarding
-				String motorCommand = "M45 P"+String.valueOf(leftPWMPin)+" S"+String.valueOf((int)leftWheel.TargetSpeed);
-				ByteSerialDataPort.getInstance().writeLine(motorCommand);
-				if( DEBUG )
-					System.out.println(motorCommand);
-			
-		}
-		
-		if( rightWheel.TargetSpeed < 0 ) {
-			//String motorCommand = "M42 P"+String.valueOf(rightDirPin); // reverse
-			//ByteSerialDataPort.getInstance().writeLine(motorCommand);
-			//if( DEBUG )
-			//		System.out.println(motorCommand);
-			String motorCommand = "M45 P"+String.valueOf(rightPWMPin)+" S"+String.valueOf((int)-rightWheel.TargetSpeed);
-			ByteSerialDataPort.getInstance().writeLine(motorCommand);
-			if( DEBUG )
-				System.out.println(motorCommand);
-		} else {
-				//String motorCommand = "M41 P"+String.valueOf(rightDirPin); // forward, set pin high
-				//ByteSerialDataPort.getInstance().writeLine(motorCommand);
-				//if( DEBUG )
-				//		System.out.println(motorCommand);
-				String motorCommand = "M45 P"+String.valueOf(rightPWMPin)+" S"+String.valueOf((int)rightWheel.TargetSpeed);
-				ByteSerialDataPort.getInstance().writeLine(motorCommand);
-				if( DEBUG )
-					System.out.println(motorCommand);
-		}
-		// store current speed values
-		leftSpeed = (int) leftWheel.TargetSpeed;
-		rightSpeed = (int) rightWheel.TargetSpeed;
 	}
 	
+	private void setRightReverse() throws IOException {
+		String motorCommand = "M42 P"+String.valueOf(rightDirPin); // reverse
+		ByteSerialDataPort.getInstance().writeLine(motorCommand);
+		if( DEBUG )
+			System.out.println(motorCommand);
+	}
+
+	@Override
+	public void updateSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException {
+		if(leftSpeed <= 0) { // previous speed
+			if( leftWheelSpeed > 0 ) // now going forward
+				setLeftForward();
+		} else {
+			if(leftWheelSpeed <= 0 )
+				setLeftReverse();
+		}
+		if(rightSpeed <= 0) { // previous speed
+			if( rightWheelSpeed > 0 ) // now going forward
+				setRightForward();
+		} else {
+			if( rightWheelSpeed <= 0)
+				setRightReverse();
+		}
+		if(leftWheelSpeed < 0) leftWheelSpeed = -leftWheelSpeed;
+		if(rightWheelSpeed < 0) rightWheelSpeed = -rightWheelSpeed;
+		String motorCommand = "M45 P"+String.valueOf(leftPWMPin)+" S"+String.valueOf(leftWheelSpeed);
+		ByteSerialDataPort.getInstance().writeLine(motorCommand);
+		if( DEBUG )
+			System.out.println(motorCommand);
+		motorCommand = "M45 P"+String.valueOf(rightPWMPin)+" S"+String.valueOf(rightWheelSpeed);
+		ByteSerialDataPort.getInstance().writeLine(motorCommand);
+
+		leftSpeed = leftWheelSpeed;
+		rightSpeed = rightWheelSpeed;
+	}
 	@Override
 	protected void init() {
 		super.init();	

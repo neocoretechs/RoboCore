@@ -66,6 +66,8 @@ public class MegaPubs extends AbstractNodeMain  {
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	private MotorControlInterface2D motorControlHost;
 	NavListenerMotorControlInterface navListener = null;
+	private AuxGPIOControl auxGPIO = null;
+	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
 	private boolean shouldMove = true;
 	
@@ -151,6 +153,12 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<geometry_msgs.Twist> substwist = 
 			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 	
+	final Subscriber<std_msgs.UInt32MultiArray> subspwm = 
+			connectedNode.newSubscriber("cmd_pwm", std_msgs.UInt32MultiArray._TYPE);
+	
+	final Subscriber<std_msgs.UInt32MultiArray> subsgpio = 
+			connectedNode.newSubscriber("cmd_gpio", std_msgs.UInt32MultiArray._TYPE);
+	
 	// subscribe to image tag input for emergency stop signal
 	final Subscriber<geometry_msgs.Quaternion> tagsub = 
 			connectedNode.newSubscriber("ardrone/image_tag", geometry_msgs.Quaternion._TYPE);
@@ -196,9 +204,10 @@ public void onStart(final ConnectedNode connectedNode) {
 			System.out.println("Robot commanded to move LIN:" + targetPitch + " ANG:" + targetYaw);
 		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
 		try {
-			if( shouldMove )
-				motorControlHost.setMotorSpeed(targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
-			else
+			if( shouldMove ) {
+				int[] speed = motorControlHost.setMotorSpeed(targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
+				motorControlHost.updateSpeed(speed[0], speed[1]);
+			} else
 				System.out.println("Emergency stop directive in effect, no move to "+targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
 		} catch (IOException e) {
 			System.out.println("there was a problem communicating with motor controller:"+e);
@@ -231,6 +240,37 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	
+	subspwm.addMessageListener(new MessageListener<std_msgs.UInt32MultiArray>() {
+		@Override
+		public void onNewMessage(std_msgs.UInt32MultiArray message) {
+			//if( DEBUG )
+				System.out.println("Aux directive:"+message.getData());
+			if( auxPWM == null )
+				auxPWM = new AuxPWMControl();
+			try {
+				auxPWM.activateAux(message.getData());
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}			
+		}
+	});
+	
+	subsgpio.addMessageListener(new MessageListener<std_msgs.UInt32MultiArray>() {
+		@Override
+		public void onNewMessage(std_msgs.UInt32MultiArray message) {
+			//if( DEBUG )
+				System.out.println("Aux directive:"+message.getData());
+			if( auxGPIO == null )
+				auxGPIO = new AuxGPIOControl();
+			try {
+				auxGPIO.activateAux(message.getData());
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}			
+		}
+	});
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
 
