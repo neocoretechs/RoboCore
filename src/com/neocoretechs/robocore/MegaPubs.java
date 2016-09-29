@@ -141,14 +141,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		AsynchDemuxer.getInstance();	
 	}
 	
-	// set the proper instance of motor control host
-	// do we have a smart controller or simple H bridge
-	// If the M2 command has been issued at startup in AsynchDemuxer assume a smart controller
-	if( AsynchDemuxer.isController) {
-		motorControlHost = new MotorControl();
-	} else {
-		motorControlHost = new MotorControlPWM();
-	}
+	motorControlHost = new MotorControl();
 	
 	final Subscriber<geometry_msgs.Twist> substwist = 
 			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);

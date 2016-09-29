@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.serialreader;
 
 import gnu.io.CommPortIdentifier;
+import gnu.io.CommPortOwnershipListener;
 import gnu.io.NoSuchPortException;
 import gnu.io.PortInUseException;
 import gnu.io.SerialPort;
@@ -37,8 +38,11 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    private static int readBufferTail = 0;
 	    private static int writeBufferHead = 0;
 	    private static int writeBufferTail = 0;
+	    
 	    private static ByteSerialDataPort instance = null;
 	    private static Object mutex = new Object();
+	    private boolean portOwned = false;
+	    
 	    public static ByteSerialDataPort getInstance() {
 	    	synchronized(mutex) {
 	    	if( instance == null ) {
@@ -67,7 +71,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    }
 	    
 	    public void connect(boolean writeable) throws IOException {
-	    	
+	    	portOwned = false;
 	    	//if( Props.DEBUG ) System.out.println("Trying connect to serial port "+portName);
 	        try {
 	            // Obtain a CommPortIdentifier object for the port you want to open
@@ -76,15 +80,19 @@ public class ByteSerialDataPort implements DataPortInterface {
 	            if( portId == null ) {
 	            	throw new IOException("Cant get CommPortIdentifier for "+portName);
 	            }
-	            //if ( portId.isCurrentlyOwned() )
-	            //{
-	            //    if( Props.DEBUG ) System.out.println("Error: Port is currently in use");
-	            //}   
+	        	// Add ownership event listener
+	            portId.addPortOwnershipListener(new SerialOwnershipHandler());
+
 	            serialPort =
 	                    (SerialPort) portId.open("", 5500);
 	            if( serialPort == null ) {
 	            	throw new IOException("Cant open SerialPort "+portName);
 	            }
+	            
+	            while(!portOwned)
+					try {
+						Thread.sleep(1);
+					} catch (InterruptedException e1) {}
 	            //if (! (serialPort instanceof SerialPort) )
 	            //{
 	            //	err
@@ -99,7 +107,13 @@ public class ByteSerialDataPort implements DataPortInterface {
 	            	throw new IOException("Cant get InputStream for port "+portName);
 	            }   
 	            //(new Thread(new SerialReader(inStream))).start();
-	            ThreadPoolManager.getInstance().spin((new SerialReader(inStream)), "SYSTEM");
+	            SerialReader readThread = new SerialReader(inStream);
+	            ThreadPoolManager.getInstance().spin(readThread, "SYSTEM");
+	            while(!readThread.isRunning)
+					try {
+						Thread.sleep(1);
+					} catch (InterruptedException e) {}
+	            
 	            
 	            if( writeable) {
 	                outStream = serialPort.getOutputStream();
@@ -107,9 +121,14 @@ public class ByteSerialDataPort implements DataPortInterface {
 		            	throw new IOException("Cant get OutputStream for port "+portName);
 		            }
 		            //(new Thread(new SerialWriter(outStream))).start();
-		            ThreadPoolManager.getInstance().spin((new SerialWriter(outStream)), "SYSTEM");
-		            
-	            }          
+		            SerialWriter writeThread = new SerialWriter(outStream);
+		            ThreadPoolManager.getInstance().spin(writeThread, "SYSTEM");
+		            while(!writeThread.isRunning)
+						try {
+							Thread.sleep(1);
+						} catch (InterruptedException e) {}
+	            }
+	            
 	        } catch (NoSuchPortException | PortInUseException | UnsupportedCommOperationException e) {
 	        	if( serialPort != null ) {
 	        		serialPort.close();
@@ -328,6 +347,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        {
 	            InputStream in;
 	            public static boolean shouldRun = true;
+	            public boolean isRunning = false;
 	            public SerialReader(InputStream in)
 	            {
 	                this.in = in;
@@ -336,6 +356,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	            public void run ()
 	            {
 	                int inChar = -1;
+	                isRunning = true;
 	                while (SerialReader.shouldRun)
 					{
 						try {
@@ -364,7 +385,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 								System.out.println("Possible buffer overrun "+readBufferHead+" "+readBufferTail);
 							readMx.notify();
 						}
-					}            
+					}
+	                isRunning = false;
 	            }
 	        }
 
@@ -373,6 +395,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        {
 	            OutputStream out;
 	            public static boolean shouldRun = true;
+	            public boolean isRunning = false;
 	            public SerialWriter( OutputStream out )
 	            {
 	                this.out = out;
@@ -380,6 +403,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	            
 	            public void run ()
 	            {
+	            	isRunning = true;
 	                while(SerialWriter.shouldRun)
 					{
 	                	try
@@ -404,6 +428,26 @@ public class ByteSerialDataPort implements DataPortInterface {
 	                	}
 
 					}
+	                isRunning = false;
+	            }
+	        }
+	        
+	        class SerialOwnershipHandler implements CommPortOwnershipListener
+	        {
+	            public void ownershipChange(int type) {
+	                switch (type) {
+	                    case CommPortOwnershipListener.PORT_OWNED:
+	                        //System.out.println("We got the port");
+	                    	portOwned = true;
+	                        break;
+	                    case CommPortOwnershipListener.PORT_UNOWNED:
+	                        //System.out.println("We've just lost our port ownership");
+	                    	portOwned = false;
+	                        break;
+	                    case CommPortOwnershipListener.PORT_OWNERSHIP_REQUESTED:
+	                        //System.out.println("Someone is asking our port's ownership");
+	                        break;
+	                }
 	            }
 	        }
 	        

@@ -25,7 +25,8 @@ public class MotorControl implements MotorControlInterface2D {
 	boolean init = true;
 	Object mutex = new Object();
 	public static final int MAXOUTPUT = 1000; // normal
-	public static boolean indoor = true; // div power by ten indoor mode
+	public static boolean indoor = false; // div power by ten indoor mode
+	public static boolean mirrorWheel = false;
 	//public static int MAXOUTPUT = 50; // indoor
 	/* Stop the robot if it hasn't received a movement command in this number of milliseconds */
 	public static int AUTO_STOP_INTERVAL = 2000;
@@ -185,7 +186,7 @@ public class MotorControl implements MotorControlInterface2D {
 		//if( DEBUG )
 		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
 		// we invert channel 1 since its a mirror of the orientation of channel 2
-		leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
+		if(mirrorWheel) leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
 		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
 	}
 	

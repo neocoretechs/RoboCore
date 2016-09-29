@@ -1,0 +1,197 @@
+package com.neocoretechs.robocore;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.ros.concurrent.CancellableLoop;
+import org.ros.message.MessageListener;
+import org.ros.namespace.GraphName;
+import org.ros.node.AbstractNodeMain;
+import org.ros.node.ConnectedNode;
+import org.ros.node.topic.Publisher;
+import org.ros.node.topic.Subscriber;
+
+import com.pi4j.io.gpio.GpioController;
+import com.pi4j.io.gpio.GpioFactory;
+import com.pi4j.io.gpio.GpioPinDigitalInput;
+import com.pi4j.io.gpio.GpioPinDigitalOutput;
+import com.pi4j.io.gpio.PinPullResistance;
+import com.pi4j.io.gpio.PinState;
+import com.pi4j.io.gpio.RaspiPin;
+import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
+import com.pi4j.io.gpio.event.GpioPinListenerDigital;
+
+public class RangeFinderPubs  extends AbstractNodeMain {
+	private static boolean DEBUG = false;
+	static long count = 0;
+	static boolean alarmTrip = false;
+	double result = 0;
+	GpioPinDigitalOutput firepulse;
+	GpioPinDigitalInput result_pin;
+	private static final int PULSE = 10000;        // #10 us pulse = 10,000 ns
+	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
+	//public static VoxHumana speaker = null;
+	public ConcurrentLinkedQueue<String> pubdata = new ConcurrentLinkedQueue<String>();
+	
+	@Override
+	public GraphName getDefaultNodeName() {
+		return GraphName.of("pubs_rangefinder1");
+	}
+
+	@Override
+	public void onStart(final ConnectedNode connectedNode) {
+		
+		//final Log log = connectedNode.getLog();
+		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
+				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+		Subscriber<std_msgs.Empty> subsalarm = connectedNode.newSubscriber("alarm/shutdown", std_msgs.Empty._TYPE);
+		
+		subsalarm.addMessageListener(new MessageListener<std_msgs.Empty>() {
+			@Override
+			public void onNewMessage(std_msgs.Empty message) {
+				alarmTrip = false;
+			}
+		});
+	
+		UltraPing up = new UltraPing();
+		ThreadPoolManager.getInstance().spin(up, "SYSTEM");
+		// This CancellableLoop will be canceled automatically when the node shuts
+		// down.
+		connectedNode.executeCancellableLoop(new CancellableLoop() {
+			diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
+			@Override
+			protected void setup() {
+				
+			}
+
+			@Override
+			protected void loop() throws InterruptedException {
+				if( !pubdata.isEmpty()) {
+					statmsg.setMessage(pubdata.poll());
+					statpub.publish(statmsg);
+				}
+				Thread.sleep(1);
+			}
+		});
+	}
+	
+	
+	 /**
+	  * 
+	  * Trigger the Range Finder and return the result
+	  * 
+	  * @return
+	  */
+	 public static double getRange(GpioPinDigitalOutput rangefindertrigger,  GpioPinDigitalInput rangefinderresult ) {
+	  long distance = -1;
+	  try {
+		  // fire the trigger pulse, 1 then 0 with 10 microsecond wait 
+		  rangefindertrigger.high();
+		  Thread.sleep(0, PULSE);// wait 10 us
+		  rangefindertrigger.low();
+		  long starttime = System.nanoTime(); //ns
+	      long stop = starttime;
+	      long start = starttime;
+	      //echo will go 0 to 1 and need to save time for that. 2 seconds difference
+	      while ((rangefinderresult.getState() == PinState.LOW) && (start < starttime + 1000000000L * 2)) {
+	          start = System.nanoTime();
+	      }
+	      while ((rangefinderresult.getState() == PinState.HIGH) && (stop < starttime + 1000000000L * 2)) {
+	          stop = System.nanoTime();
+	      }
+	      long delta = (stop - start);
+	      distance = delta * SPEEDOFSOUND; // echo from 0 to 1 depending on object distance
+	      //Thread.sleep(20);
+	  } catch (InterruptedException e) {    
+		  e.printStackTrace();
+		  System.out.println("Exception triggering range finder:"+e);
+	  }
+	 
+	  return distance / 2.0 / (1000000000L); // cm/s; 
+	 }
+	 
+	 public static void main(String[] args) {	 
+		  // Setup GPIO Pins 
+		  GpioController gpio = GpioFactory.getInstance();
+		  //range finder pins 
+		  GpioPinDigitalOutput rangefindertrigger = gpio.provisionDigitalOutputPin(RaspiPin.GPIO_02, "Range Finder Trigger", PinState.LOW);
+		  try {
+			Thread.sleep(250);
+		  } catch (InterruptedException e) {}
+		  GpioPinDigitalInput rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result", PinPullResistance.PULL_UP);
+		  try {
+			Thread.sleep(250);
+		  } catch (InterruptedException e) {}
+	
+		  do {
+			  // Get the range
+			  double distance=RangeFinderPubs.getRange(rangefindertrigger, rangefinderresult);
+			  if( distance < 300) { // 300 cm, max range is 200 cm typical
+				  if( DEBUG ) {
+					  System.out.println();
+					  System.out.println("RangeFinder result ="+distance +" cm");
+				  }
+				  alarmTrip = true;
+				  count = System.currentTimeMillis();
+			  }
+			  if( alarmTrip) {
+				  if( (System.currentTimeMillis() - count) > 2) {// alert every 2 seconds
+					  if(DEBUG)
+						  System.out.print("Intruder ALERT!!\r");
+					  count = System.currentTimeMillis();
+				  }
+			  }
+			  // try {
+			  //	Thread.sleep(100);
+			  //} catch (InterruptedException e) {}
+		  
+		  } while (true);
+		   	   
+	}
+
+
+class UltraPing implements Runnable {
+	public boolean shouldRun = true;
+	
+	@Override
+	public void run() {
+		// Setup GPIO Pins 
+		GpioController gpio = GpioFactory.getInstance();
+		//range finder pins 
+		final GpioPinDigitalOutput rangefindertrigger = gpio.provisionDigitalOutputPin(RaspiPin.GPIO_02, "Range Finder Trigger", PinState.LOW);
+		try {
+			Thread.sleep(250);
+		} catch (InterruptedException e) {}
+		final GpioPinDigitalInput rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result", PinPullResistance.PULL_UP);
+		try {
+			Thread.sleep(250);
+		} catch (InterruptedException e) {}
+		while(shouldRun) {
+		try {
+			 // Get the range
+			  double distance=RangeFinderPubs.getRange(rangefindertrigger, rangefinderresult);
+			  if( distance < 300) { // 300 cm, max range is 200 cm typical
+				  if( DEBUG ) {
+					  System.out.println();
+					  System.out.println("RangeFinder result ="+distance +" cm");
+				  }
+				  alarmTrip = true;
+				  count = System.currentTimeMillis();
+			  }
+			  if( alarmTrip) {
+				  if( (System.currentTimeMillis() - count) > 2) {// alert every 2 seconds
+					  if(DEBUG)
+						  System.out.print("Intruder ALERT!!\r");
+					  pubdata.add("Intruder Alert!");
+					  count = System.currentTimeMillis();
+				  }
+			  }
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		}
+	}
+}
+
+}

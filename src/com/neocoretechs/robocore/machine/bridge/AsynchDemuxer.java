@@ -36,6 +36,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 public class AsynchDemuxer implements Runnable {
 	private static boolean DEBUG = false;
 	private boolean shouldRun = true;
+	private boolean isRunning = false;
 	private static AsynchDemuxer instance = null;
 	private AsynchDemuxer() {}
 	public static AsynchDemuxer getInstance() {
@@ -43,6 +44,10 @@ public class AsynchDemuxer implements Runnable {
 			instance = new AsynchDemuxer();
 			instance.init();
 			ThreadPoolManager.getInstance().spin(instance, "SYSTEM");
+			while(!instance.isRunning)
+				try {
+					Thread .sleep(1);
+				} catch (InterruptedException e) {}
 		}
 		return instance;
 	}
@@ -51,7 +56,6 @@ public class AsynchDemuxer implements Runnable {
 	
 	public static String[] getTopicNames() { return topicNames; }
 	
-	public static boolean isController = false; // if we get an M2 in startup.gcode assume smart motor controller
 	
 	private void init() {
 		ThreadPoolManager.init(topicNames);
@@ -214,12 +218,12 @@ public class AsynchDemuxer implements Runnable {
 	public void config() throws IOException {
 		// now read the startup G-code directives to initiate
 		try {
+			ByteSerialDataPort bsdp = ByteSerialDataPort.getInstance();
 			String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
 			for(String s : starts) {
 				System.out.println("Startup GCode:"+s);
-				ByteSerialDataPort.getInstance().writeLine(s+"\r");
-				if( s.equals("M2") ) isController = true;
-				Thread.sleep(100);
+				bsdp.writeLine(s+"\r");
+				Thread.sleep(10);
 			}
 		} catch (IOException e) {
 			if( DEBUG) System.out.println("No startup.gcode file detected..");
@@ -230,6 +234,7 @@ public class AsynchDemuxer implements Runnable {
 	 */
 	@Override
 	public void run() {
+		isRunning = true;
 		while(shouldRun) {
 			StringBuffer op = new StringBuffer();
 			int r;
@@ -269,7 +274,8 @@ public class AsynchDemuxer implements Runnable {
 			else
 				System.out.println("Cannot demux received directive:"+op.toString());
 			
-		} // shouldRun	
+		} // shouldRun
+		isRunning = false;
 	}
 	
 	private static interface TopicList {

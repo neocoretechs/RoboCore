@@ -4,13 +4,11 @@ package com.neocoretechs.robocore;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
-
 import java.util.ArrayList;
 import java.util.Arrays;
-
 import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
@@ -24,7 +22,10 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
+import com.neocoretechs.robocore.machine.bridge.AnalogPinListener;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.machine.bridge.MachineReading;
 
 
 /**
@@ -42,14 +43,14 @@ public class TwistPubs extends AbstractNodeMain  {
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	geometry_msgs.Twist twistmsg = null;
-	public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
+	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 	//private static int[] data = new int[]{-10,10,100};
 
-	//final static int joystickMin = 0;
-	//final static int joystickMax = 1024;
+	final static int joystickMin = 0;
+	final static int joystickMax = 1024;
 	final static int motorSpeedMax = 1000;
 	// scale it to motor speed
-	//final static int sf = motorSpeedMax / (joystickMax/2);
+	final static int sf = motorSpeedMax / (joystickMax/2);
 	
 	public TwistPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -96,8 +97,8 @@ public NodeConfiguration build()  {
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {
-	fileReader reader = new fileReader();
-	ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
+	//fileReader reader = new fileReader();
+	//ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	
 	final Publisher<geometry_msgs.Twist> twistpub =
@@ -110,13 +111,13 @@ public void onStart(final ConnectedNode connectedNode) {
 	//if( remaps.containsKey("__mode") )
 	//	mode = remaps.get("__mode");
 	//if( mode.equals("startup")) {
-	//	try {
-	//		AsynchDemuxer.getInstance().config();
-	//	} catch (IOException e) {
-	//		System.out.println("Could not start process to read attached serial port.."+e);
-	//		e.printStackTrace();
-	//		return;
-	//	}
+		try {
+			AsynchDemuxer.getInstance().config();
+		} catch (IOException e) {
+		System.out.println("Could not start process to read attached serial port.."+e);
+			e.printStackTrace();
+			return;
+		}
 	//} else {
 	//	AsynchDemuxer.getInstance();	
 	//}
@@ -131,16 +132,15 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
-			//synchronized(data) {
-			/*
+			for(int i = 0; i < 2 ; i++) {
 			if( !AnalogPinListener.data.isEmpty() ) {
-				MachineReading mr = AnalogPinListener.data.peekFirst();
+				int[] mr = AnalogPinListener.data.peekFirst();
 				// wait for our pins to be displayed as we are potentially demuxxing numerous analogpin messages
 				// look for Y input (throttle)
-				if( mr.getRawSeq() == AnalogPinListener.joystickPinY) {// linear pin
+				if( mr[0] == AnalogPinListener.joystickPinY) {// linear pin
 					AnalogPinListener.data.takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					int r = mr.getReadingValInt();
+					int r = mr[1];
 					r = (r - (joystickMax/2)) * -1;	
 					r *= sf;
 					// should be set to +- joystick scaled to motor max +-
@@ -150,13 +150,13 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( twistmsg == null )
 						twistmsg = twistpub.newMessage();
 					twistmsg.setLinear(val);
-					if( DEBUG) System.out.println("Set twist linear "+val.getX()+" raw:"+mr.getReadingValInt());
+					if( DEBUG) System.out.println("Set twist linear "+val.getX()+" raw:"+mr[1]);
 				}
 				// look for x input (pivot)
-				if( mr.getRawSeq() == AnalogPinListener.joystickPinX) {// angular pin
+				if( mr[0] == AnalogPinListener.joystickPinX) {// angular pin
 					AnalogPinListener.data.takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					int r = mr.getReadingValInt();
+					int r = mr[1];
 					r = (r - (joystickMax/2));
 					// scale it to motor speed
 					r *= sf;
@@ -167,9 +167,11 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( twistmsg == null )
 						twistmsg = twistpub.newMessage();
 					twistmsg.setAngular(val);
-					if( DEBUG) System.out.println("Set twist angular "+val.getZ()+" raw:"+mr.getReadingValInt());
+					if( DEBUG) System.out.println("Set twist angular "+val.getZ()+" raw:"+mr[1]);
 				}
-			}*/
+			}
+			}
+			/*
 			if( !pubdata.isEmpty() ) {
 				int[] pubc = pubdata.takeFirst();
 				geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
@@ -190,6 +192,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				twistmsg.setAngular(vala);
 				if( DEBUG) System.out.println("Set twist angular "+val.getZ());	
 			}
+			*/
 			// If we have a full set of coords publish, if we only get a partial then one of them
 			// we in the deadband but that should not preclude a publication of valid coord plus deadband center
 			// thus leaving no dead stick
@@ -198,7 +201,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				if( DEBUG )
 					System.out.println("Published:"+twistmsg);
 				twistmsg = null;
-			} /*else {
+			} else {
 				if( twistmsg != null && twistmsg.getLinear() != null) {
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 					val.setZ((joystickMax/2));
@@ -206,7 +209,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( DEBUG )
 						System.out.println("Published fillin angular:"+twistmsg);
 					twistmsg = null;
-				} else {
+				} /*else {
 					if( twistmsg != null && twistmsg.getAngular() != null) {
 						geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 						val.setX((joystickMax/2));
@@ -215,8 +218,8 @@ public void onStart(final ConnectedNode connectedNode) {
 							System.out.println("Published fillin linear:"+twistmsg);
 						twistmsg = null;
 					}
-				}
-			}*/
+				}*/
+			}
 				//mc.moveRobotRelative(.5f, 45, 100);
 				//mc.moveRobotRelative(-.25f, 45, 100);
 				//mc.moveRobotRelative(.25f, 45, 100);
@@ -231,7 +234,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	
 			Thread.sleep(10);
 		}
-	});  
+			
+	});
+	
 
 
 }
@@ -255,7 +260,7 @@ class fileReader implements Runnable {
 			System.out.println(left+","+right);
 			int l = Integer.parseInt(left,10);
 			int r = Integer.parseInt(right,10);
-			pubdata.addLast(new int[]{l,r});
+			//pubdata.addLast(new int[]{l,r});
 			Thread.sleep(5);
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
