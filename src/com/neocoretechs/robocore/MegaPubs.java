@@ -146,6 +146,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<geometry_msgs.Twist> substwist = 
 			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 	
+	final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
+			connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
+	
 	final Subscriber<std_msgs.UInt32MultiArray> subspwm = 
 			connectedNode.newSubscriber("cmd_pwm", std_msgs.UInt32MultiArray._TYPE);
 	
@@ -202,6 +205,33 @@ public void onStart(final ConnectedNode connectedNode) {
 				motorControlHost.updateSpeed(speed[0], speed[1]);
 			} else
 				System.out.println("Emergency stop directive in effect, no move to "+targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
+		} catch (IOException e) {
+			System.out.println("there was a problem communicating with motor controller:"+e);
+			e.printStackTrace();
+		}
+	}
+	});
+	
+	subsvelocity.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
+	@Override
+	public void onNewMessage(std_msgs.Int32MultiArray message) {
+		//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+		int valch1 = message.getData()[0];
+		int valch2 = message.getData()[1];
+
+		if( valch1 == 0.0 && valch2 == 0.0 )
+				isMoving = false;
+		else
+				isMoving = true;
+		if( DEBUG )
+			System.out.println("Robot commanded to move ABS ch1:" + valch1 + " ch2:" + valch2);
+		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
+		try {
+			if( shouldMove ) {
+				motorControlHost.setAbsoluteMotorSpeed(valch1, valch2);
+			} else
+				System.out.println("Emergency stop directive in effect, no motor power "+valch1+" "+valch2);
 		} catch (IOException e) {
 			System.out.println("there was a problem communicating with motor controller:"+e);
 			e.printStackTrace();

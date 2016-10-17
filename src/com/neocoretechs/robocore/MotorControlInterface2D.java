@@ -18,5 +18,6 @@ public interface MotorControlInterface2D {
 	public TwistInfo moveRobotAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException;
 	public TwistInfo moveRobotRelative(float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException;
 	public int[] setMotorSpeed(float lin, float ang) throws IOException;
+	public void setAbsoluteMotorSpeed(int channel1Speed, int channel2Speed) throws IOException;
 	public void updateSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException;
 }

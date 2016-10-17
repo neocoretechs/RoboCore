@@ -26,7 +26,6 @@ public class MotorControl implements MotorControlInterface2D {
 	Object mutex = new Object();
 	public static final int MAXOUTPUT = 1000; // normal
 	public static boolean indoor = false; // div power by ten indoor mode
-	public static boolean mirrorWheel = false;
 	//public static int MAXOUTPUT = 50; // indoor
 	/* Stop the robot if it hasn't received a movement command in this number of milliseconds */
 	public static int AUTO_STOP_INTERVAL = 2000;
@@ -96,9 +95,9 @@ public class MotorControl implements MotorControlInterface2D {
 	 * modified by current speed to make a gentle curve.
 	 * if theta is 0, move linear in x
 	 * if x and theta not 0 its rotation about a point in space
-	 *  @param x The radius from the center point of the arc about which we are rotating, if 0 turn in place
-	 *  @param th The 2PI polar measure of arc segment we are traversing, if 0 pure forward/back motion
-	 * @return 
+	 * @param x The radius from the center point of the arc about which we are rotating, if 0 turn in place
+	 * @param th The 2PI polar measure of arc segment we are traversing, if 0 pure forward/back motion
+	 * @return int 2 element array of final wheel speed left, right
 	 * @throws IOException 
 	 */
 	public synchronized int[] setMotorSpeed(float x, float th) throws IOException {
@@ -185,9 +184,36 @@ public class MotorControl implements MotorControlInterface2D {
 		/* Set the motor speeds accordingly */
 		//if( DEBUG )
 		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
-		// we invert channel 1 since its a mirror of the orientation of channel 2
-		if(mirrorWheel) leftWheel.TargetSpeed = -leftWheel.TargetSpeed;
 		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
+	}
+	
+	public synchronized void setAbsoluteMotorSpeed(int ch1, int ch2) throws IOException {
+
+		/* Reset the auto stop timer */
+		lastMotorCommand = System.currentTimeMillis();
+		/* Indicate that we are moving */
+		moving = true;
+		// Set the target speeds in wheel rotation command units -1000, 1000 and if indoor mode div by ten
+		leftWheel.TargetSpeed = indoor ? ch1/10 : ch1;
+		rightWheel.TargetSpeed = indoor ? ch2/10 : ch2;
+		if( DEBUG )
+			System.out.println("Absolute Motor L:"+leftWheel.TargetSpeed+" R:"+rightWheel.TargetSpeed);
+		/* Convert speeds to ticks per frame */
+		leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
+		rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
+		/* Read the encoders */
+		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
+		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
+
+		/* Record the time that the readings were taken */
+		odomInfo.lastOdomTime = System.currentTimeMillis();
+		//odomInfo.encoderStamp = nh.now;
+
+		/* Compute PID update for each motor */
+		doPID(leftWheel);
+		doPID(rightWheel);
+
+		updateSpeed((int)leftWheel.TargetSpeed, (int)rightWheel.TargetSpeed);
 	}
 	
 	public void setForward() throws IOException {}

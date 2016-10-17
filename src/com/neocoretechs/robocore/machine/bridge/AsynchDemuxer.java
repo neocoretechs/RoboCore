@@ -129,6 +129,7 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData() {	
 				//mb.init();
 				String readLine;
+				int pin = 0;
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
@@ -136,9 +137,17 @@ public class AsynchDemuxer implements Runnable {
 				}
 				int reading = AbstractMachine.getReadingNumber(readLine);
 				int data =  AbstractMachine.getReadingValueInt(readLine);
+				pin = data;
+				readLine = ByteSerialDataPort.getInstance().readLine();
+				if( readLine == null || readLine.length() == 0 ) {
+							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+						return;
+				}
+				reading = AbstractMachine.getReadingNumber(readLine);
+				data =  AbstractMachine.getReadingValueInt(readLine);
 				if( DEBUG ) 
-						System.out.println("Ultrasonic retrieveData:"+readLine+"| converted:"+reading+" "+data);
-				MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
+				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);
 			}
 		});

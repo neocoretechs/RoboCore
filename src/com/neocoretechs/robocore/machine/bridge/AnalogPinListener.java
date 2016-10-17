@@ -42,6 +42,7 @@ public class AnalogPinListener implements Runnable {
 					if( mr != null ) {
 						if( DEBUG )
 							System.out.println(mr);
+						/*
 						if( mr.getRawSeq() == joystickPinY) {// linear pin
 							if(mr.getReadingValInt() >= yDeadMin && mr.getReadingValInt() <= yDeadMax )
 								continue;
@@ -51,6 +52,7 @@ public class AnalogPinListener implements Runnable {
 									continue;
 							}
 						}
+						*/
 						data.addLast(new int[]{ mr.getRawSeq(), mr.getReadingValInt() });	
 					}
 			} catch(IndexOutOfBoundsException ioobe) {}
