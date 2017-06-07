@@ -203,7 +203,7 @@ public class VideoRanger extends AbstractNodeMain
 				raster.setPixels(0, 0, dwidth, dheight, nibuff);
 				if( rowMax < 390 )
 					raster.setPixels(colMax, rowMax, 10, 10, xbuf);
-				displayPanel.lastFrame = image;
+				displayPanel.setLastFrame((java.awt.Image)image);
 				//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 				//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 				displayPanel.invalidate();

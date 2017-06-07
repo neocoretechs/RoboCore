@@ -57,7 +57,7 @@ import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
  * @author jg
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
@@ -196,7 +196,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				isMoving = false;
 		else
 				isMoving = true;
-		if( DEBUG )
+		//if( DEBUG )
 			System.out.println("Robot commanded to move LIN:" + targetPitch + " ANG:" + targetYaw);
 		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
 		try {
@@ -224,7 +224,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				isMoving = false;
 		else
 				isMoving = true;
-		if( DEBUG )
+		//if( DEBUG )
 			System.out.println("Robot commanded to move ABS ch1:" + valch1 + " ch2:" + valch2);
 		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
 		try {

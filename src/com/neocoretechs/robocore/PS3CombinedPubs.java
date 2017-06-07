@@ -9,13 +9,13 @@ import net.java.games.input.Version;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
@@ -37,13 +37,14 @@ import org.ros.internal.loader.CommandLineLoader;
  * drive params on absolute/cmd_vel. Associate PS3 controller axis made up of components like digital hats and
  * analog axis, digital axis. 
  * Identifiers:
- * 
- *x		Left stick (left/right)
- *y		Left stick (up/down)
- *rx		N/A	 
- *ry		N/A	 
- *z	 	Right stick (left/right)
- *rz		Right stick (up/down)
+ * NYCO CORE CONTROLLER:
+ * Identifies as : USB Joystick
+ *Axis x		Left stick (left/right)
+ *Axis y		Left stick (up/down)
+ *Axis rx		N/A	 
+ *Axis ry		N/A	 
+ *Axis z	 	Right stick (left/right)
+ *Axis rz		Right stick (up/down)
  *Button 0	x  - Thumb 2
  *Button 1	circle - Thumb
  *Button 2	square - Top
@@ -54,19 +55,40 @@ import org.ros.internal.loader.CommandLineLoader;
  *Button 7	Start - Base4
  *Button 8	Left Stick Press - Base5
  *Button 9	Right Stick Press - Base6
- * 
+ *
+ * AFTERGLOW CONTROLLER:
+ * Identifies as : Generic X-Box Pad (right, even though its a PS3!)
+ *Axis x		Left stick (left/right)
+ *Axis y		Left stick (up/down)
+ *Axis z	 	Left trigger
+ *Axis rx(rx)	Right stick (left/right)	 
+ *Axis ry(ry)	Right stick (up/down) 
+ *Axis rz		Right trigger
+ *Button B(B) - circle
+ *Button X(X) - square
+ *Button A(A) - X
+ *Button Y(Y) - triangle
+ *Button Left Thumb - left bumper
+ *Button Right Thumb - right bumper
+ *Button Left Thumb 3 - left stick press
+ *Button Right Thumb 3 - right stick press
+ *Button Select - Select
+ *Button Mode - Mode
+ *Button Unknown - Home
  * @author jg
  */
 public class PS3CombinedPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
+	private static boolean shouldRun = false; // main controller run method loop control
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	geometry_msgs.Twist twistmsg = null;
 	public ConcurrentHashMap<Identifier, Float> pubdata = new ConcurrentHashMap<Identifier,Float>();
-	static final long HEARTBEATMS =100; // 10th of a second
+	public ConcurrentHashMap<Identifier, Float> prevdata = new ConcurrentHashMap<Identifier,Float>();
+	static final long HEARTBEATMS = 100; // 10th of a second
 	List<ControllerManager> controllers = new ArrayList<ControllerManager>();
-
+	int speed = 50; // 50%
 	final static int motorSpeedMax = 1000;
 	// scale it to motor speed
 	
@@ -121,6 +143,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	
 	final Publisher<std_msgs.Int32MultiArray> velpub =
 		connectedNode.newPublisher("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
+	/*
 	final Publisher<std_msgs.Empty> tofpub = connectedNode.newPublisher("ardrone/takeoff", std_msgs.Empty._TYPE);
 	final Publisher<std_msgs.Empty> lanpub = connectedNode.newPublisher("ardrone/land", std_msgs.Empty._TYPE);
 	final Publisher<std_msgs.Empty> forpub = connectedNode.newPublisher("ardrone/forward", std_msgs.Empty._TYPE);
@@ -135,27 +158,19 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Publisher<std_msgs.Int16> altpub = connectedNode.newPublisher("ardrone/setalt", std_msgs.Int16._TYPE);
 	final Publisher<std_msgs.Empty> freezepub = connectedNode.newPublisher("ardrone/freeze", std_msgs.Empty._TYPE);
 	final Publisher<std_msgs.Empty> hovpub = connectedNode.newPublisher("ardrone/hover", std_msgs.Empty._TYPE);
+	final Publisher<std_msgs.Empty> respub = connectedNode.newPublisher("ardrone/reset", std_msgs.Empty._TYPE);
+	*/
 	
-	// Start reading from serial port
-	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
-	// ONLY DO IT ONCE ON INIT!
-	//Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-	//String mode="";
-	//if( remaps.containsKey("__mode") )
-	//	mode = remaps.get("__mode");
-	//if( mode.equals("startup")) {
-	//	try {
-			ControllerReader(pubdata);
-	//	} catch (IOException e) {
-	//	System.out.println("Could not start process to read attached controller.."+e);
-	//		e.printStackTrace();
-	//		return;
-	//	}
-	//} else {
-	//	AsynchDemuxer.getInstance();	
-	//}
-	// This CancellableLoop will be canceled automatically when the node shuts
-	// down.
+	// check command line remappings for __controller:=CONTROLLER or whatever your controller identifies as
+	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	String controllerType="USB Joystick";
+	if( remaps.containsKey("__controller") )
+		controllerType = remaps.get("__controller");
+	System.out.println("Target controller type is "+controllerType);
+	
+	// Main controller creation and thread invocation
+	ControllerReader(pubdata, controllerType);
+
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
 		private int sequenceNumber;
 		private boolean deadStick = false;
@@ -167,12 +182,22 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
+			if( !shouldRun) {
+				System.out.println("Cancelling publishing loop");
+				this.cancel();
+				return;
+			}
+			
 			if( !pubdata.isEmpty() ) {
-			  if(pubdata.containsKey(Component.Identifier.Axis.Y) &&
-				 pubdata.containsKey(Component.Identifier.Axis.RZ))  {
+			 // if(pubdata.containsKey(Component.Identifier.Axis.Y) &&
+			 // pubdata.containsKey(Component.Identifier.Axis.RZ))  {
+			if(pubdata.containsKey(Component.Identifier.Axis.Y) &&
+			   pubdata.containsKey(Component.Identifier.Axis.RY))  {
 				std_msgs.Int32MultiArray val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32MultiArray._TYPE);
+				//Float flj = pubdata.get(Component.Identifier.Axis.Y);
+				//Float frj = pubdata.get(Component.Identifier.Axis.RZ);
 				Float flj = pubdata.get(Component.Identifier.Axis.Y);
-				Float frj = pubdata.get(Component.Identifier.Axis.RZ);
+				Float frj = pubdata.get(Component.Identifier.Axis.RY);
 				if( flj == 0 && frj == 0 ) {
 					if( !deadStick ) {
 						vali = (new int[]{0,0});
@@ -193,126 +218,295 @@ public void onStart(final ConnectedNode connectedNode) {
 			}
 		    if(pubdata.containsKey(Component.Identifier.Axis.POV)) {
 				  Float data = pubdata.get(Component.Identifier.Axis.POV);
+				  Float predata = prevdata.get(Component.Identifier.Axis.POV);
+				  if( predata == null || predata.floatValue() != data) {
+					prevdata.put(Component.Identifier.Axis.POV, data);
 					if (data == Component.POV.OFF){
 						//if(DEBUG)System.out.println("POV OFF");
 					} else if ( data == Component.POV.UP) {
 						if(DEBUG)System.out.println("POV Up");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						forpub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//forpub.publish(val);
 					} else if ( data == Component.POV.UP_RIGHT) {
 						if(DEBUG)System.out.println("POV Up_Right");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						uppub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//uppub.publish(val);
 					} else if ( data == Component.POV.RIGHT) {
 						if(DEBUG)System.out.println("POV Right");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						gorpub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//gorpub.publish(val);
 					} else if ( data == Component.POV.DOWN_RIGHT) {
 						if(DEBUG)System.out.println("POV Down Right");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						downpub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//downpub.publish(val);
 					} else if ( data == Component.POV.DOWN) {
 						if(DEBUG)System.out.println("POV Down");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						bakpub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//bakpub.publish(val);
 					} else if ( data == Component.POV.DOWN_LEFT) {
 						if(DEBUG)System.out.println("POV Down left");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						downpub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//downpub.publish(val);
 					} else if ( data == Component.POV.LEFT) {
 						if(DEBUG)System.out.println("POV Left");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						golpub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//golpub.publish(val);
 					} else if ( data == Component.POV.UP_LEFT) {
 						if(DEBUG)System.out.println("POV Up Left");
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						uppub.publish(val);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//uppub.publish(val);
 					} else { // should never happen
 						if(DEBUG)System.out.println("POV IMPOSSIBLE!!");
-					}		 
+					}
+				  } // data reduction
 			  } // POV
-			  if(pubdata.containsKey(Component.Identifier.Button.BASE)) { // left trigger
-					 Float data = pubdata.get(Component.Identifier.Button.BASE);
-					 if( data != 0) {
-						 if( DEBUG )System.out.println("Base:"+data);
-						 std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						 spinlpub.publish(val);
+	
+		    if(pubdata.containsKey(Component.Identifier.Axis.X)) { // left stick horiz.
+				Float data = pubdata.get(Component.Identifier.Axis.X);
+				Float predata = prevdata.get(Component.Identifier.Axis.X);
+				if( predata == null || predata.floatValue() != data) {
+					prevdata.put(Component.Identifier.Axis.X, data);
+					if( data != 0) {
+						if( DEBUG )System.out.println("Left stick horiz.:"+data);
+						//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+						//spinlpub.publish(val);
+					}
+				}
+			} 
+	
+			if(pubdata.containsKey(Component.Identifier.Axis.RX)) { // right stick horiz.
+				Float data = pubdata.get(Component.Identifier.Axis.RX);
+				Float predata = prevdata.get(Component.Identifier.Axis.RX);	
+				if( predata == null || predata.floatValue() != data) {
+					prevdata.put(Component.Identifier.Axis.RX, data);
+					if( data != 0) {
+						if( DEBUG )System.out.println("Right stick horiz.:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//spinrpub.publish(val);
+					}
+				}
+			}    
+			  //if(pubdata.containsKey(Component.Identifier.Button.BASE)) { // left trigger
+				//	 Float data = pubdata.get(Component.Identifier.Button.BASE);
+				//	 Float predata = prevdata.get(Component.Identifier.Button.BASE);
+			  if(pubdata.containsKey(Component.Identifier.Axis.Z)) { // left trigger
+					 Float data = pubdata.get(Component.Identifier.Axis.Z);
+					 Float predata = prevdata.get(Component.Identifier.Axis.Z);
+					 if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.BASE, data);
+						prevdata.put(Component.Identifier.Axis.Z, data);
+						if( data != 0) {
+							if( DEBUG )System.out.println("Left Trigger:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//spinlpub.publish(val);
+						}
 					 }
 			  } 
-			  if(pubdata.containsKey(Component.Identifier.Button.BASE2)) {
-					Float data = pubdata.get(Component.Identifier.Button.BASE2);
-					if( data != 0) {
-						if( DEBUG )System.out.println("Base2:"+data);
-						std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-						spinrpub.publish(val);
+			  //if(pubdata.containsKey(Component.Identifier.Button.BASE2)) { // trigger right
+				//	Float data = pubdata.get(Component.Identifier.Button.BASE2);
+				//	Float predata = prevdata.get(Component.Identifier.Button.BASE2);
+			  if(pubdata.containsKey(Component.Identifier.Axis.RZ)) { // trigger right
+					Float data = pubdata.get(Component.Identifier.Axis.RZ);
+					Float predata = prevdata.get(Component.Identifier.Axis.RZ);	
+					if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.BASE2, data);
+						prevdata.put(Component.Identifier.Axis.RZ, data);
+						if( data != 0) {
+							if( DEBUG )System.out.println("Right Trigger:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//spinrpub.publish(val);
+						}
 					}
 			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.BASE3)) {
-					Float data = pubdata.get(Component.Identifier.Button.BASE3);
+			  //if(pubdata.containsKey(Component.Identifier.Button.BASE3)) { // select
+			//		Float data = pubdata.get(Component.Identifier.Button.BASE3);
+			  if(pubdata.containsKey(Component.Identifier.Button.SELECT)) { // select
+					Float data = pubdata.get(Component.Identifier.Button.SELECT);
 					if( data != 0) {
-						if( DEBUG )System.out.println("Base3:"+data);
+						if( DEBUG )System.out.println("Select:"+data);
 					}
 			  } 
-			  if(pubdata.containsKey(Component.Identifier.Button.BASE4)) {
-					Float data = pubdata.get(Component.Identifier.Button.BASE4);
-					if( data != 0) {
-						if( DEBUG ) System.out.println("Base4:"+data);
+			  //if(pubdata.containsKey(Component.Identifier.Button.BASE4)) { // start
+					//Float data = pubdata.get(Component.Identifier.Button.BASE4);
+					//Float predata = prevdata.get(Component.Identifier.Button.BASE4);
+			  if(pubdata.containsKey(Component.Identifier.Button.MODE)) { // start
+					Float data = pubdata.get(Component.Identifier.Button.MODE);
+					Float predata = prevdata.get(Component.Identifier.Button.MODE);
+					 if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.BASE4, data);
+						prevdata.put(Component.Identifier.Button.MODE, data);
+						if( data != 0) {
+							if( DEBUG ) System.out.println("Start:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//respub.publish(val);
+						}
+					 }
+			  }
+			  //if(pubdata.containsKey(Component.Identifier.Button.BASE5)) { // left stick press
+			//		Float data = pubdata.get(Component.Identifier.Button.BASE5);
+			//		if( data != 0) {
+			//			if( DEBUG )System.out.println("Left Stick Press:"+data);
+			//		}
+			//  }
+			  if(pubdata.containsKey(Component.Identifier.Button.LEFT_THUMB3)) { // left stick press
+					 Float data = pubdata.get(Component.Identifier.Button.LEFT_THUMB3);
+					 Float predata = prevdata.get(Component.Identifier.Button.LEFT_THUMB3);
+					 if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.BASE, data);
+						prevdata.put(Component.Identifier.Button.LEFT_THUMB3, data);
+						if( data != 0) {
+							if( DEBUG )System.out.println("Left Stick Press:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//spinlpub.publish(val);
+						}
+					 }
+			  }
+			  
+			  //if(pubdata.containsKey(Component.Identifier.Button.BASE6)) { // right stick press
+				//  Float data = pubdata.get(Component.Identifier.Button.BASE6);
+				//  if( data != 0) {
+				//	  if(DEBUG)System.out.println("Right Stick Press:"+data);
+				//  }
+			 // }
+			  if(pubdata.containsKey(Component.Identifier.Button.RIGHT_THUMB3)) { // right stick press
+					Float data = pubdata.get(Component.Identifier.Button.RIGHT_THUMB3);
+					Float predata = prevdata.get(Component.Identifier.Button.RIGHT_THUMB3);	
+					if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.BASE2, data);
+						prevdata.put(Component.Identifier.Button.RIGHT_THUMB3, data);
+						if( data != 0) {
+							if( DEBUG )System.out.println("Right Stick Press:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//spinrpub.publish(val);
+						}
 					}
 			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.BASE5)) {
-					Float data = pubdata.get(Component.Identifier.Button.BASE5);
-					if( data != 0) {
-						if( DEBUG )System.out.println("Base5:"+data);
-					}
+			  //if(pubdata.containsKey(Component.Identifier.Button.TRIGGER)) { // triangle
+				//  Float data = pubdata.get(Component.Identifier.Button.TRIGGER);
+				//  Float predata = prevdata.get(Component.Identifier.Button.TRIGGER);
+			  if(pubdata.containsKey(Component.Identifier.Button.Y)) { // triangle
+				  Float data = pubdata.get(Component.Identifier.Button.Y);
+				  Float predata = prevdata.get(Component.Identifier.Button.Y);  
+				  if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.TRIGGER, data);
+						prevdata.put(Component.Identifier.Button.Y, data);
+						if( data != 0){
+							//std_msgs.Int16 val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int16._TYPE);
+							//if( speed < 100) ++speed;
+							if(DEBUG)System.out.println("Triangle:"+data);
+							//val.setData((short) speed);
+							//speedpub.publish(val);
+						}
+				  }
 			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.BASE6)) {
-				  Float data = pubdata.get(Component.Identifier.Button.BASE6);
+			  //if(pubdata.containsKey(Component.Identifier.Button.THUMB)) { // circle
+			  //  Float data = pubdata.get(Component.Identifier.Button.THUMB);
+			  //	  Float predata = prevdata.get(Component.Identifier.Button.THUMB);
+			  if(pubdata.containsKey(Component.Identifier.Button.B)) { // circle
+				  Float data = pubdata.get(Component.Identifier.Button.B);
+				  Float predata = prevdata.get(Component.Identifier.Button.B);
+				  if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.THUMB, data);
+						prevdata.put(Component.Identifier.Button.B, data);
+						if( data != 0) {
+							if(DEBUG)System.out.println("Circle:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//tofpub.publish(val);
+						}
+				  }
+			  }
+			  //if(pubdata.containsKey(Component.Identifier.Button.THUMB2)) { // X
+				//  Float data = pubdata.get(Component.Identifier.Button.THUMB2);
+				//  Float predata = prevdata.get(Component.Identifier.Button.THUMB2);
+			  if(pubdata.containsKey(Component.Identifier.Button.A)) { // X
+					  Float data = pubdata.get(Component.Identifier.Button.A);
+					  Float predata = prevdata.get(Component.Identifier.Button.A);
+				  if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.THUMB2, data);
+						prevdata.put(Component.Identifier.Button.A, data);
+						if( data != 0) {
+							if( DEBUG )System.out.println("X:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//lanpub.publish(val);
+						}
+				  }
+			  }
+			 // if(pubdata.containsKey(Component.Identifier.Button.TOP)) { // square
+			//	  Float data = pubdata.get(Component.Identifier.Button.TOP);
+			//	  Float predata = prevdata.get(Component.Identifier.Button.TOP);
+			  if(pubdata.containsKey(Component.Identifier.Button.X)) { // square
+				  Float data = pubdata.get(Component.Identifier.Button.X);
+				  Float predata = prevdata.get(Component.Identifier.Button.X);  
+				  if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.TOP, data);
+						prevdata.put(Component.Identifier.Button.X, data);
+						if( data != 0) {
+							//std_msgs.Int16 val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int16._TYPE);
+							//if( speed > 0 ) --speed;
+							if(DEBUG)System.out.println("Square:"+data);
+							//val.setData((short)speed);
+							//speedpub.publish(val);
+						}
+				  }
+			  }
+			  //if(pubdata.containsKey(Component.Identifier.Button.TOP2)) {  //left bumper
+				//  Float data = pubdata.get(Component.Identifier.Button.TOP2);
+				//  Float predata = prevdata.get(Component.Identifier.Button.TOP2);
+			  if(pubdata.containsKey(Component.Identifier.Button.LEFT_THUMB)) {  //left bumper
+				  Float data = pubdata.get(Component.Identifier.Button.LEFT_THUMB);
+				  Float predata = prevdata.get(Component.Identifier.Button.LEFT_THUMB);
+				  if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.TOP2, data);
+						prevdata.put(Component.Identifier.Button.LEFT_THUMB, data);
+						if( data != 0) {
+							if( DEBUG )System.out.println("Left bumper:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//freezepub.publish(val);
+						}
+				  }
+			  }
+			 // if(pubdata.containsKey(Component.Identifier.Button.PINKIE)) { // right bumper
+			//	  Float data = pubdata.get(Component.Identifier.Button.PINKIE);
+			//	  Float predata = prevdata.get(Component.Identifier.Button.PINKIE);
+			  if(pubdata.containsKey(Component.Identifier.Button.RIGHT_THUMB)) { // right bumper
+				  Float data = pubdata.get(Component.Identifier.Button.RIGHT_THUMB);
+				  Float predata = prevdata.get(Component.Identifier.Button.RIGHT_THUMB);	  
+				  if( predata == null || predata.floatValue() != data) {
+						//prevdata.put(Component.Identifier.Button.PINKIE, data);
+						prevdata.put(Component.Identifier.Button.RIGHT_THUMB, data);
+						if( data != 0) {
+							if( DEBUG )System.out.println("Right Bumper:"+data);
+							//std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+							//hovpub.publish(val);
+						}
+				  }
+			  }
+			  /*
+			  if(pubdata.containsKey(Component.Identifier.Button.BACK)) { 
+				  Float data = pubdata.get(Component.Identifier.Button.BACK);
 				  if( data != 0) {
-					  if(DEBUG)System.out.println("Base6:"+data);
+					  if( DEBUG )System.out.println("Back:"+data);
 				  }
 			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.TRIGGER)) {
-				  Float data = pubdata.get(Component.Identifier.Button.TRIGGER);
-				  if( data != 0){
-					  if(DEBUG)System.out.println("Trigger:"+data);
-				  }
-			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.THUMB)) { // circle
-				  Float data = pubdata.get(Component.Identifier.Button.THUMB);
+			  if(pubdata.containsKey(Component.Identifier.Button.EXTRA)) { 
+				  Float data = pubdata.get(Component.Identifier.Button.EXTRA);
 				  if( data != 0) {
-					  if(DEBUG)System.out.println("Thumb:"+data);
-					  std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-					  tofpub.publish(val);
+					  if( DEBUG )System.out.println("Extra:"+data);
 				  }
 			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.THUMB2)) { // X
-				  Float data = pubdata.get(Component.Identifier.Button.THUMB2);
+			  if(pubdata.containsKey(Component.Identifier.Button.MODE)) { 
+				  Float data = pubdata.get(Component.Identifier.Button.MODE);
 				  if( data != 0) {
-					  if( DEBUG )System.out.println("Thumb2:"+data);
-					  std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-					  lanpub.publish(val);
+					  if( DEBUG )System.out.println("Mode:"+data);
 				  }
 			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.TOP)) {
-				  Float data = pubdata.get(Component.Identifier.Button.TOP);
-				  if( data != 0)System.out.println("Top:"+data);
-			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.TOP2)) {  //left bumper
-				  Float data = pubdata.get(Component.Identifier.Button.TOP2);
+			  if(pubdata.containsKey(Component.Identifier.Button.SIDE)) { 
+				  Float data = pubdata.get(Component.Identifier.Button.SIDE);
 				  if( data != 0) {
-					  if( DEBUG )System.out.println("Top2:"+data);
-					  std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-					  freezepub.publish(val);
+					  if( DEBUG )System.out.println("Side:"+data);
 				  }
 			  }
-			  if(pubdata.containsKey(Component.Identifier.Button.PINKIE)) { // right bumper
-				  Float data = pubdata.get(Component.Identifier.Button.PINKIE);
-				  if( data != 0) {
-					  if( DEBUG )System.out.println("Pinkie:"+data);
-					  std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
-					  hovpub.publish(val);
-				  }
-			  }
+			  */
 		  } // pubdata not empty
 		  Thread.sleep(5);	
 		}
@@ -417,7 +611,6 @@ private static class AnalogAxis extends Axis {
 	protected void renderData() {
 		if (getAxis().getDeadZone() >= Math.abs(data)) {
 			//" (DEADZONE)";
-			// add at least one power 0 shutdown at dead zone if not there and we are here
 			data = 0;
 		}
 		if( pubdata2.containsKey(getAxis().getIdentifier())) {
@@ -429,8 +622,6 @@ private static class AnalogAxis extends Axis {
 				System.out.println("AnalogAxis putting "+getAxis().getIdentifier());
 			pubdata2.put(getAxis().getIdentifier(), data);
 		}
-		// add the val
-		//pubdata2.addLast(new int[]{(int) -(data*1000)}); // invert and scale
 	}
 }
 /**
@@ -513,23 +704,34 @@ public static class ControllerManager {
 /**
  * Top level method to publish to a particular topic via placing retrieved data value
  * in ConcurrentHashMap of componentId, data value. Publishing loop will retrieve desired component
- * by name from map. We look specifically for controllers with "USB Joystick" or we get keyboard, mouse, etc as well.
- * @param pubdata2
+ * by name from map. 
+ * We look specifically for controllers with cotype like "USB Joystick" 
+ * or we get keyboard, mouse, etc as well.
+ * @param pubdata2 The map that holds the values returned from each controller index
+ * @param cotype The string that the desired controller name will contain to identify it
  */
-public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2) {
+public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, String cotype) {
+
 	if( DEBUG )
 		System.out.println("Controller version: " + Version.getVersion());
 	ControllerEnvironment ce = ControllerEnvironment.getDefaultEnvironment();
 	Controller[] ca = ce.getControllers();
 	for(int i =0;i<ca.length;i++){
-		if( ca[i].getName().contains("USB Joystick"))
+		if( DEBUG )
+			System.out.println("Found Controller:"+ca[i].getName());
+		if( ca[i].getName().contains(cotype)) { //i.e. "USB Joystick"
 			makeController(pubdata2, ca[i]);
+			shouldRun = true;
+		}
 	}
 
+	if( !shouldRun )
+		System.out.println("NO CONTROLLER MATCHING "+cotype+" FOUND, CONTROL THREAD WILL EXIT.");
+	
 	ThreadPoolManager.getInstance().spin(new Runnable() {
 		public void run(){
 			try {
-				while(true){
+				while(shouldRun){
 					for(Iterator<ControllerManager> i=controllers.iterator();i.hasNext();){
 						try {
 							ControllerManager cw = (ControllerManager)i.next();

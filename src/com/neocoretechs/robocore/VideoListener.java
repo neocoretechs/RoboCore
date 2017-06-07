@@ -15,10 +15,6 @@ import java.util.Map;
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 
-
-
-
-
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -66,7 +62,7 @@ public class VideoListener extends AbstractNodeMain
 			frame.getContentPane().add(displayPanel, BorderLayout.CENTER);
 			displayPanel.setVisible(true);
 			frame.pack();
-			frame.setSize(new Dimension(672, 418));
+			frame.setSize(new Dimension(640, 480));
 			frame.setVisible(true);
 		} else { // if mode is not display, look for output file directory
 			outDir = remaps.get("__mode");
@@ -120,7 +116,7 @@ public class VideoListener extends AbstractNodeMain
 			}
 			
 			if( mode.equals("display")) {
-				displayPanel.lastFrame = image;
+				displayPanel.setLastFrame((java.awt.Image)image);
 				//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 				//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 				displayPanel.invalidate();
