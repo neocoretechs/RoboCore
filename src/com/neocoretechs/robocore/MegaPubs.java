@@ -217,24 +217,27 @@ public void onStart(final ConnectedNode connectedNode) {
 	public void onNewMessage(std_msgs.Int32MultiArray message) {
 		//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
-		int valch1 = message.getData()[0];
-		int valch2 = message.getData()[1];
-
-		if( valch1 == 0.0 && valch2 == 0.0 )
+		int[] valch = message.getData();
+		// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
+		for(int i = 0; i < valch.length; i+=2) {
+			int valch1 = valch[i];
+			int valch2 = valch[i+1];
+			if( valch1 == 0.0 && valch2 == 0.0 )
 				isMoving = false;
-		else
+			else
 				isMoving = true;
-		//if( DEBUG )
-			System.out.println("Robot commanded to move ABS ch1:" + valch1 + " ch2:" + valch2);
-		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
-		try {
-			if( shouldMove ) {
-				motorControlHost.setAbsoluteMotorSpeed(valch1, valch2);
-			} else
-				System.out.println("Emergency stop directive in effect, no motor power "+valch1+" "+valch2);
-		} catch (IOException e) {
-			System.out.println("there was a problem communicating with motor controller:"+e);
-			e.printStackTrace();
+			//if( DEBUG )
+				System.out.println("Robot commanded to move ABS ch1:" + valch1 + " ch2:" + valch2);
+
+			try {
+				if( shouldMove ) {
+					motorControlHost.setAbsoluteMotorSpeed(valch1, valch2);
+				} else
+					System.out.println("Emergency stop directive in effect, no motor power "+valch1+" "+valch2);
+			} catch (IOException e) {
+				System.out.println("there was a problem communicating with motor controller:"+e);
+				e.printStackTrace();
+			}
 		}
 	}
 	});

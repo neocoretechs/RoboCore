@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -90,7 +91,8 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 	List<ControllerManager> controllers = new ArrayList<ControllerManager>();
 	int speed = 50; // 50%
 	final static int motorSpeedMax = 1000;
-	// scale it to motor speed
+	private static ArrayList<Integer> valBuf = new ArrayList<Integer>();
+	private static long lastPubTime = System.currentTimeMillis();
 	
 	public PS3CombinedPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -193,27 +195,31 @@ public void onStart(final ConnectedNode connectedNode) {
 			 // pubdata.containsKey(Component.Identifier.Axis.RZ))  {
 			if(pubdata.containsKey(Component.Identifier.Axis.Y) &&
 			   pubdata.containsKey(Component.Identifier.Axis.RY))  {
-				std_msgs.Int32MultiArray val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32MultiArray._TYPE);
+	
 				//Float flj = pubdata.get(Component.Identifier.Axis.Y);
 				//Float frj = pubdata.get(Component.Identifier.Axis.RZ);
 				Float flj = pubdata.get(Component.Identifier.Axis.Y);
 				Float frj = pubdata.get(Component.Identifier.Axis.RY);
+				// If we have 0,0 which is stop, publish NOW
 				if( flj == 0 && frj == 0 ) {
 					if( !deadStick ) {
-						vali = (new int[]{0,0});
-						val.setData(vali);
+						//vali = (new Integer[]{0,0});
+						//val.setData(vali);
+						valBuf.add(0);
+						valBuf.add(0);
+						std_msgs.Int32MultiArray val = setupPub(connectedNode);
 						velpub.publish(val);
 						if( DEBUG ) 
-							System.out.println("Published "+flj+","+frj);
+							System.out.println("Published on "+flj+","+frj+" with "+valBuf.size());
+						valBuf.clear();
+						lastPubTime = System.currentTimeMillis();
 					}	
 					deadStick = true;
 				} else {
 					deadStick = false;
-					vali = (new int[]{(int)-(flj*1000), (int)-(frj*1000)});
-					val.setData(vali);
-					velpub.publish(val);
-					if( DEBUG ) 
-						System.out.println("Published "+flj+","+frj);
+					valBuf.add((int)(flj*1000));
+					valBuf.add((int)(frj*1000));
+					//val.setData(vali);
 				}
 			}
 		    if(pubdata.containsKey(Component.Identifier.Axis.POV)) {
@@ -508,7 +514,14 @@ public void onStart(final ConnectedNode connectedNode) {
 			  }
 			  */
 		  } // pubdata not empty
-		  Thread.sleep(5);	
+		  if( (System.currentTimeMillis() - lastPubTime) > 1 && !valBuf.isEmpty()) {
+				std_msgs.Int32MultiArray val = setupPub(connectedNode);
+				velpub.publish(val);
+				if( DEBUG ) 
+					System.out.println("Published with "+valBuf.size());
+				valBuf.clear();
+				lastPubTime = System.currentTimeMillis();
+		  }
 		}
 			
 	});
@@ -764,6 +777,35 @@ private void createController(ConcurrentHashMap<Identifier, Float> pubdata2, Con
 	controllers.add(new ControllerManager(pubdata2, c));
 }   
 
+/**
+ * Move the buffered values into the publishing message
+ * @param connectedNode
+ * @return
+ */
+private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode) {
+	std_msgs.Int32MultiArray val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32MultiArray._TYPE);
+	std_msgs.MultiArrayLayout vlayout = new std_msgs.MultiArrayLayout();
+	List<std_msgs.MultiArrayDimension> vdim = new ArrayList<std_msgs.MultiArrayDimension>();
+	std_msgs.MultiArrayDimension vdim1 = new std_msgs.MultiArrayDimension();
+	std_msgs.MultiArrayDimension vdim2 = new std_msgs.MultiArrayDimension();
+	// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
+	vdim1.setLabel("Motor Channel");
+	vdim2.setLabel("Motor Channel value");
+	vdim1.setSize(2);
+	vdim2.setSize(valBuf.size()/2);
+	vdim1.setStride(valBuf.size());
+	vdim2.setStride(2);
+	vdim.add(vdim1);
+	vdim.add(vdim2);
+	vlayout.setDim(vdim);
+	val.setLayout(vlayout);
+	int[] vali = new int[valBuf.size()];
+	int i = 0;
+	for( Integer inv : valBuf)
+		vali[i++] = inv;
+	val.setData(vali);
+	return val;
+}
 
 class fileReader implements Runnable {
 	public boolean shouldRun = true;
