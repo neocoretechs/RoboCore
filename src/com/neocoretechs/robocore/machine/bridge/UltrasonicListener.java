@@ -7,7 +7,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  *
  */
 public class UltrasonicListener implements Runnable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	public static CircularBlockingDeque<Integer> data = new CircularBlockingDeque<Integer>(16);
 	private MachineBridge bridge;
 	private static UltrasonicListener instance = null;

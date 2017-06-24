@@ -2,7 +2,7 @@ package com.neocoretechs.robocore;
 
 import java.io.IOException;
 
-import com.microcaliperdevices.saje.io.machine.dataport.ByteSerialDataPort;
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class AuxGPIOControl {
 	public void activateAux(int[] pinaction) throws IOException {

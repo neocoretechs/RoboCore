@@ -20,6 +20,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
+import org.apache.commons.math3.fitting.PolynomialCurveFitter;
+import org.apache.commons.math3.fitting.WeightedObservedPoints;
 import org.ros.concurrent.CancellableLoop;
 import org.ros.namespace.GraphName;
 import org.ros.namespace.NameResolver;
@@ -89,6 +91,7 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 	public ConcurrentHashMap<Identifier, Float> prevdata = new ConcurrentHashMap<Identifier,Float>();
 	static final long HEARTBEATMS = 100; // 10th of a second
 	List<ControllerManager> controllers = new ArrayList<ControllerManager>();
+	final static int MAXPUBMS = 250; // ms between published messages
 	int speed = 50; // 50%
 	final static int motorSpeedMax = 1000;
 	private static ArrayList<Integer> valBuf = new ArrayList<Integer>();
@@ -189,7 +192,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				this.cancel();
 				return;
 			}
-			
+		
 			if( !pubdata.isEmpty() ) {
 			 // if(pubdata.containsKey(Component.Identifier.Axis.Y) &&
 			 // pubdata.containsKey(Component.Identifier.Axis.RZ))  {
@@ -205,20 +208,31 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( !deadStick ) {
 						//vali = (new Integer[]{0,0});
 						//val.setData(vali);
+						valBuf.clear(); // clear so we are only value, we return to zero immediately and stop
 						valBuf.add(0);
 						valBuf.add(0);
 						std_msgs.Int32MultiArray val = setupPub(connectedNode);
 						velpub.publish(val);
 						if( DEBUG ) 
-							System.out.println("Published on "+flj+","+frj+" with "+valBuf.size());
-						valBuf.clear();
+							System.out.println("Published on "+flj+","+frj+" with "+val.getData().length);
+						//valBuf.clear();
 						lastPubTime = System.currentTimeMillis();
 					}	
 					deadStick = true;
 				} else {
 					deadStick = false;
-					valBuf.add((int)(flj*1000));
-					valBuf.add((int)(frj*1000));
+					if( (System.currentTimeMillis() - lastPubTime) > MAXPUBMS ) {
+						valBuf.add((int)(flj*1000));
+						valBuf.add((int)(frj*1000));
+						// remove the lines below to build array for publishing
+						// in this mode there should be 1 value published instead of array
+						std_msgs.Int32MultiArray val = setupPub(connectedNode);
+						velpub.publish(val);
+						if( DEBUG ) 
+							System.out.println("Published on "+flj*1000+","+frj*1000+" with "+val.getData().length);
+						valBuf.clear();
+						lastPubTime = System.currentTimeMillis();
+					}
 					//val.setData(vali);
 				}
 			}
@@ -514,16 +528,15 @@ public void onStart(final ConnectedNode connectedNode) {
 			  }
 			  */
 		  } // pubdata not empty
-		  if( (System.currentTimeMillis() - lastPubTime) > 1 && !valBuf.isEmpty()) {
+		  if( (System.currentTimeMillis() - lastPubTime) > MAXPUBMS && !valBuf.isEmpty()) {
 				std_msgs.Int32MultiArray val = setupPub(connectedNode);
 				velpub.publish(val);
 				if( DEBUG ) 
-					System.out.println("Published with "+valBuf.size());
+					System.out.println("Published with "+val.getData().length);
 				valBuf.clear();
 				lastPubTime = System.currentTimeMillis();
 		  }
-		}
-			
+		}	
 	});
 }
 
@@ -747,13 +760,13 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Stri
 				while(shouldRun){
 					for(Iterator<ControllerManager> i=controllers.iterator();i.hasNext();){
 						try {
-							ControllerManager cw = (ControllerManager)i.next();
-							cw.poll();
+								ControllerManager cw = (ControllerManager)i.next();
+								cw.poll();
 						} catch (Exception e) {
-							e.printStackTrace();
+								e.printStackTrace();
 						}
+						Thread.sleep(HEARTBEATMS);
 					}
-					Thread.sleep(HEARTBEATMS);
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -789,18 +802,48 @@ private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode) {
 	std_msgs.MultiArrayDimension vdim1 = new std_msgs.MultiArrayDimension();
 	std_msgs.MultiArrayDimension vdim2 = new std_msgs.MultiArrayDimension();
 	// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
+	/*
+	// thin data via curve fitting
+	// Collect data.
+	if( DEBUG )
+		System.out.println("thinning "+valBuf.size());
+	final WeightedObservedPoints obs = new WeightedObservedPoints();
+	Integer xold = new Integer(Integer.MAX_VALUE);
+	Integer yold = new Integer(Integer.MAX_VALUE);
+	for(int i = 0; i < valBuf.size(); i+=2) {
+		if( valBuf.get(i) != xold || valBuf.get(i+1) != yold) {
+			obs.add(valBuf.get(i), valBuf.get(i+1));
+			xold = valBuf.get(i);
+			yold = valBuf.get(i+1);
+		}
+	}
+	if( DEBUG) 
+		System.out.println("Observer points: "+obs.toList().size());
+	
+	// Instantiate a third-degree polynomial fitter.
+	final PolynomialCurveFitter fitter = PolynomialCurveFitter.create(3);
+
+	// Retrieve fitted parameters (coefficients of the polynomial function).
+	final double[] coeff = fitter.fit(obs.toList());
+	if( DEBUG )
+		System.out.println("Fit points:"+coeff.length);
+	*/
 	vdim1.setLabel("Motor Channel");
 	vdim2.setLabel("Motor Channel value");
 	vdim1.setSize(2);
 	vdim2.setSize(valBuf.size()/2);
 	vdim1.setStride(valBuf.size());
+	//vdim2.setSize(coeff.length/2);
+	//vdim1.setStride(coeff.length);
 	vdim2.setStride(2);
 	vdim.add(vdim1);
 	vdim.add(vdim2);
 	vlayout.setDim(vdim);
 	val.setLayout(vlayout);
 	int[] vali = new int[valBuf.size()];
+	//int[] vali = new int[coeff.length];
 	int i = 0;
+	//for( double inv : coeff)
 	for( Integer inv : valBuf)
 		vali[i++] = inv;
 	val.setData(vali);

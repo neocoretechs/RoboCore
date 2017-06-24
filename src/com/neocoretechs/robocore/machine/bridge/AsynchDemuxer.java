@@ -210,7 +210,7 @@ public class AsynchDemuxer implements Runnable {
 				}
 				reading = AbstractMachine.getReadingNumber(readLine);
 				data =  AbstractMachine.getReadingValueInt(readLine);
-				//if( DEBUG ) 
+				if( DEBUG ) 
 						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);	
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);	

@@ -416,7 +416,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	                    			writeMx.wait();
 	                    			//System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                			}
-	                			//System.out.println("SW:"+(char)(writeBuffer[writeBufferHead]));
+	                			//System.out.print((char)(writeBuffer[writeBufferHead]));
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();
 	                		}
