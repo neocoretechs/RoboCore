@@ -19,10 +19,9 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
  	 * Bridges machine ops and model implementation. The manner in which this acts as a bridge is that this is
  	 * a passive behavioral construct that acts in a thread safe manner in between two active threads; one
  	 * transmitting or placing the data, the other receiving or retrieving the data. After completion the
- 	 * machineReadings ArrayList contains the data and can be accessed by other parts of the app in a thread safe manner
- 	 * and will ignore the null in the array that signals the end for the listeners.
+ 	 * machineReadings ArrayList contains the data and can be accessed by other parts of the app in a thread safe manner.
  	 * @author jg
- 	 * Copyright © 2012 Microcaliper Devices, LLC
+ 	 * Copyright 2012,2017 NeoCoreTechs
  	 */
 	//@XmlRootElement @XmlType(factoryMethod="getInstance")
 	@XmlRootElement(name="MachineBridge")

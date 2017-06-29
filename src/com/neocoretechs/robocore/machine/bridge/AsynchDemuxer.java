@@ -106,18 +106,19 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData() {
 				String readLine;
-				for(int i = 0; i < 8; i++) {
+				//for(int i = 0; i < 8; i++) {
 					readLine = ByteSerialDataPort.getInstance().readLine();
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						continue;
+						//continue;
+						return;
 					}
 					int reading = AbstractMachine.getReadingNumber(readLine);
 					String data =  AbstractMachine.getReadingValueString(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
-				}
+				//}
 			}
 		});
 		MotorFaultListener.getInstance();
