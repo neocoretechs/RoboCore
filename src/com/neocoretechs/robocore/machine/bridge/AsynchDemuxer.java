@@ -34,7 +34,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private boolean shouldRun = true;
 	private boolean isRunning = false;
 	private static AsynchDemuxer instance = null;
@@ -66,10 +66,10 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData() {  
 		        String readLine;
-				while( (readLine = ByteSerialDataPort.getInstance().readLine()) != null ) {
-					if( readLine.length() == 0 ) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</dataset>") ) {
+					if( readLine == null ||  readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						continue;
+						return;
 					}
 					int reading = AbstractMachine.getReadingNumber(readLine);
 					double data =  AbstractMachine.getReadingValueDouble(readLine);
@@ -85,16 +85,18 @@ public class AsynchDemuxer implements Runnable {
 	        MachineBridge mb = MachineBridge.getInstance("battery");
 			@Override
 			public void retrieveData() {
-			    String readLine = ByteSerialDataPort.getInstance().readLine();
-				if( readLine == null || readLine.length() == 0 ) {
+				String readLine;
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</battery>") ) {
+					if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 							return;
+					}
+					int reading = AbstractMachine.getReadingNumber(readLine);
+					int data =  AbstractMachine.getReadingValueInt(readLine);
+					//if( Props.DEBUG ) System.out.println(readLine);
+					MachineReading mr = new MachineReading(1, reading, reading+1, data);
+					mb.add(mr);
 				}
-				int reading = AbstractMachine.getReadingNumber(readLine);
-				int data =  AbstractMachine.getReadingValueInt(readLine);
-				//if( Props.DEBUG ) System.out.println(readLine);
-				MachineReading mr = new MachineReading(1, reading, reading+1, data);
-				mb.add(mr);
 			}
 		});
 		// start the listener thread for this topic
@@ -107,7 +109,7 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData() {
 				String readLine;
 				//for(int i = 0; i < 8; i++) {
-					readLine = ByteSerialDataPort.getInstance().readLine();
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</motorfault>") ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						//continue;
@@ -118,7 +120,7 @@ public class AsynchDemuxer implements Runnable {
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
-				//}
+				}
 			}
 		});
 		MotorFaultListener.getInstance();
@@ -131,7 +133,7 @@ public class AsynchDemuxer implements Runnable {
 				//mb.init();
 				String readLine;
 				int pin = 0;
-				readLine = ByteSerialDataPort.getInstance().readLine();
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</ultrasonic>") ) {
 				if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
@@ -150,6 +152,7 @@ public class AsynchDemuxer implements Runnable {
 						System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);
+				}
 			}
 		});
 		// start an ultrasonic listener
@@ -163,7 +166,7 @@ public class AsynchDemuxer implements Runnable {
 				//mb.init();
 				String readLine;
 				int pin = 0;
-				readLine = ByteSerialDataPort.getInstance().readLine();
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</analogpin>") ) {
 				if( readLine == null || readLine.length() == 0 ) {
 					return;
 				}
@@ -181,7 +184,8 @@ public class AsynchDemuxer implements Runnable {
 				if( DEBUG ) 
 					System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
-				mb.add(mr);		
+				mb.add(mr);
+				}
 			}
 		});
 		// start an analog pin listener
@@ -194,7 +198,7 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData() {
 				String readLine;
 				int pin = 0;
-				readLine = ByteSerialDataPort.getInstance().readLine();
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</digitalpin>") ) {
 				if( readLine == null || readLine.length() == 0 ) {
 					System.out.println("premature return digitalpin retrieveData");
 					return;
@@ -215,6 +219,7 @@ public class AsynchDemuxer implements Runnable {
 						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);	
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);	
+				}
 			}
 		});
 		// start a digital pin listener
@@ -246,44 +251,28 @@ public class AsynchDemuxer implements Runnable {
 	public void run() {
 		isRunning = true;
 		while(shouldRun) {
-			StringBuffer op = new StringBuffer();
-			int r;
-			int i;
+			String op;
 			try {
-				if((i=ByteSerialDataPort.getInstance().read()) != '<' ) {
-					if( i == -1)
-						System.out.println("Looking for directive but found EOF");
+				if((op=ByteSerialDataPort.getInstance().readLine()).charAt(0) == '<' ) {
+					if(DEBUG)
+						System.out.println("op:"+op);
+					//if( Props.DEBUG ) System.out.println("Demuxing "+op.toString());
+					TopicList tl = topics.get(op.substring(1, op.lastIndexOf('>')));
+					if( tl != null )
+						tl.retrieveData();
 					else
-						System.out.println("Looking for directive but found "+i+" "+Character.toChars(i)[0]);
-					continue;
+						System.out.println("Cannot demux received directive:"+op);
+					
+				} else {
+						System.out.println("Looking for directive but found "+op);
+						continue;
 				}
-				while((r = ByteSerialDataPort.getInstance().read()) != '>') {
-						op.append((char)r);
-						if( op.length() > 128 ) {
-							System.out.println("Directive exceeds legal length:"+op);
-							op = new StringBuffer();
-							continue;
-						}
-				}
-				// Soak up c/r
-				ByteSerialDataPort.getInstance().read();
-				// soak up l/f
-				ByteSerialDataPort.getInstance().read();
-				if(DEBUG)
-					System.out.println("op:"+op.toString());
-				if( op.length() == 0 )
-					continue;
-			} catch (IOException ioe) {
-				System.out.println("AsynchDemux IO exception:"+ioe);
+	
+			} catch (IndexOutOfBoundsException ioe) {
+				System.out.println("AsynchDemux zero length directive, continuing..");
 				continue;
 			}
-			//if( Props.DEBUG ) System.out.println("Demuxing "+op.toString());
-			TopicList tl = topics.get(op.toString());
-			if( tl != null )
-				tl.retrieveData();
-			else
-				System.out.println("Cannot demux received directive:"+op.toString());
-			
+	
 		} // shouldRun
 		isRunning = false;
 	}

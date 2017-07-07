@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.test;
 
 import net.java.games.input.Component;
 import net.java.games.input.Component.Identifier;
@@ -29,6 +29,8 @@ import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
+
+import com.neocoretechs.robocore.ThreadPoolManager;
 
 
 /**

@@ -45,6 +45,7 @@ public class MotorFaultListener implements Runnable {
 					MachineReading mr = bridge.take();
 					if( mr != null ) {
 						String sdata = mr.getReadingValString();
+						System.out.println("MOTOR FAULT:"+sdata);
 						if( sdata != null )
 							data.addLast(sdata);
 					}

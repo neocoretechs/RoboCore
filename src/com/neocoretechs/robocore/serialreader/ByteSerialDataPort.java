@@ -173,6 +173,10 @@ public class ByteSerialDataPort implements DataPortInterface {
     			//checkWriteBuffer();
 	    		writeMx.notify();
 	    	}
+	    	//try {
+			//	Thread.sleep(15);
+			//} catch (InterruptedException e) {}
+
 	    }
 	    
 	    private void checkWriteBuffer() {
@@ -416,7 +420,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	                    			writeMx.wait();
 	                    			//System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                			}
-	                			//System.out.print((char)(writeBuffer[writeBufferHead]));
+	                			//System.out.print("["+(char)(writeBuffer[writeBufferHead])+"@"+writeBufferHead+"]");
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();
 	                		}
