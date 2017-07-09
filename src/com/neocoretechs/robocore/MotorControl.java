@@ -253,11 +253,10 @@ public class MotorControl implements MotorControlInterface2D {
 
 	@Override
 	public void updateSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException {
-		String motorCommand = "G5 C1 P"+String.valueOf((int)leftWheel.TargetSpeed);
-		ByteSerialDataPort.getInstance().writeLine(motorCommand);
-		
-		motorCommand = "G5 C2 P"+String.valueOf((int)rightWheel.TargetSpeed);
-		ByteSerialDataPort.getInstance().writeLine(motorCommand);	
+		String motorCommand1 = "G5 C1 P"+String.valueOf((int)leftWheelSpeed);
+		ByteSerialDataPort.getInstance().writeLine(motorCommand1);
+		String motorCommand2 = "G5 C2 P"+String.valueOf((int)rightWheelSpeed);
+		ByteSerialDataPort.getInstance().writeLine(motorCommand2);	
 	}
 	
 	private synchronized void clearPID() {
