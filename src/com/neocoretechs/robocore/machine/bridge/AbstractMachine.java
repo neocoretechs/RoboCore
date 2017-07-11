@@ -75,7 +75,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
         		if( sindex != -1 && sindex+1 < readLine.length() ) {
         			String rnum = readLine.substring(sindex+1);
         			try {
-        			return new Double(rnum).doubleValue();
+        				return new Double(rnum).doubleValue();
         			} catch(Exception e) {
         				System.out.println("Bad reading from "+readLine);
         			}
@@ -91,7 +91,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
         		if( sindex != -1 && sindex+1 < readLine.length() ) {
         			String rnum = readLine.substring(sindex+1);
         			try {
-        			return new Integer(rnum).intValue();
+        				return new Integer(rnum).intValue();
         			} catch(Exception e) {
         				System.out.println("Bad reading from "+readLine);
         			}
@@ -107,7 +107,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
         		if( sindex != -1 && sindex+1 < readLine.length() ) {
         			String rnum = readLine.substring(sindex+1);
         			try {
-        			return rnum;
+        				return rnum;
         			} catch(Exception e) {
         				System.out.println("Bad reading from "+readLine);
         			}

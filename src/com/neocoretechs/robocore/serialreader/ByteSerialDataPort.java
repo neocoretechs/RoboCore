@@ -66,6 +66,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	stopb = tstopb;
 	    	parityb = tparityb;
 	    	connect(true);
+	    	//clear();
 	    	if( DEBUG ) 
 	    		System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	    }
@@ -232,20 +233,17 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
-				while( (c = read()) != -1 && c != '\r' ) {
+				while( c != '\r' && c != '\n' ) {
+					c = read();
 					//if( DEBUG )
 					//	System.out.print("["+Character.toChars(c)[0]+"]");
-					sb.append((char)c);
+					if( c != -1 )
+						sb.append((char)c);
 				}
-				if( c == '\r' )
-					read(); // soak up c/r lf
 			} catch (IOException e) {
+				System.out.println("IOException reading line:"+sb.toString());
+				return null;
 			}
-	    	if( c == -1 ) {
-	    		//if( DEBUG )
-	    		//	System.out.println();
-	    		return null;
-	    	}
 	    	return sb.toString();
 	    }
 	    
@@ -258,11 +256,18 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    public String readLine(long timeout) throws IOException {
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
-			while( (c = read(timeout)) != -1 && c != 10 && c != 13) {
-					sb.append((char)c);
+	    	try {
+				while( c != '\r' && c != '\n' ) {
+					c = read(timeout);
+					//if( DEBUG )
+					//	System.out.print("["+Character.toChars(c)[0]+"]");
+					if( c != -1 )
+						sb.append((char)c);
+				}
+			} catch (IOException e) {
+				System.out.println("IOException reading line:"+sb.toString());
+				return null;
 			}
-	    	if( c == -1 )
-	    		return null;
 	    	return sb.toString();
 	    }
 	    /**

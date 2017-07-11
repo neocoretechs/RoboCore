@@ -155,9 +155,6 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<std_msgs.UInt32MultiArray> subsgpio = 
 			connectedNode.newSubscriber("cmd_gpio", std_msgs.UInt32MultiArray._TYPE);
 	
-	// subscribe to image tag input for emergency stop signal
-	final Subscriber<geometry_msgs.Quaternion> tagsub = 
-			connectedNode.newSubscriber("ardrone/image_tag", geometry_msgs.Quaternion._TYPE);
 	
 	/**
 	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
@@ -201,8 +198,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
 		try {
 			if( shouldMove ) {
-				int[] speed = motorControlHost.setMotorSpeed(targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
-				motorControlHost.updateSpeed(speed[0], speed[1]);
+				int[] speed = motorControlHost.setMotorArcSpeed(targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
 			} else
 				System.out.println("Emergency stop directive in effect, no move to "+targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
 		} catch (IOException e) {
@@ -243,7 +239,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	});
 	/*
 	 * Provide an emergency stop via image recognition facility
-	 */
+	 
 	tagsub.addMessageListener(new MessageListener<geometry_msgs.Quaternion>() {
 		@Override
 		public void onNewMessage(geometry_msgs.Quaternion message) {
@@ -265,12 +261,13 @@ public void onStart(final ConnectedNode connectedNode) {
 			}
 		}
 	});
+	*/
 	
 	subspwm.addMessageListener(new MessageListener<std_msgs.UInt32MultiArray>() {
 		@Override
 		public void onNewMessage(std_msgs.UInt32MultiArray message) {
 			//if( DEBUG )
-				System.out.println("Aux directive:"+message.getData());
+				System.out.println("PWM directive:"+message.getData());
 			if( auxPWM == null )
 				auxPWM = new AuxPWMControl();
 			try {
@@ -286,7 +283,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		@Override
 		public void onNewMessage(std_msgs.UInt32MultiArray message) {
 			//if( DEBUG )
-				System.out.println("Aux directive:"+message.getData());
+				System.out.println("GPIO directive:"+message.getData());
 			if( auxGPIO == null )
 				auxGPIO = new AuxGPIOControl();
 			try {

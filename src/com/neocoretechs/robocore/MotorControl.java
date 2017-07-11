@@ -11,6 +11,8 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * the comm to the motor controller.
  * The relevant methods generate Twist messages that can be multiplexed to the Ros bus
  * and sent further on.
+ * Increasing levels of complexity of motion control with options to move in polar arcs, set absolute speeds, etc.
+ * Absolute and relative motion with the fusion of IMU data if desired.
  * @author jg
  *
  */
@@ -100,7 +102,7 @@ public class MotorControl implements MotorControlInterface2D {
 	 * @return int 2 element array of final wheel speed left, right
 	 * @throws IOException 
 	 */
-	public synchronized int[] setMotorSpeed(float x, float th) throws IOException {
+	public synchronized int[] setMotorArcSpeed(float x, float th) throws IOException {
 
 		float spd_left, spd_right;
   
@@ -184,6 +186,7 @@ public class MotorControl implements MotorControlInterface2D {
 		/* Set the motor speeds accordingly */
 		//if( DEBUG )
 		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
+		updateSpeed((int)leftWheel.TargetSpeed, (int)rightWheel.TargetSpeed);
 		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
 	}
 	
@@ -252,11 +255,17 @@ public class MotorControl implements MotorControlInterface2D {
 
 
 	@Override
-	public void updateSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException {
-		String motorCommand1 = "G5 C1 P"+String.valueOf((int)leftWheelSpeed);
+	public synchronized void updateSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException {
+		String motorCommand1 = "G5 C1 P"+String.valueOf(leftWheelSpeed);
 		ByteSerialDataPort.getInstance().writeLine(motorCommand1);
-		String motorCommand2 = "G5 C2 P"+String.valueOf((int)rightWheelSpeed);
-		ByteSerialDataPort.getInstance().writeLine(motorCommand2);	
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}
+		String motorCommand2 = "G5 C2 P"+String.valueOf(rightWheelSpeed);
+		ByteSerialDataPort.getInstance().writeLine(motorCommand2);
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}
 	}
 	
 	private synchronized void clearPID() {
@@ -276,7 +285,7 @@ public class MotorControl implements MotorControlInterface2D {
 	}
 	
 	public synchronized void commandStop() throws IOException {
-		setMotorSpeed(0.0f, 0.0f);
+		setAbsoluteMotorSpeed(0, 0);
 	}
 
 	protected synchronized void init() {
@@ -383,7 +392,7 @@ public class MotorControl implements MotorControlInterface2D {
 	                //stasis(fabs(wheel_theta),fabs(imu_theta));
 	                if( DEBUG )
 	                	System.out.println(twistInfo);
-	                setMotorSpeed(targetDistance, twistInfo.robotTheta);
+	                setMotorArcSpeed(targetDistance, twistInfo.robotTheta);
 	                return twistInfo;//twistInfo.robotTheta;
 	        //}
 	}
@@ -441,7 +450,7 @@ public class MotorControl implements MotorControlInterface2D {
 	                //stasis(fabs(wheel_theta),fabs(imu_theta));
 	                if( DEBUG )
 	                	System.out.println(twistInfo);
-	                setMotorSpeed(targetDistance, twistInfo.wheelTheta);
+	                setMotorArcSpeed(targetDistance, twistInfo.wheelTheta);
 	                return twistInfo;//twistInfo.robotTheta;
 	        //}
 	}

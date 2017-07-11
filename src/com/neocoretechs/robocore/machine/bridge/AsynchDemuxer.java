@@ -237,8 +237,8 @@ public class AsynchDemuxer implements Runnable {
 			String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
 			for(String s : starts) {
 				System.out.println("Startup GCode:"+s);
-				bsdp.writeLine(s+"\r");
-				Thread.sleep(10);
+				bsdp.writeLine(s);
+				Thread.sleep(100);
 			}
 		} catch (IOException e) {
 			if( DEBUG) System.out.println("No startup.gcode file detected..");
@@ -254,17 +254,23 @@ public class AsynchDemuxer implements Runnable {
 			String op;
 			try {
 				if((op=ByteSerialDataPort.getInstance().readLine()).charAt(0) == '<' ) {
+					int endDelim = op.indexOf('>');
+					if( endDelim == -1 ) {
+						System.out.println("Cannot demux received directive:"+op);
+						continue;
+					}
+					op = op.substring(1, endDelim);
 					if(DEBUG)
 						System.out.println("op:"+op);
 					//if( Props.DEBUG ) System.out.println("Demuxing "+op.toString());
-					TopicList tl = topics.get(op.substring(1, op.lastIndexOf('>')));
+					TopicList tl = topics.get(op);
 					if( tl != null )
 						tl.retrieveData();
 					else
 						System.out.println("Cannot demux received directive:"+op);
 					
 				} else {
-						System.out.println("Looking for directive but found "+op);
+						System.out.println("Looking for directive but found:"+op);
 						continue;
 				}
 	
