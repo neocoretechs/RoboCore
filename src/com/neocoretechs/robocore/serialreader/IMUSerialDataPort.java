@@ -43,6 +43,42 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private static Object mutex = new Object();
 	    private boolean portOwned = false;
 	    
+	    //BNO055
+	    //Page id register definition
+	    public static final byte BNO055_ID              = (byte)0xA0;
+	    public static final byte BNO055_PAGE_ID_ADDR    = (byte)0x07;
+	    // PAGE0 REGISTER DEFINITION START
+	    public static final byte BNO055_CHIP_ID_ADDR    = (byte)0x00;
+	    public static final byte BNO055_ACCEL_REV_ID_ADDR  = (byte)0x01;
+	    public static final byte BNO055_MAG_REV_ID_ADDR    = (byte)0x02;
+	    public static final byte BNO055_GYRO_REV_ID_ADDR   = (byte)0x03;
+	    public static final byte BNO055_SW_REV_ID_LSB_ADDR = (byte)0x04;
+	    public static final byte BNO055_SW_REV_ID_MSB_ADDR = (byte)0x05;
+	    public static final byte BNO055_BL_REV_ID_ADDR     = (byte)0X06;
+	    // BNO055 modes
+	    public static final byte BNO055_OPR_MODE_ADDR = (byte)0x3D;
+	    public static final byte BNO055_PWR_MODE_ADDR = (byte)0x3E;
+	    public static final byte BNO055_SYS_TRIGGER_ADDR = (byte)0x3F;
+	    public static final byte BNO055_TEMP_SOURCE_ADDR = (byte)0x40;
+	    
+	    public static final byte POWER_MODE_NORMAL = (byte)0x00;
+	    
+	    // Operation mode settings
+	    public static final byte OPERATION_MODE_CONFIG                = (byte)0x00;
+	    public static final byte OPERATION_MODE_ACCONLY               = (byte)0x01;
+	    public static final byte OPERATION_MODE_MAGONLY               = (byte)0x02;
+	    public static final byte OPERATION_MODE_GYRONLY               = (byte)0x03;
+	    public static final byte OPERATION_MODE_ACCMAG                = (byte)0x04;
+	 	public static final byte OPERATION_MODE_ACCGYRO               = (byte)0x05;
+	    public static final byte OPERATION_MODE_MAGGYRO               = (byte)0x06;
+	    public static final byte OPERATION_MODE_AMG                   = (byte)0x07;
+	    public static final byte OPERATION_MODE_IMUPLUS               = (byte)0x08;
+	    public static final byte OPERATION_MODE_COMPASS               = (byte)0x09;
+	    public static final byte OPERATION_MODE_M4G                   = (byte)0x0A;
+	    public static final byte OPERATION_MODE_NDOF_FMC_OFF          = (byte)0x0B;
+	    public static final byte OPERATION_MODE_NDOF                  = (byte)0x0C;
+
+	    
 	    public static IMUSerialDataPort getInstance() {
 	    	synchronized(mutex) {
 	    	if( instance == null ) {
@@ -136,6 +172,31 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        	}
 	            throw new IOException(e);
 	        }
+	        //
+	        // set up BNO055
+	    	// throw away command
+	        //write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, false);
+	        // set config mode
+	    	set_mode(OPERATION_MODE_CONFIG);
+	        // now read without kruft
+	        write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true);
+	        if( DEBUG )
+	        	System.out.println("Read chip id..");
+	        // Check the chip ID
+	        byte[] bno_id = read(BNO055_CHIP_ID_ADDR,(byte)0x01);
+	        if( DEBUG) {
+	        	System.out.printf("Read chip ID: %02x\r\n",bno_id[0]);
+	        }
+	        if(bno_id[0] != BNO055_ID) {
+	             return;
+	        }
+	    	reset();
+	    	// Set to normal power mode.
+	        write(BNO055_PWR_MODE_ADDR, new byte[] {POWER_MODE_NORMAL}, false);
+	        // Default to internal oscillator.
+	        write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x0}, false);
+	        //Enter normal operation mode.
+	        set_mode(OPERATION_MODE_NDOF);
 	        //if( Props.DEBUG ) System.out.println("Connected to "+portName);
 	    }
 	    
@@ -169,6 +230,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	//if( Props.DEBUG ) System.out.println("write "+c);
 	    	// Build and send serial register write command.
 	    	synchronized(writeMx) {
+	    		checkWriteBuffer();
 	    		writeBuffer[writeBufferTail++] = (byte) 0xAA; // Start byte
 	    		checkWriteBuffer();
 	    		writeBuffer[writeBufferTail++] = (byte) 0x00;  // Write
@@ -176,29 +238,51 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    		writeBuffer[writeBufferTail++] =  (byte) (address & 0xFF);
 	    		checkWriteBuffer();
 	    		writeBuffer[writeBufferTail++] =  (byte) (data.length & 0xFF);
-	    		checkWriteBuffer();
 	    		for(int i = 0; i < data.length; i++) {
-	    			writeBuffer[writeBufferTail++] =  (byte) (data[i] & 0xFF);
 	    			checkWriteBuffer();
+	    			writeBuffer[writeBufferTail++] =  (byte) (data[i] & 0xFF);
 	    		}
 	    		writeMx.notify();
 	    	}
 	    	if( !ack )
 	    		return;
 	    	// wait for buffer to empty
-	    	synchronized(writeMx) {
-	    		while(writeBufferHead != writeBufferTail) {
-	    			try {
-	    				Thread.sleep(1);
-	    			} catch (InterruptedException e) {}
+	    	//if( DEBUG )
+	    	//	System.out.println("Wait for write buffer to empty");
+	    	
+	    	//synchronized(writeMx) {
+	    	//	while(writeBufferHead != writeBufferTail) {
+	    	//		try {
+	    	//			Thread.sleep(1);
+	    	//		} catch (InterruptedException e) {}
+	    	//	}
+	    	//}
+	    	// read the ack
+	    	//try {
+			//	Thread.sleep(30);
+			//} catch (InterruptedException e) {}
+	    	//if( DEBUG )
+	    	//	System.out.println("Preparing to receive ACK");
+	    	
+	    	byte resp;
+	    	synchronized( readMx) {
+	    		checkReadBuffer();
+	    		resp = (byte) readBuffer[readBufferHead++];
+	    		if( resp != (byte)0xEE ) {
+	    			System.out.printf("Received unexpected response in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp);
+	    			return;
+	    		}
+	    		if( DEBUG )
+	    			System.out.println("Found ack header");
+	    		checkReadBuffer();
+	    		resp = (byte) readBuffer[readBufferHead++];
+	    		if( resp != (byte)0x01 ) {
+	    				System.out.printf("Error from write ACK:\r\n",resp);
+	    				return;
 	    		}
 	    	}
-	    	byte[] resp = new byte[2];
-	    	resp[0] = (byte) read();
-	    	resp[1] = (byte) read();
-            // Verify register write succeeded if there was an acknowledgment.
-            if (resp[0] != (byte)0xEE && resp[1] != (byte)0x01) {
-                System.out.printf("Bad response from IMU: %02x %02x\r\n",resp[0],resp[1]);
+	    	if( DEBUG ) {
+	    		System.out.println("ACK successful");
 	    	}
 	    }
 	    
@@ -218,7 +302,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    }
 	    /**
 		 * 0xEE - error, 0xBB - success
-		 * byte 2:
+		 * byte 2: returned from method, 0 if success
 		 * 0x02: READ_FAIL
 		 * 0x04: REGMAP_INVALID_ADDRESS
 		 * 0x05: REGMAP_WRITE_DISABLED
@@ -228,12 +312,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 		 * 0x09: MIN_LENGTH_ERROR
 		 * 0x0A: RECEIVE_CHARACTER_TIMEOUT
 		 */
-	    private void signalRead(byte address, byte length) throws IOException {
+	    private byte signalRead(byte address, byte length) throws IOException {
 		    	//if( Props.DEBUG ) System.out.println("write "+c);
 		    	// Build and send serial register write command.
 	    	if( DEBUG )
 	    		System.out.println("Sending header to signalRead");
 		    	synchronized(writeMx) {
+		    		checkWriteBuffer();
 		    		writeBuffer[writeBufferTail++] = (byte) 0xAA; // Start byte
 		    		checkWriteBuffer();
 		    		writeBuffer[writeBufferTail++] = (byte) 0x01;  // Read
@@ -260,17 +345,24 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    		checkReadBuffer();
 		    		resp = (byte) readBuffer[readBufferHead++];
 		    		if( resp == (byte)0xBB )
-		    			return;
+		    			return 0;
 		    		// read fail is EE, otherwise confustion
+		    		if( DEBUG )
+		    			System.out.println("Did NOT receive expected 'bb' response in signalRead");
 		    		if( resp != (byte)0xEE ) {
-		    			System.out.printf("Received unexpected response in signalRead %02x\r\n", resp);
-		    			return;
+		    			System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
+		    			return (byte)0xFF;
+		    		} else {
+		    			checkReadBuffer();
+		    			resp = (byte) readBuffer[readBufferHead++];
+		    			if( DEBUG ) {
+		    				System.out.println("Recovered error code from signalRead");
+		    			}
 		    		}
-		    		checkReadBuffer();
-		    		resp = (byte) readBuffer[readBufferHead++];
 		    	}
 		    	// should have the error code
 		    	System.out.printf("Bad response from IMU: %02x\r\n",resp);
+		    	return resp;
 	    }
 	        
 	    /**
@@ -293,21 +385,30 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public byte[] read(byte address, byte length) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("read");
 	    	// Build and send serial register read command.
-	    	signalRead(address, length);
+	    	int retry = 0;
+	    	byte resp;
+	    	while( (resp = signalRead(address, length)) == (byte)0x07 && retry++ < 10) {
+	    		try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {}
+	    	}
+	    	if( resp != 0 ) {
+	    		System.out.println("Bad response for signalRead, exiting read..."+resp);
+	    		return null;
+	    	}
             // Verify register read succeeded.
 	    	synchronized(readMx) {
 	    		checkReadBuffer();
 	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
-	    		byte resp;
 	    		if( (resp = (byte) readBuffer[readBufferHead++]) != (byte)0xBB) 
-	                 System.out.printf("Register read error: %02x\r\n", resp);
+	                 System.out.printf("Register read error: %02x looking for 'bb'\r\n", resp);
 	            // Read the returned bytes.
 	    		checkReadBuffer();
-	            byte blen = (byte) readBuffer[readBufferHead++];
-	            if( DEBUG )
-	            	System.out.printf("Received: %d but looking for %d bytes.\r\n", blen, length);
-	            if( blen == 0 || blen != length)
+	            byte blen = (byte) readBuffer[readBufferHead++];          	
+	            if( blen == 0 || blen != length) {
 	                System.out.println("Timeout waiting to read data, is the BNO055 connected?");
+	                System.out.printf("Received: %d but looking for %d bytes.\r\n", blen, length);
+	            }
 	            byte[] bout = new byte[blen];
 	            for(int i = 0; i < blen; i++) {
 	            	checkReadBuffer();
@@ -328,31 +429,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    }
 	    
 	    /**
-	     * Read with thrown MachineNotReadyException on timeout
-	     * @param timeout
-	     * @return
-	     * @throws IOException
-	     */
-	    private int read(long timeout) throws IOException {
-	    	//if( Props.DEBUG ) System.out.println("read");
-	    	synchronized(readMx) {
-	    		try {
-	    			if( readBufferHead == readBuffer.length)
-	    				readBufferHead = 0;
-	    			if( readBufferHead == readBufferTail )
-	    				readMx.wait(timeout);
-				} catch (InterruptedException e) {
-				}
-	    		// if we waited and nothing came back after timeout, machine no go
-	    		if( readBufferHead == readBufferTail ) {
-	    			throw new IOException("Serial port not responding..");
-	    		}
-	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
-	    		return readBuffer[readBufferHead++];
-	    	}
-	    }
-	    
-	    /**
 	     * pacman the jizzle in the inputstream
 	     */
 	    public void clear() {
@@ -368,6 +444,41 @@ public class IMUSerialDataPort implements DataPortInterface {
 				}
 	    		EOT = false;
 	    	}
+	    }
+	    
+	    private void set_mode(byte mode) throws IOException {
+	    	if( DEBUG )
+	    		System.out.printf("Setting mode:%02x\r\n",mode);
+	       //Set operation mode for BNO055 sensor.  Mode should be a value from
+	       //table 3-3 and 3-5 of the datasheet:
+	       // http://www.adafruit.com/datasheets/BST_BNO055_DS000_12.pdf
+	       // 
+	       write(BNO055_OPR_MODE_ADDR, new byte[]{(byte)(mode & (byte)0xFF)}, false);
+	       // Delay for 30 milliseconds (datasheet recommends 19ms, but a little more
+	       // can't hurt and the kernel is going to spend some unknown amount of time too).
+	       try {
+			Thread.sleep(30);
+	       } catch (InterruptedException e) {}
+	       if( DEBUG )
+	    		System.out.println("Exiting set_mode");
+	    }
+
+	    private void reset() throws IOException {
+	    	if( DEBUG )
+	    		System.out.println("entering device reset");
+	    	 write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x20}, false);
+	         // Wait 650ms after reset for chip to be ready (as suggested in datasheet).
+	         try {
+				Thread.sleep(650);
+			} catch (InterruptedException e) {}
+	         // Set to normal power mode.
+	         write(BNO055_PWR_MODE_ADDR, new byte[]{(byte)POWER_MODE_NORMAL}, false);
+	         // Default to internal oscillator.
+	         write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x0}, false);
+	         // Enter normal operation mode.
+	         set_mode(OPERATION_MODE_NDOF);
+		    if( DEBUG )
+		    	System.out.println("exiting device reset");  
 	    }
 	    
 	    public String getPortName() { return portName; }

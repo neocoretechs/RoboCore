@@ -173,20 +173,20 @@ public void onStart(final ConnectedNode connectedNode) {
 
 public void setIMU() throws IOException {
 	// Select OPR_MODE register
-	// Accelerometer, Magnetometer and Gyrometer enabled
+	// Accelerometer, Magnetometer and Gyro enabled
 	if( DEBUG )
 		System.out.println("...setting OPR_MODE");
-	imuPort.write((byte)0x3D, new byte[]{(byte)0x07}, false);
+	imuPort.write(IMUSerialDataPort.BNO055_OPR_MODE_ADDR, new byte[]{(byte)0x07}, false);
 	// Select PWR_MODE register
 	// Normal mode
 	if( DEBUG )
 		System.out.println("setting PWR_MODE");
-	imuPort.write((byte)0x3E, new byte[]{(byte)0x00}, false);
+	imuPort.write(IMUSerialDataPort.BNO055_PWR_MODE_ADDR, new byte[]{(byte)0x00}, false);
 	// Select PAGE_ID register
 	// Shift to Page-1
 	if( DEBUG )
 		System.out.println("setting PAGE_ID");
-	imuPort.write((byte)0x07, new byte[]{(byte)0x01}, false);
+	imuPort.write(IMUSerialDataPort.BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x01}, false);
 	// Select ACC_CONFIG register
 	// Range = 4G, B/W = 62.5, Normal mode
 	if( DEBUG )
@@ -211,7 +211,7 @@ public void setIMU() throws IOException {
 	// Shift to Page-0
 	if( DEBUG )
 		System.out.println("setting PAGE_ID to 0...");
-	imuPort.write((byte)0x07, new byte[]{(byte)0x00}, false);
+	imuPort.write(IMUSerialDataPort.BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, false);
 	try {
 	Thread.sleep(500);
 	} catch(InterruptedException ie) {}
