@@ -60,6 +60,14 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public static final byte BNO055_PWR_MODE_ADDR = (byte)0x3E;
 	    public static final byte BNO055_SYS_TRIGGER_ADDR = (byte)0x3F;
 	    public static final byte BNO055_TEMP_SOURCE_ADDR = (byte)0x40;
+	    // Accel data register
+	    public static final byte BNO055_ACCEL_DATA_X_LSB_ADDR = (byte)0x08;
+	    // Mag data register
+	    public static final byte BNO055_MAG_DATA_X_LSB_ADDR = (byte)0x0E;
+	    // Gyro register
+	    public static final byte BNO055_GYRO_DATA_X_LSB_ADDR = (byte)0x14;
+	    // Euler register
+	    public static final byte BNO055_EULER_H_LSB_ADDR = (byte)0x1A;
 	    
 	    public static final byte POWER_MODE_NORMAL = (byte)0x00;
 	    
@@ -216,22 +224,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public void write(byte address, byte[] data, boolean ack) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("write "+c);
 	    	// Build and send serial register write command.
-	    	synchronized(writeMx) {
-	    		checkWriteBuffer();
-	    		writeBuffer[writeBufferTail++] = (byte) 0xAA; // Start byte
-	    		checkWriteBuffer();
-	    		writeBuffer[writeBufferTail++] = (byte) 0x00;  // Write
-	    		checkWriteBuffer();
-	    		writeBuffer[writeBufferTail++] =  (byte) (address & 0xFF);
-	    		checkWriteBuffer();
-	    		writeBuffer[writeBufferTail++] =  (byte) (data.length & 0xFF);
-	    		for(int i = 0; i < data.length; i++) {
-	    			checkWriteBuffer();
-	    			writeBuffer[writeBufferTail++] =  (byte) (data[i] & 0xFF);
-	    		}
-	    		writeMx.notify();
+	    	write((byte) 0xAA); // Start byte
+	    	write((byte) 0x00);  // Write
+	    	write((byte) (address & 0xFF));
+	    	write((byte) (data.length & 0xFF));
+	    	for(int i = 0; i < data.length; i++) {
+	    			write((byte) (data[i] & 0xFF));
 	    	}
-	
 	    	// wait for buffer to empty
 	    	//if( DEBUG )
 	    	//	System.out.println("Wait for write buffer to empty");
@@ -251,38 +250,40 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	//	System.out.println("Preparing to receive ACK");
 	    	
 	    	byte resp;
-	    	synchronized( readMx) {
-	    		checkReadBuffer();
-	    		resp = (byte) readBuffer[readBufferHead++];
+	    	//synchronized( readMx) {
+	    		//checkReadBuffer();
+	    		//resp = (byte) readBuffer[readBufferHead++];
+	    		resp = (byte)(read() & 0xFF);
 	    		if( resp != (byte)0xEE ) {
 	    			System.out.printf("Received unexpected response in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp);
 	    			return;
 	    		}
-	    		if( DEBUG )
-	    			System.out.println("Found ack header");
+	    		//if( DEBUG )
+	    		//	System.out.println("Found ack header");
 	    		// we always use ACK except for reset, but it seems to send back the ee
 	        	if( !ack ) {
 		    		if( DEBUG )
 		    			System.out.println("return from write without ACK..");
 		    		return;
 		    	}
-	    		checkReadBuffer();
-	    		resp = (byte) readBuffer[readBufferHead++];
+	    		//checkReadBuffer();
+	    		//resp = (byte) readBuffer[readBufferHead++];
+	        	resp = (byte)( read() & 0xFF);
 	    		if( resp != (byte)0x01 ) {
 	    				System.out.printf("Error from write ACK:%02x\r\n",resp);
 	    				return;
 	    		}
-	    	}
-	    	if( DEBUG ) {
-	    		System.out.println("ACK successful");
-	    	}
+	    	//}
+	    	//if( DEBUG ) {
+	    	//	System.out.println("ACK successful");
+	    	//}
 	    }
 	    
 		@Override
 		public void write(int c) throws IOException {
 	    	synchronized(writeMx) {
-	    		writeBuffer[writeBufferTail++] = (byte)( c & 0xFF);
 	    		checkWriteBuffer();
+	    		writeBuffer[writeBufferTail++] = (byte)( c & 0xFF);
 	       		writeMx.notify();
 	    	}
 		}
@@ -292,6 +293,25 @@ public class IMUSerialDataPort implements DataPortInterface {
     				writeBufferTail = 0;
 			}
 	    }
+	    
+	    private void checkReadBuffer() {
+	    	synchronized(readMx) {
+	    		try {
+	    			if( readBufferHead == readBuffer.length)
+	    				readBufferHead = 0;
+	    			if( readBufferHead == readBufferTail )
+	    				readMx.wait();
+	    		} catch (InterruptedException e) {}
+	    	}
+	    }
+	    
+		@Override
+		public int read() throws IOException {
+	    	synchronized( readMx) {
+	    		checkReadBuffer();
+	    		return readBuffer[readBufferHead++];
+	    	}
+		}
 	    /**
 		 * 0xEE - error, 0xBB - success
 		 * byte 2: returned from method, 0 if success
@@ -307,54 +327,49 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private byte signalRead(byte address, byte length) throws IOException {
 		    	//if( Props.DEBUG ) System.out.println("write "+c);
 		    	// Build and send serial register write command.
-	    	if( DEBUG )
-	    		System.out.println("Sending header to signalRead");
-		    	synchronized(writeMx) {
-		    		checkWriteBuffer();
-		    		writeBuffer[writeBufferTail++] = (byte) 0xAA; // Start byte
-		    		checkWriteBuffer();
-		    		writeBuffer[writeBufferTail++] = (byte) 0x01;  // Read
-		    		checkWriteBuffer();
-		    		writeBuffer[writeBufferTail++] =  (byte) (address & 0xFF);
-		    		checkWriteBuffer();
-		    		writeBuffer[writeBufferTail++] =  (byte) (length & 0xFF);
-		    		writeMx.notify();
-		    	}
-		      	if( DEBUG )
-		    		System.out.println("wait for empty buffer");
-		    	// wait for buffer to empty
-		    	synchronized(writeMx) {
-		    		while(writeBufferHead != writeBufferTail) {
-		    			try {
-		    				Thread.sleep(1);
-		    			} catch (InterruptedException e) {}
-		    		}
-		    	}
-		      	if( DEBUG )
-		    		System.out.println("Reading response header in signalRead");
-		    	byte resp;
-		    	synchronized( readMx) {
-		    		checkReadBuffer();
-		    		resp = (byte) readBuffer[readBufferHead++];
+	    	//if( DEBUG )
+	    	//	System.out.println("Setting up read registers from signalRead..");
+		    write((byte) 0xAA); // Start byte
+		    write((byte) 0x01);  // Read
+		    write((byte) (address & 0xFF));
+		    write((byte) (length & 0xFF));		
+		    //  if( DEBUG )
+		    //		System.out.println("wait for empty write buffer");
+		    // wait for buffer to empty
+		    //synchronized(writeMx) {
+		    //		while(writeBufferHead != writeBufferTail) {
+		    //			try {
+		    //				Thread.sleep(5);
+		    //			} catch (InterruptedException e) {}
+		    //		}
+		    //}
+		    //if( DEBUG )
+		    //		System.out.println("Reading response header in signalRead");
+		    byte resp;
+		    //synchronized( readMx) {
+		    		//checkReadBuffer();
+		    		//resp = (byte) readBuffer[readBufferHead++];
+		    		resp = (byte)( read() & 0xFF);
 		    		if( resp == (byte)0xBB )
 		    			return 0;
 		    		// read fail is EE, otherwise confustion
-		    		if( DEBUG )
-		    			System.out.println("Did NOT receive expected 'bb' response in signalRead");
+		    		//if( DEBUG )
+		    		//	System.out.println("Did NOT receive expected 'bb' response in signalRead");
 		    		if( resp != (byte)0xEE ) {
 		    			System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
-		    			return (byte)0xFF;
+		    			return (byte)0x07; // lets call this bus overrun from chip
 		    		} else {
-		    			checkReadBuffer();
-		    			resp = (byte) readBuffer[readBufferHead++];
-		    			if( DEBUG ) {
-		    				System.out.println("Recovered error code from signalRead");
-		    			}
+		    			//checkReadBuffer();
+		    			//resp = (byte) readBuffer[readBufferHead++];
+		    			resp = (byte)( read() & 0xFF);
+		    			//if( DEBUG ) {
+		    			//	System.out.println("Recovered error code from signalRead");
+		    			//}
 		    		}
-		    	}
-		    	// should have the error code
-		    	System.out.printf("Bad response from IMU: %02x\r\n",resp);
-		    	return resp;
+		    //}
+		    // should have the error code
+		    System.out.printf("Bad response from IMU: %02x\r\n",resp);
+		    return resp;
 	    }
 	        
 	    /**
@@ -381,43 +396,38 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	byte resp;
 	    	while( (resp = signalRead(address, length)) == (byte)0x07 && retry++ < 10) {
 	    		try {
-					Thread.sleep(1);
+					Thread.sleep(5);
 				} catch (InterruptedException e) {}
 	    	}
 	    	if( resp != 0 ) {
-	    		System.out.println("Bad response for signalRead, exiting read..."+resp);
+	    		System.out.println("Bad response for signalRead after " + retry +" retries, exiting read with response:"+resp);
 	    		return null;
 	    	}
 	    	// Returning with 0 from signalRead means we found 0xBB
 	    	// next byte is length, then data 1..n
-	    	synchronized(readMx) {
-	    		checkReadBuffer();
+	    	//synchronized(readMx) {
+	    		//checkReadBuffer();
 	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
-	    		byte blen = (byte) readBuffer[readBufferHead++];  // length
-	    		if( DEBUG )
-	    			System.out.printf("Recovered length byte: %02x\r\n", resp);
+	    		//byte blen = (byte) readBuffer[readBufferHead++];  // length
+	    		byte blen = (byte)( read() & 0xFF);
+	    		//if( DEBUG )
+	    		//	System.out.printf("Recovered length byte: %02x\r\n", blen);
 	            // Read the returned bytes.	
 	            if( blen == 0 || blen != length) {
 	                System.out.printf("Received length byte: %d but read requested %d bytes.\r\n", blen, length);
+	                return null;
 	            }
 	            byte[] bout = new byte[blen];
 	            for(int i = 0; i < blen; i++) {
-	            	checkReadBuffer();
-	            	bout[i] = (byte) readBuffer[readBufferHead++];
+	            	//checkReadBuffer();
+	            	///bout[i] = (byte) readBuffer[readBufferHead++];
+	            	bout[i] = (byte)( read() & 0xFF);
 	            }
 	            return bout;
-	    	}
+	    	//}
 	    	//return inStream.read();
 	    }
 	    
-	    private void checkReadBuffer() {
-    		try {
-    			if( readBufferHead == readBuffer.length)
-    				readBufferHead = 0;
-    			if( readBufferHead == readBufferTail )
-    				readMx.wait();
-			} catch (InterruptedException e) {}
-	    }
 	    
 	    /**
 	     * pacman the jizzle in the inputstream
@@ -450,8 +460,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	       try {
 			Thread.sleep(30);
 	       } catch (InterruptedException e) {}
-	       if( DEBUG )
-	    		System.out.println("Exiting set_mode");
+	       //if( DEBUG )
+	    	//	System.out.println("Exiting set_mode");
 	    }
 
 	    private void reset() throws IOException {
@@ -462,8 +472,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	         try {
 				Thread.sleep(650);
 			} catch (InterruptedException e) {}
-		    if( DEBUG )
-		    	System.out.println("exiting device reset");  
+		    //if( DEBUG )
+		    //	System.out.println("exiting device reset");  
 	    }
 	    
 	    private void setNormalPowerNDOFMode() throws IOException {
@@ -476,8 +486,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    }
 	    
 	    private void readChipId() throws IOException {
-	        if( DEBUG )
-	        	System.out.println("Read chip id..");
+	        //if( DEBUG )
+	        //	System.out.println("Read chip id..");
 	        // Check the chip ID
 	        byte[] bno_id = read(BNO055_CHIP_ID_ADDR,(byte)0x01);
 	        if( DEBUG) {
@@ -490,6 +500,95 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        }
 	    }
 	    
+	    /**
+	     * Read accelerometer
+	     * @return int array of x,y,z accel values
+	     * @throws IOException
+	     */
+	    public int[] readAccel() throws IOException {
+	    	byte[] data = read(BNO055_ACCEL_DATA_X_LSB_ADDR, (byte)6);
+	    	if( data == null )
+	    		return null;
+	    	// Convert the data
+	    	int xAccl = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
+	    	if(xAccl > 32767) {
+	    		xAccl -= 65536;
+	    	}	
+	    	int yAccl = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
+	    	if(yAccl > 32767) {
+	    		yAccl -= 65536;
+	    	}
+	    	int zAccl = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
+	    	if(zAccl > 32767) {
+	    		zAccl -= 65536;
+	    	}
+	    	return new int[]{xAccl, yAccl, zAccl};
+	    }
+	    
+	    public int[] readMag() throws IOException {
+	    	// Read 6 bytes of data from address 0x0E(14)
+	    	// xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
+	    	byte[] data = read(BNO055_MAG_DATA_X_LSB_ADDR, (byte)6);
+	    	if( data == null )
+	    		return null;
+	    	// Convert the data
+	    	int xMag = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
+	    	if(xMag > 32767) {
+	    		xMag -= 65536;
+	    	}	
+	    	int yMag = ((data[3] & 0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
+	    	if(yMag > 32767) {
+	    		yMag -= 65536;
+	    	}
+	    	int zMag = ((data[5] & 0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
+	    	if(zMag > 32767) {
+	    		zMag -= 65536;
+	    	}	
+	    	return new int[]{xMag, yMag, zMag};
+	    }
+	    
+	    public int[] readGyro() throws IOException {
+	    	// Read 6 bytes of data from address 0x14(20)
+	    	// xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
+	    	byte[] data = read(BNO055_GYRO_DATA_X_LSB_ADDR, (byte)6);
+	    	if( data == null)
+	    		return null;
+	    	// Convert the data
+	    	int xGyro = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
+	    	if(xGyro > 32767) {
+	    		xGyro -= 65536;
+	    	}
+	    	int yGyro = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
+	    	if(yGyro > 32767) {
+	    		yGyro -= 65536;
+	    	}
+	    	int zGyro = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
+	    	if(zGyro > 32767) {
+	    		zGyro -= 65536;
+	    	}
+	    	return new int[]{xGyro, yGyro, zGyro};
+	    }
+	    
+	    public double[] readEuler() throws IOException {
+	        //Return the current absolute orientation as a tuple of heading, roll, and pitch euler angles in degrees.
+	    	byte[] data = read(BNO055_EULER_H_LSB_ADDR, (byte)6);
+	    	if( data == null )
+	    		return null;
+	        int heading = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
+	    	if(heading > 32767) {
+	    		heading -= 65536;
+	    	}
+	       	int roll = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
+	    	if(roll > 32767) {
+	    		roll -= 65536;
+	    	}
+	    	int pitch = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
+	    	if(pitch > 32767) {
+	    		pitch -= 65536;
+	    	}
+	        return new double[]{heading/16.0, roll/16.0, pitch/16.0};
+
+	    }
 	    public String getPortName() { return portName; }
 	    public int getBaudRate() { return baud; }
 	    public int getDataBits() { return datab; }
@@ -674,9 +773,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 				
 			}
 
-			@Override
-			public int read() throws IOException {
-				throw new RuntimeException("wrong method, need address etc!");
-			}
+	
 	        
 }

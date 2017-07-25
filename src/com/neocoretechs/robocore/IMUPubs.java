@@ -100,12 +100,7 @@ public NodeConfiguration build()  {
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	imuPort = IMUSerialDataPort.getInstance();
-	//try {
-	//	setIMU();
-	//} catch (IOException e) {
-		// TODO Auto-generated catch block
-	//	e.printStackTrace();
-	//}
+
 	//fileReader reader = new fileReader();
 	//ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
@@ -132,8 +127,6 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
-
-
 			/*
 			if( !pubdata.isEmpty() ) {
 				int[] pubc = pubdata.takeFirst();
@@ -171,133 +164,51 @@ public void onStart(final ConnectedNode connectedNode) {
 
 }
 
-public void setIMU() throws IOException {
-	// Select OPR_MODE register
-	// Accelerometer, Magnetometer and Gyro enabled
-	if( DEBUG )
-		System.out.println("...setting OPR_MODE");
-	imuPort.write(IMUSerialDataPort.BNO055_OPR_MODE_ADDR, new byte[]{(byte)0x07}, false);
-	// Select PWR_MODE register
-	// Normal mode
-	if( DEBUG )
-		System.out.println("setting PWR_MODE");
-	imuPort.write(IMUSerialDataPort.BNO055_PWR_MODE_ADDR, new byte[]{(byte)0x00}, false);
-	// Select PAGE_ID register
-	// Shift to Page-1
-	if( DEBUG )
-		System.out.println("setting PAGE_ID");
-	imuPort.write(IMUSerialDataPort.BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x01}, false);
-	// Select ACC_CONFIG register
-	// Range = 4G, B/W = 62.5, Normal mode
-	if( DEBUG )
-		System.out.println("setting ACC_CONFIG");
-	imuPort.write((byte)0x08, new byte[]{(byte)0x0C}, false);
-	// Select MAG_CONFIG register
-	// Data o/p rate = 10 Hz, Regular mode, normal mode
-	if( DEBUG )
-		System.out.println("setting MAG_CONFIG");
-	imuPort.write((byte)0x09, new byte[]{(byte)0x0B}, false);
-	// Select GYRO_CONFIG1 register
-	// Range = 2000 dps, B/W  = 32 Hz
-	if( DEBUG )
-		System.out.println("setting GYRO_CONFIG1");
-	imuPort.write((byte)0x0A, new byte[]{(byte)0x38}, false);
-	// Select GYRO_CONFIG2 register
-	// Normal mode
-	if( DEBUG )
-		System.out.println("setting GYRO_CONFIG2");
-	imuPort.write((byte)0x0B, new byte[]{(byte)0x00}, false);
-	// Select PAGE_ID register
-	// Shift to Page-0
-	if( DEBUG )
-		System.out.println("setting PAGE_ID to 0...");
-	imuPort.write(IMUSerialDataPort.BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, false);
-	try {
-	Thread.sleep(500);
-	} catch(InterruptedException ie) {}
-}
 
 public void getIMU() throws IOException{
-	// Read 6 bytes of data from address 0x08(08)
-	// xAccl lsb, xAccl msb, yAccl lsb, yAccl msb, zAccl lsb, zAccl msb
-	byte[] data;
-	/*
+
 	if( DEBUG )
 		System.out.println("reading ACCEL");
+	int[] accels = imuPort.readAccel();
+	if( DEBUG && accels != null )
+		System.out.println("Accel:"+accels[0]+" "+accels[1]+" "+accels[2]);
 
-	data = imuPort.read((byte)0x08, (byte)6);
-
-	// Convert the data
-	int xAccl = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
-	if(xAccl > 32767) {
-		xAccl -= 65536;
-	}	
-
-	int yAccl = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	if(yAccl > 32767) {
-		yAccl -= 65536;
-	}
-
-	int zAccl = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	if(zAccl > 32767) {
-		zAccl -= 65536;
-	}
-*/
 	if( DEBUG )
 		System.out.println("reading MAG");
-	// Read 6 bytes of data from address 0x0E(14)
-	// xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
-	data = imuPort.read((byte)0x0E, (byte)6);
-
-	// Convert the data
-	int xMag = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
-	if(xMag > 32767) {
-		xMag -= 65536;
-	}	
-
-	int yMag = ((data[3] & 0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	if(yMag > 32767) {
-		yMag -= 65536;
-	}
-
-	int zMag = ((data[5] & 0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	if(zMag > 32767) {
-		zMag -= 65536;
-	}
-
+	int[] mags = imuPort.readMag();
+	if( DEBUG && mags!= null )
+		System.out.println("Mag:"+mags[0]+" "+mags[1]+" "+mags[2]);
+	
 	if( DEBUG )
 		System.out.println("reading GYRO");
-	// Read 6 bytes of data from address 0x14(20)
-	// xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
-	data = imuPort.read((byte)0x14, (byte)6);
-
-	// Convert the data
-	int xGyro = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
-	if(xGyro > 32767) {
-		xGyro -= 65536;
-	}
-
-	int yGyro = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	if(yGyro > 32767) {
-		yGyro -= 65536;
-	}
-
-	int zGyro = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	if(zGyro > 32767) {
-		zGyro -= 65536;
-	}
-
+	int[] gyros = imuPort.readGyro();
+	if( DEBUG && gyros != null)
+		System.out.println("Gyros:"+gyros[0]+" "+gyros[1]+" "+gyros[2]);
+	
+	if( DEBUG )
+		System.out.println("reading EULER");
+	double[] eulers = imuPort.readEuler();
+	if( DEBUG && eulers != null)
+		System.out.println("Eulers:"+eulers[0]+" "+eulers[1]+eulers[2]);
+	
 	// Output data to screen
-	System.out.printf("X-axis Of Rotation : %d \r\n", xGyro);
-	System.out.printf("Y-axis Of Rotation : %d \r\n", yGyro);
-	System.out.printf("Z-axis Of Rotation : %d \r\n", zGyro);
-	//System.out.printf("Acceleration in X-Axis : %d \r\n", xAccl);
-	//System.out.printf("Acceleration in Y-Axis : %d \r\n", yAccl);
-	//System.out.printf("Acceleration in Z-Axis : %d \r\n", zAccl);
-	System.out.printf("Magnetic field in X-Axis : %d \r\n", xMag);
-	System.out.printf("Magnetic field in Y-Axis : %d \r\n", yMag);
-	System.out.printf("Magnetic field in Z-Axis : %d \r\n", zMag);	
-
+	if( gyros != null )
+		System.out.printf("X,Y,Z axis Of gyro Rotation : %d %d %d\r\n", gyros[0],gyros[1],gyros[2]);
+	else
+		System.out.println("GYRO ERROR");
+	if( accels != null )
+		System.out.printf("X,Y,Z axis Acceleration : %d %d %d \r\n", accels[0],accels[1],accels[2]);
+	else
+		System.out.println("ACCEL ERROR");
+	if( mags != null )
+		System.out.printf("X,Y,Z axis Magnetic field : %d %d %d \r\n", mags[0], mags[1], mags[2]);
+	else
+		System.out.println("MAG ERROR");
+	if( eulers != null )
+		System.out.printf("yaw, roll, pitch degrees: %f %f %f \r\n", eulers[0], eulers[1], eulers[2]);
+	else
+		System.out.println("FUSION ERROR");
+	
 }	
 class fileReader implements Runnable {
 	public boolean shouldRun = true;
