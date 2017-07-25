@@ -180,24 +180,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	set_mode(OPERATION_MODE_CONFIG);
 	        // now read without kruft
 	        write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true);
-	        if( DEBUG )
-	        	System.out.println("Read chip id..");
-	        // Check the chip ID
-	        byte[] bno_id = read(BNO055_CHIP_ID_ADDR,(byte)0x01);
-	        if( DEBUG) {
-	        	System.out.printf("Read chip ID: %02x\r\n",bno_id[0]);
-	        }
-	        if(bno_id[0] != BNO055_ID) {
-	             return;
-	        }
+	        readChipId();
 	    	reset();
-	    	// Set to normal power mode.
-	        write(BNO055_PWR_MODE_ADDR, new byte[] {POWER_MODE_NORMAL}, false);
-	        // Default to internal oscillator.
-	        write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x0}, false);
-	        //Enter normal operation mode.
-	        set_mode(OPERATION_MODE_NDOF);
-	        //if( Props.DEBUG ) System.out.println("Connected to "+portName);
+	    	setNormalPowerNDOFMode();
+	        if( DEBUG ) 
+	        	System.out.println("Connected to "+portName+" and BNO055 IMU is ready!");
 	    }
 	    
 	    public void close() {
@@ -244,8 +231,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    		}
 	    		writeMx.notify();
 	    	}
-	    	if( !ack )
-	    		return;
+	
 	    	// wait for buffer to empty
 	    	//if( DEBUG )
 	    	//	System.out.println("Wait for write buffer to empty");
@@ -274,10 +260,16 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    		}
 	    		if( DEBUG )
 	    			System.out.println("Found ack header");
+	    		// we always use ACK except for reset, but it seems to send back the ee
+	        	if( !ack ) {
+		    		if( DEBUG )
+		    			System.out.println("return from write without ACK..");
+		    		return;
+		    	}
 	    		checkReadBuffer();
 	    		resp = (byte) readBuffer[readBufferHead++];
 	    		if( resp != (byte)0x01 ) {
-	    				System.out.printf("Error from write ACK:\r\n",resp);
+	    				System.out.printf("Error from write ACK:%02x\r\n",resp);
 	    				return;
 	    		}
 	    	}
@@ -396,18 +388,17 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    		System.out.println("Bad response for signalRead, exiting read..."+resp);
 	    		return null;
 	    	}
-            // Verify register read succeeded.
+	    	// Returning with 0 from signalRead means we found 0xBB
+	    	// next byte is length, then data 1..n
 	    	synchronized(readMx) {
 	    		checkReadBuffer();
 	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
-	    		if( (resp = (byte) readBuffer[readBufferHead++]) != (byte)0xBB) 
-	                 System.out.printf("Register read error: %02x looking for 'bb'\r\n", resp);
-	            // Read the returned bytes.
-	    		checkReadBuffer();
-	            byte blen = (byte) readBuffer[readBufferHead++];          	
+	    		byte blen = (byte) readBuffer[readBufferHead++];  // length
+	    		if( DEBUG )
+	    			System.out.printf("Recovered length byte: %02x\r\n", resp);
+	            // Read the returned bytes.	
 	            if( blen == 0 || blen != length) {
-	                System.out.println("Timeout waiting to read data, is the BNO055 connected?");
-	                System.out.printf("Received: %d but looking for %d bytes.\r\n", blen, length);
+	                System.out.printf("Received length byte: %d but read requested %d bytes.\r\n", blen, length);
 	            }
 	            byte[] bout = new byte[blen];
 	            for(int i = 0; i < blen; i++) {
@@ -453,7 +444,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	       //table 3-3 and 3-5 of the datasheet:
 	       // http://www.adafruit.com/datasheets/BST_BNO055_DS000_12.pdf
 	       // 
-	       write(BNO055_OPR_MODE_ADDR, new byte[]{(byte)(mode & (byte)0xFF)}, false);
+	       write(BNO055_OPR_MODE_ADDR, new byte[]{(byte)(mode & (byte)0xFF)}, true);
 	       // Delay for 30 milliseconds (datasheet recommends 19ms, but a little more
 	       // can't hurt and the kernel is going to spend some unknown amount of time too).
 	       try {
@@ -471,14 +462,32 @@ public class IMUSerialDataPort implements DataPortInterface {
 	         try {
 				Thread.sleep(650);
 			} catch (InterruptedException e) {}
-	         // Set to normal power mode.
-	         write(BNO055_PWR_MODE_ADDR, new byte[]{(byte)POWER_MODE_NORMAL}, false);
-	         // Default to internal oscillator.
-	         write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x0}, false);
-	         // Enter normal operation mode.
-	         set_mode(OPERATION_MODE_NDOF);
 		    if( DEBUG )
 		    	System.out.println("exiting device reset");  
+	    }
+	    
+	    private void setNormalPowerNDOFMode() throws IOException {
+	         // Set to normal power mode.
+	         write(BNO055_PWR_MODE_ADDR, new byte[]{(byte)POWER_MODE_NORMAL}, true);
+	         // Default to internal oscillator.
+	         write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x0}, true);
+	         // Enter normal operation mode.
+	         set_mode(OPERATION_MODE_NDOF);
+	    }
+	    
+	    private void readChipId() throws IOException {
+	        if( DEBUG )
+	        	System.out.println("Read chip id..");
+	        // Check the chip ID
+	        byte[] bno_id = read(BNO055_CHIP_ID_ADDR,(byte)0x01);
+	        if( DEBUG) {
+	        	System.out.printf("Read chip ID: %02x\r\n",bno_id[0]);
+	        }
+	        if(bno_id[0] != BNO055_ID) {
+	        	System.out.printf("Recovered chip Id did NOT match expected byte!:%02x\r\n",bno_id[0]);
+	        	close();
+	            throw new IOException("BNO055 chip id did not match expected value");
+	        }
 	    }
 	    
 	    public String getPortName() { return portName; }

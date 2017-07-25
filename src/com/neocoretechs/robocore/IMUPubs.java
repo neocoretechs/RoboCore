@@ -100,12 +100,12 @@ public NodeConfiguration build()  {
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	imuPort = IMUSerialDataPort.getInstance();
-	try {
-		setIMU();
-	} catch (IOException e) {
+	//try {
+	//	setIMU();
+	//} catch (IOException e) {
 		// TODO Auto-generated catch block
-		e.printStackTrace();
-	}
+	//	e.printStackTrace();
+	//}
 	//fileReader reader = new fileReader();
 	//ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
@@ -220,9 +220,11 @@ public void setIMU() throws IOException {
 public void getIMU() throws IOException{
 	// Read 6 bytes of data from address 0x08(08)
 	// xAccl lsb, xAccl msb, yAccl lsb, yAccl msb, zAccl lsb, zAccl msb
+	byte[] data;
+	/*
 	if( DEBUG )
 		System.out.println("reading ACCEL");
-	byte[] data;
+
 	data = imuPort.read((byte)0x08, (byte)6);
 
 	// Convert the data
@@ -240,7 +242,7 @@ public void getIMU() throws IOException{
 	if(zAccl > 32767) {
 		zAccl -= 65536;
 	}
-
+*/
 	if( DEBUG )
 		System.out.println("reading MAG");
 	// Read 6 bytes of data from address 0x0E(14)
@@ -289,9 +291,9 @@ public void getIMU() throws IOException{
 	System.out.printf("X-axis Of Rotation : %d \r\n", xGyro);
 	System.out.printf("Y-axis Of Rotation : %d \r\n", yGyro);
 	System.out.printf("Z-axis Of Rotation : %d \r\n", zGyro);
-	System.out.printf("Acceleration in X-Axis : %d \r\n", xAccl);
-	System.out.printf("Acceleration in Y-Axis : %d \r\n", yAccl);
-	System.out.printf("Acceleration in Z-Axis : %d \r\n", zAccl);
+	//System.out.printf("Acceleration in X-Axis : %d \r\n", xAccl);
+	//System.out.printf("Acceleration in Y-Axis : %d \r\n", yAccl);
+	//System.out.printf("Acceleration in Z-Axis : %d \r\n", zAccl);
 	System.out.printf("Magnetic field in X-Axis : %d \r\n", xMag);
 	System.out.printf("Magnetic field in Y-Axis : %d \r\n", yMag);
 	System.out.printf("Magnetic field in Z-Axis : %d \r\n", zMag);	
