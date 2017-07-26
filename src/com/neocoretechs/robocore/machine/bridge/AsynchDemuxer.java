@@ -134,16 +134,18 @@ public class AsynchDemuxer implements Runnable {
 				String readLine;
 				int pin = 0;
 				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</ultrasonic>") ) {
+				// get element 1 <pin>
 				if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						return;
+					if(DEBUG) System.out.println("Empty line returned from readLine of ultrasonic pin");
+					return;
 				}
 				int reading = AbstractMachine.getReadingNumber(readLine);
 				int data =  AbstractMachine.getReadingValueInt(readLine);
 				pin = data;
+				// get element 2 <range>
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+						if(DEBUG) System.out.println("Empty line returned from readLine of ultrasonic range");
 						return;
 				}
 				reading = AbstractMachine.getReadingNumber(readLine);

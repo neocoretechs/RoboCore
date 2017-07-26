@@ -13,14 +13,19 @@ import java.io.OutputStream;
 import java.util.Enumeration;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
-
+/**
+ * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
+ * The accelerometer, gyro, magnetometer, fused Euler angle data, and temperature.
+ * Copyright NeoCoreTechs 2017
+ * @author jg
+ *
+ */
 public class IMUSerialDataPort implements DataPortInterface {
 		private static boolean DEBUG = true;
 	    private SerialPort serialPort;
 	    private OutputStream outStream;
 	    private InputStream inStream;
 		// serial settings
-		//Port=/dev/ttyACM0
 		//PortSettings=115200,n,8,1
 	    private static String portName = "/dev/ttyS0";
 	    private static int baud = 115200;
@@ -32,8 +37,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private static Object writeMx = new Object();
 	    private static boolean EOT = false;
 	 
-	    private static int[] readBuffer = new int[32767];
-	    private static int[] writeBuffer = new int[32767];
+	    private static int[] readBuffer = new int[256];
+	    private static int[] writeBuffer = new int[256];
 	    private static int readBufferHead = 0;
 	    private static int readBufferTail = 0;
 	    private static int writeBufferHead = 0;
@@ -68,6 +73,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public static final byte BNO055_GYRO_DATA_X_LSB_ADDR = (byte)0x14;
 	    // Euler register
 	    public static final byte BNO055_EULER_H_LSB_ADDR = (byte)0x1A;
+	    // Temperature data register
+	    public static final byte BNO055_TEMP_ADDR  = (byte)0x34;
+	    // Quaternion data register
+	    public static final byte BNO055_QUATERNION_DATA_W_LSB_ADDR = (byte)0x20;
 	    
 	    public static final byte POWER_MODE_NORMAL = (byte)0x00;
 	    
@@ -182,8 +191,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        }
 	        //
 	        // set up BNO055
-	    	// throw away command
-	        //write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, false);
 	        // set config mode
 	    	set_mode(OPERATION_MODE_CONFIG);
 	        // now read without kruft
@@ -231,49 +238,26 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	for(int i = 0; i < data.length; i++) {
 	    			write((byte) (data[i] & 0xFF));
 	    	}
-	    	// wait for buffer to empty
-	    	//if( DEBUG )
-	    	//	System.out.println("Wait for write buffer to empty");
-	    	
-	    	//synchronized(writeMx) {
-	    	//	while(writeBufferHead != writeBufferTail) {
-	    	//		try {
-	    	//			Thread.sleep(1);
-	    	//		} catch (InterruptedException e) {}
-	    	//	}
-	    	//}
-	    	// read the ack
-	    	//try {
-			//	Thread.sleep(30);
-			//} catch (InterruptedException e) {}
-	    	//if( DEBUG )
-	    	//	System.out.println("Preparing to receive ACK");
 	    	
 	    	byte resp;
-	    	//synchronized( readMx) {
-	    		//checkReadBuffer();
-	    		//resp = (byte) readBuffer[readBufferHead++];
-	    		resp = (byte)(read() & 0xFF);
-	    		if( resp != (byte)0xEE ) {
+	    	resp = (byte)(read() & 0xFF);
+	    	if( resp != (byte)0xEE ) {
 	    			System.out.printf("Received unexpected response in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp);
 	    			return;
-	    		}
-	    		//if( DEBUG )
-	    		//	System.out.println("Found ack header");
-	    		// we always use ACK except for reset, but it seems to send back the ee
-	        	if( !ack ) {
+	    	}
+	    	//if( DEBUG )
+	    	//	System.out.println("Found ack header");
+	    	// we always use ACK except for reset, but it seems to send back the ee
+	        if( !ack ) {
 		    		if( DEBUG )
 		    			System.out.println("return from write without ACK..");
 		    		return;
-		    	}
-	    		//checkReadBuffer();
-	    		//resp = (byte) readBuffer[readBufferHead++];
-	        	resp = (byte)( read() & 0xFF);
-	    		if( resp != (byte)0x01 ) {
+		    }
+	        resp = (byte)( read() & 0xFF);
+	    	if( resp != (byte)0x01 ) {
 	    				System.out.printf("Error from write ACK:%02x\r\n",resp);
 	    				return;
-	    		}
-	    	//}
+	    	}
 	    	//if( DEBUG ) {
 	    	//	System.out.println("ACK successful");
 	    	//}
@@ -297,10 +281,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private void checkReadBuffer() {
 	    	synchronized(readMx) {
 	    		try {
-	    			if( readBufferHead == readBuffer.length)
-	    				readBufferHead = 0;
 	    			if( readBufferHead == readBufferTail )
 	    				readMx.wait();
+	    			if( readBufferHead == readBuffer.length)
+	    				readBufferHead = 0;
 	    		} catch (InterruptedException e) {}
 	    	}
 	    }
@@ -325,48 +309,32 @@ public class IMUSerialDataPort implements DataPortInterface {
 		 * 0x0A: RECEIVE_CHARACTER_TIMEOUT
 		 */
 	    private byte signalRead(byte address, byte length) throws IOException {
-		    	//if( Props.DEBUG ) System.out.println("write "+c);
-		    	// Build and send serial register write command.
+		    //if( Props.DEBUG ) System.out.println("write "+c);
+		    // Build and send serial register write command.
 	    	//if( DEBUG )
 	    	//	System.out.println("Setting up read registers from signalRead..");
 		    write((byte) 0xAA); // Start byte
 		    write((byte) 0x01);  // Read
 		    write((byte) (address & 0xFF));
 		    write((byte) (length & 0xFF));		
-		    //  if( DEBUG )
-		    //		System.out.println("wait for empty write buffer");
-		    // wait for buffer to empty
-		    //synchronized(writeMx) {
-		    //		while(writeBufferHead != writeBufferTail) {
-		    //			try {
-		    //				Thread.sleep(5);
-		    //			} catch (InterruptedException e) {}
-		    //		}
-		    //}
 		    //if( DEBUG )
 		    //		System.out.println("Reading response header in signalRead");
 		    byte resp;
-		    //synchronized( readMx) {
-		    		//checkReadBuffer();
-		    		//resp = (byte) readBuffer[readBufferHead++];
-		    		resp = (byte)( read() & 0xFF);
-		    		if( resp == (byte)0xBB )
-		    			return 0;
-		    		// read fail is EE, otherwise confustion
-		    		//if( DEBUG )
-		    		//	System.out.println("Did NOT receive expected 'bb' response in signalRead");
-		    		if( resp != (byte)0xEE ) {
-		    			System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
-		    			return (byte)0x07; // lets call this bus overrun from chip
-		    		} else {
-		    			//checkReadBuffer();
-		    			//resp = (byte) readBuffer[readBufferHead++];
-		    			resp = (byte)( read() & 0xFF);
-		    			//if( DEBUG ) {
-		    			//	System.out.println("Recovered error code from signalRead");
-		    			//}
-		    		}
-		    //}
+		    resp = (byte)( read() & 0xFF);
+		    if( resp == (byte)0xBB )
+		    		return 0;
+		    // read fail is EE, otherwise confustion
+		    //if( DEBUG )
+		    //	System.out.println("Did NOT receive expected 'bb' response in signalRead");
+		    if( resp != (byte)0xEE ) {
+		    	System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
+		    	return (byte)0x07; // lets call this bus overrun from chip
+		    } else {
+		    	resp = (byte)( read() & 0xFF);
+		    	//if( DEBUG ) {
+		    	//	System.out.println("Recovered error code from signalRead");
+		    	//}
+		    }
 		    // should have the error code
 		    System.out.printf("Bad response from IMU: %02x\r\n",resp);
 		    return resp;
@@ -405,29 +373,22 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	}
 	    	// Returning with 0 from signalRead means we found 0xBB
 	    	// next byte is length, then data 1..n
-	    	//synchronized(readMx) {
-	    		//checkReadBuffer();
-	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
-	    		//byte blen = (byte) readBuffer[readBufferHead++];  // length
-	    		byte blen = (byte)( read() & 0xFF);
-	    		//if( DEBUG )
-	    		//	System.out.printf("Recovered length byte: %02x\r\n", blen);
-	            // Read the returned bytes.	
-	            if( blen == 0 || blen != length) {
+	    	//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
+	    	byte blen = (byte)( read() & 0xFF);
+	    	//if( DEBUG )
+	    	//	System.out.printf("Recovered length byte: %02x\r\n", blen);
+	        // Read the returned bytes.	
+	        if( blen == 0 || blen != length) {
 	                System.out.printf("Received length byte: %d but read requested %d bytes.\r\n", blen, length);
 	                return null;
-	            }
-	            byte[] bout = new byte[blen];
-	            for(int i = 0; i < blen; i++) {
-	            	//checkReadBuffer();
-	            	///bout[i] = (byte) readBuffer[readBufferHead++];
+	        }
+	        byte[] bout = new byte[blen];
+	        for(int i = 0; i < blen; i++) {
 	            	bout[i] = (byte)( read() & 0xFF);
-	            }
-	            return bout;
-	    	//}
-	    	//return inStream.read();
+	         }
+	         return bout;
+
 	    }
-	    
 	    
 	    /**
 	     * pacman the jizzle in the inputstream
@@ -447,6 +408,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	}
 	    }
 	    
+	    /**
+	     * Set the operation mode for sensor
+	     * @param mode
+	     * @throws IOException
+	     */
 	    private void set_mode(byte mode) throws IOException {
 	    	if( DEBUG )
 	    		System.out.printf("Setting mode:%02x\r\n",mode);
@@ -476,6 +442,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    //	System.out.println("exiting device reset");  
 	    }
 	    
+	    /**
+	     * Set the sensor fusion NDOF mode
+	     * @throws IOException
+	     */
 	    private void setNormalPowerNDOFMode() throws IOException {
 	         // Set to normal power mode.
 	         write(BNO055_PWR_MODE_ADDR, new byte[]{(byte)POWER_MODE_NORMAL}, true);
@@ -525,6 +495,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	return new int[]{xAccl, yAccl, zAccl};
 	    }
 	    
+	    /**
+	     * Read the magnetometer sensor data
+	     * @return x/Y/Z magnetic field strength of axis in microteslas
+	     * @throws IOException
+	     */
 	    public int[] readMag() throws IOException {
 	    	// Read 6 bytes of data from address 0x0E(14)
 	    	// xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
@@ -547,6 +522,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	return new int[]{xMag, yMag, zMag};
 	    }
 	    
+	    /**
+	     * Read the gyroscope sensor data
+	     * @return x/y/z/ gyro reading
+	     * @throws IOException
+	     */
 	    public int[] readGyro() throws IOException {
 	    	// Read 6 bytes of data from address 0x14(20)
 	    	// xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
@@ -569,6 +549,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	return new int[]{xGyro, yGyro, zGyro};
 	    }
 	    
+	    /**
+	     * Return euler orientation data from the sensor
+	     * @return the Yaw/Pitch/Roll integer array, or null if read error from sensor
+	     * @throws IOException
+	     */
 	    public double[] readEuler() throws IOException {
 	        //Return the current absolute orientation as a tuple of heading, roll, and pitch euler angles in degrees.
 	    	byte[] data = read(BNO055_EULER_H_LSB_ADDR, (byte)6);
@@ -589,6 +574,50 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        return new double[]{heading/16.0, roll/16.0, pitch/16.0};
 
 	    }
+	    
+	    /**
+	     * Read temperature from sensor
+	     * @return The +/- temperature in current setting/mode, or Integer.MAX_VALUE if error
+	     * @throws IOException
+	     */
+	    public int readTemperature() throws IOException {
+	    	byte[] data = read(BNO055_TEMP_ADDR, (byte)1);
+	    	if( data == null )
+	    		return Integer.MAX_VALUE;
+	    	int temp = data[0];
+	    	if(temp > 127)
+	            temp -= 256;
+	    	return temp;
+	    }
+	    
+	    /**
+	     * Return the current orientation as a tuple of X, Y, Z, W quaternion values.
+	     */
+	    public double[] readQuaternion() throws IOException {
+	    	byte[] data = read(BNO055_QUATERNION_DATA_W_LSB_ADDR, (byte)8);
+	    	if( data == null )
+	    		return null;
+	        int w = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
+	    	if(w > 32767) {
+	    		w -= 65536;
+	    	}
+	       	int x = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
+	    	if(x > 32767) {
+	    		x -= 65536;
+	    	}
+	    	int y = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
+	    	if(y > 32767) {
+	    		y -= 65536;
+	    	}
+	    	int z = ((data[7] & (byte)0xFF) * 256 + (byte)(data[6] & (byte)0xFF)) ;
+	    	if(z > 32767) {
+	    		z -= 65536;
+	    	}	
+	    	// Scale values, see 3.6.5.5 in the datasheet.
+	    	double scale = (1.0 / (1<<14));
+	    	return new double[]{x*scale, y*scale, z*scale, w*scale};
+	    }
+	    
 	    public String getPortName() { return portName; }
 	    public int getBaudRate() { return baud; }
 	    public int getDataBits() { return datab; }
@@ -719,13 +748,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	                	try
 	                	{                
 	                		synchronized(writeMx) {
-	                			if( writeBufferHead == writeBuffer.length)
-	                				writeBufferHead = 0;
 	                			if( writeBufferHead == writeBufferTail ) {
 	                				//System.out.println("Enter wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                    			writeMx.wait();
 	                    			//System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                			}
+	                			if( writeBufferHead == writeBuffer.length)
+	                				writeBufferHead = 0;
 	                			//System.out.print("["+(char)(writeBuffer[writeBufferHead])+"@"+writeBufferHead+"]");
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();

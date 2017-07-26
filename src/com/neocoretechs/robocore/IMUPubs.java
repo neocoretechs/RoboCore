@@ -30,9 +30,7 @@ import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
 
 
 /**
- * Publishes user constructed Twist messages on the cmd_vel topic. Takes the demuxxed values
- * from the attached device that collects 2 axis data from joystick etc and translates to X linear and Z
- * angular values
+ * Takes readings from the IMU DataPort and packages them for publication on the ROS bus
  * @author jg
  */
 public class IMUPubs extends AbstractNodeMain  {
@@ -119,10 +117,11 @@ public void onStart(final ConnectedNode connectedNode) {
 	// This CancellableLoop will be canceled automatically when the node shuts
 	// down.
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
-		private int sequenceNumber;
+		private long sequenceNumber, time1;
 		@Override
 		protected void setup() {
 			sequenceNumber = 0;
+			time1 = System.currentTimeMillis();
 		}
 
 		@Override
@@ -152,6 +151,49 @@ public void onStart(final ConnectedNode connectedNode) {
 
 			try {
 				getIMU();
+				++sequenceNumber;
+				if( System.currentTimeMillis() - time1 >= 1000) {
+					time1 = System.currentTimeMillis();
+					System.out.println("Samples per second:"+sequenceNumber);
+					sequenceNumber = 0;
+				}
+				
+				if( DEBUG )
+					System.out.println("reading ACCEL");
+				int[] accels = imuPort.readAccel();
+				if( DEBUG && accels != null )
+					System.out.println("Accel:"+accels[0]+" "+accels[1]+" "+accels[2]);
+				if( accels != null ) {
+					System.out.printf("X,Y,Z axis Acceleration : %d %d %d \r\n", accels[0],accels[1],accels[2]);
+					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+					val.setX(accels[0]);
+					val.setY(accels[1]);
+					val.setZ(accels[2]);
+					if( twistmsg == null )
+						twistmsg = twistpub.newMessage();
+					twistmsg.setLinear(val);
+				} else
+					System.out.println("ACCEL ERROR");
+				
+				if( DEBUG )
+					System.out.println("reading GYRO");
+				int[] gyros = imuPort.readGyro();
+				if( DEBUG && gyros != null)
+					System.out.println("Gyros:"+gyros[0]+" "+gyros[1]+" "+gyros[2]);
+				if( gyros != null ) {
+					System.out.printf("X,Y,Z axis Of gyro Rotation : %d %d %d\r\n", gyros[0],gyros[1],gyros[2]);
+					geometry_msgs.Vector3 vala = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+					vala.setZ(gyros[2]);
+					vala.setX(gyros[0]);
+					vala.setY(gyros[1]);
+					if( twistmsg == null )
+						twistmsg = twistpub.newMessage();
+					twistmsg.setAngular(vala);
+				} else
+					System.out.println("GYRO ERROR");
+
+				twistpub.publish(twistmsg);
+		
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -168,38 +210,32 @@ public void onStart(final ConnectedNode connectedNode) {
 public void getIMU() throws IOException{
 
 	if( DEBUG )
-		System.out.println("reading ACCEL");
-	int[] accels = imuPort.readAccel();
-	if( DEBUG && accels != null )
-		System.out.println("Accel:"+accels[0]+" "+accels[1]+" "+accels[2]);
-
-	if( DEBUG )
 		System.out.println("reading MAG");
 	int[] mags = imuPort.readMag();
 	if( DEBUG && mags!= null )
 		System.out.println("Mag:"+mags[0]+" "+mags[1]+" "+mags[2]);
 	
 	if( DEBUG )
-		System.out.println("reading GYRO");
-	int[] gyros = imuPort.readGyro();
-	if( DEBUG && gyros != null)
-		System.out.println("Gyros:"+gyros[0]+" "+gyros[1]+" "+gyros[2]);
-	
-	if( DEBUG )
 		System.out.println("reading EULER");
 	double[] eulers = imuPort.readEuler();
 	if( DEBUG && eulers != null)
-		System.out.println("Eulers:"+eulers[0]+" "+eulers[1]+eulers[2]);
+		System.out.println("Eulers:"+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+	
+	if( DEBUG )
+		System.out.println("reading QUATERNION");
+	double[] quats = imuPort.readQuaternion();
+	if( DEBUG && quats != null)
+		System.out.println("Quats:"+quats[0]+" "+quats[1]+" "+quats[2]+" "+quats[3]);
+	
+	if( DEBUG )
+		System.out.println("reading TEMPERATURE");
+	int temp = imuPort.readTemperature();
+	if( DEBUG && temp != Integer.MAX_VALUE)
+		System.out.println("Temp:"+temp);
+	
 	
 	// Output data to screen
-	if( gyros != null )
-		System.out.printf("X,Y,Z axis Of gyro Rotation : %d %d %d\r\n", gyros[0],gyros[1],gyros[2]);
-	else
-		System.out.println("GYRO ERROR");
-	if( accels != null )
-		System.out.printf("X,Y,Z axis Acceleration : %d %d %d \r\n", accels[0],accels[1],accels[2]);
-	else
-		System.out.println("ACCEL ERROR");
+
 	if( mags != null )
 		System.out.printf("X,Y,Z axis Magnetic field : %d %d %d \r\n", mags[0], mags[1], mags[2]);
 	else
@@ -208,6 +244,15 @@ public void getIMU() throws IOException{
 		System.out.printf("yaw, roll, pitch degrees: %f %f %f \r\n", eulers[0], eulers[1], eulers[2]);
 	else
 		System.out.println("FUSION ERROR");
+	if( quats != null )
+		System.out.printf("X, Y, Z, W degrees: %f %f %f %f\r\n", quats[0], quats[1], quats[2], quats[3]);
+	else
+		System.out.println("FUSION ERROR");
+	if( temp != Integer.MAX_VALUE)
+		System.out.printf("Temperature: %d \r\n", temp);
+	else
+		System.out.println("TEMPERATURE ERROR");
+	
 	
 }	
 class fileReader implements Runnable {

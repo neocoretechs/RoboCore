@@ -190,10 +190,10 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	//if( Props.DEBUG ) System.out.println("read");
 	    	synchronized(readMx) {
 	    		try {
-	    			if( readBufferHead == readBuffer.length)
-	    				readBufferHead = 0;
 	    			if( readBufferHead == readBufferTail )
 	    				readMx.wait();
+	    			if( readBufferHead == readBuffer.length)
+	    				readBufferHead = 0;
 				} catch (InterruptedException e) {
 				}
 	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
@@ -211,10 +211,10 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	//if( Props.DEBUG ) System.out.println("read");
 	    	synchronized(readMx) {
 	    		try {
-	    			if( readBufferHead == readBuffer.length)
-	    				readBufferHead = 0;
 	    			if( readBufferHead == readBufferTail )
 	    				readMx.wait(timeout);
+	      			if( readBufferHead == readBuffer.length)
+	    				readBufferHead = 0;
 				} catch (InterruptedException e) {
 				}
 	    		// if we waited and nothing came back after timeout, machine no go
@@ -417,14 +417,14 @@ public class ByteSerialDataPort implements DataPortInterface {
 					{
 	                	try
 	                	{                
-	                		synchronized(writeMx) {
-	                			if( writeBufferHead == writeBuffer.length)
-	                				writeBufferHead = 0;
+	                		synchronized(writeMx) {   
 	                			if( writeBufferHead == writeBufferTail ) {
 	                				//System.out.println("Enter wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                    			writeMx.wait();
 	                    			//System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
 	                			}
+	                   			if( writeBufferHead == writeBuffer.length)
+	                				writeBufferHead = 0;
 	                			//System.out.print("["+(char)(writeBuffer[writeBufferHead])+"@"+writeBufferHead+"]");
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();
