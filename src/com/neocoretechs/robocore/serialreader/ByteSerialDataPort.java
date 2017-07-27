@@ -233,17 +233,19 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
-				while( c != '\r' && c != '\n' ) {
+				while( c != '\r' && c != '\n' || sb.length() <= 1 ) {
 					c = read();
 					//if( DEBUG )
 					//	System.out.print("["+Character.toChars(c)[0]+"]");
-					if( c != -1 )
-						sb.append((char)c);
+					if( c != -1 && c != '\r' && c != '\n')
+						sb.append(Character.toString((char)c));
 				}
 			} catch (IOException e) {
 				System.out.println("IOException reading line:"+sb.toString());
 				return null;
 			}
+	    	if( DEBUG )
+	    		System.out.println("readLine:"+sb.toString());
 	    	return sb.toString();
 	    }
 	    

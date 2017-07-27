@@ -68,72 +68,8 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
         public String getPortName() { return dataPort.getPortName(); }
         
         public abstract void postProcess() throws Exception;
-        
-        public static double getReadingValueDouble(String readLine) {
-        	if( readLine != null ) {
-        		int sindex = readLine.indexOf(" ");
-        		if( sindex != -1 && sindex+1 < readLine.length() ) {
-        			String rnum = readLine.substring(sindex+1);
-        			try {
-        				return new Double(rnum).doubleValue();
-        			} catch(Exception e) {
-        				System.out.println("Bad reading from "+readLine);
-        			}
-        		}
-        	}
-        	System.out.println("Can't get valid value from acquired reading in "+readLine);
-        	return 0;
-		}
 
-        public static int getReadingValueInt(String readLine) {
-        	if( readLine != null ) {
-        		int sindex = readLine.indexOf(" ");
-        		if( sindex != -1 && sindex+1 < readLine.length() ) {
-        			String rnum = readLine.substring(sindex+1);
-        			try {
-        				return new Integer(rnum).intValue();
-        			} catch(Exception e) {
-        				System.out.println("Bad reading from "+readLine);
-        			}
-        		}
-        	}
-        	System.out.println("Can't get valid value from acquired reading in "+readLine);
-        	return 0;
-		}
-        
-        public static String getReadingValueString(String readLine) {
-        	if( readLine != null ) {
-        		int sindex = readLine.indexOf(" ");
-        		if( sindex != -1 && sindex+1 < readLine.length() ) {
-        			String rnum = readLine.substring(sindex+1);
-        			try {
-        				return rnum;
-        			} catch(Exception e) {
-        				System.out.println("Bad reading from "+readLine);
-        			}
-        		}
-        	}
-        	System.out.println("Can't get valid value from acquired reading in "+readLine);
-        	return null;
-		}
-        
-		public static int getReadingNumber(String readLine) {
-	       	if( readLine != null ) {
-        		int sindex = readLine.indexOf(" ");
-        		if( sindex != -1 && sindex+1 < readLine.length() ) {
-        			String rnum = readLine.substring(0,sindex);
-        			try {
-        				return new Integer(rnum).intValue();
-        			} catch(Exception e) {
-        				System.out.println("Bad reading from "+readLine);
-        				return 0;
-        			}
-        		}
-        	}	
-	       	System.out.println("Can't get valid sequence from acquired reading in "+readLine);
-        	return 0;
-		}
-
+      
 		@SuppressWarnings("unused")
 		private String determineUnitsOfMeasure(String readLine) {
         	return "UNKNOWN";

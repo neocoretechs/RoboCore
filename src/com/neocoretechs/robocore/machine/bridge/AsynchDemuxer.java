@@ -71,8 +71,8 @@ public class AsynchDemuxer implements Runnable {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
 					}
-					int reading = AbstractMachine.getReadingNumber(readLine);
-					double data =  AbstractMachine.getReadingValueDouble(readLine);
+					int reading = getReadingNumber(readLine);
+					double data =  getReadingValueDouble(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
@@ -91,8 +91,8 @@ public class AsynchDemuxer implements Runnable {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 							return;
 					}
-					int reading = AbstractMachine.getReadingNumber(readLine);
-					int data =  AbstractMachine.getReadingValueInt(readLine);
+					int reading = getReadingNumber(readLine);
+					int data =  getReadingValueInt(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
@@ -115,8 +115,8 @@ public class AsynchDemuxer implements Runnable {
 						//continue;
 						return;
 					}
-					int reading = AbstractMachine.getReadingNumber(readLine);
-					String data =  AbstractMachine.getReadingValueString(readLine);
+					int reading = getReadingNumber(readLine);
+					String data =  getReadingValueString(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
@@ -137,19 +137,19 @@ public class AsynchDemuxer implements Runnable {
 				// get element 1 <pin>
 				if( readLine == null || readLine.length() == 0 ) {
 					if(DEBUG) System.out.println("Empty line returned from readLine of ultrasonic pin");
-					return;
+					continue;
 				}
-				int reading = AbstractMachine.getReadingNumber(readLine);
-				int data =  AbstractMachine.getReadingValueInt(readLine);
+				int reading = getReadingNumber(readLine);
+				int data =  getReadingValueInt(readLine);
 				pin = data;
 				// get element 2 <range>
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
 						if(DEBUG) System.out.println("Empty line returned from readLine of ultrasonic range");
-						return;
+						continue;
 				}
-				reading = AbstractMachine.getReadingNumber(readLine);
-				data =  (int) AbstractMachine.getReadingValueDouble(readLine);
+				reading = getReadingNumber(readLine);
+				data =  (int) getReadingValueDouble(readLine);
 				if( DEBUG ) 
 						System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
@@ -172,8 +172,8 @@ public class AsynchDemuxer implements Runnable {
 				if( readLine == null || readLine.length() == 0 ) {
 					return;
 				}
-				int reading = AbstractMachine.getReadingNumber(readLine);
-				int data =  AbstractMachine.getReadingValueInt(readLine);
+				int reading = getReadingNumber(readLine);
+				int data =  getReadingValueInt(readLine);
 				if( DEBUG ) 
 						System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				pin = data;
@@ -181,8 +181,8 @@ public class AsynchDemuxer implements Runnable {
 				if( readLine == null || readLine.length() == 0 ) {
 					return;
 				}
-				reading = AbstractMachine.getReadingNumber(readLine);
-				data =  AbstractMachine.getReadingValueInt(readLine);
+				reading = getReadingNumber(readLine);
+				data =  getReadingValueInt(readLine);
 				if( DEBUG ) 
 					System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
@@ -205,8 +205,8 @@ public class AsynchDemuxer implements Runnable {
 					System.out.println("premature return digitalpin retrieveData");
 					return;
 				}
-				int reading = AbstractMachine.getReadingNumber(readLine);
-				int data =  AbstractMachine.getReadingValueInt(readLine);
+				int reading = getReadingNumber(readLine);
+				int data =  getReadingValueInt(readLine);
 				if( DEBUG ) 
 						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				pin = data;
@@ -215,8 +215,8 @@ public class AsynchDemuxer implements Runnable {
 					System.out.println("premature return digitalpin retrieveData");
 					return;
 				}
-				reading = AbstractMachine.getReadingNumber(readLine);
-				data =  AbstractMachine.getReadingValueInt(readLine);
+				reading = getReadingNumber(readLine);
+				data =  getReadingValueInt(readLine);
 				if( DEBUG ) 
 						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);	
 				MachineReading mr = new MachineReading(1, pin, reading, data);
@@ -228,6 +228,70 @@ public class AsynchDemuxer implements Runnable {
 		DigitalPinListener.getInstance();
 	}
 	
+    public double getReadingValueDouble(String readLine) {
+    	if( readLine != null ) {
+    		int sindex = readLine.indexOf(" ");
+    		if( sindex != -1 && sindex+1 < readLine.length() ) {
+    			String rnum = readLine.substring(sindex+1);
+    			try {
+    				return new Double(rnum).doubleValue();
+    			} catch(Exception e) {
+    				System.out.println("Bad reading from "+readLine);
+    			}
+    		}
+    	}
+    	System.out.println("Can't get valid value from acquired reading in "+readLine);
+    	return 0;
+	}
+	  public int getReadingValueInt(String readLine) {
+      	if( readLine != null ) {
+      		int sindex = readLine.indexOf(" ");
+      		if( sindex != -1 && sindex+1 < readLine.length() ) {
+      			String rnum = readLine.substring(sindex+1);
+      			try {
+      				return new Integer(rnum).intValue();
+      			} catch(Exception e) {
+      				System.out.println("Bad reading from "+readLine);
+      			}
+      		}
+      	}
+      	System.out.println("Can't get valid value from acquired reading in "+readLine);
+      	return 0;
+		}
+      
+      public String getReadingValueString(String readLine) {
+      	if( readLine != null ) {
+      		int sindex = readLine.indexOf(" ");
+      		if( sindex != -1 && sindex+1 < readLine.length() ) {
+      			String rnum = readLine.substring(sindex+1);
+      			try {
+      				return rnum;
+      			} catch(Exception e) {
+      				System.out.println("Bad reading from "+readLine);
+      			}
+      		}
+      	}
+      	System.out.println("Can't get valid value from acquired reading in "+readLine);
+      	return null;
+		}
+      
+		public int getReadingNumber(String readLine) {
+	       	if( readLine != null ) {
+      		int sindex = readLine.indexOf(" ");
+      		if( sindex != -1 && sindex+1 < readLine.length() ) {
+      			String rnum = readLine.substring(0,sindex);
+      			try {
+      				return new Integer(rnum).intValue();
+      			} catch(Exception e) {
+      				System.out.println("Bad reading from "+readLine);
+      				return 0;
+      			}
+      		}
+      	}	
+	       	System.out.println("Can't get valid sequence from acquired reading in "+readLine);
+      	return 0;
+		}
+
 	/**
 	 * Configure the robot with a series of G-code directives at startup in file startup.gcode
 	 * @throws IOException
