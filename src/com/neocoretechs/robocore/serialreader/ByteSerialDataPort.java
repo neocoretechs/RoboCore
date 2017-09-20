@@ -244,8 +244,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 				System.out.println("IOException reading line:"+sb.toString());
 				return null;
 			}
-	    	if( DEBUG )
-	    		System.out.println("readLine:"+sb.toString());
+	    	//if( DEBUG )
+	    	//	System.out.println("readLine:"+sb.toString());
 	    	return sb.toString();
 	    }
 	    

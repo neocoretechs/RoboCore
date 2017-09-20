@@ -150,8 +150,8 @@ public class AsynchDemuxer implements Runnable {
 				}
 				reading = getReadingNumber(readLine);
 				data =  (int) getReadingValueDouble(readLine);
-				if( DEBUG ) 
-						System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
+				//if( DEBUG ) 
+				//		System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);
 				}
@@ -236,7 +236,7 @@ public class AsynchDemuxer implements Runnable {
     			try {
     				return new Double(rnum).doubleValue();
     			} catch(Exception e) {
-    				System.out.println("Bad reading from "+readLine);
+    				System.out.println("Bad double value reading from "+readLine);
     			}
     		}
     	}
@@ -251,7 +251,7 @@ public class AsynchDemuxer implements Runnable {
       			try {
       				return new Integer(rnum).intValue();
       			} catch(Exception e) {
-      				System.out.println("Bad reading from "+readLine);
+      				System.out.println("Bad integer reading from "+readLine);
       			}
       		}
       	}
@@ -267,7 +267,7 @@ public class AsynchDemuxer implements Runnable {
       			try {
       				return rnum;
       			} catch(Exception e) {
-      				System.out.println("Bad reading from "+readLine);
+      				System.out.println("Bad String reading from "+readLine);
       			}
       		}
       	}
@@ -283,12 +283,12 @@ public class AsynchDemuxer implements Runnable {
       			try {
       				return new Integer(rnum).intValue();
       			} catch(Exception e) {
-      				System.out.println("Bad reading from "+readLine);
+      				System.out.println("Bad Numeric reading from "+readLine);
       				return 0;
       			}
       		}
       	}	
-	       	System.out.println("Can't get valid sequence from acquired reading in "+readLine);
+	    System.out.println("Can't get valid sequence from acquired reading in "+readLine);
       	return 0;
 		}
 
@@ -326,9 +326,8 @@ public class AsynchDemuxer implements Runnable {
 						continue;
 					}
 					op = op.substring(1, endDelim);
-					if(DEBUG)
-						System.out.println("op:"+op);
-					//if( Props.DEBUG ) System.out.println("Demuxing "+op.toString());
+					//if(DEBUG)
+					//	System.out.println("op:"+op);
 					TopicList tl = topics.get(op);
 					if( tl != null )
 						tl.retrieveData();

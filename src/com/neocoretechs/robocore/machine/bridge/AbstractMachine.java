@@ -4,11 +4,10 @@ import java.io.IOException;
 
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
-
 	/**
 	 * Defines an abstraction of a type of machine ofmachineType that performs operations on a DataPortInterface
 	 * @author jg
-	 * Copyright  © 2012 Microcaliper Devices, LLC
+	 * Copyright (C) 2012 Microcaliper Devices, LLC
 	 */
     public abstract class AbstractMachine 
     {

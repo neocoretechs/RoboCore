@@ -273,9 +273,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 		}
 		
 	    private void checkWriteBuffer() {
-	    	if( writeBufferTail >= writeBuffer.length) {	
+	    	synchronized(writeMx) {
+	    		if( writeBufferTail >= writeBuffer.length) {	
     				writeBufferTail = 0;
-			}
+	    		}
+	    	}
 	    }
 	    
 	    private void checkReadBuffer() {
@@ -291,7 +293,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    
 		@Override
 		public int read() throws IOException {
-	    	synchronized( readMx) {
+	    	synchronized(readMx) {
 	    		checkReadBuffer();
 	    		return readBuffer[readBufferHead++];
 	    	}
