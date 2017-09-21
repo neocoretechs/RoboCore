@@ -37,7 +37,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private static Object writeMx = new Object();
 	    private static boolean EOT = false;
 	 
-	    private static int[] readBuffer = new int[256];
+	    private static int[] readBuffer = new int[512];
 	    private static int[] writeBuffer = new int[256];
 	    private static int readBufferHead = 0;
 	    private static int readBufferTail = 0;
@@ -726,6 +726,12 @@ public class IMUSerialDataPort implements DataPortInterface {
 								System.out.println("Possible buffer overrun "+readBufferHead+" "+readBufferTail);
 							readMx.notify();
 						}
+						try {
+							Thread.sleep(1);
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
 					}
 	                isRunning = false;
 	            }
@@ -761,6 +767,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();
 	                		}
+	                		Thread.sleep(1);
 	                	}
 	                	catch ( IOException ioe ) {
 							System.out.println("Write exception on serial write:"+ioe);
