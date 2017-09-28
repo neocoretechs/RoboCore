@@ -21,7 +21,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  *
  */
 public class IMUSerialDataPort implements DataPortInterface {
-		private static boolean DEBUG = true;
+		private static boolean DEBUG = false;
 	    private SerialPort serialPort;
 	    private OutputStream outStream;
 	    private InputStream inStream;
@@ -479,8 +479,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     */
 	    public int[] readAccel() throws IOException {
 	    	byte[] data = read(BNO055_ACCEL_DATA_X_LSB_ADDR, (byte)6);
-	    	if( data == null )
-	    		return null;
+	    	int c = 0;
+	    	while( data == null ) {
+	    		if(++c == 5) return null;
+		    	reset();
+		    	setNormalPowerNDOFMode();
+		    	data = read(BNO055_ACCEL_DATA_X_LSB_ADDR, (byte)6);
+	    	}
 	    	// Convert the data
 	    	int xAccl = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
 	    	if(xAccl > 32767) {
@@ -506,8 +511,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	// Read 6 bytes of data from address 0x0E(14)
 	    	// xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
 	    	byte[] data = read(BNO055_MAG_DATA_X_LSB_ADDR, (byte)6);
-	    	if( data == null )
-	    		return null;
+	    	int c = 0;
+	    	while( data == null ) {
+	    		if(++c == 5) return null;
+		    	reset();
+		    	setNormalPowerNDOFMode();
+		    	data = read(BNO055_MAG_DATA_X_LSB_ADDR, (byte)6);
+	    	}
 	    	// Convert the data
 	    	int xMag = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
 	    	if(xMag > 32767) {
@@ -533,8 +543,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	// Read 6 bytes of data from address 0x14(20)
 	    	// xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
 	    	byte[] data = read(BNO055_GYRO_DATA_X_LSB_ADDR, (byte)6);
-	    	if( data == null)
-	    		return null;
+	    	int c = 0;
+	    	while( data == null ) {
+	    		if(++c == 5) return null;
+		    	reset();
+		    	setNormalPowerNDOFMode();
+		    	data = read(BNO055_GYRO_DATA_X_LSB_ADDR, (byte)6);
+	    	}
 	    	// Convert the data
 	    	int xGyro = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
 	    	if(xGyro > 32767) {
@@ -559,8 +574,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public double[] readEuler() throws IOException {
 	        //Return the current absolute orientation as a tuple of heading, roll, and pitch euler angles in degrees.
 	    	byte[] data = read(BNO055_EULER_H_LSB_ADDR, (byte)6);
-	    	if( data == null )
-	    		return null;
+	    	int c = 0;
+	    	while( data == null ) {
+	    		if(++c == 5) return null;
+		    	reset();
+		    	setNormalPowerNDOFMode();
+		    	data = read(BNO055_EULER_H_LSB_ADDR, (byte)6);
+	    	}
 	        int heading = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
 	    	if(heading > 32767) {
 	    		heading -= 65536;
@@ -584,8 +604,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     */
 	    public int readTemperature() throws IOException {
 	    	byte[] data = read(BNO055_TEMP_ADDR, (byte)1);
-	    	if( data == null )
-	    		return Integer.MAX_VALUE;
+	    	int c = 0;
+	    	while( data == null ) {
+	    		if(++c == 5)  return Integer.MAX_VALUE;
+		    	reset();
+		    	setNormalPowerNDOFMode();
+		    	data = read(BNO055_TEMP_ADDR, (byte)1);
+	    	}
 	    	int temp = data[0];
 	    	if(temp > 127)
 	            temp -= 256;
@@ -597,8 +622,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     */
 	    public double[] readQuaternion() throws IOException {
 	    	byte[] data = read(BNO055_QUATERNION_DATA_W_LSB_ADDR, (byte)8);
-	    	if( data == null )
-	    		return null;
+	    	int c = 0;
+	    	while( data == null ) {
+	    		if(++c == 5) return null;
+		    	reset();
+		    	setNormalPowerNDOFMode();
+		    	data = read(BNO055_QUATERNION_DATA_W_LSB_ADDR, (byte)8);
+	    	}
 	        int w = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
 	    	if(w > 32767) {
 	    		w -= 65536;
@@ -727,7 +757,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 							readMx.notify();
 						}
 						try {
-							Thread.sleep(1);
+							Thread.sleep(2);
 						} catch (InterruptedException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
@@ -767,7 +797,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();
 	                		}
-	                		Thread.sleep(1);
+	                		Thread.sleep(2);
 	                	}
 	                	catch ( IOException ioe ) {
 							System.out.println("Write exception on serial write:"+ioe);
