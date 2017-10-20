@@ -170,6 +170,7 @@ public class AsynchDemuxer implements Runnable {
 				int pin = 0;
 				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</analogpin>") ) {
 				if( readLine == null || readLine.length() == 0 ) {
+					System.out.println("Premature return analogpin retrieveData from empty line");
 					return;
 				}
 				int reading = getReadingNumber(readLine);
@@ -179,6 +180,7 @@ public class AsynchDemuxer implements Runnable {
 				pin = data;
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
+					System.out.println("Premature return analogpin retrieveData from empty line");
 					return;
 				}
 				reading = getReadingNumber(readLine);
@@ -202,7 +204,7 @@ public class AsynchDemuxer implements Runnable {
 				int pin = 0;
 				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</digitalpin>") ) {
 				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("premature return digitalpin retrieveData");
+					System.out.println("Premature return digitalpin retrieveData pin # from empty line");
 					return;
 				}
 				int reading = getReadingNumber(readLine);
@@ -212,7 +214,7 @@ public class AsynchDemuxer implements Runnable {
 				pin = data;
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("premature return digitalpin retrieveData");
+					System.out.println("Premature return digitalpin retrieveData value from empty line");
 					return;
 				}
 				reading = getReadingNumber(readLine);
@@ -236,14 +238,14 @@ public class AsynchDemuxer implements Runnable {
     			try {
     				return new Double(rnum).doubleValue();
     			} catch(Exception e) {
-    				System.out.println("Bad double value reading from "+readLine);
+    				System.out.println("Cannot convert double value from:"+rnum);
     			}
     		}
     	}
-    	System.out.println("Can't get valid value from acquired reading in "+readLine);
+    	System.out.println("Can't get valid Double value from:"+readLine);
     	return 0;
 	}
-	  public int getReadingValueInt(String readLine) {
+	public int getReadingValueInt(String readLine) {
       	if( readLine != null ) {
       		int sindex = readLine.indexOf(" ");
       		if( sindex != -1 && sindex+1 < readLine.length() ) {
@@ -251,46 +253,45 @@ public class AsynchDemuxer implements Runnable {
       			try {
       				return new Integer(rnum).intValue();
       			} catch(Exception e) {
-      				System.out.println("Bad integer reading from "+readLine);
+      				System.out.println("Cannot convert integer value from:"+rnum);
       			}
       		}
       	}
-      	System.out.println("Can't get valid value from acquired reading in "+readLine);
+      	System.out.println("Can't get valid Integer value from:"+readLine);
       	return 0;
-		}
+	}
       
-      public String getReadingValueString(String readLine) {
+    public String getReadingValueString(String readLine) {
       	if( readLine != null ) {
       		int sindex = readLine.indexOf(" ");
       		if( sindex != -1 && sindex+1 < readLine.length() ) {
-      			String rnum = readLine.substring(sindex+1);
-      			try {
-      				return rnum;
-      			} catch(Exception e) {
-      				System.out.println("Bad String reading from "+readLine);
-      			}
+      			return readLine.substring(sindex+1);
       		}
       	}
-      	System.out.println("Can't get valid value from acquired reading in "+readLine);
+      	System.out.println("Can't get valid String from raw line:"+readLine);
       	return null;
-		}
-      
-		public int getReadingNumber(String readLine) {
+	}
+    /**
+     * Get the value of the monotonically increasing reading number field
+     * that precedes the pin or value reading in the given line 
+     * @param readLine
+     * @return The integer value of the field
+     */
+    public int getReadingNumber(String readLine) {
 	       	if( readLine != null ) {
-      		int sindex = readLine.indexOf(" ");
-      		if( sindex != -1 && sindex+1 < readLine.length() ) {
-      			String rnum = readLine.substring(0,sindex);
-      			try {
-      				return new Integer(rnum).intValue();
-      			} catch(Exception e) {
-      				System.out.println("Bad Numeric reading from "+readLine);
-      				return 0;
+	       		int sindex = readLine.indexOf(" ");
+      			if( sindex != -1 && sindex+1 < readLine.length() ) {
+      				String rnum = readLine.substring(0,sindex);
+      				try {
+      					return new Integer(rnum).intValue();
+      				} catch(Exception e) {
+      					System.out.println("Cannot convert Integer from:"+rnum);
+      				}
       			}
-      		}
-      	}	
-	    System.out.println("Can't get valid sequence from acquired reading in "+readLine);
-      	return 0;
-		}
+	       	}	
+	       	System.out.println("Can't get valid reading number from:"+readLine);
+	       	return 0;
+	}
 
 	/**
 	 * Configure the robot with a series of G-code directives at startup in file startup.gcode
@@ -317,25 +318,25 @@ public class AsynchDemuxer implements Runnable {
 	public void run() {
 		isRunning = true;
 		while(shouldRun) {
-			String op;
+			String op, fop;
 			try {
 				if((op=ByteSerialDataPort.getInstance().readLine()).charAt(0) == '<' ) {
 					int endDelim = op.indexOf('>');
 					if( endDelim == -1 ) {
-						System.out.println("Cannot demux received directive:"+op);
+						System.out.println("Cannot demux received raw directive:"+op);
 						continue;
 					}
-					op = op.substring(1, endDelim);
+					fop = op.substring(1, endDelim);
 					//if(DEBUG)
 					//	System.out.println("op:"+op);
-					TopicList tl = topics.get(op);
+					TopicList tl = topics.get(fop);
 					if( tl != null )
 						tl.retrieveData();
 					else
-						System.out.println("Cannot demux received directive:"+op);
+						System.out.println("Cannot retrieve topic "+fop+" from raw directive "+op);
 					
 				} else {
-						System.out.println("Looking for directive but found:"+op);
+						System.out.println("Expecting directive but instead found:"+op);
 						continue;
 				}
 	

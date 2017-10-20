@@ -43,6 +43,9 @@ public class TwistPubs extends AbstractNodeMain  {
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	geometry_msgs.Twist twistmsg = null;
+	// analog inputs on pins 55,56 of Mega2560 as defined in startup.gcode for AsynchDemuxer
+	public final static int joystickPinY = 55;
+	public final static int joystickPinX = 56;
 	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 	//private static int[] data = new int[]{-10,10,100};
 
@@ -137,7 +140,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				int[] mr = AnalogPinListener.data.peekFirst();
 				// wait for our pins to be displayed as we are potentially demuxxing numerous analogpin messages
 				// look for Y input (throttle)
-				if( mr[0] == AnalogPinListener.joystickPinY) {// linear pin
+				if( mr[0] == joystickPinY) {// linear pin
 					AnalogPinListener.data.takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 					int r = mr[1];
@@ -153,7 +156,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( DEBUG) System.out.println("Set twist linear "+val.getX()+" raw:"+mr[1]);
 				}
 				// look for x input (pivot)
-				if( mr[0] == AnalogPinListener.joystickPinX) {// angular pin
+				if( mr[0] == joystickPinX) {// angular pin
 					AnalogPinListener.data.takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 					int r = mr[1];

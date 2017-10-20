@@ -24,6 +24,8 @@ import org.ros.internal.loader.CommandLineLoader;
 import org.ros.message.MessageListener;
 import org.ros.message.Time;
 
+import rosgraph_msgs.Log;
+
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.BatteryListener;
 import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
@@ -32,21 +34,27 @@ import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 /**
  * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
  * voltage, etc and all that is acquired from the attached USB of an aux board such as Mega2560 via RS-232.
- * As input from the board is received the AsynchDemuxer decodes the header and prepares the data for publication
- * to the Ros bus. If the 'M2' code is issued the data from the controller is enabled.
- * The ByteSerialDataPort and its associates read the base level data organized as a header and followed by each successive line
- * of parameter number and value.
  * 
- * Subscribe to messages on the cmd_vel standard ROS topic to receive motor control commands as TWIST messages and
- * send them on to the controller.
+ * As input from the attached board is received the AsynchDemuxer decodes the header and prepares the data for publication
+ * to the Ros bus. Publish various warnings over the 'robocore/status' topic.
+ * The ByteSerialDataPort and its associates read the base level data organized as a header delimited by chevrons and
+ * containing the message topic identifier. After the identifier, which is used to demux the message and properly read the
+ * remainder and process it after each successive line.
+ * Each line after the header has a parameter number and value. For instance, for an analog pin input or an ultrasonic reading
+ * we have '1 pin', '2 reading' with pin and reading being the numeric values for the distance or pin reading value.
+ * The end of the message is delimited with '</topic>' with topic being the matching header element.
  * 
- * Publish various warnings over the 'robocore/status' topic.
+ * On the subscriber side, Subscribe to messages on the cmd_vel standard ROS topic to receive motor control commands as TWIST messages and
+ * send them on to the attached controller. We have the standard cmd_vel which receives TWIST messages and an aux "absolute/cmd_vel"
+ * that we use to send absolute motor control acceleration directives, such as from the PS3 controller.
+ * We also subscribe to the cmd_pwm message, which allows us to issue a M45 PWM directive for a particular power level.
+ * The cmd_gpio message is also processed activating a specific pin with a specific value.
  * 
  * Essentially this is the main interface to the attached Mega2560 and on to all GPIO
- * and high level motor control functions which are activated via a serial board TTL to RS-232 attached to Mega2560
- * UART aux port or low level motor driver H bridge which is issued a series of M codes to activate the
- * PWM and GPIO direction pins on the Mega. 
- * Controller:
+ * and high level motor control functions which are activated via a serial board TTL to RS-232 attached to Mega2560.
+ * Anything attached to the microcontroller: UART aux port or low level motor driver H bridge, issued a series of M codes 
+ * to activate the functions of the PWM and GPIO pins on the Mega. 
+ * Controller M and G code examples:
  * G5 C<channel> P<power> - Issue move command to controller on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
@@ -95,12 +103,11 @@ public class MegaPubs extends AbstractNodeMain  {
 	public MegaPubs() {}
 	
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("pubs_robocore");
+		return GraphName.of("pubsubs_robocore");
 	}
 
 /**
  * Create NodeConfiguration 
- * @throws URISyntaxException 
  */
 public NodeConfiguration build()  {
   //NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
@@ -121,7 +128,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 
 	final Publisher<sensor_msgs.Range> rangepub = 
-		connectedNode.newPublisher("range/ultrasonic/robocore", sensor_msgs.Range._TYPE);
+		connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor

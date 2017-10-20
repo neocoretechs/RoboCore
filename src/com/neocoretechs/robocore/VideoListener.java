@@ -27,7 +27,7 @@ import sensor_msgs.Image;
 
 
 /**
- * Create a panel and receive published video images on the Ros bus from ardrone/image_raw, then
+ * Create a panel and receive published video images on the Ros bus from robocore/image_raw, then
  * display them to the panel or write out a series of image files.
  * The function depends on remapped command line param "__mode" either "display" or directory name
  * Mainly demonstrates how we can manipulate the 3 byte BGR buffer to publish to ROS or create
@@ -40,6 +40,8 @@ public class VideoListener extends AbstractNodeMain
 	private static boolean DEBUG = true;
     private BufferedImage image = null;
     private PlayerFrame displayPanel;
+    ByteBuffer cb;
+    byte[] buffer;
     JFrame frame;
 	String mode = "display";
 	String outDir = "/";
@@ -69,14 +71,14 @@ public class VideoListener extends AbstractNodeMain
 			System.out.println("Sending video files to :"+outDir);
 		}
 		final Subscriber<sensor_msgs.Image> imgsub =
-				connectedNode.newSubscriber("ardrone/image_raw", sensor_msgs.Image._TYPE);
+				connectedNode.newSubscriber("robocore/image_raw", sensor_msgs.Image._TYPE);
 		
 		imgsub.addMessageListener(new MessageListener<sensor_msgs.Image>() {
 
 		@Override
 		public void onNewMessage(Image img) {
-			ByteBuffer cb = img.getData();
-			byte[] buffer = cb.array(); // 3 byte BGR
+			cb = img.getData();
+			buffer = cb.array(); // 3 byte BGR
 			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
 			if( DEBUG ) {
 				System.out.println("New image "+img.getWidth()+","+img.getHeight()+" size:"+buffer.length/*ib.limit()*/);

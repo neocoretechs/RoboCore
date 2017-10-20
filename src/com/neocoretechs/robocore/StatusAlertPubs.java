@@ -17,7 +17,7 @@ import sensor_msgs.Range;
  * Publish to the robocore/status topic, based on subscribing to forward ultrasonic rangers.
  * This is a nice test example to abstract away some of the functionality on the bus.
  * StatusAlerts comprise robocore/status - Which has 'List' of Key/Value messages in diagnostic_msgs.DiagnosticStatus
- * range/ultrasonic/* has integer range val in sensor_msgs.Range. The option to activate the speech option is also provided.
+ * sensor_msgs/Range has integer range val in sensor_msgs.Range. The option to activate the speech option is also provided.
  * @author jg
  *
  */
@@ -39,8 +39,8 @@ public class StatusAlertPubs extends AbstractNodeMain {
 		//Subscriber<diagnostic_msgs.DiagnosticStatus> subsbat = connectedNode.newSubscriber("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-		Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("range/ultrasonic/robocore", sensor_msgs.Range._TYPE);
-		Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("range/ultrasonic/ardrone", sensor_msgs.Range._TYPE);
+		Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+		Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 	
 		//subsbat.addMessageListener(new MessageListener<diagnostic_msgs.DiagnosticStatus>() {
 		//@Override

@@ -7,6 +7,11 @@ import gnu.io.PortInUseException;
 import gnu.io.SerialPort;
 import gnu.io.UnsupportedCommOperationException;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -26,7 +31,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private OutputStream outStream;
 	    private InputStream inStream;
 		// serial settings
-		//PortSettings=115200,n,8,1
+		// PortSettings=115200,n,8,1
+	    // On RasPi its /dev/ttyS0, on Odroid, ttyS0 is hardwired console so we use ttyS1 on header
 	    private static String portName = "/dev/ttyS0";
 	    private static int baud = 115200;
 	    private static int datab = 8;
@@ -77,8 +83,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public static final byte BNO055_TEMP_ADDR  = (byte)0x34;
 	    // Quaternion data register
 	    public static final byte BNO055_QUATERNION_DATA_W_LSB_ADDR = (byte)0x20;
-	    
+	    //
 	    public static final byte POWER_MODE_NORMAL = (byte)0x00;
+	    // Calibration register
+	    public static final byte BNO055_CALIB_STAT_ADDR = (byte)0X35;
 	    
 	    // Operation mode settings
 	    public static final byte OPERATION_MODE_CONFIG                = (byte)0x00;
@@ -94,6 +102,29 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public static final byte OPERATION_MODE_M4G                   = (byte)0x0A;
 	    public static final byte OPERATION_MODE_NDOF_FMC_OFF          = (byte)0x0B;
 	    public static final byte OPERATION_MODE_NDOF                  = (byte)0x0C;
+	    
+	    public static final byte ACCEL_OFFSET_X_LSB_ADDR              = (byte)0x55;
+	    
+	    // Axis remap registers
+	    public static final byte BNO055_AXIS_MAP_CONFIG_ADDR          = (byte)0x41;
+	    public static final byte BNO055_AXIS_MAP_SIGN_ADDR            = (byte)0x42;
+	    //Axis remap values
+	    public static final byte AXIS_REMAP_X                         = (byte)0x00;
+	    public static final byte AXIS_REMAP_Y                         = (byte)0x01;
+	    public static final byte AXIS_REMAP_Z                         = (byte)0x02;
+	    public static final byte AXIS_REMAP_POSITIVE                  = (byte)0x00;
+	    public static final byte AXIS_REMAP_NEGATIVE                  = (byte)0x01;
+	    
+	    // Status registers
+	    public static final byte BNO055_SELFTEST_RESULT_ADDR          = (byte)0x36;
+	    public static final byte BNO055_INTR_STAT_ADDR                = (byte)0x37;
+
+	    public static final byte BNO055_SYS_CLK_STAT_ADDR             = (byte)0x38;
+	    public static final byte BNO055_SYS_STAT_ADDR                 = (byte)0x39;
+	    public static final byte BNO055_SYS_ERR_ADDR                  = (byte)0x3A;
+
+	    
+		private static final String CALIBRATION_FILE = "/var/local/calibration.json";
 
 	    
 	    public static IMUSerialDataPort getInstance() {
@@ -197,7 +228,15 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true);
 	        readChipId();
 	    	reset();
+	    	// obtain calibration data if we can
+	    	byte[] calData = null;
+	    	try {
+	    		calData = readCalibration();
+	    		set_mode(OPERATION_MODE_CONFIG);
+	    		setCalibration(calData);
+	    	} catch(FileNotFoundException fnfe) {}
 	    	setNormalPowerNDOFMode();
+	    	reportCalibrationStatus();
 	        if( DEBUG ) 
 	        	System.out.println("Connected to "+portName+" and BNO055 IMU is ready!");
 	    }
@@ -473,6 +512,28 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    }
 	    
 	    /**
+	     * Read the calibration status of the sensors and return a 4 tuple with
+	     * calibration status as follows:
+	     * - System, 3=fully calibrated, 0=not calibrated
+	     * - Gyroscope, 3=fully calibrated, 0=not calibrated
+	     * - Accelerometer, 3=fully calibrated, 0=not calibrated
+	     * - Magnetometer, 3=fully calibrated, 0=not calibrated
+	     * According to docs, one should ignore those device readings with 0 calibration status.
+	     * If the system or accel is 0, readings from fusion are considered worthless.
+	     * @return A 4 byte array representing the above calibration status
+	     * @throws IOException 
+	     */
+	    private byte[] getCalibrationStatus() throws IOException {
+	        // Return the calibration status register value.
+	        byte[] cal_status = read(BNO055_CALIB_STAT_ADDR, (byte)0x01);
+	        byte sys = (byte) ((byte)(cal_status[0] >> 6) & (byte)0x03);
+	        byte gyro = (byte) (((byte)cal_status[0] >> 4) & (byte)0x03);
+	        byte accel = (byte) (((byte)cal_status[0] >> 2) & (byte)0x03);
+	        byte mag = (byte) ((byte)cal_status[0] & (byte)0x03);
+	        // Return the results as a tuple of all 3 values.
+	        return new byte[]{sys, gyro, accel, mag};
+	    }
+	    /**
 	     * Read accelerometer
 	     * @return int array of x,y,z accel values
 	     * @throws IOException
@@ -649,7 +710,409 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	double scale = (1.0 / (1<<14));
 	    	return new double[]{x*scale, y*scale, z*scale, w*scale};
 	    }
+		/**
+		 * We are going to look for the calibration data in a form generated by the Adafruit webGl calibration
+		 * process, which is rendered as a single line of JSON if we can find it, otherwise we will hand out relatively worthless
+		 * answers upon each reset. Will will presume to have moved it to /var/local as a common reference point.
+		 * @throws IOException 
+		 */
+		public byte[] readCalibration() throws FileNotFoundException, IOException {
+					FileReader fis = new FileReader(CALIBRATION_FILE);
+					BufferedReader br = new BufferedReader(fis);
+					String s = br.readLine();
+					br.close();
+					fis.close();
+					if( DEBUG )
+						System.out.println("Calibration:"+s);
+					String[] tokes = s.substring(1,s.length()-1).split(",");
+					if( tokes.length != 22) {
+						throw new IOException("Configuration file contains "+tokes.length+" items where 22 were expected!");
+					}
+					byte[] cb = new byte[22];
+					for(int i = 0; i < cb.length; i++) {
+						cb[i] = Integer.valueOf(tokes[i].trim()).byteValue();
+						System.out.println("Calb "+i+":"+tokes[i].trim());
+					}
+					return cb;
+		}
+		/**
+		 * Write calibration data in JSON as the Adafruit do.
+		 * @param calb
+		 * @throws FileNotFoundException
+		 * @throws IOException
+		 */
+		public void writeCalibration(byte[] calb) throws FileNotFoundException, IOException {
+			if( calb.length != 22) {
+				throw new IOException("Configuration data contains "+calb.length+" items where 22 were expected!");
+			}
+			FileWriter fis = new FileWriter(CALIBRATION_FILE);
+			BufferedWriter br = new BufferedWriter(fis);
+			br.write("[");
+			for(int i = 0; i < calb.length; i++) {
+				br.write(String.valueOf((int)calb[i] & 0xFF));
+				if( i != calb.length-1)
+					br.write(", ");
+			}
+			br.write("]");
+			br.close();
+			fis.close();
+		}
+		/**
+		 * Return the sensor's calibration data and return it as an array of
+	     * 22 bytes. Can be saved and then reloaded with the set_calibration function
+	     * to quickly calibrate from a previously calculated set of calibration data.
+	     * Assume we switched to configuration mode, as mentioned in section 3.10.4 of datasheet.
+		 * @throws IOException 
+		 */
+		private byte[] getCalibration() throws IOException {
+	        //self._config_mode()
+	        // Read the 22 bytes of calibration data and convert it to a list (from
+	        // a bytearray) so it's more easily serialized should the caller want to
+	        // store it.
+	        return read(ACCEL_OFFSET_X_LSB_ADDR, (byte)22);
+	        //Go back to normal operation mode.
+	        //self._operation_mode()
+		}
+		/**
+		 * Set the sensor's calibration data using a list of 22 bytes that
+	     * represent the sensor offsets and calibration data.  This data should be
+	     * a value that was previously retrieved with getCalibration (and then
+	     * perhaps persisted to disk or other location until needed again).
+		 * @param data
+		 */
+	    private void setCalibration(byte[] data) throws IOException {
+	        // Check that 22 bytes were passed in with calibration data.
+	    	if( data.length != 22)
+	    		throw new IOException("Calibration data expected 22 bytes but got "+data.length);
+	        //Switch to configuration mode, as mentioned in section 3.10.4 of datasheet.
+	        //self._config_mode()
+	        // Set the 22 bytes of calibration data.
+	        write(ACCEL_OFFSET_X_LSB_ADDR, data, true);
+	        // Go back to normal operation mode.
+	        //self._operation_mode()
+	    }
 	    
+	    public boolean reportCalibrationStatus() throws IOException {
+	    	byte[] stat = getCalibrationStatus();
+	    	// system, gyro, accel, mag
+	    	if( stat[0] != 3 )
+	    		System.out.println("System status is less than full calibration at:"+stat[0]+", results will be "+
+	    				(stat[0] == 0 ? "UNUSABLE" : stat[0] == 1 ? "INACCURATE" : stat[0] == 2 ? "MARGINAL" : "UNKNOWN"));
+	    	if( stat[1] != 3 )
+	    		System.out.println("Gyro calibration less than optimal at:"+stat[1]+", results will be "+
+	    				(stat[1] == 0 ? "UNUSABLE" : stat[1] == 1 ? "INACCURATE" : stat[1] == 2 ? "MARGINAL" : "UNKNOWN"));
+	    	if( stat[2] != 3 )
+	    		System.out.println("Accelerometer calibration less than optimal at:"+stat[2]+", results will be "+
+	    				(stat[2] == 0 ? "UNUSABLE" : stat[2] == 1 ? "INACCURATE" : stat[2] == 2 ? "MARGINAL" : "UNKNOWN"));
+	    	if( stat[3] != 3 )
+	    		System.out.println("Magnetometer calibration less than optimal at:"+stat[3]+", results will be "+
+	    				(stat[3] == 0 ? "UNUSABLE" : stat[3] == 1 ? "INACCURATE" : stat[3] == 2 ? "MARGINAL" : "UNKNOWN"));
+	    	return (stat[0] == 3 && stat[1] == 3 && stat[2] == 3 && stat[3] == 3 );
+	    }
+
+	    /**
+	     * Perform interactive calibration. The steps are:
+	     * 1.) For gyro leave flat for a few seconds, this reading usually self corrects immediately
+	     * 2.) For accel, rotate the sensor through increments of 15 degrees roll from the flat position, pausing for a few seconds between each
+	     * 3.) For mag, wave the sensor through a figure 8 rotation of 8 to 12 inches until stable. This reading is the most tedious.
+	     * Once all elements reach 3 a write is performed storing a file for next reset and the method exits.
+	     * @throws IOException
+	     */
+	    public void calibrate() throws IOException {
+	    	while(!reportCalibrationStatus()) {
+	    		System.out.println("PERFORM CALIBRATION KATA NOW!");
+	    		try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {}
+	    	}
+	    	// loop exits when all status reaches 3, then we write after retrieving calibration bytes
+	    	set_mode(OPERATION_MODE_CONFIG);
+	    	writeCalibration(getCalibration());
+	    	setNormalPowerNDOFMode();
+	    }
+	    
+	    /**
+	     * Return a tuple with the axis remap register values.  This will return
+	     * 6 values with the following meaning:
+	     * - X axis remap (a value of AXIS_REMAP_X, AXIS_REMAP_Y, or AXIS_REMAP_Z.
+	     *                   which indicates that the physical X axis of the chip
+	     *                   is remapped to a different axis)
+	     *    - Y axis remap (see above)
+	     *    - Z axis remap (see above)
+	     *    - X axis sign (a value of AXIS_REMAP_POSITIVE or AXIS_REMAP_NEGATIVE
+	     *                   which indicates if the X axis values should be positive/
+	     *                   normal or negative/inverted.  The default is positive.)
+	     *    - Y axis sign (see above)
+	     *    - Z axis sign (see above)
+	     *  Note that by default the axis orientation of the BNO chip looks like
+	     *  the following (taken from section 3.4, page 24 of the datasheet).  Notice
+	     *  the dot in the corner that corresponds to the dot on the BNO chip:
+	     *                     | Z axis
+	     *                     |
+	     *                     |   / X axis
+	     *                 ____|__/____
+	     *    Y axis     / *   | /    /|
+	     *    _________ /______|/    //
+	     *             /___________ //
+	     *            |____________|/
+	     * @throws IOException 
+	     */
+	     private byte[] getAxisRemap() throws IOException {
+	        // Get the axis remap register value.
+	        byte[] mapConfig = read(BNO055_AXIS_MAP_CONFIG_ADDR, (byte)1);
+	        byte z = (byte) ((mapConfig[0] >> 4) & (byte)0x03);
+	        byte y = (byte) ((mapConfig[0] >> 2) & (byte)0x03);
+	        byte x = (byte) (mapConfig[0] & (byte)0x03);
+	        // Get the axis remap sign register value.
+	        byte[] signConfig = read(BNO055_AXIS_MAP_SIGN_ADDR, (byte)1);
+	        byte x_sign = (byte) ((signConfig[0] >> 2) & (byte)0x01);
+	        byte y_sign = (byte) ((signConfig[0] >> 1) & (byte)0x01);
+	        byte z_sign = (byte) (signConfig[0] & (byte)0x01);
+	        // Return the results as a tuple of all 3 values.
+	        return new  byte[]{x, y, z, x_sign, y_sign, z_sign};
+	     }
+	    /**
+	     *  Set axis remap for each axis.  The x, y, z parameter values should
+	     *  be set to one of AXIS_REMAP_X, AXIS_REMAP_Y, or AXIS_REMAP_Z and will
+	     *  change the BNO's axis to represent another axis.  Note that two axis
+	     *  cannot be mapped to the same axis, so the x, y, z params should be a
+	     *  unique combination of AXIS_REMAP_X, AXIS_REMAP_Y, AXIS_REMAP_Z values.
+	     *  The x_sign, y_sign, z_sign values represent if the axis should be positive
+	     *  or negative (inverted).
+	     *  See the get_axis_remap documentation for information on the orientation
+	     *  of the axis on the chip, and consult section 3.4 of the datasheet.
+	     * @throws IOException 
+	     */
+	     private void setAxisRemap(byte x, byte y, byte z, byte x_sign, byte y_sign, byte z_sign) throws IOException {    
+	        // Switch to configuration mode.
+	    	set_mode(OPERATION_MODE_CONFIG);
+	        // Set the axis remap register value.
+	        byte map_config = (byte)0x00;
+	        map_config |= (z & (byte)0x03) << 4;
+	        map_config |= (y & (byte)0x03) << 2;
+	        map_config |= x & (byte)0x03;
+	        write(BNO055_AXIS_MAP_CONFIG_ADDR,new byte[]{ map_config}, true);
+	        // Set the axis remap sign register value.
+	        byte sign_config = (byte)0x00;
+	        sign_config |= (x_sign & (byte)0x01) << 2;
+	        sign_config |= (y_sign & (byte)0x01) << 1;
+	        sign_config |= z_sign & (byte)0x01;
+	        write(BNO055_AXIS_MAP_SIGN_ADDR, new byte[]{sign_config}, true);
+	        // Go back to normal operation mode.
+	        setNormalPowerNDOFMode();
+	     }
+	    /**
+	     * 	Set axis remap for each axis.  The x, y, z parameter values should
+	     *  be set to one of AXIS_REMAP_X, AXIS_REMAP_Y, or AXIS_REMAP_Z and will
+	     *  change the BNO's axis to represent another axis.  Note that two axis
+	     *  cannot be mapped to the same axis, so the x, y, z params should be a
+	     *  unique combination of AXIS_REMAP_X, AXIS_REMAP_Y, AXIS_REMAP_Z values.
+	     *  In this overload, the axis default to all positive.
+	     * @param x
+	     * @param y
+	     * @param z
+	     * @throws IOException
+	     */
+	    private void setAxisRemap(byte x, byte y, byte z) throws IOException {
+	    	setAxisRemap(x, y, z, AXIS_REMAP_POSITIVE, AXIS_REMAP_POSITIVE, AXIS_REMAP_POSITIVE);
+	    }
+	    
+	    /**
+	     *     Return a tuple with status information.  Three values will be returned:
+	     *     - System status register value with the following meaning:
+	     *         0 = Idle
+	     *         1 = System Error
+	     *         2 = Initializing Peripherals
+	     *         3 = System Initialization
+	     *         4 = Executing Self-Test
+	     *         5 = Sensor fusion algorithm running
+	     *         6 = System running without fusion algorithms
+	     *     - Self test result register value with the following meaning:
+	     *         Bit value: 1 = test passed, 0 = test failed
+	     *         Bit 0 = Accelerometer self test
+	     *         Bit 1 = Magnetometer self test
+	     *         Bit 2 = Gyroscope self test
+	     *         Bit 3 = MCU self test
+	     *         Value of 0x0F = all good!
+	     *     - System error register value with the following meaning:
+	     *         0 = No error
+	     *         1 = Peripheral initialization error
+	     *         2 = System initialization error
+	     *         3 = Self test result failed
+	     *         4 = Register map value out of range
+	     *         5 = Register map address out of range
+	     *         6 = Register map write error
+	     *         7 = BNO low power mode not available for selected operation mode
+	     *         8 = Accelerometer power mode not available
+	     *         9 = Fusion algorithm configuration error
+	     *        10 = Sensor configuration error
+	     *   If run_self_test is passed in as False then no self test is performed and
+	     *   None will be returned for the self test result.  Note that running a
+	     *   self test requires going into config mode which will stop the fusion
+	     *   engine from running.
+	     * @return The three byte tuple of status, self test, error where self-test is 0 for fail or not run 
+	     * @param run_self_test true to execute self test
+	     * @throws IOException 
+	     */
+	    public byte[] getSystemStatus(boolean run_self_test) throws IOException {
+	    	byte[] selfTest = new byte[1];
+	    	byte[] status = new byte[1];
+	    	byte[] error = new byte[1];
+	        if(run_self_test) {
+	            // Switch to configuration mode if running self test.
+	        	set_mode(OPERATION_MODE_CONFIG);
+	            // Perform a self test.
+	            byte[] sysTrigger = read(BNO055_SYS_TRIGGER_ADDR, (byte)1);
+	            sysTrigger[0] |= (byte)0x1;
+	            write(BNO055_SYS_TRIGGER_ADDR, sysTrigger, true);
+	            // Wait for self test to finish.
+	            try {
+					Thread.sleep(1000);
+				} catch (InterruptedException e) {}
+	            // Read test result.
+	            selfTest = read(BNO055_SELFTEST_RESULT_ADDR, (byte)1);
+	            // Go back to operation mode.
+	            setNormalPowerNDOFMode();
+	        }
+	        // Now read status and error registers.
+	        status = read(BNO055_SYS_STAT_ADDR, (byte)1);
+	        error = read(BNO055_SYS_ERR_ADDR, (byte)1);
+	        // Return the results as a tuple of all 3 values.
+	        return new byte[]{status[0], selfTest[0], error[0]};
+	    }
+	    public byte[] getSystemStatus() throws IOException { return getSystemStatus(true); }
+	    /**
+	     * Display status from test.
+	     * @param sysStat the 3 byte tuple from getSystemStatus()
+	     */
+	    public void displaySystemStatus(byte[] sysStat) {
+	    	System.out.print("System status:");
+	    	switch(sysStat[0]) {
+	    	case(0): 
+	    		System.out.println("Idle");
+	    		break;
+	    	case(1):
+	    		System.out.println("System Error");
+	    		break;
+	    	case(2):
+	    		System.out.println("Initializing Peripherals");
+	    		break;       
+	    	case(3):
+	    		System.out.println("System Initialization");
+	    		break;
+	    	case(4):
+	    		System.out.println("Executing Self-Test");
+	    		break;
+	    	case (5):
+	    		System.out.println("Sensor fusion algorithm running");
+	    		break;
+	    	case (6):
+	    		System.out.println("System running without fusion algorithms");
+	    		break;
+	    	default:
+	    		System.out.println("Unknown system status "+sysStat[0]);
+	    		break;
+	    	}
+	    	// self test
+	    	System.out.print("Self test:");
+	    	//Bit 0 = Accelerometer self test
+	    	System.out.print(" Accel:"+((sysStat[1] & (byte)0x01) > 0 ? "PASS" : "FAIL or not run"));
+	    	//Bit 1 = Magnetometer self test
+	    	System.out.print(" Mag:"+((sysStat[1] & (byte)0x02) > 0 ? "PASS" : "FAIL or not run"));
+	    	//Bit 2 = Gyroscope self test
+	    	System.out.print(" Gyro:"+((sysStat[1] & (byte)0x04) > 0 ? "PASS" : "FAIL or not run"));
+	    	//Bit 3 = MCU self test
+	    	System.out.println(" MCU:"+((sysStat[1] & (byte)0x08) > 0 ? "PASS" : "FAIL or not run"));
+	    	// system error
+	    	System.out.print("System error:");
+	    	switch(sysStat[2]) {
+	    	case(0): 
+	    		System.out.println("NO ERROR");
+	    		break;
+	    	case(1):
+	    		System.out.println("Peripheral initialization error");
+	    		break;
+	    	case(2):
+	    		System.out.println("System initialization error");
+	    		break;       
+	    	case(3):
+	    		System.out.println("Self test result failed");
+	    		break;
+	    	case(4):
+	    		System.out.println("Register map value out of range");
+	    		break;
+	    	case (5):
+	    		System.out.println("Register map address out of range");
+	    		break;
+	    	case (6):
+	    		System.out.println("Register map write error");
+	    		break;
+	    	case (7):
+	    		System.out.println("BNO low power mode not available for selected operation mode");
+	    		break;
+	    	case (8):
+	    		System.out.println("Accelerometer power mode not available");
+	    		break;
+	    	case (9):
+	    		System.out.println("Fusion algorithm configuration error");
+	    		break;
+	    	case (10):
+	    		System.out.println("Sensor configuration error");
+	    		break;
+	    	default:
+	    		System.out.println("Unknown system error value "+sysStat[2]);
+	    		break;
+	    	}
+	    }
+	    /**
+	     *  Return a tuple with revision information about the BNO055 chip.  Will
+	     *   return 5 values:
+	     *   - Software revision
+	     *   - Bootloader version
+	     *   - Accelerometer ID
+	     *   - Magnetometer ID
+	     *   - Gyro ID
+	     * @return
+	     * @throws IOException 
+	     */
+	    public byte[] getRevision() throws IOException {  
+	        // Read revision values.
+	        byte[] accel = read(BNO055_ACCEL_REV_ID_ADDR, (byte)1);
+	        byte[] mag = read(BNO055_MAG_REV_ID_ADDR, (byte)1);
+	        byte[] gyro = read(BNO055_GYRO_REV_ID_ADDR, (byte)1);
+	        byte[] bl = read(BNO055_BL_REV_ID_ADDR, (byte)1);
+	        byte[] sw_lsb = read(BNO055_SW_REV_ID_LSB_ADDR, (byte)1);
+	        byte[] sw_msb = read(BNO055_SW_REV_ID_MSB_ADDR, (byte)1);
+	        byte sw = (byte) (((sw_msb[0] << 8) | sw_lsb[0]) & 0xFFFF);
+	        // Return the results as a tuple of all 5 values.
+	        return new byte[]{sw, bl[0], accel[0], mag[0], gyro[0]};
+	    }
+	    
+	    public void displayRevision(byte[] revs) {
+	    	System.out.println("BNO055 Software rev.:"+Integer.valueOf(revs[0] & 0xff) +
+	    			" bootloader:"+Integer.valueOf(revs[1] & 0xff) +
+	    			" Accel Id:"+Integer.valueOf(revs[2] & 0xff) +
+	    			" Mag Id:"+Integer.valueOf(revs[3] & 0xff) +
+	    			" Gyro Id:"+Integer.valueOf(revs[4] & 0xff));
+	    }
+        /**
+         * Set if an external crystal is being used by passing True, otherwise
+         * use the internal oscillator by passing False (the default behavior).
+         * @throws IOException 
+         */
+	    public void setExternalCrystal(boolean external_crystal) throws IOException {
+	        // Switch to configuration mode.
+	    	set_mode(OPERATION_MODE_CONFIG);
+	        // Set the clock bit appropriately in the SYS_TRIGGER register.
+	        if(external_crystal) {
+	            write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x80}, true);
+	        } else {
+	            write(BNO055_SYS_TRIGGER_ADDR, new byte[]{0x00}, true);
+	        }
+	        // Go back to normal operation mode.
+	        setNormalPowerNDOFMode();
+	    }
+	        
 	    public String getPortName() { return portName; }
 	    public int getBaudRate() { return baud; }
 	    public int getDataBits() { return datab; }
@@ -840,7 +1303,5 @@ public class IMUSerialDataPort implements DataPortInterface {
 				throw new RuntimeException("refactor! not applicable method");
 				
 			}
-
-	
 	        
 }

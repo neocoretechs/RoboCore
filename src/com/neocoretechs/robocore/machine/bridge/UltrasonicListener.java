@@ -3,6 +3,11 @@ package com.neocoretechs.robocore.machine.bridge;
 import com.neocoretechs.robocore.ThreadPoolManager;
 
 /**
+ * This class functions with a series of singletons for each type of message coming form the real time
+ * environment. For each 'listener' such as this, the getInstance method will start a thread that
+ * activates the loop that takes elements of this group from the MachineBridge. These MachineBridge
+ * readings are placed into the CircularBlockingDeque in this class for later retrieval.
+ * Here we are retrieving pin number as element 1 and reading as element 2 of dataset.
  * @author jg
  *
  */

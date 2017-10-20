@@ -1,13 +1,12 @@
 package com.neocoretechs.robocore;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
@@ -26,8 +25,8 @@ import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
 
 /**
  * Takes readings from the IMU DataPort and packages them for publication on the ROS bus.
- * Three messages will be published: pubs_imu with the sensor_msgs.Imu class, pubs_temp with sensor_msgs.Temperature
- * and pubs_mag with sensor_msgs.MagneticField.
+ * Three messages will be published: sensor_msgs/Imu with the sensor_msgs.Imu class, sensor_msgs/Temperature with sensor_msgs.Temperature
+ * and sensor_msgs/MagneticField with sensor_msgs.MagneticField.
  * IMUSerialDataPort class is oriented toward the Bosch BNO055
  * @author jg
  */
@@ -37,6 +36,7 @@ public class IMUPubs extends AbstractNodeMain  {
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
+	private String mode="";
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
@@ -98,21 +98,20 @@ public NodeConfiguration build()  {
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {
-	imuPort = IMUSerialDataPort.getInstance();
 
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	
-	final Publisher<sensor_msgs.Imu> imupub = connectedNode.newPublisher("pubs_imu", sensor_msgs.Imu._TYPE);
-	final Publisher<sensor_msgs.MagneticField> magpub = connectedNode.newPublisher("pubs_mag", sensor_msgs.MagneticField._TYPE);
-	final Publisher<sensor_msgs.Temperature> temppub = connectedNode.newPublisher("pubs_temp", sensor_msgs.Temperature._TYPE);
-	final std_msgs.Header header = new std_msgs.Header();
-	// check command line remappings for __mode:=startup
-	//Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-	//String mode="";
-	//if( remaps.containsKey("__mode") )
-	//	mode = remaps.get("__mode");
-	//if( mode.equals("startup")) 
-	//}
+	final Publisher<sensor_msgs.Imu> imupub = connectedNode.newPublisher("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
+	final Publisher<sensor_msgs.MagneticField> magpub = connectedNode.newPublisher("/sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
+	final Publisher<sensor_msgs.Temperature> temppub = connectedNode.newPublisher("/sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
+	final std_msgs.Header header = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
+	// check command line remappings for __mode:=calibrate
+	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	if( remaps.containsKey("__mode") )
+		mode = remaps.get("__mode");
+
+	// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
+	awaitStart.countDown();
 	// This CancellableLoop will be canceled automatically when the node shuts
 	// down.
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
@@ -124,6 +123,17 @@ public void onStart(final ConnectedNode connectedNode) {
 			sequenceNumber = 0;
 			lastSequenceNumber = 0;
 			time1 = System.currentTimeMillis();
+			imuPort = IMUSerialDataPort.getInstance();
+			try {
+				imuPort.displayRevision(imuPort.getRevision());
+				if( mode.equals("calibrate")) {
+					imuPort.calibrate();
+				}
+				imuPort.displaySystemStatus(imuPort.getSystemStatus());
+			} catch (IOException e) {
+				System.out.println("Cannot achieve proper calibration of IMU due to "+e);
+				e.printStackTrace();
+			}
 		}
 
 		@Override
@@ -136,17 +146,15 @@ public void onStart(final ConnectedNode connectedNode) {
 					time1 = System.currentTimeMillis();
 					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber));
 					lastSequenceNumber = sequenceNumber;
+					imuPort.reportCalibrationStatus();
 				}
 				header.setSeq(sequenceNumber);
 				time = org.ros.message.Time.fromMillis(System.currentTimeMillis());
 				header.setStamp(time);
 				header.setFrameId(time.toString());
-				if( imumsg == null )
-					imumsg = imupub.newMessage();
-				if( tempmsg == null )
-					tempmsg = temppub.newMessage();
-				if( magmsg == null )
-					magmsg = magpub.newMessage();
+				imumsg = imupub.newMessage();
+				tempmsg = temppub.newMessage();
+				magmsg = magpub.newMessage();
 				imumsg.setHeader(header);
 				tempmsg.setHeader(header);
 				magmsg.setHeader(header);
@@ -178,12 +186,19 @@ public void onStart(final ConnectedNode connectedNode) {
 					imumsg.setOrientation(valq);
 				} else
 					System.out.println("QUAT ERROR");
-				
-				imupub.publish(imumsg);
+				if( accels != null && gyros != null && quats != null) {
+					if( DEBUG )
+						System.out.println("Publishing IMU:"+imumsg);
+					imupub.publish(imumsg);
+					Thread.sleep(10);
+				}
 				
 				// Temp
 				tempmsg.setTemperature(temp);
 				temppub.publish(tempmsg);
+				Thread.sleep(10);
+				if( DEBUG )
+					System.out.println("Publishing TEMP:"+tempmsg);
 				
 				// Mag
 				if(mags != null) {
@@ -192,10 +207,12 @@ public void onStart(final ConnectedNode connectedNode) {
 					valm.setX(mags[0]);
 					valm.setY(mags[1]);
 					magmsg.setMagneticField(valm);
+					magpub.publish(magmsg);
+					Thread.sleep(10);
+					if( DEBUG )
+						System.out.println("Publishing MAG:"+magmsg);
 				} else
 					System.out.println("MAG ERROR");
-				
-				magpub.publish(magmsg);
 				
 		
 			} catch (IOException e) {
@@ -203,13 +220,12 @@ public void onStart(final ConnectedNode connectedNode) {
 				e.printStackTrace();
 			}
 	
-			//Thread.sleep(10);
+			Thread.sleep(10);
 		}
 			
 	});
 
 }
-
 
 public void getIMU() throws IOException{
 	if( DEBUG )

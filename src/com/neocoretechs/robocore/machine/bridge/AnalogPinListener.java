@@ -3,25 +3,28 @@ package com.neocoretechs.robocore.machine.bridge;
 import com.neocoretechs.robocore.ThreadPoolManager;
 
 /**
- * Retrieve the real time analog pin data from attached microcontroller and place in 2 element array
- * of pin, value
+ * Retrieve the real time analog pin data from attached microcontroller and place in 2 element array.
+ * This class functions with a series of singletons for each type of message coming form the real time
+ * environment. For each 'listener' such as this, the getInstance method will start a thread that
+ * activates the loop that takes elements of this group from the MachineBridge. These MachineBridge
+ * readings are placed into the CircularBlockingDeque in this class for later retrieval of pin, value
  * @author jg
  *
  */
 public class AnalogPinListener implements Runnable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	public static CircularBlockingDeque<int[]> data = new CircularBlockingDeque<int[]>(4);
 	private static AnalogPinListener instance = null;
 	private static MachineBridge bridge;
 	
 	// analog inputs on pins 55,56 of Mega2560 as defined in startup.gcode for AsynchDemuxer
-	public final static int joystickPinY = 55;
-	public final static int joystickPinX = 56;
+	//public final static int joystickPinY = 55;
+	//public final static int joystickPinX = 56;
 	
-	private int yDeadMin = 500;
-	private int yDeadMax = 510;
-	private int xDeadMin = 670;
-	private int xDeadMax = 700;
+	//private int yDeadMin = 500;
+	//private int yDeadMax = 510;
+	//private int xDeadMin = 670;
+	//private int xDeadMax = 700;
 	public static AnalogPinListener getInstance() { 
 		if(instance == null)
 			instance = new AnalogPinListener();

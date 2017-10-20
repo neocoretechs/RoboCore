@@ -6,65 +6,56 @@
  */
 package com.neocoretechs.robocore;
 
-import geometry_msgs.Quaternion;
 
-import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLConnection;
 import java.nio.ByteBuffer;
 
-import javax.imageio.ImageIO;
-
-import org.apache.commons.logging.Log;
-import org.ros.message.MessageListener;
 import org.ros.concurrent.CancellableLoop;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
-import org.ros.node.topic.Subscriber;
+
 import org.ros.message.Time;
 
+import au.edu.jcu.v4l4j.CaptureCallback;
+import au.edu.jcu.v4l4j.FrameGrabber;
+import au.edu.jcu.v4l4j.V4L4JConstants;
+import au.edu.jcu.v4l4j.VideoDevice;
+import au.edu.jcu.v4l4j.VideoFrame;
+import au.edu.jcu.v4l4j.exceptions.StateException;
+import au.edu.jcu.v4l4j.exceptions.V4L4JException;
+
+
 /**
- * This class takes a series of images from the UV4l and remuxxed onto the ROS bus.
+ * This class takes a series of images from V4L4j and remuxxes them onto the ROS bus.
+ * The images a encoded jpeg via capture class, then the byte payload is sent downline.
+ * Changing the capture class in initFrameGrabber of embedded videocap class can change the format.
  * @author jg
  *
  */
-public class VideoPub extends AbstractNodeMain  {
-	private boolean DEBUG = true;
-	//double phi, theta, psi;
-	float rangeTop; // Ultrasonic sensor
-	
+public class VideoPub extends AbstractNodeMain {
+	private static final boolean DEBUG = false;
+	private static final boolean SAMPLERATE = true; // display pubs per second
+
 	byte[] bbuf = null;// RGB buffer
 
 	boolean imageReady = false;
 	
-	boolean started = true;
-	boolean videohoriz = true;
-	boolean emergency = false;
-
-	int visionDistance, visionAngle, visionX, visionY;
-	
-	boolean isTemp = true;
-	boolean isPress = true;
-	boolean isTag = false;
-	boolean isVision = false;
-	String visionName;
+	private int lastSequenceNumber;
+	long time1;
 	
 	Time tst;
-	//int imwidth = 672, imheight = 418;
-	int imwidth = 640, imheight = 480;
 
+	int imwidth = 640, imheight = 480;
 	
 	Object vidMutex = new Object();
+	
+	private static int width = 640, height = 480, std = V4L4JConstants.STANDARD_WEBCAM, channel = 0;
+	private static String device = "/dev/video0";
+	private VideoDevice videoDevice;
+	private FrameGrabber frameGrabber;
 
+	ByteBuffer bb;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -73,21 +64,17 @@ public class VideoPub extends AbstractNodeMain  {
 
 	/**
 	 * 
-	 * Start the main processing pipeline. We subscribe to an external ranging message robocore/range to augment the
-	 * ultrasonic range and supply a complete point cloud to the range/ultrasonic/ardrone channel. If we have ultrasonics
-	 * they will be in the first elements of the point cloud array in X in addition to element 0 X being the ARDrone ranger
 	 */
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 
 		//final Log log = connectedNode.getLog();
 		final Publisher<sensor_msgs.Image> imgpub =
-		connectedNode.newPublisher("ardrone/image_raw", sensor_msgs.Image._TYPE);
+		connectedNode.newPublisher("robocore/image_raw", sensor_msgs.Image._TYPE);
 		// caminfopub has camera info
 		//final Publisher<sensor_msgs.CameraInfo> caminfopub =
 		//connectedNode.newPublisher("ardrone/camera_info", sensor_msgs.CameraInfo._TYPE);
 	
-		
 	/**
 	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
 	 * mutex appropriate to establish critical sections. A sleep follows each publication to keep the bus arbitrated
@@ -95,13 +82,20 @@ public class VideoPub extends AbstractNodeMain  {
 	 */
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
 		private int sequenceNumber;
-		byte[] bbuf;
-		BufferedImage bi = null;
-		byte[] byteChunk = new byte[8192];
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		videocap vidcap;
 		@Override
 		protected void setup() {
 			sequenceNumber = 0;
+			try {
+				vidcap = new videocap();
+				vidcap.initFrameGrabber();
+			} catch (V4L4JException e1) {
+				System.out.println("Error setting up capture");
+				e1.printStackTrace();
+				// cleanup and exit
+				vidcap.cleanupCapture();
+				return;
+			}
 		}
 
 		@Override
@@ -114,56 +108,32 @@ public class VideoPub extends AbstractNodeMain  {
 			imghead.setFrameId(tst.toString());
 			sensor_msgs.Image imagemess = imgpub.newMessage();
  
-			try {
-				//ByteArrayOutputStream os = new ByteArrayOutputStream();
-				//JPEGImageEncoder encoder = JPEGCodec.createJPEGEncoder(os);
-				URL iurl = new URL("http://172.16.0.102:9090/stream/snapshot.jpeg");
-				InputStream istream = iurl.openStream();
-				
-				if( istream == null) {
-					System.out.println("Returned URL image stream null "+sequenceNumber);
-					imageReady = false;
-				} else {
-					int n;
-					baos.reset();
-					while ( (n = istream.read(byteChunk)) > 0 ) {
-						//System.out.println(n+" read ");
-						baos.write(byteChunk, 0, n);
-					}
-					//bi = ImageIO.read(istream);
-					imageReady = true;
-					baos.flush();
-					bbuf = baos.toByteArray();
+			//ByteArrayOutputStream os = new ByteArrayOutputStream();
+						
+			if( imageReady) {
+				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
+					time1 = System.currentTimeMillis();
+					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber));
+					lastSequenceNumber = sequenceNumber;
 				}
-				//os.close();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}//
 				if( DEBUG )
-					if( imageReady )
-						System.out.println("Added frame "+imwidth+","+imheight+" "+bbuf.length);
-					else
-						System.out.println("Image not ready "+sequenceNumber++);
-			//} catch(IllegalStateException ise) {
-				// buffer full;
-				//System.out.println("Video buffer full!");
-				//vidbuf.clear();
-			//}
-
-			if( bbuf != null && imageReady) {
+					System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
 				synchronized(vidMutex) {		
-				//sensor_msgs.CameraInfo caminfomsg = caminfopub.newMessage();
-            	//System.out.println("Image:"+newImage.imageWidth+","+newImage.imageHeight+" queue:"+list.size());
-					imagemess.setData(ByteBuffer.wrap(bbuf));
+				//ImageIO.write(bi, "jpg", os);
+					//os.flush();
+					//bbuf = os.toByteArray();
+					imagemess.setData(bb);
+					imagemess.setEncoding("JPG"/*"8UC3"*/);
+					imagemess.setWidth(imwidth);
+					imagemess.setHeight(imheight);
+					imagemess.setStep(imwidth);
+					imagemess.setIsBigendian((byte)0);
+					imagemess.setHeader(imghead);
+					imgpub.publish(imagemess);
+					imageReady = false;
+					if( DEBUG )
+						System.out.println("Pub. Image:"+sequenceNumber);	
 				}
-				imagemess.setEncoding("JPG"/*"8UC3"*/);
-				
-				imagemess.setWidth(imwidth);
-				imagemess.setHeight(imheight);
-				imagemess.setStep(imwidth);
-				imagemess.setIsBigendian((byte)0);
-				imagemess.setHeader(imghead);
 				//
 				//caminfomsg.setHeader(imghead);
 				//caminfomsg.setWidth(imwidth);
@@ -171,19 +141,109 @@ public class VideoPub extends AbstractNodeMain  {
 				//caminfomsg.setDistortionModel("plumb_bob");
 				//caminfomsg.setK(K);
 				//caminfomsg.setP(P);
-				
-				imgpub.publish(imagemess);
-				imageReady = false;
-				if( DEBUG )
-					System.out.println("Pub. Image:"+sequenceNumber);
 				//caminfopub.publish(caminfomsg);
 				//System.out.println("Pub cam:"+imagemess);
-				sequenceNumber++;  	
+			} else {
+				if(DEBUG)
+					System.out.println("Image not ready "+sequenceNumber);
+				Thread.sleep(1);
+				++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
 			}
-			
-			Thread.sleep(1);		
+			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
 	});
 	}
 	
+	/**
+	 *  * A typical <code>FrameGrabber</code> use case is as follows:
+	 * <br>
+	 * Create the video device and frame grabber:
+	 * <code><br><br>
+	 * //create a new video device<br>
+	 * VideoDevice vd = new VideoDevice("/dev/video0");<br>
+	 * // vd.setThreadFactory(myThreadFactory); // set your own thread factory if required.
+	 * <br>//Create an instance of FrameGrabber
+	 * <br>FrameGrabber f = vd.getJPEGFrameGrabber(320, 240, 0, 0, 80);
+	 * <br>//If supported, this frame grabber will capture frames and convert them
+	 * <br>//to JPEG before delivering them to your application. 
+	 * <br>
+	 * <br>//Instantiate an object that implements the {@link CaptureCallback}
+	 * <br>//interface which will receive captured frame
+	 * <br>myCallbackObject = new MyCallbackObjectclass();
+	 * <br>
+	 * <br>//pass it to the frame grabber.
+	 * <br>f.setCaptureCallback(myCallbackObject);
+	 * <br>
+	 * <br>//Now start the capture
+	 * <br>f.startCapture();
+	 * <br>
+	 * <br>//At this stage, myCallbackObject.nextFrame() will be called every time
+	 * <br>//a new frame is available (see next paragraph).
+	 * <br>
+	 * <br>//When appropriate, stop the capture
+	 * <br>f.stopCapture();
+	 * <br>//Release the frame grabber
+	 * <br>vd.releaseFrameGrabber();
+	 * <br>//Release the video device
+	 * <br>vd.release();
+	 * </code><br><br>
+	 * In myCallbackObject, when the capture is started, the following method is
+	 * called every time a new frame is available :<br>
+	 * <code>
+	 * <br>public void nextFrame(VideoFrame frame) {
+	 * <br>&nbsp;&nbsp; //do something useful with frame. But make sure you recycle
+	 * <br>&nbsp;&nbsp; //it when dealt with, so v4l4j can re-use it later on
+	 * <br>&nbsp;&nbsp; frame.recycle();
+	 * <br>}<br>
+	 * </code>
+	 * @author jg
+	 *
+	 */
+	class videocap implements CaptureCallback {
+		
+	private void initFrameGrabber() throws V4L4JException {
+		videoDevice = new VideoDevice(device);
+		frameGrabber = videoDevice.getJPEGFrameGrabber(width, height, channel, std, 80);
+		frameGrabber.setCaptureCallback(this);
+		width = frameGrabber.getWidth();
+		height = frameGrabber.getHeight();
+		System.out.println("Starting capture at " + width + "x" + height);
+		frameGrabber.startCapture();
+	}
+	
+	private void cleanupCapture() {
+		try {
+			frameGrabber.stopCapture();
+		}
+		catch (StateException ex) {
+			// the frame grabber may be already stopped, so we just ignore
+			// any exception and simply continue.
+		}
+		// release the frame grabber and video device
+		videoDevice.releaseFrameGrabber();
+		videoDevice.release();
+	}
+	
+	@Override
+	public void nextFrame(VideoFrame frame) {
+		// This method is called when a new frame is ready.
+		// Don't forget to recycle it when done dealing with the frame.
+		// draw the new frame onto the JLabel
+		synchronized(vidMutex) {
+			//bi = frame.getBufferedImage();
+			bb = ByteBuffer.wrap(frame.getBytes());
+		}
+		imageReady = true;
+		// recycle the frame
+		frame.recycle();
+	}
+	
+	@Override
+	public void exceptionReceived(V4L4JException e) {
+		// This method is called by v4l4j if an exception
+		// occurs while waiting for a new frame to be ready.
+		// The exception is available through e.getCause()
+		e.printStackTrace();
+	}
+	}
 }

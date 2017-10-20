@@ -4,7 +4,15 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 
 /**
  * Retrieve the real time digital pin state from attached microcontroller and place in 2 element array
- * of pin, value
+ * of pin, value.
+ * This class functions with a series of singletons for each type of message coming form the real time
+ * environment. For each 'listener' such as this, the getInstance method will start a thread that
+ * activates the loop that takes elements of this group from the MachineBridge. These MachineBridge
+ * readings are placed into the CircularBlockingDeque in this class for later retrieval.
+ * <digitalpin>
+ * 1 pin
+ * 2 value
+ * </digitalpin>
  * @author jg
  *
  */
