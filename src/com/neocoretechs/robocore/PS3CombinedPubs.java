@@ -78,6 +78,27 @@ import org.ros.internal.loader.CommandLineLoader;
  *Button Select - Select
  *Button Mode - Mode
  *Button Unknown - Home
+ *
+ * LOGITECH, INC F310 GAMEPAD
+ * Identifies as : Generic X-box pad (Controls are the same as AfterGlow)
+ *Axis x		Left stick (left/right)
+ *Axis y		Left stick (up/down)
+ *Axis z	 	Left trigger
+ *Axis rx(rx)	Right stick (left/right)	 
+ *Axis ry(ry)	Right stick (up/down) 
+ *Axis rz		Right trigger
+ *Button B(B) - circle
+ *Button X(X) - square
+ *Button A(A) - X
+ *Button Y(Y) - triangle
+ *Button Left Thumb - left bumper
+ *Button Right Thumb - right bumper
+ *Button Left Thumb 3 - left stick press
+ *Button Right Thumb 3 - right stick press
+ *Button Select - Select
+ *Button Mode - Mode
+ *Button Unknown - Home
+ *
  * @author jg
  */
 public class PS3CombinedPubs extends AbstractNodeMain  {
@@ -94,6 +115,7 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 	final static int MAXPUBMS = 250; // ms between published messages
 	int speed = 50; // 50%
 	final static int motorSpeedMax = 1000;
+	final static double DEADZONE = 0.07;
 	private static ArrayList<Integer> valBuf = new ArrayList<Integer>();
 	private static long lastPubTime = System.currentTimeMillis();
 	
@@ -168,7 +190,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	
 	// check command line remappings for __controller:=CONTROLLER or whatever your controller identifies as
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-	String controllerType="USB Joystick";
+	String controllerType="Generic X-box pad";
 	if( remaps.containsKey("__controller") )
 		controllerType = remaps.get("__controller");
 	System.out.println("Target controller type is "+controllerType);
@@ -204,7 +226,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				Float flj = pubdata.get(Component.Identifier.Axis.Y);
 				Float frj = pubdata.get(Component.Identifier.Axis.RY);
 				// If we have 0,0 which is stop, publish NOW
-				if( flj == 0 && frj == 0 ) {
+				if( Math.abs(flj) < DEADZONE && Math.abs(frj) < DEADZONE ) {
 					if( !deadStick ) {
 						//vali = (new Integer[]{0,0});
 						//val.setData(vali);
@@ -214,7 +236,7 @@ public void onStart(final ConnectedNode connectedNode) {
 						std_msgs.Int32MultiArray val = setupPub(connectedNode);
 						velpub.publish(val);
 						if( DEBUG ) 
-							System.out.println("Published on "+flj+","+frj+" with "+val.getData().length);
+							System.out.println("Published deadstick on "+flj+","+frj+" with "+val.getData().length);
 						//valBuf.clear();
 						lastPubTime = System.currentTimeMillis();
 					}	
@@ -222,6 +244,10 @@ public void onStart(final ConnectedNode connectedNode) {
 				} else {
 					deadStick = false;
 					if( (System.currentTimeMillis() - lastPubTime) > MAXPUBMS ) {
+						if( Math.abs(flj) < DEADZONE )
+							flj = 0.0f;
+						if( Math.abs(frj) < DEADZONE )
+							frj = 0.0f;
 						valBuf.add((int)(flj*1000));
 						valBuf.add((int)(frj*1000));
 						// remove the lines below to build array for publishing

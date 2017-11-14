@@ -2,18 +2,29 @@ package com.neocoretechs.robocore;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -21,9 +32,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.twilight.h264.player.PlayerFrame;
-
-import sensor_msgs.Image;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 
 /**
@@ -38,15 +47,26 @@ import sensor_msgs.Image;
 public class VideoListener extends AbstractNodeMain 
 {
 	private static boolean DEBUG = true;
+	private static final boolean SAMPLERATE = true; // display pubs per second
+
     private BufferedImage image = null;
     private PlayerFrame displayPanel;
+ 
     ByteBuffer cb;
-    byte[] buffer;
-    JFrame frame;
+    byte[] buffer = new byte[0];
+   
 	String mode = "display";
 	String outDir = "/";
 	int frames = 0;
 	int[] ibuf = null;
+	// http
+    int port = 8000;
+    CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
+    CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
+    
+	private int sequenceNumber,lastSequenceNumber;
+	long time1;
+	
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -59,26 +79,90 @@ public class VideoListener extends AbstractNodeMain
 		if( remaps.containsKey("__mode") )
 			mode = remaps.get("__mode");
 		if( mode.equals("display")) {
-			frame = new JFrame("Player");
-			displayPanel = new PlayerFrame();
-			frame.getContentPane().add(displayPanel, BorderLayout.CENTER);
-			displayPanel.setVisible(true);
-			frame.pack();
-			frame.setSize(new Dimension(640, 480));
-			frame.setVisible(true);
-		} else { // if mode is not display, look for output file directory
-			outDir = remaps.get("__mode");
-			System.out.println("Sending video files to :"+outDir);
+			//SwingUtilities.invokeLater(() -> {
+			//      displayPanel = new PlayerFrame();
+			//    });
+			SwingUtilities.invokeLater(new Runnable() {
+			    public void run() {
+			        displayPanel = new PlayerFrame();
+			    }
+			});
+			ThreadPoolManager.getInstance().spin(new Runnable() {
+				@Override
+				public void run() {
+			        while(true) {
+			        	java.awt.Image dimage=null;
+						try {
+							dimage = queue.takeFirst();
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+						displayPanel.setLastFrame((java.awt.Image)dimage);
+						//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
+						//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
+						displayPanel.invalidate();
+						displayPanel.updateUI();
+			        }
+				}
+			}, "SYSTEM");
+		} else {
+			// Spin up a server to server multipart image types
+			if( mode.equals("display_server") ) {
+				ThreadPoolManager.getInstance().spin(new Runnable() {
+					@Override
+					public void run() {
+				        while(true) {
+				        	ServerSocket ssocket = null;
+				        	try {
+				        		ssocket = new ServerSocket(port);
+				        		while (true) {
+				        			Socket client_socket = ssocket.accept();
+				        			ThreadPoolManager.getInstance().spin(new StandardImageConnection(client_socket), "SYSTEM");
+				        		}
+				        	} catch (Exception e) {
+				        		System.err.println("Exception occurred: " + e);
+				        	}
+				        	finally {
+				        		if(ssocket != null)
+				        			try {
+				        				ssocket.close();
+				        			} catch (IOException e) {}
+				        	}
+				        }
+					}
+				}, "SYSTEM");		
+			} else { // mode has output directory
+				if( mode.equals("rtsp_server") ) {
+					try {
+						RtspServer.init();
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				} else {
+					// if mode is not display, or display_server, look for output file directory
+					outDir = remaps.get("__mode");
+					System.out.println("Sending video files to :"+outDir);
+				}
+			}
 		}
 		final Subscriber<sensor_msgs.Image> imgsub =
 				connectedNode.newSubscriber("robocore/image_raw", sensor_msgs.Image._TYPE);
 		
 		imgsub.addMessageListener(new MessageListener<sensor_msgs.Image>() {
-
 		@Override
-		public void onNewMessage(Image img) {
-			cb = img.getData();
-			buffer = cb.array(); // 3 byte BGR
+		public void onNewMessage(sensor_msgs.Image img) {
+			long slew = System.currentTimeMillis() - time1;
+			if( SAMPLERATE && slew >= 1000) {
+				time1 = System.currentTimeMillis();
+				System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber)+". Slew rate="+(slew-1000));
+				lastSequenceNumber = sequenceNumber;
+			}
+			synchronized(buffer) {
+				cb = img.getData();
+				buffer = cb.array(); // 3 byte BGR
+			}
 			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
 			if( DEBUG ) {
 				System.out.println("New image "+img.getWidth()+","+img.getHeight()+" size:"+buffer.length/*ib.limit()*/);
@@ -109,33 +193,160 @@ public class VideoListener extends AbstractNodeMain
 			//System.out.println(ibuf.length+" "+raster.getWidth()+" "+raster.getHeight()+" "+raster.getMinX()+" "+raster.getMinY());
 		    raster.setPixels(0, 0, img.getWidth(), img.getHeight(), ibuf);
 			*/
-			InputStream in = new ByteArrayInputStream(buffer);
-			try {
-				image = ImageIO.read(in);
-			} catch (IOException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
 			
 			if( mode.equals("display")) {
-				displayPanel.setLastFrame((java.awt.Image)image);
+				try {
+					synchronized(buffer) {
+						InputStream in = new ByteArrayInputStream(buffer);
+						image = ImageIO.read(in);
+						in.close();
+					}
+				} catch (IOException e1) {
+					System.out.println("Could not convert image payload due to:"+e1.getMessage());
+					return;
+				}
+				//displayPanel.setLastFrame((java.awt.Image)image);
 				//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 				//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
-				displayPanel.invalidate();
-				displayPanel.updateUI();
-			} else {	
-				File f = new File(outDir+"/roscoe"+(++frames)+".jpg");
-				try {
-					ImageIO.write(image, "jpg", f);
-					if( DEBUG )
-						System.out.println("Wrote: roscoe"+frames+".jpg");
-				} catch (IOException e) {
-					System.out.println("Cant write image roscoe"+frames+".jpg");
-				}	
+				//displayPanel.invalidate();
+				//displayPanel.updateUI();
+				queue.addLast(image);
+				System.gc();
+			} else {
+				if( mode.equals("display_server")) {
+					bqueue.addLast(buffer);
+				} else { 
+					if( mode.equals("rtsp_server")){
+						RtspServer.queue.addLast(buffer);
+					} else {
+						// write file for each frame
+						// if its a jpeg payload this is inefficient but still format independent
+						InputStream in = new ByteArrayInputStream(buffer);
+						try {
+							image = ImageIO.read(in);
+						} catch (IOException e1) {
+							System.out.println("Could not convert image payload due to:"+e1.getMessage());
+							return;
+						}
+						File f = new File(outDir+"/roscoe"+(++frames)+".jpg");
+						try {
+							ImageIO.write(image, "jpg", f);
+							if( DEBUG )
+								System.out.println("Wrote: roscoe"+frames+".jpg");
+						} catch (IOException e) {
+							System.out.println("Cant write image roscoe"+frames+".jpg");
+							return;
+						}	
+					}
+				}
 			}
+			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
 		});
 		
 	}
+	
+	
+	class StandardImageConnection implements Runnable {
+		private static final String BOUNDARY = "reposition";
 
+		private Socket client;
+		private DataInputStream in;
+		private DataOutputStream out;
+
+		public StandardImageConnection(Socket client_socket)
+		{
+			client = client_socket;
+			try {
+				in = new DataInputStream(client.getInputStream());
+				out = new DataOutputStream(new BufferedOutputStream(client.getOutputStream()));
+			} catch (IOException ie) {
+				System.err.println("Unable to start new connection: " + ie);
+				try {
+					client.close();
+				} catch (IOException ie2) {
+				}
+				return;
+			}
+
+		}
+
+	    public void run()
+		{
+			try {
+				out.writeBytes("HTTP/1.0 200 OK\r\n");
+				out.writeBytes("Server: RoboCore Image server\r\n");
+				out.writeBytes("Content-Type: multipart/x-mixed-replace;boundary=" + BOUNDARY + "\r\n");
+				out.writeBytes("\r\n");
+				out.writeBytes("--" + BOUNDARY + "\n");
+				int bytesRead;
+				byte[] barr = new byte[1024];
+				while (true) {
+						out.writeBytes("Content-type: image/jpeg\n\n");
+						byte[] b = null;
+        				try {
+							b = bqueue.takeFirst();
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+						//ByteArrayInputStream fis = new ByteArrayInputStream(b);
+						//while ((bytesRead = fis.read(barr)) != -1) {
+						//	out.write(barr, 0, bytesRead);
+						//}
+						//fis.close();
+        				out.write(b, 0, b.length);
+//	                    out.writeBytes("\n");
+						out.writeBytes("--" + BOUNDARY + "\n");
+						out.flush();
+				}
+			} catch (Exception ie) {
+				try {
+					in.close();
+					out.close();
+					client.close();
+				} catch (IOException ie2) {
+				}
+			}
+		}
+	}
+	
+	class PlayerFrame extends JPanel {
+		JFrame frame;
+		public PlayerFrame() {
+			frame = new JFrame("Player");
+			//displayPanel = new PlayerFrame();
+			//frame.getContentPane().add(displayPanel, BorderLayout.CENTER);
+			//displayPanel.setVisible(true);
+			frame.getContentPane().add(this, BorderLayout.CENTER);
+			this.setVisible(true);
+			frame.pack();
+			frame.setSize(new Dimension(640, 480));
+			frame.setVisible(true);
+		}
+		private java.awt.Image lastFrame;
+		public void setLastFrame(java.awt.Image lf) {
+			if( lf == null ) return;
+			if( lastFrame == null ) {
+				lastFrame = lf;
+				return;
+			}
+			synchronized(lastFrame) {
+				//lastFrame.getGraphics().dispose();
+				lastFrame = lf; 
+			} 
+		}
+		//public void paint(Graphics g) {
+		public void paintComponent(Graphics g) {
+			super.paintComponent(g);
+			if( lastFrame == null )
+				return;
+			synchronized(lastFrame) {
+				g.drawImage(lastFrame, 0, 0, lastFrame.getWidth(this), lastFrame.getHeight(this), this);
+				lastFrame.flush();
+			}
+		}
+	}
+	
 }
+

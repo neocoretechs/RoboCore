@@ -14,11 +14,12 @@ import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
-
 import org.ros.message.Time;
 
 import au.edu.jcu.v4l4j.CaptureCallback;
+import au.edu.jcu.v4l4j.DeviceInfo;
 import au.edu.jcu.v4l4j.FrameGrabber;
+import au.edu.jcu.v4l4j.ImageFormat;
 import au.edu.jcu.v4l4j.V4L4JConstants;
 import au.edu.jcu.v4l4j.VideoDevice;
 import au.edu.jcu.v4l4j.VideoFrame;
@@ -203,6 +204,15 @@ public class VideoPub extends AbstractNodeMain {
 		
 	private void initFrameGrabber() throws V4L4JException {
 		videoDevice = new VideoDevice(device);
+		DeviceInfo deviceInfo=videoDevice.getDeviceInfo();
+		if (deviceInfo.getFormatList().getNativeFormats().isEmpty()) {
+		    System.out.println("Couldn't detect native format for the device.");
+		} else {
+			for(ImageFormat fi : deviceInfo.getFormatList().getNativeFormats() )
+				System.out.println(fi);
+		}
+		  //ImageFormat imageFormat=deviceInfo.getFormatList().getNativeFormat(0);
+		
 		frameGrabber = videoDevice.getJPEGFrameGrabber(width, height, channel, std, 80);
 		frameGrabber.setCaptureCallback(this);
 		width = frameGrabber.getWidth();
