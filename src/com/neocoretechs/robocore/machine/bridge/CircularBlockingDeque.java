@@ -66,7 +66,7 @@ public class CircularBlockingDeque<T> implements Iterable<T> {
   }
 
   /**
-   * Adds the specified entry to the tail of the queue, overwriting older
+   * Adds the specified entry to the head of the queue, overwriting older
    * entries if necessary.
    * 
    * @param entry
@@ -168,6 +168,9 @@ public class CircularBlockingDeque<T> implements Iterable<T> {
     return length == 0;
   }
 
+  public int length() {
+	    return length;
+  }
   /**
    * Returns an iterator over the queue.
    * <p>

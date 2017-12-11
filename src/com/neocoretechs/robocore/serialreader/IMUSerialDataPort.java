@@ -33,7 +33,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		// serial settings
 		// PortSettings=115200,n,8,1
 	    // On RasPi its /dev/ttyS0, on Odroid, ttyS0 is hardwired console so we use ttyS1 on header
-	    private static String portName = "/dev/ttyS0";
+	    private static String portName = "/dev/ttyS1";
 	    private static int baud = 115200;
 	    private static int datab = 8;
 	    private static int stopb = 1;
@@ -826,6 +826,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 				} catch (InterruptedException e) {}
 	    	}
 	    	// loop exits when all status reaches 3, then we write after retrieving calibration bytes
+	    	System.out.println("<< CALIBRATION ACHIEVED! >>");
 	    	set_mode(OPERATION_MODE_CONFIG);
 	    	writeCalibration(getCalibration());
 	    	setNormalPowerNDOFMode();
