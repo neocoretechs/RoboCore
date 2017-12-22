@@ -533,6 +533,9 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        // Return the results as a tuple of all 3 values.
 	        return new byte[]{sys, gyro, accel, mag};
 	    }
+	    
+	    /* Convert the value to an appropriate range (section 3.6.4) */
+	    
 	    /**
 	     * Read accelerometer
 	     * @return int array of x,y,z accel values
@@ -547,20 +550,15 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    	setNormalPowerNDOFMode();
 		    	data = read(BNO055_ACCEL_DATA_X_LSB_ADDR, (byte)6);
 	    	}
+	    	short xAccl = (short)((data[0] & 0xFF)
+					| ((data[1] << 8) & 0xFF00));
+			short yAccl = (short)((data[2] & 0xFF)
+					| ((data[3] << 8) & 0xFF00));
+			short zAccl = (short)((data[4] & 0xFF)
+					| ((data[5] << 8) & 0xFF00));
 	    	// Convert the data
-	    	int xAccl = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
-	    	if(xAccl > 32767) {
-	    		xAccl -= 65536;
-	    	}	
-	    	int yAccl = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	    	if(yAccl > 32767) {
-	    		yAccl -= 65536;
-	    	}
-	    	int zAccl = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	    	if(zAccl > 32767) {
-	    		zAccl -= 65536;
-	    	}
-	    	return new int[]{xAccl, yAccl, zAccl};
+			/* 1m/s^2 = 100 LSB */
+	    	return new int[]{xAccl/100, yAccl/100, zAccl/100};
 	    }
 	    
 	    /**
@@ -580,19 +578,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    	data = read(BNO055_MAG_DATA_X_LSB_ADDR, (byte)6);
 	    	}
 	    	// Convert the data
-	    	int xMag = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
-	    	if(xMag > 32767) {
-	    		xMag -= 65536;
-	    	}	
-	    	int yMag = ((data[3] & 0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	    	if(yMag > 32767) {
-	    		yMag -= 65536;
-	    	}
-	    	int zMag = ((data[5] & 0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	    	if(zMag > 32767) {
-	    		zMag -= 65536;
-	    	}	
-	    	return new int[]{xMag, yMag, zMag};
+	    	short xMag = (short)((data[0] & 0xFF)
+						| ((data[1] << 8) & 0xFF00));
+			short yMag = (short)((data[2] & 0xFF)
+						| ((data[3] << 8) & 0xFF00));
+			short zMag = (short)((data[4] & 0xFF)
+						| ((data[5] << 8) & 0xFF00));
+	    	return new int[]{xMag/16, yMag/16, zMag/16};
 	    }
 	    
 	    /**
@@ -611,20 +603,14 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    	setNormalPowerNDOFMode();
 		    	data = read(BNO055_GYRO_DATA_X_LSB_ADDR, (byte)6);
 	    	}
+	    	short xGyro = (short)((data[0] & 0xFF)
+						| ((data[1] << 8) & 0xFF00));
+			short yGyro = (short)((data[2] & 0xFF)
+						| ((data[3] << 8) & 0xFF00));
+			short zGyro = (short)((data[4] & 0xFF)
+						| ((data[5] << 8) & 0xFF00));
 	    	// Convert the data
-	    	int xGyro = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF)) ;
-	    	if(xGyro > 32767) {
-	    		xGyro -= 65536;
-	    	}
-	    	int yGyro = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	    	if(yGyro > 32767) {
-	    		yGyro -= 65536;
-	    	}
-	    	int zGyro = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	    	if(zGyro > 32767) {
-	    		zGyro -= 65536;
-	    	}
-	    	return new int[]{xGyro, yGyro, zGyro};
+	    	return new int[]{xGyro/900, yGyro/900, zGyro/900};
 	    }
 	    
 	    /**
@@ -642,19 +628,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    	setNormalPowerNDOFMode();
 		    	data = read(BNO055_EULER_H_LSB_ADDR, (byte)6);
 	    	}
-	        int heading = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
-	    	if(heading > 32767) {
-	    		heading -= 65536;
-	    	}
-	       	int roll = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	    	if(roll > 32767) {
-	    		roll -= 65536;
-	    	}
-	    	int pitch = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	    	if(pitch > 32767) {
-	    		pitch -= 65536;
-	    	}
-	        return new double[]{heading/16.0, roll/16.0, pitch/16.0};
+	    	short heading = (short)((data[0] & 0xFF)
+					| ((data[1] << 8) & 0xFF00));
+			short roll = (short)((data[2] & 0xFF)
+					| ((data[3] << 8) & 0xFF00));
+			short pitch = (short)((data[4] & 0xFF)
+					| ((data[5] << 8) & 0xFF00));
+	        return new double[]{((double)heading)/16.0, ((double)roll)/16.0, ((double)pitch)/16.0};
 
 	    }
 	    
@@ -690,22 +670,14 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    	setNormalPowerNDOFMode();
 		    	data = read(BNO055_QUATERNION_DATA_W_LSB_ADDR, (byte)8);
 	    	}
-	        int w = ((data[1] & (byte)0xFF) * 256 + (byte)(data[0] & (byte)0xFF));
-	    	if(w > 32767) {
-	    		w -= 65536;
-	    	}
-	       	int x = ((data[3] & (byte)0xFF) * 256 + (byte)(data[2] & (byte)0xFF)) ;
-	    	if(x > 32767) {
-	    		x -= 65536;
-	    	}
-	    	int y = ((data[5] & (byte)0xFF) * 256 + (byte)(data[4] & (byte)0xFF)) ;
-	    	if(y > 32767) {
-	    		y -= 65536;
-	    	}
-	    	int z = ((data[7] & (byte)0xFF) * 256 + (byte)(data[6] & (byte)0xFF)) ;
-	    	if(z > 32767) {
-	    		z -= 65536;
-	    	}	
+	    	short w = (short)((data[0] & 0xFF)
+					| ((data[1] << 8) & 0xFF00));
+			short x = (short)((data[2] & 0xFF)
+					| ((data[3] << 8) & 0xFF00));
+			short y = (short)((data[4] & 0xFF)
+					| ((data[5] << 8) & 0xFF00));
+			short z = (short)((data[6] & 0xFF)
+					| ((data[7] << 8) & 0xFF00));
 	    	// Scale values, see 3.6.5.5 in the datasheet.
 	    	double scale = (1.0 / (1<<14));
 	    	return new double[]{x*scale, y*scale, z*scale, w*scale};

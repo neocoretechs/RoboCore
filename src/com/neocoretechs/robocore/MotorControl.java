@@ -13,7 +13,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * and sent further on.
  * Increasing levels of complexity of motion control with options to move in polar arcs, set absolute speeds, etc.
  * Absolute and relative motion with the fusion of IMU data if desired.
- * @author jg
+ * @author jg Copyright (C) NeoCoreTechs 2017
  *
  */
 public class MotorControl implements MotorControlInterface2D {

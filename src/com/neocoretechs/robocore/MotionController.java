@@ -162,8 +162,8 @@ public class MotionController extends AbstractNodeMain {
 		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
 		
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
-		Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
-		Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+		//Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+		//Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
 		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
 		/*
@@ -241,7 +241,7 @@ public class MotionController extends AbstractNodeMain {
 		}
 
 		});
-		
+		/*
 		subsrangetop.addMessageListener(new MessageListener<sensor_msgs.Range>() {
 		@Override
 		public void onNewMessage(sensor_msgs.Range message) {
@@ -285,7 +285,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 		}
 		});
-		
+		*/
 		subsmag.addMessageListener(new MessageListener<sensor_msgs.MagneticField>() {
 		@Override
 		public void onNewMessage(sensor_msgs.MagneticField message) {
