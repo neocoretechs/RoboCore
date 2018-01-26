@@ -27,13 +27,16 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  */
 public class IMUSerialDataPort implements DataPortInterface {
 		private static boolean DEBUG = false;
+		private static boolean INFO = true;
 	    private SerialPort serialPort;
 	    private OutputStream outStream;
 	    private InputStream inStream;
 		// serial settings
 		// PortSettings=115200,n,8,1
-	    // On RasPi its /dev/ttyS0, on Odroid, ttyS0 is hardwired console so we use ttyS1 on header
-	    private static String portName = "/dev/ttyS1";
+	    // On RasPi its /dev/ttyS0, on OdroidC2, ttyS0 is hardwired console so we use ttyS1 on header
+	    // On C1 we have ttyS0 so basically, if we have a ttyS1, use it, otherwise, use ttyS0
+	    // 
+	    private static String portName = "/dev/ttyS0";
 	    private static int baud = 115200;
 	    private static int datab = 8;
 	    private static int stopb = 1;
@@ -126,13 +129,23 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    
 		private static final String CALIBRATION_FILE = "/var/local/calibration.json";
 
-	    
+	    /**
+	     * Try to determine port, if we cant through cpuinfo, use default
+	     * @return An instance of IMUSerialDataPort, singleton for this class
+	     */
 	    public static IMUSerialDataPort getInstance() {
 	    	synchronized(mutex) {
 	    	if( instance == null ) {
 	    		try {
-					instance = new IMUSerialDataPort(portName, baud, datab, stopb, parityb);
-													 
+	    			Enumeration<?> e = CommPortIdentifier.getPortIdentifiers();
+	    			while(e.hasMoreElements()) {
+	    				CommPortIdentifier cpi = (CommPortIdentifier) e.nextElement();
+	    				if(cpi.getName().equals("/dev/ttyS1")) {
+	    					portName = "/dev/ttyS1";
+	    					break;
+	    				}
+	    			}
+					instance = new IMUSerialDataPort(portName, baud, datab, stopb, parityb);									 
 				} catch (IOException e) {
 					System.out.println("Could not initialize IMUSerialDataPort:"+e);
 					e.printStackTrace();
@@ -149,10 +162,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	datab = tdatab;
 	    	stopb = tstopb;
 	    	parityb = tparityb;
+	    	if( DEBUG || INFO) 
+	    		System.out.println("IMUSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	    	connect(true);
 	    	//clear();
-	    	if( DEBUG ) 
-	    		System.out.println("IMUSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	    }
 	    
 	    public void connect(boolean writeable) throws IOException {

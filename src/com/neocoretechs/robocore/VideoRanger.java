@@ -24,8 +24,8 @@ import sensor_msgs.Image;
 
 
 /**
- * Create a panel and receive published video images on the Ros bus from robocore/image_raw, then
- * determine distance basedon laser spot focal plane tanget calc
+ * Create a panel and receive published video images on the Ros bus from /sensor_msgs/Image, then
+ * determine distance based on laser spot focal plane tangent calc
  * The function depends on remapped command line param "__mode" either "display" or directory name
  * @author jg
  *
@@ -47,8 +47,7 @@ public class VideoRanger extends AbstractNodeMain
 	double	offset = -0.056514344;	// Offset Constant
 	double	h_cm = 40.5;		// Distance between center of camera and laser
     double	range;		        // Calculated range 
-	int	pixels_from_center;	// Brightest pixel location from center
-						// not bottom of frame
+	int	pixels_from_center;	// Brightest pixel location from center, not bottom of frame
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -74,7 +73,7 @@ public class VideoRanger extends AbstractNodeMain
 		for(int i = 0; i < 1200; i++) xbuf[i]= 255;
 		
 		final Subscriber<sensor_msgs.Image> imgsub =
-				connectedNode.newSubscriber("robocore/image_raw", sensor_msgs.Image._TYPE);
+				connectedNode.newSubscriber("/sensor_msgs/Image", sensor_msgs.Image._TYPE);
 		
 		imgsub.addMessageListener(new MessageListener<sensor_msgs.Image>() {
 		@Override

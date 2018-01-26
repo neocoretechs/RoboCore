@@ -1,11 +1,4 @@
-/**
- * AR Drone driver for ROS
- * Based on the JavaDrone project and rosjava and ardrone_utd and the original Japanese version and some other
- * assorted code.
- * @author jg
- */
 package com.neocoretechs.robocore;
-
 
 import java.nio.ByteBuffer;
 
@@ -26,12 +19,11 @@ import au.edu.jcu.v4l4j.VideoFrame;
 import au.edu.jcu.v4l4j.exceptions.StateException;
 import au.edu.jcu.v4l4j.exceptions.V4L4JException;
 
-
 /**
  * This class takes a series of images from V4L4j and remuxxes them onto the ROS bus.
  * The images a encoded jpeg via capture class, then the byte payload is sent downline.
  * Changing the capture class in initFrameGrabber of embedded videocap class can change the format.
- * @author jg
+ * @author jg Copyright (C) NeoCoreTechs 2017,2018
  *
  */
 public class VideoPub extends AbstractNodeMain {
@@ -71,10 +63,10 @@ public class VideoPub extends AbstractNodeMain {
 
 		//final Log log = connectedNode.getLog();
 		final Publisher<sensor_msgs.Image> imgpub =
-		connectedNode.newPublisher("robocore/image_raw", sensor_msgs.Image._TYPE);
+		connectedNode.newPublisher("/sensor_msgs/Image", sensor_msgs.Image._TYPE);
 		// caminfopub has camera info
 		//final Publisher<sensor_msgs.CameraInfo> caminfopub =
-		//connectedNode.newPublisher("ardrone/camera_info", sensor_msgs.CameraInfo._TYPE);
+		//connectedNode.newPublisher("/sensor_msgs/CameraInfo", sensor_msgs.CameraInfo._TYPE);
 	
 	/**
 	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
@@ -197,7 +189,6 @@ public class VideoPub extends AbstractNodeMain {
 	 * <br>&nbsp;&nbsp; frame.recycle();
 	 * <br>}<br>
 	 * </code>
-	 * @author jg
 	 *
 	 */
 	class videocap implements CaptureCallback {

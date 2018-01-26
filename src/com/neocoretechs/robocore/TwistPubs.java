@@ -181,18 +181,18 @@ public void onStart(final ConnectedNode connectedNode) {
 				val.setX(pubc[0]);
 				val.setY(0);
 				val.setZ(0);
-				if( twistmsg == null )
-					twistmsg = twistpub.newMessage();
-				twistmsg.setLinear(val);
+				if( joymsg == null )
+					joymsg = twistpub.newMessage();
+				joymsg.setLinear(val);
 
 				if( DEBUG) System.out.println("Set twist linear "+val.getX());
 				geometry_msgs.Vector3 vala = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 				vala.setZ(pubc[1]);
 				vala.setX(0);
 				vala.setY(0);
-				if( twistmsg == null )
-					twistmsg = twistpub.newMessage();
-				twistmsg.setAngular(vala);
+				if( joymsg == null )
+					joymsg = twistpub.newMessage();
+				joymsg.setAngular(vala);
 				if( DEBUG) System.out.println("Set twist angular "+val.getZ());	
 			}
 			*/
@@ -213,13 +213,13 @@ public void onStart(final ConnectedNode connectedNode) {
 						System.out.println("Published fillin angular:"+twistmsg);
 					twistmsg = null;
 				} /*else {
-					if( twistmsg != null && twistmsg.getAngular() != null) {
+					if( joymsg != null && joymsg.getAngular() != null) {
 						geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 						val.setX((joystickMax/2));
-						twistmsg.setLinear(val);
+						joymsg.setLinear(val);
 						if( DEBUG )
-							System.out.println("Published fillin linear:"+twistmsg);
-						twistmsg = null;
+							System.out.println("Published fillin linear:"+joymsg);
+						joymsg = null;
 					}
 				}*/
 			}

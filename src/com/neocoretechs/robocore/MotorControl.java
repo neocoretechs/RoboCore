@@ -464,7 +464,6 @@ public class MotorControl implements MotorControlInterface2D {
 	/**
 	 * Move absolute with some rudimentary checks for excessive angular momentum and objects too close
 	 * and reduce motor rate by intermittent commandStop until values are acceptable.
-	 * The ARDrone US seems to flatten everything to 0 when objects 200mm closer or less
 	 * this is called by the chain or responsibility emanating from the cmd_vel topic.
 	 * @throws IOException 
 	 */
@@ -511,7 +510,6 @@ public class MotorControl implements MotorControlInterface2D {
 	/**
 	 * Move relative with some rudimentary checks for excessive angular momentum and objects too close
 	 * and reduce motor rate by intermittent commandStop until values are acceptable.
-	 * The ARDrone US seems to flatten everything to 0 when objects 200mm closer or less
 	 * this is called by the chain or responsibility emanating from the cmd_vel topic.
 	 * @throws IOException 
 	 */

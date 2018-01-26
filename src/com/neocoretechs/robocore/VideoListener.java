@@ -31,7 +31,7 @@ import org.ros.node.topic.Subscriber;
 
 
 /**
- * Create a panel and receive published video images on the Ros bus from robocore/image_raw, then
+ * Create a panel and receive published video images on the Ros bus from /sensor_mmsgs/Image, then
  * display them to the panel OR Start an MPEG streaming server and await connections OR write out a series of image files.
  * The function depends on remapped command line param "__mode" either "display" or directory name
  * Demonstrates how we can manipulate the image buffer to publish to ROS or create
@@ -157,7 +157,7 @@ public class VideoListener extends AbstractNodeMain
 			}*/
 		}
 		final Subscriber<sensor_msgs.Image> imgsub =
-				connectedNode.newSubscriber("robocore/image_raw", sensor_msgs.Image._TYPE);
+				connectedNode.newSubscriber("/sensor_msgs/Image", sensor_msgs.Image._TYPE);
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
