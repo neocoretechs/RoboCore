@@ -153,19 +153,23 @@ public class MotionController extends AbstractNodeMain {
 		//final Log log = connectedNode.getLog();
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
+		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+		final Publisher<std_msgs.Int32MultiArray> velpub =
+				connectedNode.newPublisher("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
 		
-		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
+		//final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
 		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
 		
+		Subscriber<sensor_msgs.Joy> subsrange = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
-		Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
-		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
+		Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("/sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
+		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("/sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
 		/*
 		Subscriber<sensor_msgs.PointCloud> subsrange = connectedNode.newSubscriber("robocore/kinect", sensor_msgs.PointCloud._TYPE);
 
@@ -183,13 +187,30 @@ public class MotionController extends AbstractNodeMain {
 			}
 		});
 		*/
-		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
-		@Override
-		public void onNewMessage(sensor_msgs.Imu message) {
-			if( DEBUG )
-				System.out.println("New nav msg:"+message);
-			synchronized(navMutex) {
+		
+		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right
+		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
+			@Override
+			public void onNewMessage(sensor_msgs.Joy message) {
+				float[] axes = message.getAxes();
+				int[] buttons = message.getButtons();
+				//if( DEBUG )
+					System.out.println("Axes:"+axes[0]+","+axes[2]);
 				try {
+			
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}	
+			}
+		});
+		
+		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
+			@Override
+			public void onNewMessage(sensor_msgs.Imu message) {
+				if( DEBUG )
+					System.out.println("New nav msg:"+message);
+				synchronized(navMutex) {
+					try {
 					if( message.getAngularVelocity().getX() != angular.getX() ||
 						message.getAngularVelocity().getY() != angular.getY() ||
 						message.getAngularVelocity().getZ() != angular.getZ() ||
@@ -237,8 +258,8 @@ public class MotionController extends AbstractNodeMain {
 					System.out.println("Nav subs exception:"+e.getMessage());
 					e.printStackTrace();
 				}
+				}
 			}
-		}
 
 		});
 		/*
@@ -287,12 +308,12 @@ public class MotionController extends AbstractNodeMain {
 		});
 		*/
 		subsmag.addMessageListener(new MessageListener<sensor_msgs.MagneticField>() {
-		@Override
-		public void onNewMessage(sensor_msgs.MagneticField message) {
-			if( DEBUG )
-				System.out.println("New mag msg:"+message);
-			geometry_msgs.Vector3 mag3 = message.getMagneticField();
-			synchronized(magMutex) {
+			@Override
+			public void onNewMessage(sensor_msgs.MagneticField message) {
+				if( DEBUG )
+					System.out.println("New mag msg:"+message);
+				geometry_msgs.Vector3 mag3 = message.getMagneticField();
+				synchronized(magMutex) {
 				if( mag3.getX() != mag[0] || mag3.getY() != mag[1] || mag3.getZ() != mag[2]) {
 					mag[0] = mag3.getX();
 					mag[1] = mag3.getY();
@@ -306,8 +327,8 @@ public class MotionController extends AbstractNodeMain {
 					}
 				} else
 					isMag = false;
+				}
 			}
-		}
 		});
 		
 		substemp.addMessageListener(new MessageListener<sensor_msgs.Temperature>() {
@@ -381,11 +402,11 @@ public class MotionController extends AbstractNodeMain {
 				// creep forward
 				// value linear and angular may have current IMU vals
 				//linear.setX(50.0);linear.setY(50.0);linear.setZ(50.0);
-				//twistmsg.setLinear(linear);
+				//joymsg.setLinear(linear);
 				//angular.setX(0.0); angular.setY(0.0); angular.setZ(0.0);
-				//twistmsg.setAngular(angular);
+				//joymsg.setAngular(angular);
 				//System.out.println("Motion control pub move forward");
-				//mopub.publish(twistmsg);
+				//mopub.publish(joymsg);
 				//float targetRoll = (float) val.getY();
 				//float targetPitch = (float) val.getX();
 				//float targetVertvel = (float) val.getZ();
@@ -488,5 +509,206 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}); // cancellable loop
 
+	}
+	/**
+	 * Move the buffered values into the publishing message to send absolute vals to motor control
+	 * @param connectedNode
+	 * @return
+	 */
+	private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf) {
+		std_msgs.Int32MultiArray val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32MultiArray._TYPE);
+		std_msgs.MultiArrayLayout vlayout = new std_msgs.MultiArrayLayout();
+		List<std_msgs.MultiArrayDimension> vdim = new ArrayList<std_msgs.MultiArrayDimension>();
+		std_msgs.MultiArrayDimension vdim1 = new std_msgs.MultiArrayDimension();
+		std_msgs.MultiArrayDimension vdim2 = new std_msgs.MultiArrayDimension();
+		vdim1.setLabel("Motor Channel");
+		vdim2.setLabel("Motor Channel value");
+		vdim1.setSize(2);
+		vdim2.setSize(valBuf.size()/2);
+		vdim1.setStride(valBuf.size());
+		vdim2.setStride(2);
+		vdim.add(vdim1);
+		vdim.add(vdim2);
+		vlayout.setDim(vdim);
+		val.setLayout(vlayout);
+		int[] vali = new int[valBuf.size()];
+		int i = 0;
+		for( Integer inv : valBuf)
+			vali[i++] = inv;
+		val.setData(vali);
+		return val;
+	}
+	
+	static float steadyError, previousError;
+	static long baset = System.currentTimeMillis();
+	static long samplet = 100; // millis sample time
+	static float kp = 0.0f;
+	static float ki = 1.0f;
+	static float kd = 0.0f;
+	static float pidOutput = 0;
+	// pid controller
+	static void updatePID(float current, float target)
+	{
+		float P; // proportional error
+		float I; // integral error
+		float D; // derivative error
+		// determine time interval
+		long difft = System.currentTimeMillis() - baset;
+		if( difft < samplet )
+			return;
+		baset = System.currentTimeMillis();
+		float dt = (float)difft;
+	    // calculate difference between actual and goal values
+	    float pidError = target - current;
+	    if (pidError < -270) pidError += 360;
+	    if (pidError >  270) pidError -= 360;
+	 
+	    // accumulates error over time
+	    steadyError += pidError*dt;
+	 
+	    // integrator windup compensation (saturates to actuator's output)
+	    if (steadyError < -10.0) steadyError = -10.0f;
+	    if (steadyError > 10.0) steadyError = 10.0f;
+	 
+	    P = kp*pidError; // proportional error
+	    I = ki*steadyError; // integral error
+	    D = kd*(pidError - previousError)/dt;  // derivative error
+	 
+	    // save current error
+	    previousError = pidError;
+	 
+	    pidOutput = P + I + D;  // calculate the PID output
+	    //pidOutput /= 100.0;  // scale it down to get it within the range of the actuator - probably needs tuning
+	    //if(pidOutput < -0.1) pidOutput = -0.1f;
+	    //if(pidOutput > 0.1) pidOutput = 0.1f;
+	 
+	    System.out.printf("P = %f | I = %f | D = %f | Output = %f | pidErr = %f | SteadyErr = %f\n",P,I,D,pidOutput,pidError,steadyError);
+	    // publish to the absolute motor control channel
+	    
+	}
+	// working variables
+	static long lastTime = System.currentTimeMillis();
+	static float Input, Output, Setpoint;
+	static float ITerm, lastInput;
+	//float kp, ki, kd;
+	static int SampleTime = 100; //.1 sec
+	static float outMin, outMax;
+	static boolean inAuto = false;
+	static void Compute()
+	{
+	   if(!inAuto) return;
+	   long now = System.currentTimeMillis();
+	   long timeChange = (now - lastTime);
+	   if(timeChange >= SampleTime) {
+	      // Compute all the working error variables
+	      float error = Setpoint - Input;
+	      // This is specific to pid control of heading
+	      // reduce the angle  
+	      error =  error % 360; 
+	      // force it to be the positive remainder, so that 0 <= angle < 360  
+	      error = (error + 360) % 360;  
+	      // force into the minimum absolute value residue class, so that -180 < angle <= 180  
+	      if (error > 180)  
+	          error -= 360;  
+		  //if (error < -270) error += 360;
+		  //if (error >  270) error -= 360;  
+	      // To change tuning parameters at runtime:
+	      // Instead of having the Ki live outside the integral, we bring it inside.
+	      // we take the error and multiply it by whatever the Ki is at that time. 
+	      // We then store the sum of THAT. When the Ki changes, there no bump because 
+	      // all the old Kis are already in the bank so to speak. 
+	      // We get a smooth transfer with no additional math operations
+	      ITerm += (ki * error);
+	      // clamp the I term to prevent reset windup
+	      // If all we did was clamp the output, the Integral term would go back to growing and growing. 
+	      // Though the output would look nice during the step up, wed see that telltale lag on the step down
+	      if(ITerm > outMax) 
+	    	  ITerm = outMax;
+	      else 
+	    	  if(ITerm < outMin) 
+	    		  ITerm = outMin;
+	      float dInput = (Input - lastInput);
+	 
+	      // Compute PID Output
+	      Output = kp * error ;//+ ITerm - kd * dInput;
+	      //In addition to clamping the I-Term, we clamp the Output value so that it stays where wed expect it.
+	      /*
+	      if(Output > outMax) 
+	    	  Output = outMax;
+	      else 
+	    	  if(Output < outMin) 
+	    		  Output = outMin;
+	 	  */
+	      // Remember some variables for next time
+	      lastInput = Input;
+	      lastTime = now;
+	      //error is positive if current_heading > bearing (compass direction)
+	      //positive bias acts to reduce left motor speed, so bear left
+
+	      //System.out.printf("P = %f | I = %f | D = %f | Output = %f | pidErr = %f\n",error,ITerm,dInput,Output,error);
+	      System.out.printf("Output L = %f | Output R = %f | Err = %f\n",-Output, Output,error);
+	   }
+	}
+	 
+	static void SetTunings(float Kp, float Ki, float Kd)
+	{
+	  float SampleTimeInSec = ((float)SampleTime)/1000.0f;
+	  kp = Kp;
+	  ki = Ki * SampleTimeInSec;
+	  kd = Kd / SampleTimeInSec;
+	}
+	 
+	static void SetSampleTime(int NewSampleTime)
+	{
+	   if( NewSampleTime > 0) {
+	      float ratio  = (float)NewSampleTime / (float)SampleTime;
+	      ki *= ratio;
+	      kd /= ratio;
+	      SampleTime = NewSampleTime;
+	   }
+	}
+	/**
+	 * Set output limits to clamp I term and output
+	 * @param Min
+	 * @param Max
+	 */
+	static void SetOutputLimits(float Min, float Max)
+	{
+	   if(Min > Max) return;
+	   outMin = Min;
+	   outMax = Max;
+	    
+	   if(Output > outMax) 
+		   Output = outMax;
+	   else 
+		   if(Output < outMin) 
+			   Output = outMin;
+	 
+	   if(ITerm > outMax) 
+		   ITerm= outMax;
+	   else 
+		   if(ITerm < outMin) 
+			   ITerm= outMin;
+	}
+	 
+	static void SetMode(boolean isAuto)
+	{
+	    if(isAuto && !inAuto)
+	    {  
+	    	/*we just went from manual to auto*/
+	        Initialize();
+	    }
+	    inAuto = isAuto;
+	}
+	 
+	static void Initialize()
+	{
+	   lastInput = Input;
+	   ITerm = Output;
+	   if(ITerm > outMax) 
+		   ITerm = outMax;
+	   else 
+		   if(ITerm < outMin) 
+			   ITerm = outMin;
 	}
 }

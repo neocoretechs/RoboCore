@@ -293,7 +293,7 @@ public void onStart(final ConnectedNode connectedNode) {
 								shouldPublish = true;
 								prevdata.put(Component.Identifier.Axis.Y, data);
 								if( DEBUG )System.out.println("Left stick vertical (Y):"+data);
-								axisPub[1] = data;
+								axisPub[2] = data;
 						}
 					}
 					
@@ -500,7 +500,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							shouldPublish = true;
 							prevdata.put(Component.Identifier.Axis.Y, data);
 							if( DEBUG )System.out.println("Left stick vertical (Y):"+data);
-							axisPub[1] = data;
+							axisPub[2] = data;
 						}
 					}
 					

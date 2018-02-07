@@ -34,7 +34,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		// serial settings
 		// PortSettings=115200,n,8,1
 	    // On RasPi its /dev/ttyS0, on OdroidC2, ttyS0 is hardwired console so we use ttyS1 on header
-	    // On C1 we have ttyS0 so basically, if we have a ttyS1, use it, otherwise, use ttyS0
+	    // On C1 we have ttyS2 so basically, if we have ttyS2 use that, if we have a ttyS1, use it, otherwise, use ttyS0
 	    // 
 	    private static String portName = "/dev/ttyS0";
 	    private static int baud = 115200;
@@ -137,17 +137,31 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	synchronized(mutex) {
 	    	if( instance == null ) {
 	    		try {
-	    			Enumeration<?> e = CommPortIdentifier.getPortIdentifiers();
-	    			while(e.hasMoreElements()) {
-	    				CommPortIdentifier cpi = (CommPortIdentifier) e.nextElement();
-	    				if(cpi.getName().equals("/dev/ttyS1")) {
+	    			CommPortIdentifier cpi  = null;
+	    			try {
+	    				System.setProperty("gnu.io.rxtx.SerialPorts", "/dev/ttyS2");
+	    				cpi = CommPortIdentifier.getPortIdentifier("/dev/ttyS2");
+	    				portName = "/dev/ttyS2";
+	    			} catch(NoSuchPortException nspe) {
+	    				try {
+	    					System.setProperty("gnu.io.rxtx.SerialPorts", "/dev/ttyS1");
+	    					cpi = CommPortIdentifier.getPortIdentifier("/dev/ttyS1"); 
 	    					portName = "/dev/ttyS1";
-	    					break;
-	    				}
+	    				} catch(NoSuchPortException nspe2) {
+	    					try {
+	    						System.setProperty("gnu.io.rxtx.SerialPorts", "/dev/ttyS0");
+								cpi = CommPortIdentifier.getPortIdentifier("/dev/ttyS0");
+								portName = "/dev/ttyS0";
+							} catch (NoSuchPortException e) {
+								System.out.println("Could not initialize IMUSerialDataPort of /dev/ttyS0, /dev/ttyS1, or /dev/ttyS2:"+e);
+								e.printStackTrace();
+								throw new RuntimeException(e);
+							}
+	    				}	
 	    			}
 					instance = new IMUSerialDataPort(portName, baud, datab, stopb, parityb);									 
 				} catch (IOException e) {
-					System.out.println("Could not initialize IMUSerialDataPort:"+e);
+					System.out.println("Could not initialize IMUSerialDataPort of:"+portName+" because "+e);
 					e.printStackTrace();
 					throw new RuntimeException(e);
 				}

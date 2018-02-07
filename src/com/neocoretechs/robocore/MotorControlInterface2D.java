@@ -5,10 +5,10 @@ import java.io.IOException;
 import com.neocoretechs.robocore.MotorControl.TwistInfo;
 
 /**
- * This interface is the cut between ARDrone land/sea/space (basically anything outside of standard air motor control)
- * Preliminary sensor fusion of IMU, ultrasonic range, and accelerometer deltas to determine baseline safe movement.
- * The purpose of this contract is to abstract various embedded and client server motor control interfaces.
- * @author jg
+ * This interface could be the cut between land/sea/space robots. 
+ * The method params represent sensor fusion of IMU, range, and other sensors to determine baseline safe movement.
+ * An abstraction of motor control interfaces.
+ * @author jg Copyright (C) NeoCoreTechs 2017,2018
  *
  */
 public interface MotorControlInterface2D {

@@ -52,7 +52,7 @@ public class VideoPub extends AbstractNodeMain {
 	
 	@Override
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("videopub");
+		return GraphName.of("pubs_video");
 	}
 
 	/**

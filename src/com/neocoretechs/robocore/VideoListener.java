@@ -2,6 +2,7 @@ package com.neocoretechs.robocore;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
@@ -20,6 +21,7 @@ import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
+import javax.swing.WindowConstants;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -337,13 +339,25 @@ public class VideoListener extends AbstractNodeMain
 		JFrame frame;
 		public PlayerFrame() {
 			frame = new JFrame("Player");
+			//---
 			//displayPanel = new PlayerFrame();
 			//frame.getContentPane().add(displayPanel, BorderLayout.CENTER);
 			//displayPanel.setVisible(true);
-			frame.getContentPane().add(this, BorderLayout.CENTER);
+			//---
+			//frame.getContentPane().add(this, BorderLayout.CENTER);
+			frame.add(this, BorderLayout.CENTER);
+			// Remove window title and borders
+	        frame.setUndecorated(true);
+	        // Make frame topmost
+	        //frame.setAlwaysOnTop(true);
+	        // Disable Alt+F4 on Windows
+	        frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+	        // Make frame full-screen
+	        frame.setExtendedState(Frame.MAXIMIZED_BOTH);
+	        // Display frame
 			this.setVisible(true);
 			frame.pack();
-			frame.setSize(new Dimension(640, 480));
+			//frame.setSize(new Dimension(640, 480));
 			frame.setVisible(true);
 		}
 		private java.awt.Image lastFrame;
