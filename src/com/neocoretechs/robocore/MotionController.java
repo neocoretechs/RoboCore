@@ -59,6 +59,7 @@ public class MotionController extends AbstractNodeMain {
 	float rangetop, rangebot;
 	double pressure, temperature;
 	double[] mag = {0, 0, 0};
+	double[] eulers = {0, 0, 0};
 	
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
@@ -209,7 +210,15 @@ public class MotionController extends AbstractNodeMain {
 			public void onNewMessage(sensor_msgs.Imu message) {
 				if( DEBUG )
 					System.out.println("New nav msg:"+message);
+				
 				synchronized(navMutex) {
+					orientation.setX(message.getOrientation().getX());
+					orientation.setY(message.getOrientation().getY());
+					orientation.setZ(message.getOrientation().getZ());
+					orientation.setW(message.getOrientation().getW());
+					eulers = message.getOrientationCovariance();
+					System.out.println("Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
+					System.out.println("Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 					try {
 					if( message.getAngularVelocity().getX() != angular.getX() ||
 						message.getAngularVelocity().getY() != angular.getY() ||
@@ -223,10 +232,6 @@ public class MotionController extends AbstractNodeMain {
 							linear.setX(message.getLinearAcceleration().getX());
 							linear.setY(message.getLinearAcceleration().getY());
 							linear.setZ(message.getLinearAcceleration().getZ());
-							orientation.setX(message.getOrientation().getX());
-							orientation.setY(message.getOrientation().getY());
-							orientation.setZ(message.getOrientation().getZ());
-							orientation.setW(message.getOrientation().getW());
 							isNav = true;
 							if( SHOCK_THRESHOLD[0] != -1 ) {
 								if( Math.abs(linear.getX()-SHOCK_BASELINE[0]) > SHOCK_THRESHOLD[0] ) {
@@ -246,11 +251,7 @@ public class MotionController extends AbstractNodeMain {
 							System.out.println("Angular Z:"+angular.getZ());
 							System.out.println("Linear X:"+linear.getX());
 							System.out.println("Linear Y:"+linear.getY());
-							System.out.println("Linear Z:"+linear.getZ());
-							System.out.println("Orientation X:"+orientation.getX());
-							System.out.println("Orientation Y:"+orientation.getY());
-							System.out.println("Orientation Z:"+orientation.getZ());
-							System.out.println("Orientation W:"+orientation.getW());
+							System.out.println("Linear Z:"+linear.getZ());			
 					} else
 						isNav = false;
 				} catch (Throwable e) {
@@ -358,6 +359,10 @@ public class MotionController extends AbstractNodeMain {
 			@Override
 			protected void setup() {
 				sequenceNumber = 0;
+				Setpoint = 0.0f; // 0 degrees yaw
+				SetTunings(5.55f, 1.0f, 0.5f);
+				SetOutputLimits(0.0f, 1000.0f);
+				SetMode(true);
 			}
 
 			@Override
@@ -501,7 +506,12 @@ public class MotionController extends AbstractNodeMain {
 					statpub.publish(statmsg);
 					Thread.sleep(1);
 				}
-				
+				// If there was joystick input, thats the new target setpoint
+				// after we execute maneuver, setpoint is new heading from IMU so we hold that course
+				// and then wait for new input or hold course from last setting
+				Input = (float) eulers[0];
+				Compute();
+				Setpoint = Input;
 				Thread.sleep(10);
 				++sequenceNumber;
 				if( DEBUG )

@@ -31,7 +31,7 @@ import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
  * @author jg
  */
 public class IMUPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 	float volts;
 	Object statMutex = new Object(); 
@@ -134,10 +134,6 @@ public void onStart(final ConnectedNode connectedNode) {
 				System.out.println("Cannot achieve proper calibration of IMU due to "+e);
 				e.printStackTrace();
 			}
-			MotionController.Setpoint = 0.0f; // 0 degrees yaw
-			MotionController.SetTunings(5.55f, 1.0f, 0.5f);
-			MotionController.SetOutputLimits(0.0f, 1000.0f);
-			MotionController.SetMode(true);
 		}
 
 		@Override
@@ -152,8 +148,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					lastSequenceNumber = sequenceNumber;
 					imuPort.reportCalibrationStatus();
 				}
-				MotionController.Input = (float) eulers[0];
-				MotionController.Compute();
+	
 				//MotionController.updatePID((float)eulers[0],  0.0f);
 				header.setSeq(sequenceNumber);
 				time = org.ros.message.Time.fromMillis(System.currentTimeMillis());
@@ -191,6 +186,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					valq.setZ(quats[2]);
 					valq.setW(quats[3]);
 					imumsg.setOrientation(valq);
+					imumsg.setOrientationCovariance(eulers); // we send the euler angles through the covariance matrix
 				} else
 					System.out.println("QUAT ERROR");
 				if( accels != null && gyros != null && quats != null) {
