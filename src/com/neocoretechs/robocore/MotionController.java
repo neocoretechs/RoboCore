@@ -3,10 +3,10 @@ package com.neocoretechs.robocore;
 //import org.apache.commons.logging.Log;
 import java.io.File;
 import java.net.InetSocketAddress;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 
@@ -25,20 +25,26 @@ import org.ros.node.topic.Subscriber;
 
 
 /**
- * Published on cmd_vel and robocore/status to issue autonomous propulsion directives and status updates relating to those topics.
- * After sensor fusion from subscribers, messages are published as TWIST directives on the cmd_vel topic.
- * Twist messages are constructed and sent to cmd_vel topic where they ultimately activate motor control
- * through the process that manages serial data to the motor controller.
+ * We are fusing data from the IMU, any joystick input, and other autonomous controls to affect
+ * propulsion and issue status updates based on IMU data edge conditions that may indicate problems.
+ * Published on absolute/cmd_vel are the values from 0-1000 that represent actual power to each differential drive wheel.
+ * Subscribers to absolute/cmd_vel include the process that manages serial data to the motor controller.
+ * Publishers on robocore/status provide status updates relating to IMU extremes that are picked up by the VoxHumana voice synth or others.
  * sensor_msgs/MagneticField
  * sensor_msgs/Temperature
  * sensor_msgs/Imu
  * UpperFront/sensor_msgs/Range
  * LowerFront/sensor_msgs/Range
- * So the convention is to represent anything not part of an actual message class in brackets.
- * Two sets of flags and a threshold value are used to determine if:
+ * To reduce incoming data, Two sets of flags and a threshold value are used to determine if:
  * a) The values have changed from last message
  * b) The value exceed a threshold deemed noteworthy
- * @author jg
+ * 
+ * We take steps to align the joystick reference frame to the following:
+ *      / 0 \
+ *   90   |  -90
+ *    \   |   /
+ *     180,-180
+ * @author jg Copyright (C) NeoCoreTechs 2017,2018
  *
  */
 public class MotionController extends AbstractNodeMain {
@@ -47,15 +53,6 @@ public class MotionController extends AbstractNodeMain {
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
-	//private static MotionController instance = null;
-	//private MotionController(){}
-	//public static MotionController getInstance() {
-	//	if( instance == null ) {
-	//		instance = new MotionController();
-	//		mc = new MotorControl();
-	//	}
-	//	return instance;
-	//}
 	float rangetop, rangebot;
 	double pressure, temperature;
 	double[] mag = {0, 0, 0};
@@ -63,6 +60,7 @@ public class MotionController extends AbstractNodeMain {
 	
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
+	public static float WHEELBASE = 1.0f;
 	// deltas. 971, 136, 36 relatively normal values. seismic: last value swings from rangeTop -40 to 140
 	public static float[] SHOCK_BASELINE = { 971.0f, 136.0f, 36.0f};
 
@@ -152,6 +150,10 @@ public class MotionController extends AbstractNodeMain {
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 		//final Log log = connectedNode.getLog();
+		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		if( remaps.containsKey("__wheelbase") )
+			WHEELBASE = Float.parseFloat(remaps.get("__wheelbase"));
+		
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
 		
@@ -188,20 +190,74 @@ public class MotionController extends AbstractNodeMain {
 			}
 		});
 		*/
+		//
+		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
+		// The IMU calculates the theoretical speed for each wheel in the 0-1000 scale based on target point vs IMU yaw angle.
+		// If the joystick chimes in the target point becomes the stick position and the speed is modified by the Y value of the stick.
+		// We just have to reduce the IMU theoretical values (one value that is a positive speed on one wheel and negative for the other, or 0)
 		
-		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Joy message) {
 				float[] axes = message.getAxes();
 				int[] buttons = message.getButtons();
+				float radians = (float) Math.atan2(axes[2], axes[0]);
+				float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
+				// horizontal axis is 0 to -180 degrees, we want 0 at the top
+				stickDegrees += 90;
+				stickDegrees = (stickDegrees > 180.0 ? stickDegrees -= 90.0 : -stickDegrees);
+				// we have absolute stickdegrees, offset the current IMU by that quantity to get new desired course
+				float offsetDegrees = (float) (eulers[0] - stickDegrees);
+			    // reduce the angle  
+			    offsetDegrees =  offsetDegrees % 360; 
+			    // force it to be the positive remainder, so that 0 <= angle < 360  
+			    offsetDegrees = (offsetDegrees + 360) % 360;  
+			    // force into the minimum absolute value residue class, so that -180 < angle <= 180  
+			    if (offsetDegrees > 180)  
+			          offsetDegrees -= 360;  
+			    //bearingDegrees = (float) (bearingDegrees > 0.0 ? bearingDegrees : (360.0 + bearingDegrees)); // correct discontinuity
 				//if( DEBUG )
-					System.out.println("Axes:"+axes[0]+","+axes[2]);
-				try {
-			
-				} catch (Throwable e) {
-					e.printStackTrace();
-				}	
+				//	System.out.println("Axes:"+axes[0]+","+axes[2]+" deg:"+bearingDegrees+" rad:"+radians);
+				Setpoint = offsetDegrees;
+				// If there was joystick input, thats the new target setpoint
+				// after we execute maneuver, setpoint is new heading from IMU so we hold that course
+				// and then wait for new input or hold course from last setting
+				Input = (float) eulers[0]; //eulers[0] is yaw angle from IMU
+				Compute();
+				Setpoint = Input;
+				// Output has the positive or negative difference in degrees (left or right offset)
+				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply
+				// We determine the radius of the turn potential by the forward speed desired (joystick Y)
+				// For instance if at 0 we can spin at radius .5 of wheelbase if necessary, while at speed 500 of 1000
+				// we can turn at 1 which is 90 degrees with inner wheel stationary
+				// and 1000 which is 2 robot widths radius of inner arc describes 90 degree traverse
+				// degrees/180 * PI * (r + WHEELBASE) = outer wheel arc length
+				// degrees/180 * PI * r = inner wheel arc length
+				// we compare the arc lengths as a ratio.
+				// We use the speed 1,0,-1 as a scale factor to add to wheelbase, so at max speed
+				// we extend radius by by one robot length, joystick y * 2
+				// so this assumes that at half speed we can still make a 90 degree turn
+				// deal with negative radius later, it means back up, turn wheels in reverse
+				float radius = (-axes[2]*2);
+				float arcin = (float) ((radius/180.0) * Math.PI * radius);
+				float arcout = (float) ((radius/180.0) * Math.PI * (radius + WHEELBASE));
+				// speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
+				// of wheels left and right
+				// axes[2] is y, value is -1 to 0 to 1 for some reason forward is negative on the stick
+				float speedR = -axes[2] * 1000.0f;
+				float speedL = speedR;
+				// Output is difference in degrees between setpoint and input
+				if( Output < 0.0f )
+					speedL *= (arcin/arcout);
+				else
+					if( Output > 0.0f )
+						speedR *= (arcin/arcout);
+				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|Output=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,Output,speedL,speedR);
+				// set it up to send
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+				speedVals.add((int)speedL);
+				speedVals.add((int)speedR);
+				velpub.publish(setupPub(connectedNode, speedVals));		
 			}
 		});
 		
@@ -251,7 +307,11 @@ public class MotionController extends AbstractNodeMain {
 							System.out.println("Angular Z:"+angular.getZ());
 							System.out.println("Linear X:"+linear.getX());
 							System.out.println("Linear Y:"+linear.getY());
-							System.out.println("Linear Z:"+linear.getZ());			
+							System.out.println("Linear Z:"+linear.getZ());
+							
+							Input = (float) eulers[0];
+							Compute();
+							Setpoint = Input;
 					} else
 						isNav = false;
 				} catch (Throwable e) {
@@ -360,64 +420,20 @@ public class MotionController extends AbstractNodeMain {
 			protected void setup() {
 				sequenceNumber = 0;
 				Setpoint = 0.0f; // 0 degrees yaw
-				SetTunings(5.55f, 1.0f, 0.5f);
+				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
+				SetTunings(1.0f, 1.0f, 0.5f);
 				SetOutputLimits(0.0f, 1000.0f);
 				SetMode(true);
 			}
 
 			@Override
 			protected void loop() throws InterruptedException {
+		
 				/*
-				NavPacket np = data.pop();
-				int linearMove = 0;
-				int courseOffset = 0;
-				// we have x,y theta where x is frame x and y is distance to object
-				if( np.isVision() ) {
-					int range = (int)np.getVisionDistance();
-					System.out.println("Range: "+range);
-					if( range < 200 ) {
-						courseOffset = 0; // stop
-						System.out.println("Course offset zero");
-					} else {
-						int x = (int) np.getVisionX();
-						if( x > 500 ) {
-							x -=500;
-						} else {
-							x = 500 - x;
-							x = -x; // turn left
-						}
-						// div by 10 to scale 500 to 0-5 degrees off center turn
-						x /= 100;
-						courseOffset = x;
-						linearMove = 50;
-						if( courseOffset != 0 ) linearMove = 0; // turn in place
-						System.out.println("Robot offset course with "+ courseOffset +" "+linearMove);
-					}
-				} else {
-					// no vision markers to influence the move
-					courseOffset = np.getTargetYaw();
-					linearMove = np.getTargetPitch();
-					System.out.println("Robot normal course with "+ courseOffset +" "+linearMove);
-				}
 				hasMoved = motorControlListener.move2DRelative(np.getGyros()[0] , courseOffset, linearMove
 						, np.getTimeVal(), np.getAccs(), np.getRanges());
 					//System.out.println("Robot should have Moved to "+(robotTheta *= 57.2957795)+" degrees"); // to degrees		
-			}
-			*/
-				// creep forward
-				// value linear and angular may have current IMU vals
-				//linear.setX(50.0);linear.setY(50.0);linear.setZ(50.0);
-				//joymsg.setLinear(linear);
-				//angular.setX(0.0); angular.setY(0.0); angular.setZ(0.0);
-				//joymsg.setAngular(angular);
-				//System.out.println("Motion control pub move forward");
-				//mopub.publish(joymsg);
-				//float targetRoll = (float) val.getY();
-				//float targetPitch = (float) val.getX();
-				//float targetVertvel = (float) val.getZ();
-				//val = message.getAngular();
-				//float targetYaw = (float) val.getZ();
-				//System.out.println("Seq: "+sequenceNumber);
+				 */
 				
 				synchronized(rngMutex1) {
 					if(isRangeUpperFront) {
@@ -506,12 +522,7 @@ public class MotionController extends AbstractNodeMain {
 					statpub.publish(statmsg);
 					Thread.sleep(1);
 				}
-				// If there was joystick input, thats the new target setpoint
-				// after we execute maneuver, setpoint is new heading from IMU so we hold that course
-				// and then wait for new input or hold course from last setting
-				Input = (float) eulers[0];
-				Compute();
-				Setpoint = Input;
+	
 				Thread.sleep(10);
 				++sequenceNumber;
 				if( DEBUG )
