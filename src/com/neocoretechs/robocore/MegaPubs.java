@@ -373,7 +373,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		
 			if( upSeq )
 				++sequenceNumber;
-			Thread.sleep(5);
+			Thread.sleep(10);
 		}
 	});  
 

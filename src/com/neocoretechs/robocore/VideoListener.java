@@ -349,7 +349,7 @@ public class VideoListener extends AbstractNodeMain
 			// Remove window title and borders
 	        frame.setUndecorated(true);
 	        // Make frame topmost
-	        //frame.setAlwaysOnTop(true);
+	        frame.setAlwaysOnTop(true);
 	        // Disable Alt+F4 on Windows
 	        frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 	        // Make frame full-screen

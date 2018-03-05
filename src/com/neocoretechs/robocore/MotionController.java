@@ -84,6 +84,7 @@ public class MotionController extends AbstractNodeMain {
 	
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
+	boolean holdBearing = false; // hold steering to current bearing
 
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
@@ -192,15 +193,48 @@ public class MotionController extends AbstractNodeMain {
 		*/
 		//
 		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
-		// The IMU calculates the theoretical speed for each wheel in the 0-1000 scale based on target point vs IMU yaw angle.
-		// If the joystick chimes in the target point becomes the stick position and the speed is modified by the Y value of the stick.
-		// We just have to reduce the IMU theoretical values (one value that is a positive speed on one wheel and negative for the other, or 0)
-		
+		// The code calculates the theoretical speed for each wheel in the 0-1000 scale based on target point vs IMU yaw angle.
+		// If the joystick chimes in the target point becomes the current course minus relative stick position,
+		// and the speed is modified by the Y value of the stick.
+		// Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
+		// correct for deviation an wheel slippage.
+		//
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Joy message) {
+				float speedL, speedR;
 				float[] axes = message.getAxes();
 				int[] buttons = message.getButtons();
+				// check for emergency stop, on X or A or green or lower button
+				if( buttons[6] != 0 ) {
+					System.out.println("**CANCELLED "+axes[2]);
+					return;
+				}
+				// If the button square or circle is depressed, rotate in place at stick position Y speed
+				if( buttons[7] != 0 ) { // left pivot
+					speedR = -axes[2] * 1000.0f;
+					speedL = -speedR;
+					// set it up to send
+					ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+					speedVals.add((int)speedL);
+					speedVals.add((int)speedR);
+					velpub.publish(setupPub(connectedNode, speedVals));
+					System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
+					return;
+				} else {
+					if( buttons[5] != 0 ) { // right
+						speedL = -axes[2] * 1000.0f;
+						speedR = -speedL;
+						// set it up to send
+						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+						speedVals.add((int)speedL);
+						speedVals.add((int)speedR);
+						velpub.publish(setupPub(connectedNode, speedVals));
+						System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
+						return;
+					}
+				}
+	
 				float radians = (float) Math.atan2(axes[2], axes[0]);
 				float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 				// horizontal axis is 0 to -180 degrees, we want 0 at the top
@@ -214,45 +248,57 @@ public class MotionController extends AbstractNodeMain {
 			    offsetDegrees = (offsetDegrees + 360) % 360;  
 			    // force into the minimum absolute value residue class, so that -180 < angle <= 180  
 			    if (offsetDegrees > 180)  
-			          offsetDegrees -= 360;  
-			    //bearingDegrees = (float) (bearingDegrees > 0.0 ? bearingDegrees : (360.0 + bearingDegrees)); // correct discontinuity
+			          offsetDegrees -= 360;
 				//if( DEBUG )
 				//	System.out.println("Axes:"+axes[0]+","+axes[2]+" deg:"+bearingDegrees+" rad:"+radians);
-				Setpoint = offsetDegrees;
-				// If there was joystick input, thats the new target setpoint
-				// after we execute maneuver, setpoint is new heading from IMU so we hold that course
-				// and then wait for new input or hold course from last setting
+				// If we are pressing the triangle, dont update the setpoint with IMU yaw, this has the effect of locking
+				// the course onto the absolute track relative to the way the robot is pointing offset by stick position
+				// rather than a continuous update of stick offset added to current orientation. so if you want the robot to track
+				// straight forward on its current orientation, hold triangle and push stick forward or back.
+			    if( buttons[4] != 0 ) {   
+					// is it initial button press? then log current bearing of IMU to hold to
+					if( !holdBearing ) {
+						holdBearing = true;
+						Setpoint = (float) eulers[0];
+						System.out.println("Stick absolute deg set:"+Setpoint);	
+					} // If we are pressing triangle, leave setpoint alone as initial bearing from IMU
+			    } else {
+			    	holdBearing = false;
+			    	Setpoint = offsetDegrees; // otherwise its the heading minus the joystick offset from 0
+			    }
+	
 				Input = (float) eulers[0]; //eulers[0] is yaw angle from IMU
 				Compute();
-				Setpoint = Input;
+	
 				// Output has the positive or negative difference in degrees (left or right offset)
 				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply
 				// We determine the radius of the turn potential by the forward speed desired (joystick Y)
-				// For instance if at 0 we can spin at radius .5 of wheelbase if necessary, while at speed 500 of 1000
-				// we can turn at 1 which is 90 degrees with inner wheel stationary
-				// and 1000 which is 2 robot widths radius of inner arc describes 90 degree traverse
+				// For instance if at 0 we can spin at radius .5 of wheelbase if necessary, while at speed 500 out of 1000
+				// we can turn at radius 1, which is 90 degrees with inner wheel stationary, and at 1000 out of 1000
+				// we turn inner radius 1 and outer radius 2 robot widths, a gradual arc.
 				// degrees/180 * PI * (r + WHEELBASE) = outer wheel arc length
 				// degrees/180 * PI * r = inner wheel arc length
 				// we compare the arc lengths as a ratio.
-				// We use the speed 1,0,-1 as a scale factor to add to wheelbase, so at max speed
-				// we extend radius by by one robot length, joystick y * 2
-				// so this assumes that at half speed we can still make a 90 degree turn
-				// deal with negative radius later, it means back up, turn wheels in reverse
-				float radius = (-axes[2]*2);
+				// We use the speed in the range 1,0,-1 as a scale factor to add to wheelbase, so at max speed
+				// we extend the radius by one robot length; joystick y + wheelbase making inner radius 1 and outer 2.
+				// This assumes that at half speed we can still make a 90 degree turn.
+				// We use value of IMU vs desired course to turn left or right via
+				// a plus or minus value from the Compute method set in the variable called Output.
+				float radius = Math.abs(axes[2]);
 				float arcin = (float) ((radius/180.0) * Math.PI * radius);
 				float arcout = (float) ((radius/180.0) * Math.PI * (radius + WHEELBASE));
 				// speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
 				// of wheels left and right
 				// axes[2] is y, value is -1 to 0 to 1 for some reason forward is negative on the stick
-				float speedR = -axes[2] * 1000.0f;
-				float speedL = speedR;
+				speedR = -axes[2] * 1000.0f;
+				speedL = speedR;
 				// Output is difference in degrees between setpoint and input
 				if( Output < 0.0f )
 					speedL *= (arcin/arcout);
 				else
 					if( Output > 0.0f )
 						speedR *= (arcin/arcout);
-				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|Output=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,Output,speedL,speedR);
+				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|Output=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,Output,speedL,speedR,holdBearing);
 				// set it up to send
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 				speedVals.add((int)speedL);
@@ -264,17 +310,14 @@ public class MotionController extends AbstractNodeMain {
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
-				if( DEBUG )
-					System.out.println("New nav msg:"+message);
-				
 				synchronized(navMutex) {
 					orientation.setX(message.getOrientation().getX());
 					orientation.setY(message.getOrientation().getY());
 					orientation.setZ(message.getOrientation().getZ());
 					orientation.setW(message.getOrientation().getW());
 					eulers = message.getOrientationCovariance();
-					System.out.println("Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
-					System.out.println("Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+					System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
+					System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 					try {
 					if( message.getAngularVelocity().getX() != angular.getX() ||
 						message.getAngularVelocity().getY() != angular.getY() ||
@@ -300,18 +343,8 @@ public class MotionController extends AbstractNodeMain {
 									isOverShock = true;
 								}
 							}
-							System.out.println();
-							System.out.println("Nav:");
-							System.out.println("Angular X:"+angular.getX());
-							System.out.println("Angular Y:"+angular.getY());
-							System.out.println("Angular Z:"+angular.getZ());
-							System.out.println("Linear X:"+linear.getX());
-							System.out.println("Linear Y:"+linear.getY());
-							System.out.println("Linear Z:"+linear.getZ());
-							
-							Input = (float) eulers[0];
-							Compute();
-							Setpoint = Input;
+							System.out.printf("Nav:Angular X:%f | Angular Y:%f | Angular Z:%f",angular.getX(),angular.getY(),angular.getZ());
+							System.out.printf("Nav:Linear X:%f | Linear Y:%f | Linear Z:%f",linear.getX(),linear.getY(),linear.getZ());
 					} else
 						isNav = false;
 				} catch (Throwable e) {
