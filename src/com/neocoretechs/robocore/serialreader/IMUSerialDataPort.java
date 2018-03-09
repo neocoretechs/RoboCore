@@ -550,7 +550,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     * @return A 4 byte array representing the above calibration status
 	     * @throws IOException 
 	     */
-	    private byte[] getCalibrationStatus() throws IOException {
+	    public byte[] getCalibrationStatus() throws IOException {
 	        // Return the calibration status register value.
 	        byte[] cal_status = read(BNO055_CALIB_STAT_ADDR, (byte)0x01);
 	        byte sys = (byte) ((byte)(cal_status[0] >> 6) & (byte)0x03);
@@ -560,7 +560,29 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        // Return the results as a tuple of all 3 values.
 	        return new byte[]{sys, gyro, accel, mag};
 	    }
-	    
+	    /**
+	     * Attempt to reset calibration by generating a reset then reading calibration data and calibrating
+	     * @throws IOException
+	     */
+	    public void resetCalibration() throws IOException {
+	        // set up BNO055
+	        // set config mode
+	    	set_mode(OPERATION_MODE_CONFIG);
+	        // now read without kruft
+	        write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true);
+	        readChipId();
+	    	reset();
+	    	// obtain calibration data if we can
+	    	byte[] calData = null;
+	    	try {
+	    		calData = readCalibration();
+	    		set_mode(OPERATION_MODE_CONFIG);
+	    		setCalibration(calData);
+	    	} catch(FileNotFoundException fnfe) {}
+	    	setNormalPowerNDOFMode();
+	        if( DEBUG ) 
+	        	System.out.println("BNO055 IMU is re-calibrated!");
+	    }
 	    /* Convert the value to an appropriate range (section 3.6.4) */
 	    
 	    /**
@@ -790,8 +812,12 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        // Go back to normal operation mode.
 	        //self._operation_mode()
 	    }
-	    
-	    public boolean reportCalibrationStatus() throws IOException {
+	    /**
+	     * Report the current calibration status.
+	     * @return the 4 byte array for system status, gyro, accel, mag 0-3
+	     * @throws IOException
+	     */
+	    public byte[] reportCalibrationStatus() throws IOException {
 	    	byte[] stat = getCalibrationStatus();
 	    	// system, gyro, accel, mag
 	    	if( stat[0] != 3 )
@@ -806,7 +832,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	if( stat[3] != 3 )
 	    		System.out.println("Magnetometer calibration less than optimal at:"+stat[3]+", results will be "+
 	    				(stat[3] == 0 ? "UNUSABLE" : stat[3] == 1 ? "INACCURATE" : stat[3] == 2 ? "MARGINAL" : "UNKNOWN"));
-	    	return (stat[0] == 3 && stat[1] == 3 && stat[2] == 3 && stat[3] == 3 );
+	
+	    	return stat;
 	    }
 
 	    /**
@@ -818,11 +845,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     * @throws IOException
 	     */
 	    public void calibrate() throws IOException {
-	    	while(!reportCalibrationStatus()) {
+	    	byte[] stat = reportCalibrationStatus();
+	    	while( stat[0] != 3 || stat[1] != 3 || stat[2] != 3 || stat[4] != 3 ){
 	    		System.out.println("PERFORM CALIBRATION KATA NOW!");
 	    		try {
 					Thread.sleep(100);
 				} catch (InterruptedException e) {}
+	    		stat = reportCalibrationStatus();
 	    	}
 	    	// loop exits when all status reaches 3, then we write after retrieving calibration bytes
 	    	System.out.println("<< CALIBRATION ACHIEVED! >>");

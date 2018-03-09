@@ -650,10 +650,10 @@ public class MotionController extends AbstractNodeMain {
 	static boolean inAuto = false;
 	static void Compute()
 	{
-	   if(!inAuto) return;
-	   long now = System.currentTimeMillis();
-	   long timeChange = (now - lastTime);
-	   if(timeChange >= SampleTime) {
+	   //if(!inAuto) return;
+	   //long now = System.currentTimeMillis();
+	   //long timeChange = (now - lastTime);
+	   //if(timeChange >= SampleTime) {
 	      // Compute all the working error variables
 	      float error = Setpoint - Input;
 	      // This is specific to pid control of heading
@@ -672,16 +672,16 @@ public class MotionController extends AbstractNodeMain {
 	      // We then store the sum of THAT. When the Ki changes, there no bump because 
 	      // all the old Kis are already in the bank so to speak. 
 	      // We get a smooth transfer with no additional math operations
-	      ITerm += (ki * error);
+	      //ITerm += (ki * error);
 	      // clamp the I term to prevent reset windup
 	      // If all we did was clamp the output, the Integral term would go back to growing and growing. 
 	      // Though the output would look nice during the step up, wed see that telltale lag on the step down
-	      if(ITerm > outMax) 
-	    	  ITerm = outMax;
-	      else 
-	    	  if(ITerm < outMin) 
-	    		  ITerm = outMin;
-	      float dInput = (Input - lastInput);
+	      //if(ITerm > outMax) 
+	    	//  ITerm = outMax;
+	      //else 
+	    	//  if(ITerm < outMin) 
+	    	//	  ITerm = outMin;
+	      //float dInput = (Input - lastInput);
 	 
 	      // Compute PID Output
 	      Output = kp * error ;//+ ITerm - kd * dInput;
@@ -695,13 +695,13 @@ public class MotionController extends AbstractNodeMain {
 	 	  */
 	      // Remember some variables for next time
 	      lastInput = Input;
-	      lastTime = now;
+	      //lastTime = now;
 	      //error is positive if current_heading > bearing (compass direction)
 	      //positive bias acts to reduce left motor speed, so bear left
 
 	      //System.out.printf("P = %f | I = %f | D = %f | Output = %f | pidErr = %f\n",error,ITerm,dInput,Output,error);
 	      System.out.printf("Output L = %f | Output R = %f | Err = %f\n",-Output, Output,error);
-	   }
+	   //}
 	}
 	 
 	static void SetTunings(float Kp, float Ki, float Kd)

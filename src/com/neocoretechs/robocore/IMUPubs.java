@@ -116,13 +116,14 @@ public void onStart(final ConnectedNode connectedNode) {
 	// down.
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
 		private int sequenceNumber, lastSequenceNumber;
-		long time1;
+		long time1, startTime;
 		org.ros.message.Time time = null;
 		@Override
 		protected void setup() {
 			sequenceNumber = 0;
 			lastSequenceNumber = 0;
 			time1 = System.currentTimeMillis();
+			startTime = time1;
 			imuPort = IMUSerialDataPort.getInstance();
 			try {
 				imuPort.displayRevision(imuPort.getRevision());
@@ -146,7 +147,15 @@ public void onStart(final ConnectedNode connectedNode) {
 					time1 = System.currentTimeMillis();
 					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber));
 					lastSequenceNumber = sequenceNumber;
-					imuPort.reportCalibrationStatus();
+					byte[] stat = imuPort.reportCalibrationStatus();
+					// If overall system status falls below 1, attempt an on-the-fly recalibration
+				    if( stat[0] <= 1 ) {
+				    	if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
+				    		startTime = time1; // start time is when we recalibrated last
+				    		imuPort.resetCalibration();
+				    		System.out.println("** SYSTEM RESET AND RECALIBRATED");
+				    	}
+				    }
 				}
 	
 				//MotionController.updatePID((float)eulers[0],  0.0f);
