@@ -44,6 +44,8 @@ import org.ros.node.topic.Subscriber;
  *   90   |  -90
  *    \   |   /
  *     180,-180
+ * The ratio of arc lengths of radius speed and speed+WHEELBASE, and turn angle theta from course difference 
+ * becomes the ratio of speeds at each wheel.
  * @author jg Copyright (C) NeoCoreTechs 2017,2018
  *
  */
@@ -60,7 +62,7 @@ public class MotionController extends AbstractNodeMain {
 	
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
-	public static float WHEELBASE = 100.0f;
+	public static float WHEELBASE = 1000.0f;
 	// deltas. 971, 136, 36 relatively normal values. seismic: last value swings from rangeTop -40 to 140
 	public static float[] SHOCK_BASELINE = { 971.0f, 136.0f, 36.0f};
 
@@ -198,6 +200,17 @@ public class MotionController extends AbstractNodeMain {
 		// and the speed is modified by the Y value of the stick.
 		// Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
 		// correct for deviation an wheel slippage.
+		// To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
+		// (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0 added to current heading forming theta.
+		// Theta may also be formed by button press and the difference in current heading and ongoing IMU headings for bearing on a forward course.
+		// We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
+		// of speeds of each wheel, time and speed being distance and all, and the fact that both wheels, being attached to the robot,
+		// have to arrive at essentially the same time after covering the desired distance based on desired speed.
+		// The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
+		// in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
+		// So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE and we generate 2 arc lengths that are taken
+		// as a ratio that is multiplied by the proper wheel depending on direction to reduce power in one wheel to affect turn.
+		// The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.
 		//
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 			@Override
@@ -283,12 +296,12 @@ public class MotionController extends AbstractNodeMain {
 				// add to wheelbase, so at max speed we extend the radius by one robot length; joystick y + WHEELBASE making 
 				// inner radius 1 'robot length unit' and outer radius 1 + WHEELBASE units.
 				// We dont really need absolute measurements, we just assign the values based on stick Y and a scale factor
-				// and the same scale factor to 1 'robot width unit'. We are multiplying the stick Y by 100 and WHEELBASE by 100
-				// but in reality we are using radius 0 to 1, and then 0 to 1 plus WHEELBASE.
+				// and the same scale factor to 1 'robot width unit'. We are multiplying the stick Y by 1000 and WHEELBASE by 1000
+				// but in reality we are using radius 0 to 1, and then 0 to 1 plus WHEELBASE scaled to finer granularity.
 				// This assumes that at half speed we can still make a 90 degree turn.
 				// We use value of IMU vs desired course to turn left or right via
 				// a plus or minus value from the Compute method set in the variable called Output.
-				float radius = Math.abs(axes[2]) * 100.0f;
+				float radius = Math.abs(axes[2]) * 1000.0f;
 				float arcin = (float) ((radius/180.0) * Math.PI * radius);
 				float arcout = (float) ((radius/180.0) * Math.PI * (radius + WHEELBASE));
 				// speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
