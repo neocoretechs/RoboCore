@@ -36,7 +36,7 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
     	CircularBlockingDeque<MachineReading> machineReadings = new CircularBlockingDeque<MachineReading>(16);
    
 		private String group;
-    	private static MachineBridge[] instance = null;
+    	private static volatile MachineBridge[] instance = null;
     	public static MachineBridge getInstance(String group) { 
     		if( instance == null ) {
     			instance = new MachineBridge[AsynchDemuxer.getTopicNames().length];

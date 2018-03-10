@@ -39,7 +39,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    private static int writeBufferHead = 0;
 	    private static int writeBufferTail = 0;
 	    
-	    private static ByteSerialDataPort instance = null;
+	    private static volatile ByteSerialDataPort instance = null;
 	    private static Object mutex = new Object();
 	    private boolean portOwned = false;
 	    

@@ -15,7 +15,7 @@ public class UltrasonicListener implements Runnable {
 	public static boolean DEBUG = false;
 	public static CircularBlockingDeque<Integer> data = new CircularBlockingDeque<Integer>(16);
 	private MachineBridge bridge;
-	private static UltrasonicListener instance = null;
+	private static volatile UltrasonicListener instance = null;
 	public static UltrasonicListener getInstance() { 
 		if(instance == null)
 			instance = new UltrasonicListener();

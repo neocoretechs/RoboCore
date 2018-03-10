@@ -53,7 +53,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private static int writeBufferHead = 0;
 	    private static int writeBufferTail = 0;
 	    
-	    private static IMUSerialDataPort instance = null;
+	    private static volatile IMUSerialDataPort instance = null;
 	    private static Object mutex = new Object();
 	    private boolean portOwned = false;
 	    

@@ -17,7 +17,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 public class MotorFaultListener implements Runnable {
 	public static CircularBlockingDeque<String> data = new CircularBlockingDeque<String>(16);
 	private static MachineBridge bridge;
-	private static MotorFaultListener instance = null;
+	private static volatile MotorFaultListener instance = null;
 	public static MotorFaultListener getInstance() {
 		if( instance == null )
 			instance = new MotorFaultListener();

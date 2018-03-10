@@ -12,7 +12,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  */
 public class BatteryListener implements Runnable {
 	public static CircularBlockingDeque<Float> data = new CircularBlockingDeque<Float>(16);
-	private static BatteryListener instance = null;
+	private static volatile BatteryListener instance = null;
 	private static MachineBridge bridge;
 	public static BatteryListener getInstance() {
 		if( instance == null ) {

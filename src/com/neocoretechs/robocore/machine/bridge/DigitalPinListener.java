@@ -23,7 +23,7 @@ public class DigitalPinListener implements Runnable {
 	public static int stopPin = 49;
 	public static CircularBlockingDeque<int[]> data = new CircularBlockingDeque<int[]>(4);
 	private static MachineBridge bridge;
-	private static DigitalPinListener instance = null;
+	private static volatile DigitalPinListener instance = null;
 	public static DigitalPinListener getInstance() { 
 		if(instance == null)
 			instance = new DigitalPinListener();

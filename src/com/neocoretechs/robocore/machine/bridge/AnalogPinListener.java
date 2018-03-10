@@ -14,7 +14,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 public class AnalogPinListener implements Runnable {
 	public static boolean DEBUG = true;
 	public static CircularBlockingDeque<int[]> data = new CircularBlockingDeque<int[]>(4);
-	private static AnalogPinListener instance = null;
+	private static volatile AnalogPinListener instance = null;
 	private static MachineBridge bridge;
 	
 	// analog inputs on pins 55,56 of Mega2560 as defined in startup.gcode for AsynchDemuxer
