@@ -60,7 +60,7 @@ public class MotionController extends AbstractNodeMain {
 	
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
-	public static float WHEELBASE = 1.0f;
+	public static float WHEELBASE = 100.0f;
 	// deltas. 971, 136, 36 relatively normal values. seismic: last value swings from rangeTop -40 to 140
 	public static float[] SHOCK_BASELINE = { 971.0f, 136.0f, 36.0f};
 
@@ -271,25 +271,30 @@ public class MotionController extends AbstractNodeMain {
 				Compute();
 	
 				// Output has the positive or negative difference in degrees (left or right offset)
-				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply
+				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
 				// We determine the radius of the turn potential by the forward speed desired (joystick Y)
 				// For instance if at 0 we can spin at radius .5 of wheelbase if necessary, while at speed 500 out of 1000
 				// we can turn at radius 1, which is 90 degrees with inner wheel stationary, and at 1000 out of 1000
-				// we turn inner radius 1 and outer radius 2 robot widths, a gradual arc.
+				// we turn inner radius 1 and outer radius 2 robot widths as defined by WHEELBASE, which is a gradual arc.
 				// degrees/180 * PI * (r + WHEELBASE) = outer wheel arc length
 				// degrees/180 * PI * r = inner wheel arc length
 				// we compare the arc lengths as a ratio.
-				// We use the speed in the range 1,0,-1 as a scale factor to add to wheelbase, so at max speed
-				// we extend the radius by one robot length; joystick y + wheelbase making inner radius 1 and outer 2.
+				// We use the speed in the range of the stick Y range (0 to 1) times a scale, and establish that as a scale factor to 
+				// add to wheelbase, so at max speed we extend the radius by one robot length; joystick y + WHEELBASE making 
+				// inner radius 1 'robot length unit' and outer radius 1 + WHEELBASE units.
+				// We dont really need absolute measurements, we just assign the values based on stick Y and a scale factor
+				// and the same scale factor to 1 'robot width unit'. We are multiplying the stick Y by 100 and WHEELBASE by 100
+				// but in reality we are using radius 0 to 1, and then 0 to 1 plus WHEELBASE.
 				// This assumes that at half speed we can still make a 90 degree turn.
 				// We use value of IMU vs desired course to turn left or right via
 				// a plus or minus value from the Compute method set in the variable called Output.
-				float radius = Math.abs(axes[2]);
+				float radius = Math.abs(axes[2]) * 100.0f;
 				float arcin = (float) ((radius/180.0) * Math.PI * radius);
 				float arcout = (float) ((radius/180.0) * Math.PI * (radius + WHEELBASE));
 				// speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
 				// of wheels left and right
 				// axes[2] is y, value is -1 to 0 to 1 for some reason forward is negative on the stick
+				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, which is our speed control range 
 				speedR = -axes[2] * 1000.0f;
 				speedL = speedR;
 				// Output is difference in degrees between setpoint and input

@@ -428,7 +428,7 @@ private void createController(ConcurrentHashMap<Identifier, Float> pubdata2, Con
 
 
 class fileReader implements Runnable {
-	public boolean shouldRun = true;
+	public volatile boolean shouldRun = true;
 	
 	@Override
 	public void run() {

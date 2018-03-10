@@ -115,7 +115,7 @@ import org.ros.internal.loader.CommandLineLoader;
  */
 public class PS3CombinedPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
-	private static boolean shouldRun = false; // main controller run method loop control
+	private static volatile boolean shouldRun = false; // main controller run method loop control
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
@@ -1140,7 +1140,7 @@ private sensor_msgs.Joy setupPub(ConnectedNode connectedNode, float[] taxes, int
 }
 
 class fileReader implements Runnable {
-	public boolean shouldRun = true;
+	public volatile boolean shouldRun = true;
 	
 	@Override
 	public void run() {

@@ -25,7 +25,7 @@ import org.openkinect.LEDStatus;
  */
 public class KinectReader implements Runnable{
 	private static boolean DEBUG = true;
-	private static boolean shouldRun = true;
+	private static volatile boolean shouldRun = true;
 	//private Device device = null;
 	//private Context context = null;
 	private static int sequenceNumber = 0;

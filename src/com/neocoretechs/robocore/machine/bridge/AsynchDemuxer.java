@@ -35,9 +35,9 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  */
 public class AsynchDemuxer implements Runnable {
 	private static boolean DEBUG = true;
-	private boolean shouldRun = true;
-	private boolean isRunning = false;
-	private static AsynchDemuxer instance = null;
+	private volatile boolean shouldRun = true;
+	private volatile boolean isRunning = false;
+	private volatile static AsynchDemuxer instance = null;
 	private AsynchDemuxer() {}
 	public static AsynchDemuxer getInstance() {
 		if( instance == null ) {

@@ -357,8 +357,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        public static class SerialReader implements Runnable 
 	        {
 	            InputStream in;
-	            public static boolean shouldRun = true;
-	            public boolean isRunning = false;
+	            public static volatile boolean shouldRun = true;
+	            public volatile boolean isRunning = false;
 	            public SerialReader(InputStream in)
 	            {
 	                this.in = in;
@@ -405,8 +405,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        public static class SerialWriter implements Runnable 
 	        {
 	            OutputStream out;
-	            public static boolean shouldRun = true;
-	            public boolean isRunning = false;
+	            public static volatile boolean shouldRun = true;
+	            public volatile boolean isRunning = false;
 	            public SerialWriter( OutputStream out )
 	            {
 	                this.out = out;

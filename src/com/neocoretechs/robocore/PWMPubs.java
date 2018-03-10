@@ -112,7 +112,7 @@ public void onStart(final ConnectedNode connectedNode) {
 }
 
 class fileReader implements Runnable {
-	public boolean shouldRun = true;
+	public volatile boolean shouldRun = true;
 	
 	@Override
 	public void run() {

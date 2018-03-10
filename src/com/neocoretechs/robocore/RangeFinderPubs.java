@@ -151,7 +151,7 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 
 
 class UltraPing implements Runnable {
-	public boolean shouldRun = true;
+	public volatile boolean shouldRun = true;
 	
 	@Override
 	public void run() {
