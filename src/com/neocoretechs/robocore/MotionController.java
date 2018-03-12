@@ -302,8 +302,8 @@ public class MotionController extends AbstractNodeMain {
 				// We use value of IMU vs desired course to turn left or right via
 				// a plus or minus value from the Compute method set in the variable called Output.
 				float radius = Math.abs(axes[2]) * 1000.0f;
-				float arcin = (float) ((radius/180.0) * Math.PI * radius);
-				float arcout = (float) ((radius/180.0) * Math.PI * (radius + WHEELBASE));
+				float arcin = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * radius);
+				float arcout = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 				// speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
 				// of wheels left and right
 				// axes[2] is y, value is -1 to 0 to 1 for some reason forward is negative on the stick
