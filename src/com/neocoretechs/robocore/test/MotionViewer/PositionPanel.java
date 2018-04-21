@@ -25,7 +25,7 @@ class PositionPanel extends JPanel
     */
         TitledBorder  tBorder = new TitledBorder("Actual and Dead " +
                                                   "Reckoned Position " +
-																									"(DR2 uses mean theta)");
+																									"(DR2 - mean theta)");
         setBorder(tBorder);
         setForeground(tBorder.getTitleColor());
 

@@ -846,7 +846,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     */
 	    public void calibrate() throws IOException {
 	    	byte[] stat = reportCalibrationStatus();
-	    	while( stat[0] != 3 || stat[1] != 3 || stat[2] != 3 || stat[4] != 3 ){
+	    	while( stat[0] != 3 || stat[1] != 3 || stat[2] != 3 || stat[3] != 3 ){
 	    		System.out.println("PERFORM CALIBRATION KATA NOW!");
 	    		try {
 					Thread.sleep(100);

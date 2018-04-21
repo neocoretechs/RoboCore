@@ -62,6 +62,11 @@ public class MotionController extends AbstractNodeMain {
 	
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
+	// If we call the wheelbase 1000, it implies that at maximum speed of 1000 it take 2 robot radii to turn 90 degrees
+	// This is because the radius of the inner wheel is from speed 0 to speed max, and the outer is from speed 0 to speed max plus wheelbase.
+	// Correspondingly at speed 1 the arc describing the inner wheel is 1 and the inner wheel turns at 1, or in place 
+	// and the arc describing the outer wheel has a radius equivalent to the wheelbase and the 
+	// outer wheel turns at the robot wheelbase through 90 degrees.
 	public static float WHEELBASE = 1000.0f;
 	// deltas. 971, 136, 36 relatively normal values. seismic: last value swings from rangeTop -40 to 140
 	public static float[] SHOCK_BASELINE = { 971.0f, 136.0f, 36.0f};
@@ -86,8 +91,19 @@ public class MotionController extends AbstractNodeMain {
 	
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
-	boolean holdBearing = false; // hold steering to current bearing
+	static boolean holdBearing = false; // hold steering to current bearing
 
+	static float pidOutput = 0;
+	static float kp = 0.9f;
+	static float ki = 0.0f;
+	static float kd = 1.5f;
+	static long lastTime = System.currentTimeMillis();
+	static float Input, Output, Setpoint, error;
+	static float ITerm, DTerm, lastInput, lastOutput;
+	static int SampleTime = 100; //.1 sec
+	static float outMin, outMax;
+	static boolean inAuto = false;
+	
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
 	Object navMutex = new Object();
@@ -273,6 +289,9 @@ public class MotionController extends AbstractNodeMain {
 					if( !holdBearing ) {
 						holdBearing = true;
 						Setpoint = (float) eulers[0];
+						Output = 0.0f;
+						ITerm = 0.0f;
+						DTerm = 0.0f;
 						System.out.println("Stick absolute deg set:"+Setpoint);	
 					} // If we are pressing triangle, leave setpoint alone as initial bearing from IMU
 			    } else {
@@ -282,7 +301,14 @@ public class MotionController extends AbstractNodeMain {
 	
 				Input = (float) eulers[0]; //eulers[0] is yaw angle from IMU
 				Compute();
-	
+				
+				// Speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
+				// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
+				// or on the computed derivation from desired course if a straight line course is set.
+				// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
+				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, which is our speed control range 
+				speedR = -axes[2] * 1000.0f;
+				speedL = speedR;
 				// Output has the positive or negative difference in degrees (left or right offset)
 				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
 				// We determine the radius of the turn potential by the forward speed desired (joystick Y)
@@ -302,21 +328,69 @@ public class MotionController extends AbstractNodeMain {
 				// We use value of IMU vs desired course to turn left or right via
 				// a plus or minus value from the Compute method set in the variable called Output.
 				float radius = Math.abs(axes[2]) * 1000.0f;
-				float arcin = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * radius);
-				float arcout = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
-				// speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
-				// of wheels left and right
-				// axes[2] is y, value is -1 to 0 to 1 for some reason forward is negative on the stick
-				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, which is our speed control range 
-				speedR = -axes[2] * 1000.0f;
-				speedL = speedR;
-				// Output is difference in degrees between setpoint and input
-				if( Output < 0.0f )
-					speedL *= (arcin/arcout);
-				else
-					if( Output > 0.0f )
-						speedR *= (arcin/arcout);
-				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|Output=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,Output,speedL,speedR,holdBearing);
+				float arcin, arcout;
+				//
+				// If holding an inertially guided course, check for the tolerance of error proportion
+				// from setpoint to current heading, if within that tolerance, use the pid values of the
+				// currently computed course deviation plus the scaled speed dependent radius from stick value to
+				// alter the motor speed to reduce cross track error and become critically damped.
+				//
+				if( holdBearing ) {
+					System.out.printf("Inertial Setpoint=%f | Hold=%b ", Setpoint, holdBearing);
+					// In auto
+					if( Math.abs(Output) <= 20.0 ) {
+						if( Output < 0.0f ) {
+							//float sscale = (float) (1.0/(Math.abs(axes[2]) < .1 ? .1 : Math.abs(axes[2])));
+							//if( pidOutput < 0.0f ) sscale = -sscale;
+							// goal is to increase power of right wheel
+							speedR += Math.abs(pidOutput);
+							// if we cap at max, use the difference to retard opposite
+							if( speedR > 1000.0f ) {
+								float speeDif = speedR - 1000.0f;
+								speedR = 1000.0f;
+								// left is decreased by the amount right went over max
+								speedL -= speeDif;
+								if( speedL < 0.0 ) speedL = 0.0f;
+								// and the robot is pivoting at max speed if everything was capped
+							}
+						} else {
+							if( Output > 0.0f ) {
+								// goal is net increase of left wheel power
+								speedL += Math.abs(pidOutput);
+								if( speedL > 1000.0f ) {
+									float speeDif = speedL - 1000.0f;
+									speedL = 1000.0f;
+									speedR -= speeDif;
+									if( speedR < 0.0) speedR = 0.0f;
+								}
+							}
+						}
+						System.out.printf("<=20 degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+					} else {
+						arcin = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * radius);
+						arcout = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+						// Output is difference in degrees between setpoint and input
+						if( Output < 0.0f )
+							speedL *= (arcin/arcout);
+						else
+							if( Output > 0.0f )
+								speedR *= (arcin/arcout);
+						System.out.printf(">20 degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+					}
+				} else {
+					// manual steering mode, use tight radii and a human integrator
+					arcin = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * radius);
+					arcout = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+					// Output is difference in degrees between setpoint and input
+					if( Output < 0.0f )
+						speedL *= (arcin/arcout);
+					else
+						if( Output > 0.0f )
+							speedR *= (arcin/arcout);
+					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+				}
+	
+				System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Hold=%b\n",Output, DTerm, ITerm, error, pidOutput, holdBearing);
 				// set it up to send
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 				speedVals.add((int)speedL);
@@ -471,8 +545,8 @@ public class MotionController extends AbstractNodeMain {
 			protected void setup() {
 				sequenceNumber = 0;
 				Setpoint = 0.0f; // 0 degrees yaw
+				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
-				SetTunings(1.0f, 1.0f, 0.5f);
 				SetOutputLimits(0.0f, 1000.0f);
 				SetMode(true);
 			}
@@ -610,62 +684,11 @@ public class MotionController extends AbstractNodeMain {
 		val.setData(vali);
 		return val;
 	}
-	
-	static float steadyError, previousError;
-	static long baset = System.currentTimeMillis();
-	static long samplet = 100; // millis sample time
-	static float kp = 0.0f;
-	static float ki = 1.0f;
-	static float kd = 0.0f;
-	static float pidOutput = 0;
-	// pid controller
-	static void updatePID(float current, float target)
-	{
-		float P; // proportional error
-		float I; // integral error
-		float D; // derivative error
-		// determine time interval
-		long difft = System.currentTimeMillis() - baset;
-		if( difft < samplet )
-			return;
-		baset = System.currentTimeMillis();
-		float dt = (float)difft;
-	    // calculate difference between actual and goal values
-	    float pidError = target - current;
-	    if (pidError < -270) pidError += 360;
-	    if (pidError >  270) pidError -= 360;
-	 
-	    // accumulates error over time
-	    steadyError += pidError*dt;
-	 
-	    // integrator windup compensation (saturates to actuator's output)
-	    if (steadyError < -10.0) steadyError = -10.0f;
-	    if (steadyError > 10.0) steadyError = 10.0f;
-	 
-	    P = kp*pidError; // proportional error
-	    I = ki*steadyError; // integral error
-	    D = kd*(pidError - previousError)/dt;  // derivative error
-	 
-	    // save current error
-	    previousError = pidError;
-	 
-	    pidOutput = P + I + D;  // calculate the PID output
-	    //pidOutput /= 100.0;  // scale it down to get it within the range of the actuator - probably needs tuning
-	    //if(pidOutput < -0.1) pidOutput = -0.1f;
-	    //if(pidOutput > 0.1) pidOutput = 0.1f;
-	 
-	    System.out.printf("P = %f | I = %f | D = %f | Output = %f | pidErr = %f | SteadyErr = %f\n",P,I,D,pidOutput,pidError,steadyError);
-	    // publish to the absolute motor control channel
-	    
-	}
-	// working variables
-	static long lastTime = System.currentTimeMillis();
-	static float Input, Output, Setpoint;
-	static float ITerm, lastInput;
-	//float kp, ki, kd;
-	static int SampleTime = 100; //.1 sec
-	static float outMin, outMax;
-	static boolean inAuto = false;
+	/**
+	 * Calculate the PID values, Output contains the proportion times scalar
+	 * DTerm is the derivative, ITerm is the integral of error variable.
+	 * pidOutput is output, PD here, so ITerm is held in reserve.
+	 */
 	static void Compute()
 	{
 	   //if(!inAuto) return;
@@ -673,7 +696,7 @@ public class MotionController extends AbstractNodeMain {
 	   //long timeChange = (now - lastTime);
 	   //if(timeChange >= SampleTime) {
 	      // Compute all the working error variables
-	      float error = Setpoint - Input;
+	      error = Setpoint - Input;
 	      // This is specific to pid control of heading
 	      // reduce the angle  
 	      error =  error % 360; 
@@ -687,7 +710,7 @@ public class MotionController extends AbstractNodeMain {
 	      // To change tuning parameters at runtime:
 	      // Instead of having the Ki live outside the integral, we bring it inside.
 	      // we take the error and multiply it by whatever the Ki is at that time. 
-	      // We then store the sum of THAT. When the Ki changes, there no bump because 
+	      // We then store the sum of THAT. When the Ki changes, there is no bump because 
 	      // all the old Kis are already in the bank so to speak. 
 	      // We get a smooth transfer with no additional math operations
 	      //ITerm += (ki * error);
@@ -700,9 +723,14 @@ public class MotionController extends AbstractNodeMain {
 	    	//  if(ITerm < outMin) 
 	    	//	  ITerm = outMin;
 	      //float dInput = (Input - lastInput);
-	 
-	      // Compute PID Output
+	      lastOutput = Output;
+	      // Compute PID Output, proportion
 	      Output = kp * error ;//+ ITerm - kd * dInput;
+	      // derivative
+	      DTerm = kd * (Output - lastOutput); // derivative
+	      // integral
+	      ITerm += error; // integrate the error
+	      ITerm = ki * (ITerm);
 	      //In addition to clamping the I-Term, we clamp the Output value so that it stays where wed expect it.
 	      /*
 	      if(Output > outMax) 
@@ -711,17 +739,21 @@ public class MotionController extends AbstractNodeMain {
 	    	  if(Output < outMin) 
 	    		  Output = outMin;
 	 	  */
-	      // Remember some variables for next time
 	      lastInput = Input;
 	      //lastTime = now;
 	      //error is positive if current_heading > bearing (compass direction)
-	      //positive bias acts to reduce left motor speed, so bear left
-
+	      // Use the PD form, set ki to 0.0 default
+	      pidOutput = Output + ITerm + DTerm;
 	      //System.out.printf("P = %f | I = %f | D = %f | Output = %f | pidErr = %f\n",error,ITerm,dInput,Output,error);
-	      System.out.printf("Output L = %f | Output R = %f | Err = %f\n",-Output, Output,error);
+	      //System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Auto = %b\n",Output, DTerm, ITerm, error, pidOutput, holdBearing);
 	   //}
 	}
-	 
+	/**
+	 * Currently we are using a non time based control, this is for reference.
+	 * @param Kp
+	 * @param Ki
+	 * @param Kd
+	 */
 	static void SetTunings(float Kp, float Ki, float Kd)
 	{
 	  float SampleTimeInSec = ((float)SampleTime)/1000.0f;
@@ -729,7 +761,10 @@ public class MotionController extends AbstractNodeMain {
 	  ki = Ki * SampleTimeInSec;
 	  kd = Kd / SampleTimeInSec;
 	}
-	 
+	 /**
+	  * If we used a time based control.
+	  * @param NewSampleTime
+	  */
 	static void SetSampleTime(int NewSampleTime)
 	{
 	   if( NewSampleTime > 0) {
@@ -740,7 +775,7 @@ public class MotionController extends AbstractNodeMain {
 	   }
 	}
 	/**
-	 * Set output limits to clamp I term and output
+	 * Set output limits to clamp Iterm and output
 	 * @param Min
 	 * @param Max
 	 */
@@ -772,7 +807,9 @@ public class MotionController extends AbstractNodeMain {
 	    }
 	    inAuto = isAuto;
 	}
-	 
+	/**
+	 * Init lastInput (last IMU), ITerm integral , and check for integral windup
+	 */
 	static void Initialize()
 	{
 	   lastInput = Input;
