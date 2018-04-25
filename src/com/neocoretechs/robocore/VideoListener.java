@@ -4,6 +4,8 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Graphics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.io.BufferedInputStream;
@@ -15,13 +17,18 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
+import javax.swing.border.Border;
+import javax.swing.border.TitledBorder;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -49,8 +56,11 @@ public class VideoListener extends AbstractNodeMain
     private BufferedImage image = null;
     private PlayerFrame displayPanel;
     private Object mutex = new Object();
+    private Object navMutex = new Object();
     ByteBuffer cb;
     byte[] buffer = new byte[0];
+    
+    double eulers[] = new double[]{0.0,0.0,0.0};
    
 	String mode = "display";
 	String outDir = "/";
@@ -81,6 +91,7 @@ public class VideoListener extends AbstractNodeMain
 			SwingUtilities.invokeLater(new Runnable() {
 			    public void run() {
 			        displayPanel = new PlayerFrame();
+			        displayPanel.paintPanel();
 			    }
 			});
 			ThreadPoolManager.getInstance().spin(new Runnable() {
@@ -100,6 +111,9 @@ public class VideoListener extends AbstractNodeMain
 			        	else {
 			        		synchronized(mutex) {
 			        		displayPanel.setLastFrame((java.awt.Image)/*d*/image);
+			        		synchronized(navMutex) {
+			        			displayPanel.setComputedValues(eulers[0], eulers[1], eulers[2]);
+			        		}
 			        	//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 						//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 			        		displayPanel.invalidate();
@@ -160,6 +174,8 @@ public class VideoListener extends AbstractNodeMain
 		}
 		final Subscriber<sensor_msgs.Image> imgsub =
 				connectedNode.newSubscriber("/sensor_msgs/Image", sensor_msgs.Image._TYPE);
+		final Subscriber<sensor_msgs.Imu> subsimu = 
+				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
@@ -260,9 +276,23 @@ public class VideoListener extends AbstractNodeMain
 		}
 		});
 		
+		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
+			@Override
+			public void onNewMessage(sensor_msgs.Imu message) {
+				synchronized(navMutex) {
+					eulers = message.getOrientationCovariance();
+					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
+					System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+				}
+			}
+
+		});
 	}
 	
-	
+	/**
+	 * Pump the HTTP image payload to the socket connected client, most likely a browser.
+	 * Designed to be spun up in its own thread.
+	 */
 	class StandardImageConnection implements Runnable {
 		private static final String BOUNDARY = "reposition";
 
@@ -292,41 +322,20 @@ public class VideoListener extends AbstractNodeMain
 	    public void run()
 		{
 			try {
-				//out.writeBytes("HTTP/1.0 200 OK\r\n");
-				//out.writeBytes("Server: RoboCore Image server\r\n");
-				//out.writeBytes("Content-Type: multipart/x-mixed-replace;boundary=" + BOUNDARY + "\r\n");
-				//out.writeBytes("\r\n");
-				//out.writeBytes("--" + BOUNDARY + "\n");
 				out.write("HTTP/1.0 200 OK\r\n".getBytes());
 				out.write("Server: RoboCore Image server\r\n".getBytes());
 				out.write(("Content-Type: multipart/x-mixed-replace;boundary=" + BOUNDARY + "\r\n").getBytes());
 				out.write("\r\n".getBytes());
 				out.write(("--" + BOUNDARY + "\n").getBytes());
-				//int bytesRead;
-				//byte[] barr = new byte[1024];
 				while (true) {
-						//out.writeBytes("Content-type: image/jpeg\n\n");
 						out.write("Content-type: image/jpeg\n\n".getBytes());
-						byte[] b = null;
-        				//try {
-							b = bqueue;//.takeFirst();
-						//} catch (InterruptedException e) {
-							// TODO Auto-generated catch block
-						//	e.printStackTrace();
-						//}
-						//ByteArrayInputStream fis = new ByteArrayInputStream(b);
-						//while ((bytesRead = fis.read(barr)) != -1) {
-						//	out.write(barr, 0, bytesRead);
-						//}
-						//fis.close();
+						byte[] b = bqueue;//.takeFirst();
         				out.write(b, 0, b.length);
-						//out.writeBytes("--" + BOUNDARY + "\n");
 						out.write(("--" + BOUNDARY + "\n").getBytes());
 						out.flush();
 				}
 			} catch (Exception ie) {
 				try {
-					//in.close();
 					out.close();
 					client.close();
 				} catch (IOException ie2) {
@@ -382,7 +391,167 @@ public class VideoListener extends AbstractNodeMain
 				lastFrame.flush();
 			}
 		}
-	}
+		
+		public void paintPanel(){
+		   /*
+		    * Use a "Grid Bag Layout" for this panel.  It will be laid
+		    * out like this:
+		    * Yaw:<actual Yaw> Roll:<actual roll> Pitch:<actual pitch>
+		    */
+		        GridBagLayout      gbl      = new GridBagLayout();
+		        GridBagConstraints gbc = new GridBagConstraints();
+		        setLayout(gbl);
+		        gbc.anchor=gbc.LAST_LINE_START;
+
+
+		   /*
+		    * Set up the "Yaw" label
+		    */
+		        gbc.fill=gbc.HORIZONTAL;
+		        JLabel xJLabel = new JLabel("Yaw:");
+		        gbc.gridx=1;
+		        gbc.gridy=1;
+		        gbc.weightx=0;
+		        gbc.weighty=1;
+		        gbl.setConstraints(xJLabel, gbc);
+		        add(xJLabel);
+
+		   /*
+		    * Set up the "Roll" label
+		    */
+		        JLabel yJLabel = new JLabel("Roll:");
+		        gbc.fill=gbc.HORIZONTAL;
+		        gbc.gridx=2;
+		        gbc.gridy=1;
+		        gbc.weightx=0;
+		        gbc.weighty=1;
+		        gbl.setConstraints(yJLabel, gbc);
+		        add(yJLabel);
+
+		   /*
+		    * Set up the "Pitch" label
+		    */
+		        JLabel aJLabel = new JLabel("Pitch:");
+		        gbc.fill=gbc.HORIZONTAL;
+		        gbc.gridx=3;
+		        gbc.gridy=1;
+		        gbc.weightx=0;
+		        gbc.weighty=1;
+		        gbl.setConstraints(aJLabel, gbc);
+		        add(aJLabel);
+
+		   
+		   /*
+		    * Set up the text field for the actual X coordinate
+		    */
+		        xField = new JTextField(8);
+		        xField.setEditable(false);
+		        xField.setHorizontalAlignment(JTextField.RIGHT);
+		        xField.setBorder(null);
+		        gbc.fill=gbc.NONE;
+		        gbc.gridx=1;
+		        gbc.gridy=1;
+		        gbc.weightx=1;
+		        gbc.weighty=1;
+		        gbl.setConstraints(xField, gbc);
+		        add(xField);
+
+		   /*
+		    * Set up the text field for the actual Y coordinate
+		    */
+		        yField = new JTextField(8);
+		        yField.setEditable(false);
+		        yField.setHorizontalAlignment(JTextField.RIGHT);
+		        yField.setBorder(null);
+		        gbc.fill=gbc.NONE;
+		        gbc.gridx=2;
+		        gbc.gridy=1;
+		        gbc.weightx=1;
+		        gbc.weighty=1;
+		        gbl.setConstraints(yField, gbc);
+		        add(yField);
+
+		   /*
+		    * Set up the text field for the actual angle (theta)
+		    */
+		        aField = new JTextField(8);
+		        aField.setEditable(false);
+		        aField.setHorizontalAlignment(JTextField.RIGHT);
+		        aField.setBorder(null);
+		        gbc.fill=gbc.NONE;
+		        gbc.gridx=3;
+		        gbc.gridy=1;
+		        gbc.weightx=1;
+		        gbc.weighty=1;
+		        gbl.setConstraints(aField, gbc);
+		        add(aField);
+
+
+		   /*
+		    * Create formatters for the coordinates and time (2 decimal places)
+		    * and the angles (1 decimal place, and the degrees symbol).
+		    */
+		        df = new DecimalFormat("####0.00");
+		        dfs = new DecimalFormat("+####0.00;-####0.00");
+		        da = new DecimalFormat("####0.0\u00b0");
+		        das = new DecimalFormat("+####0.0\u00b0;-####0.0\u00b0");
+
+		   /*
+		    * Initialize all displayed values to 0, except the angles,
+		    * which are set to 90 degrees.
+		    */
+		        setComputedValues(0.0, 0.0, 0.0);
+		    }
+
+
+		    /* Convert from radians to degrees, and coerce to range (-180, 180] */
+		    private double degree(double a){
+		        double d = a*180.0/Math.PI;
+		        if(d<0)
+		           d = -d;
+		        d = d - 360.0*Math.floor(d/360.0);
+		        if(a<0)
+		           d=360.0-d;
+		        if(d>180.0)
+		           d-=360;
+		        return d;
+		    }
+
+
+		    /**
+		     * Display both the true and dead-reckoned positions
+		     * (location and direction).
+		     */
+		    void setComputedValues(double yaw, double roll, double pitch)
+		    {
+		        xField.setText(da.format(yaw));
+		        yField.setText(da.format(roll));
+		        aField.setText(da.format(pitch));
+
+		    }
+
+		    /** Formatter for the coordinates and time (2 decimal places). */
+		    DecimalFormat df;
+
+		    /** Formatter for the errors (2 decimal places, allows shows + or -). */
+		    DecimalFormat dfs;
+
+		    /** Formatter for the angles (1 decimal place, and the "&deg;" symbol). */
+		    DecimalFormat da;
+
+		    /** Formatter for the angle errors (1 decimal place, allows include + or - 
+				 * and the "&deg;" symbol). */
+		    DecimalFormat das;
+
+		   /** Field for displaying the "true" X coordinate. */
+		    JTextField xField;
+
+		    /** Field for displaying the "true" Y coordinate. */
+		    JTextField yField;
+		    /** Field for displaying the "true" direction. */
+		    JTextField aField;
+
+		}
 	
 }
 
