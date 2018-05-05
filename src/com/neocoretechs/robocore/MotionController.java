@@ -93,16 +93,18 @@ public class MotionController extends AbstractNodeMain {
 	boolean init = true;
 	static boolean holdBearing = false; // hold steering to current bearing
 
+	static float speedL, speedR;
 	static float pidOutput = 0;
 	static float kp = 0.9f;
-	static float ki = 0.0f;
-	static float kd = 1.5f;
+	static float ki = .85f;
+	static float kd = 3.0f;
 	static long lastTime = System.currentTimeMillis();
 	static float Input, Output, Setpoint, error;
-	static float ITerm, DTerm, lastInput, lastOutput;
+	static float ITerm, DTerm, lastInput, lastError;
 	static int SampleTime = 100; //.1 sec
 	static float outMin, outMax;
 	static boolean inAuto = false;
+	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
 	
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
@@ -231,7 +233,6 @@ public class MotionController extends AbstractNodeMain {
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Joy message) {
-				float speedL, speedR;
 				float[] axes = message.getAxes();
 				int[] buttons = message.getButtons();
 				// check for emergency stop, on X or A or green or lower button
@@ -338,35 +339,23 @@ public class MotionController extends AbstractNodeMain {
 				if( holdBearing ) {
 					System.out.printf("Inertial Setpoint=%f | Hold=%b ", Setpoint, holdBearing);
 					// In auto
-					if( Math.abs(Output) <= 20.0 ) {
-						if( Output < 0.0f ) {
-							//float sscale = (float) (1.0/(Math.abs(axes[2]) < .1 ? .1 : Math.abs(axes[2])));
-							//if( pidOutput < 0.0f ) sscale = -sscale;
-							// goal is to increase power of right wheel
-							speedR += Math.abs(pidOutput);
-							// if we cap at max, use the difference to retard opposite
-							if( speedR > 1000.0f ) {
-								float speeDif = speedR - 1000.0f;
-								speedR = 1000.0f;
-								// left is decreased by the amount right went over max
-								speedL -= speeDif;
-								if( speedL < 0.0 ) speedL = 0.0f;
-								// and the robot is pivoting at max speed if everything was capped
-							}
+					if( Math.abs(Output) <= 30.0 ) {
+						if( Output < 0.0f ) { // increase right wheel power goal
+							//rightPid(axes);
+							rightAngle(radius); // decrease left wheel power
 						} else {
-							if( Output > 0.0f ) {
-								// goal is net increase of left wheel power
-								speedL += Math.abs(pidOutput);
-								if( speedL > 1000.0f ) {
-									float speeDif = speedL - 1000.0f;
-									speedL = 1000.0f;
-									speedR -= speeDif;
-									if( speedR < 0.0) speedR = 0.0f;
-								}
+							if( Output > 0.0f ) { // increase left wheel power goal
+								//leftPid(axes);
+								leftAngle(radius); // decrease right wheel power
+							} else {
+								// we are critically damped, set integral to 0
+								ITerm = 0;
 							}
 						}
-						System.out.printf("<=20 degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+						System.out.printf("<=30 degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
+						// Exceeded tolerance, proceed to geometric solution, reset integral windup
+						ITerm = 0;
 						arcin = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * radius);
 						arcout = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 						// Output is difference in degrees between setpoint and input
@@ -375,7 +364,7 @@ public class MotionController extends AbstractNodeMain {
 						else
 							if( Output > 0.0f )
 								speedR *= (arcin/arcout);
-						System.out.printf(">20 degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+						System.out.printf(">30 degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
@@ -396,6 +385,98 @@ public class MotionController extends AbstractNodeMain {
 				speedVals.add((int)speedL);
 				speedVals.add((int)speedR);
 				velpub.publish(setupPub(connectedNode, speedVals));		
+			}
+			/**
+			 * Increase power of right wheel based on PID results
+			 * If we hit max we are going to decrease power to left wheel by splitting the difference
+			 * of leftover speed on right applied to left wheel decrease. whether these are equivalent in reality is
+			 * left to evaluation.
+			 * @param axes
+			 */
+			private void rightPid(float[] axes) {
+				if( !outputNeg ) { // prevent integral windup by checking when track is crossed via sign of course diff changing
+					ITerm = 0;
+				}
+				outputNeg = true;
+				// goal is to increase power of right wheel
+				// We scale it by speed with the assumption that at full speed,
+				// the values from PID represent the ones necessary to work at top speed of 1000.
+				speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.7) );
+				// if we cap at max, use the difference to retard opposite
+				if( speedR > 1000.0f ) {
+					float speeDif = speedR - 1000.0f;
+					speedR = 1000.0f;
+					// left is decreased by the amount right went over max
+					speedL -= speeDif;
+					if( speedL < 0.0 ) speedL = 0.0f;
+					// and the robot is pivoting at max speed if everything was capped
+				}
+			}
+			/**
+			 * Increase power of left wheel base don PID results. If we max out we are going to apply the leftover
+			 * power over maximum to decreasing the right wheel speed.
+			 * @param axes
+			 */
+			private void leftPid(float[] axes) {
+				if( outputNeg ) {
+					ITerm = 0;
+				}
+				outputNeg = false;
+				// goal is net increase of left wheel power
+				// We scale it by speed with the assumption that at full speed,
+				// the values from PID represent the ones necessary to work at top speed of 1000.
+				speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.7) );
+				if( speedL > 1000.0f ) {
+					float speeDif = speedL - 1000.0f;
+					speedL = 1000.0f;
+					speedR -= speeDif;
+					if( speedR < 0.0) speedR = 0.0f;
+				}
+			}
+			/**
+			 * Apply a solution in triangles as we do with solution in arcs. This presupposes we are within tolerance such that
+			 * the long leg is not much beyond the 'WHEELBASE' when we finally compute it, 
+			 * WHEELBASE is not really the physical, actual wheelbase, but a scaling value to get us into our
+			 * 0-1000 speed range.
+			 */
+			private void rightAngle(float radius) {
+				// maintain our PID as well
+				if( !outputNeg ) { // prevent integral windup by checking when track is crossed via sign of course diff changing
+					ITerm = 0;
+				}
+				outputNeg = true;
+				// compute chord of course deviation, this is short leg of triangle.
+				// 'radius' is our scaled speed, it does not point directly forward but is used for arc cord and so it is an angle.
+				// might need to scale
+				// chord is 2Rsin(theta/2) ( we convert to radians first)
+				double chord = 2 * (radius*1.1) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
+				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
+				// square root of sum of square of base and leg
+				double hypot = Math.sqrt((chord*chord) + (radius*radius));
+				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
+				// travel the length of base and the other needs to travel length of hypotenuse
+				System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,(radius/hypot),holdBearing);
+				speedL *= (radius/hypot);
+			}
+			
+			private void leftAngle(float radius) {
+				// preserve PID integral
+				if( outputNeg ) {
+					ITerm = 0;
+				}
+				outputNeg = false;
+				// compute chord of course deviation, this is short leg of triangle.
+				// 'radius' is our scaled speed, it does not point directly forward but is used for arc cord and so it is an angle.
+				// might need to scale
+				// chord is 2Rsin(theta/2)
+				double chord = 2 * (radius*1.1) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
+				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
+				// square root of sum of square of base and leg
+				double hypot = Math.sqrt((chord*chord) + (radius*radius));
+				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
+				// travel the length of base and the other needs to travel length of hypotenuse
+				System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,(radius/hypot),holdBearing);
+				speedR *= (radius/hypot);
 			}
 		});
 		
@@ -687,7 +768,7 @@ public class MotionController extends AbstractNodeMain {
 	/**
 	 * Calculate the PID values, Output contains the proportion times scalar
 	 * DTerm is the derivative, ITerm is the integral of error variable.
-	 * pidOutput is output, PD here, so ITerm is held in reserve.
+	 * pidOutput is output.
 	 */
 	static void Compute()
 	{
@@ -695,6 +776,7 @@ public class MotionController extends AbstractNodeMain {
 	   //long now = System.currentTimeMillis();
 	   //long timeChange = (now - lastTime);
 	   //if(timeChange >= SampleTime) {
+	      lastError = error;
 	      // Compute all the working error variables
 	      error = Setpoint - Input;
 	      // This is specific to pid control of heading
@@ -707,42 +789,34 @@ public class MotionController extends AbstractNodeMain {
 	          error -= 360;  
 		  //if (error < -270) error += 360;
 		  //if (error >  270) error -= 360;  
-	      // To change tuning parameters at runtime:
-	      // Instead of having the Ki live outside the integral, we bring it inside.
-	      // we take the error and multiply it by whatever the Ki is at that time. 
-	      // We then store the sum of THAT. When the Ki changes, there is no bump because 
-	      // all the old Kis are already in the bank so to speak. 
-	      // We get a smooth transfer with no additional math operations
-	      //ITerm += (ki * error);
-	      // clamp the I term to prevent reset windup
-	      // If all we did was clamp the output, the Integral term would go back to growing and growing. 
-	      // Though the output would look nice during the step up, wed see that telltale lag on the step down
-	      //if(ITerm > outMax) 
-	    	//  ITerm = outMax;
-	      //else 
-	    	//  if(ITerm < outMin) 
-	    	//	  ITerm = outMin;
+
 	      //float dInput = (Input - lastInput);
-	      lastOutput = Output;
 	      // Compute PID Output, proportion
 	      Output = kp * error ;//+ ITerm - kd * dInput;
 	      // derivative
-	      DTerm = kd * (Output - lastOutput); // derivative
+	      DTerm = kd * (error - lastError);
 	      // integral
 	      ITerm += error; // integrate the error
-	      ITerm = ki * (ITerm);
-	      //In addition to clamping the I-Term, we clamp the Output value so that it stays where wed expect it.
-	      /*
-	      if(Output > outMax) 
-	    	  Output = outMax;
-	      else 
-	    	  if(Output < outMin) 
-	    		  Output = outMin;
-	 	  */
+	      ITerm = ki * ITerm; // then scale it, this limits windup
+	      //ITerm += (ki * error);
+	      // clamp the I term to prevent reset windup
+	      if( ITerm > 0 ) {
+	    	  if(ITerm > outMax) 
+	    		  ITerm = outMax;
+	    	  else 
+	    		  if(ITerm < outMin) 
+	    			  ITerm = outMin;
+	      } else {
+	    	  if(-ITerm > outMax )
+	    		  ITerm = -outMax;
+	    	  else
+	    		  if(-ITerm < outMin)
+	    			  ITerm = -outMin;
+	      }
 	      lastInput = Input;
 	      //lastTime = now;
 	      //error is positive if current_heading > bearing (compass direction)
-	      // Use the PD form, set ki to 0.0 default
+	      // To Use the PD form, set ki to 0.0 default, thus eliminating integrator
 	      pidOutput = Output + ITerm + DTerm;
 	      //System.out.printf("P = %f | I = %f | D = %f | Output = %f | pidErr = %f\n",error,ITerm,dInput,Output,error);
 	      //System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Auto = %b\n",Output, DTerm, ITerm, error, pidOutput, holdBearing);
@@ -820,4 +894,16 @@ public class MotionController extends AbstractNodeMain {
 		   if(ITerm < outMin) 
 			   ITerm = outMin;
 	}
+	/*
+	 // Create Roll Pitch Yaw Angles from Quaternions 
+	double yy = quat.y() * quat.y(); // 2 Uses below
+	double roll = atan2(2 * (quat.w() * quat.x() + quat.y() * quat.z()), 1 - 2*(quat.x() * quat.x() + yy));
+	double pitch = asin(2 * quat.w() * quat.y() - quat.x() * quat.z());
+	double yaw = atan2(2 * (quat.w() * quat.z() + quat.x() * quat.y()), 1 - 2*(yy+quat.z() * quat.z()));
+
+	//Convert Radians to Degrees 
+	float rollDeg  = 57.2958 * roll;
+	float pitchDeg = 57.2958 * pitch;
+	float yawDeg   = 57.2958 * yaw;
+	 */
 }

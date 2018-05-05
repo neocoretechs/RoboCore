@@ -606,13 +606,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 			short zAccl = (short)((data[4] & 0xFF)
 					| ((data[5] << 8) & 0xFF00));
 	    	// Convert the data
-			/* 1m/s^2 = 100 LSB */
+			/* 1m/s^2 = 100 LSB, to get readings in mg div by 1 */
 	    	return new int[]{xAccl/100, yAccl/100, zAccl/100};
 	    }
 	    
 	    /**
 	     * Read the magnetometer sensor data
-	     * @return x/Y/Z magnetic field strength of axis in microteslas
+	     * @return X/Y/Z magnetic field strength of axis in microteslas
 	     * @throws IOException
 	     */
 	    public int[] readMag() throws IOException {
@@ -658,8 +658,9 @@ public class IMUSerialDataPort implements DataPortInterface {
 						| ((data[3] << 8) & 0xFF00));
 			short zGyro = (short)((data[4] & 0xFF)
 						| ((data[5] << 8) & 0xFF00));
-	    	// Convert the data
-	    	return new int[]{xGyro/900, yGyro/900, zGyro/900};
+	    	// Convert the data, 900 is RPS, radians per second, 16 is DPS, degrees per second
+	    	//return new int[]{xGyro/900, yGyro/900, zGyro/900};
+	    	return new int[]{xGyro/16, yGyro/16, zGyro/16};
 	    }
 	    
 	    /**
