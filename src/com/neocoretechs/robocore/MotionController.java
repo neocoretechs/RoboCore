@@ -46,6 +46,16 @@ import org.ros.node.topic.Subscriber;
  *     180,-180
  * The ratio of arc lengths of radius speed and speed+WHEELBASE, and turn angle theta from course difference 
  * becomes the ratio of speeds at each wheel.
+ * When in autonomous mode we use the same steering method for large granularity turns. At mid granularity we compute a solution
+ * using a right triangle whose base is speed and whose hypotenuse is computed from scaled speed and course deviation. For the short leg,
+ * course deviation and half wheelbase form a chord with radius of WHEELBASE/2 and angle of course deviation: 2*(wheelbase/2)*sin(deviation/2). 
+ * The ratio of hypotenuse to base is our distance and hence speed for each wheel as we do with the arc solution.
+ * finally at the smallest granularity a PID controller takes over to maintain critical crosstrack damping.
+ * This methodology is analogous to a human driver, who upon leaving the road and entering median, must compute a wide arc to re-enter
+ * the roadway, then perform adjustments that bring them to a tangent of the center of the lane, and from there perform a series
+ * of small corrections to stay on course. Regardless of the amount the machine is knocked off course it can find its way back to the
+ * proper heading through a circuitous route gradually refined to require only small correction.
+ * 
  * @author jg Copyright (C) NeoCoreTechs 2017,2018
  *
  */
@@ -229,6 +239,11 @@ public class MotionController extends AbstractNodeMain {
 		// So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE and we generate 2 arc lengths that are taken
 		// as a ratio that is multiplied by the proper wheel depending on direction to reduce power in one wheel to affect turn.
 		// The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.
+		// The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
+		// The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
+		// for the inner arc and the hypotenuse computed by the base and chord formed from course deviation and half wheelbase for the outer arc.
+		// The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
+		// us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.
 		//
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 			@Override
@@ -332,27 +347,41 @@ public class MotionController extends AbstractNodeMain {
 				float arcin, arcout;
 				//
 				// If holding an inertially guided course, check for the tolerance of error proportion
-				// from setpoint to current heading, if within that tolerance, use the pid values of the
-				// currently computed course deviation plus the scaled speed dependent radius from stick value to
+				// from setpoint to current heading, if within a lower tolerance, use the pid values of the
+				// currently computed course deviation to
 				// alter the motor speed to reduce cross track error and become critically damped.
+				// If we are at the higher tolerance, compute a solution based on triangles that brings us on a tangent course
+				// to the crosstrack. The base of a right triangle is the speed plus half wheelbase, the hypotenuse is computed from
+				// the chord of the magnitude error offset from track and the base (speed). The ratio of base to hypotenuse is used
+				// based on required distance traveled for each wheel and the opposite wheel is slowed by that proportion
+				// just as we do for a solution of arcs.
+				// The chord leg of the triangle is computed based on half wheelbase as radius via 2*R*sin(theta/2) with theta
+				// being crosstrack deviation.
 				//
 				if( holdBearing ) {
 					System.out.printf("Inertial Setpoint=%f | Hold=%b ", Setpoint, holdBearing);
 					// In auto
-					if( Math.abs(Output) <= 30.0 ) {
+					if( Math.abs(Output) <= 45.0 ) {
 						if( Output < 0.0f ) { // increase right wheel power goal
-							//rightPid(axes);
-							rightAngle(radius); // decrease left wheel power
+							// If between -15 and 0, use PID, between -16 and -30 use triangle solution
+							if( Output >= -5.0 ) {
+								rightPid(axes);
+							} else {
+								rightAngle(radius); // decrease left wheel power
+							}
 						} else {
 							if( Output > 0.0f ) { // increase left wheel power goal
-								//leftPid(axes);
-								leftAngle(radius); // decrease right wheel power
+								if( Output <= 5.0) {
+									leftPid(axes);
+								} else {
+									leftAngle(radius); // decrease right wheel power
+								}
 							} else {
 								// we are critically damped, set integral to 0
 								ITerm = 0;
 							}
 						}
-						System.out.printf("<=30 degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+						System.out.printf("<=45 degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
 						// Exceeded tolerance, proceed to geometric solution, reset integral windup
 						ITerm = 0;
@@ -364,7 +393,7 @@ public class MotionController extends AbstractNodeMain {
 						else
 							if( Output > 0.0f )
 								speedR *= (arcin/arcout);
-						System.out.printf(">30 degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+						System.out.printf(">45 degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
@@ -401,7 +430,7 @@ public class MotionController extends AbstractNodeMain {
 				// goal is to increase power of right wheel
 				// We scale it by speed with the assumption that at full speed,
 				// the values from PID represent the ones necessary to work at top speed of 1000.
-				speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.7) );
+				speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.0) );
 				// if we cap at max, use the difference to retard opposite
 				if( speedR > 1000.0f ) {
 					float speeDif = speedR - 1000.0f;
@@ -425,7 +454,7 @@ public class MotionController extends AbstractNodeMain {
 				// goal is net increase of left wheel power
 				// We scale it by speed with the assumption that at full speed,
 				// the values from PID represent the ones necessary to work at top speed of 1000.
-				speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.7) );
+				speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.0) );
 				if( speedL > 1000.0f ) {
 					float speeDif = speedL - 1000.0f;
 					speedL = 1000.0f;
@@ -434,49 +463,40 @@ public class MotionController extends AbstractNodeMain {
 				}
 			}
 			/**
-			 * Apply a solution in triangles as we do with solution in arcs. This presupposes we are within tolerance such that
-			 * the long leg is not much beyond the 'WHEELBASE' when we finally compute it, 
-			 * WHEELBASE is not really the physical, actual wheelbase, but a scaling value to get us into our
-			 * 0-1000 speed range.
+			 * Apply a solution in triangles as we do with solution in arcs to reduce left wheel speed.
+			 *  This presupposes we are within tolerance.
 			 */
 			private void rightAngle(float radius) {
-				// maintain our PID as well
-				if( !outputNeg ) { // prevent integral windup by checking when track is crossed via sign of course diff changing
-					ITerm = 0;
-				}
-				outputNeg = true;
+				// Mitigate integral windup
+				ITerm = 0;
 				// compute chord of course deviation, this is short leg of triangle.
-				// 'radius' is our scaled speed, it does not point directly forward but is used for arc cord and so it is an angle.
-				// might need to scale
 				// chord is 2Rsin(theta/2) ( we convert to radians first)
-				double chord = 2 * (radius*1.1) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
-				double hypot = Math.sqrt((chord*chord) + (radius*radius));
+				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
-				System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,(radius/hypot),holdBearing);
-				speedL *= (radius/hypot);
+				System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
+				speedL *= ((radius+(WHEELBASE/2))/hypot);
 			}
-			
+			/**
+			 * Apply a solution in triangles as we do with solution in arcs to reduce right wheel speed.
+			 * This presupposes we are within tolerance.
+			 */
 			private void leftAngle(float radius) {
-				// preserve PID integral
-				if( outputNeg ) {
-					ITerm = 0;
-				}
-				outputNeg = false;
+				// Mitigate integral windup
+				ITerm = 0;
 				// compute chord of course deviation, this is short leg of triangle.
-				// 'radius' is our scaled speed, it does not point directly forward but is used for arc cord and so it is an angle.
-				// might need to scale
-				// chord is 2Rsin(theta/2)
-				double chord = 2 * (radius*1.1) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
+				// chord is 2Rsin(theta/2), R is half wheelbase so we assume our robot is roughly 'square'
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
-				double hypot = Math.sqrt((chord*chord) + (radius*radius));
+				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
-				System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,(radius/hypot),holdBearing);
-				speedR *= (radius/hypot);
+				System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
+				speedR *= ((radius+(WHEELBASE/2))/hypot);
 			}
 		});
 		
