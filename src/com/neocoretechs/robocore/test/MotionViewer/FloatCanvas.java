@@ -207,14 +207,13 @@ public class FloatCanvas extends Canvas implements ComponentListener {
      * this function will not be called a second time.
      */
     void grabFontInfo() {
-   Graphics g = getGraphics();
-
+    	Graphics g = getGraphics();
         fontMetric = g.getFontMetrics(labelFont);
         fontHeight = fontMetric.getAscent();
     }
 
     /**
-     * setLimits() sets the floating-point boundariesof the plot area,
+     * setLimits() sets the floating-point boundaries of the plot area,
      * rounded out to one decimal place (e.g., 1.00 would be treated as 1.00,
      * but 1.01 would become 1.1).
      */

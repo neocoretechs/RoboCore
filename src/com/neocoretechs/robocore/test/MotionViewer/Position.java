@@ -43,4 +43,8 @@ class Position extends FPoint {
         theta = newTheta;
     }
     
+    @Override
+    public String toString() {
+    	return super.toString()+" theta="+theta;
+    }
 }

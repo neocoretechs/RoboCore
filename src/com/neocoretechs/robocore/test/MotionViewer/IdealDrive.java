@@ -25,7 +25,7 @@ public class IdealDrive {
      * The width of the robot's body--i.e., the distance
      * between the drive wheels.
      */
-    double bodyWidth = 0.7;
+    public static double bodyWidth = 0.7;
 
     /**
      * The velocity of the left drive wheel.
@@ -184,11 +184,16 @@ public class IdealDrive {
 
     /**
      * Return the velocity of the left drive wheel.
-     * <P>See the note at the top of this file for information
-     * about measurement units.</P>
+     * runData[0][numSteps] = err;
+     * runData[1][numSteps] = left;
+     * runData[2][numSteps] = right;
+     * runData[3][numSteps] = dterm;
+     * runData[4][numSteps] = iterm;
+     * runData[5][numSteps] = pid;
      */
     public double getVelocityLeft(double t) {
-        return velocityLeft+t*accelerationLeft;
+        //return velocityLeft+t*accelerationLeft;
+    	return MotionApp.runData[1][(int) t];
     }
 
     /**
@@ -197,7 +202,8 @@ public class IdealDrive {
      * about measurement units.</P>
      */
     public double getVelocityRight(double t) {
-        return velocityRight+t*accelerationRight;
+        //return velocityRight+t*accelerationRight;
+    	return MotionApp.runData[2][(int) t];
     }
 
     /**
@@ -405,7 +411,7 @@ public class IdealDrive {
            if (t == 0) {
                  cachedTime = 0;
            }
-
+           /*
            double A = (accelerationLeft + accelerationRight) /2;
            double B = (velocityLeft + velocityRight) /2;
            double C = (accelerationRight - accelerationLeft) /(2 * bodyWidth);
@@ -454,36 +460,34 @@ public class IdealDrive {
            finalY = deltaT*finalY/3.0d;
 
            //End of simpson's rule...
-
+	*/
            cachedTime = t;
 
            FPoint location = new FPoint();
 
-           location.x = finalX;
-           location.y = finalY;
+           location.x = MotionApp.centerPoints[(int) t].x;//finalX;
+           location.y = MotionApp.centerPoints[(int) t].y;//finalY;
 
            location = location.add(initialPos);
 
-            return new Position(location.x, location.y, theta);
+           return new Position(location.x, location.y, MotionApp.plotData[(int) t].theta);
     }
 
     /**
      * Use dead-reckoning, as described in Gary Lucas' paper, to
      * estimate where the robot will be after time t.
-     */
+     
     public Position DeadReckonAt(double t) {
-        /*
-         * First, calculate the distance traveled by each wheel:
-         */
-
+        
+         // First, calculate the distance traveled by each wheel:
         double distanceLeft = velocityLeft * t;
         double distanceRight = velocityRight * t;
 
-        /*
-         * Now, calculate the final angle, and use that to estimate
-         * the final position.  See Gary Lucas' paper for derivations
-         * of the equations.
-         */
+        //
+        // Now, calculate the final angle, and use that to estimate
+        // the final position.  See Gary Lucas' paper for derivations
+        // of the equations.
+        ///
         double theta = initialPos.theta + (distanceRight - distanceLeft)
             / bodyWidth;
         double x = initialPos.x + (distanceRight + distanceLeft)
@@ -493,13 +497,14 @@ public class IdealDrive {
 
         return new Position(x, y, theta);
     }
+	*/
 
     /**
      * Given the position of the robot (i.e., location and direction),
      * return the location of the left wheel.  This is used for
      * drawing the robot, or its path.
      */
-    FPoint LeftWheelLoc(Position p) {
+    public static FPoint LeftWheelLoc(Position p) {
         FPoint result = new FPoint();
 
         result.x = p.x + bodyWidth/2 * Math.cos(p.theta + Math.PI/2);
@@ -513,7 +518,7 @@ public class IdealDrive {
      * return the location of the right wheel.  This is used for
      * drawing the robot, or its path.
      */
-    FPoint RightWheelLoc(Position p) {
+    public static FPoint RightWheelLoc(Position p) {
         FPoint result = new FPoint();
 
         result.x = p.x + bodyWidth/2 * Math.cos(p.theta - Math.PI/2);
@@ -527,7 +532,7 @@ public class IdealDrive {
      * return the location of its nose (i.e., the "front".  This is used
      * for drawing the robot, or its path.
      */
-    FPoint NoseLoc(Position p) {
+    public static FPoint NoseLoc(Position p) {
         FPoint result = new FPoint();
 
         /*

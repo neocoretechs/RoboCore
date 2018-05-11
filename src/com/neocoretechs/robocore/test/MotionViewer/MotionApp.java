@@ -8,6 +8,9 @@ import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.concurrent.CountDownLatch;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -41,6 +44,8 @@ import javax.swing.event.ChangeListener;
  */
 public class MotionApp implements ChangeListener, DrawInterface
 {
+	public static String setPoint;
+	public static int numSteps;
     // These variables are used for the controls in the applet.
 
     /** Adjustment for the initial position "X" coordinate. */
@@ -50,8 +55,8 @@ public class MotionApp implements ChangeListener, DrawInterface
     private JFBSlider controlPositionY = new JFBSlider("Y:", -10, 10, 200, 1);
 
     /** Adjustment for the initial direction. */
-    private JFBSlider controlPositionTheta = new JFBSlider("Theta", -180, 180,
-                                                           144, 1, "\u00b0");
+    private JFBSlider controlPositionTheta = new JFBSlider("Coord:", 0, numSteps,
+                                                           numSteps, 0);
 
     /** Adjustment for the velocity of the left wheel. */
     private JFBSlider controlVelocityLeft = new JFBSlider("L: ", -5.00, 5.00,
@@ -173,10 +178,10 @@ public class MotionApp implements ChangeListener, DrawInterface
     // (e.g., true position of each wheel).
 
     /** The duration of the simulation, in seconds. */
-    private double      simulationTime = 2.0;
+    public static double      simulationTime = 2.0;
 
     /** The time between dead-reckoning calculations, in seconds. */
-    private double      deadReckoningInterval = 0.01;
+    private double      deadReckoningInterval = 1;//0.01;
 
     /** This is the object used to simulate the robot's movements. */
     private IdealDrive  theWheels = new IdealDrive();
@@ -194,9 +199,9 @@ public class MotionApp implements ChangeListener, DrawInterface
      *  smooth changes in direction.   These bends are artifact of
      *  the graphics routines, not errors in the position calculations.
      */
-    private int         maxNumSteps   = 250;
-    private int         numSteps      = 100;
-    private int         maxDRSegments = 100;
+    private static int         maxNumSteps   = 10000;
+    //private int         numSteps      = 100;
+    private static int         maxDRSegments = 10000;
 
     /**
      * A temporary variable used to determine the time between each
@@ -210,31 +215,37 @@ public class MotionApp implements ChangeListener, DrawInterface
     /** This variable is used to store the  path of the center of the robot,
      * which is then used to derive the position of the wheels.
      */
-    private Position    plotData[] = new Position[maxNumSteps + 1];
+    public static Position    plotData[] = new Position[maxNumSteps + 1];
 
     /** Storage for the path of the center of the robot, which will
      * be used for drawing the track.
      */
-    private FPoint      centerPoints[] = new FPoint[maxNumSteps + 1];
+    static FPoint      centerPoints[] = new FPoint[maxNumSteps + 1];
 
     /** Storage for the path of the left wheel of the robot, which will
      * be used for drawing the track.
      */
-    private FPoint      leftPoints[] = new FPoint[maxNumSteps + 1];
+    private static FPoint      leftPoints[] = new FPoint[maxNumSteps + 1];
 
     /** Storage for the path of the right wheel of the robot, which will
      * be used for drawing the track.
      */
-    private FPoint      rightPoints[] = new FPoint[maxNumSteps + 1];
+    private static FPoint      rightPoints[] = new FPoint[maxNumSteps + 1];
 
     /** Storage for the dead-reckoned path of the robot. */
-    private Position    deadReckonPos[] = new Position[maxDRSegments+1];
+    private static Position    deadReckonPos[] = new Position[maxDRSegments+1];
 
     /** Storage for the dead-reckoned path of the robot using the mean of theta. */
-    private Position    deadReckonMeanPos[] = new Position[maxDRSegments+1];
+    private static Position    deadReckonMeanPos[] = new Position[maxDRSegments+1];
 
     /** Storage for the true path of the robot. */
-    private Position    trueReckonPos[] = new Position[maxDRSegments+1];
+    private static Position    trueReckonPos[] = new Position[maxDRSegments+1];
+    
+    /** Log data from run. err, left speed, right speed, dterm, iterm, pid */
+    public static float[][] runData = new float[7][maxNumSteps+1];
+    
+    /** current position of data slider */
+    public static double currentPosition = 0;
 
     /** Temporary variable. */
     private int         nSegment;
@@ -244,8 +255,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     	init();
     }
     /**
-     * Initialize the applet.
-     * @param None No explanation necessary.
+     * Initialize the app.
      */
     public void init() {
         /*
@@ -282,6 +292,7 @@ public class MotionApp implements ChangeListener, DrawInterface
         controlPositionY.addTicks(10,5);
         controlPositionY.addChangeListener(this);
 
+        controlPositionTheta.steps = numSteps;
         controlPositionTheta.addTicks(10,5);
         controlPositionTheta.addChangeListener(this);
 
@@ -296,6 +307,12 @@ public class MotionApp implements ChangeListener, DrawInterface
         theSliderPanel.add(controlPositionY);
         theSliderPanel.add(Box.createRigidArea(vpad3));
         theSliderPanel.add(controlPositionTheta);
+        // body width
+        theSliderPanel.add(Box.createRigidArea(vpad3));
+        controlBodyWidth.addTicks(5,5);
+        controlBodyWidth.addChangeListener(this);
+        theSliderPanel.add(controlBodyWidth);
+        //
         System.out.println("adding slider to main panel"+controlsRobot);
         controlsRobot.add(theSliderPanel);
         controlsRobot.add(Box.createRigidArea(vpad3));
@@ -306,7 +323,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     * tick marks to the Body Width control, add this object
     * as a change listener, and add the new panel to the
     * robot tab panel.
-    */
+    
         JPanel theBodyPanel = new JPanel();
         theBodyPanel.setLayout(new BoxLayout(theBodyPanel,
                                              BoxLayout.Y_AXIS));
@@ -320,7 +337,7 @@ public class MotionApp implements ChangeListener, DrawInterface
         controlsRobot.add(theBodyPanel);
         controlsRobot.add(Box.createRigidArea(vpad3));
         System.out.println("added panel to main panel "+controlsRobot);
-
+    */
 
    /*
     * Set up the controls for Speed tab, which include
@@ -459,8 +476,8 @@ public class MotionApp implements ChangeListener, DrawInterface
         controlsRobot.setLayout(gbl);
         System.out.println("main panel layout set to "+gbl);
         // Add the canvas pane to the main window
-        gbc.anchor=gbc.NORTHWEST;
-        gbc.fill=gbc.BOTH;
+        gbc.anchor=GridBagConstraints.NORTHWEST;
+        gbc.fill=GridBagConstraints.BOTH;
         gbc.gridx=0;
         gbc.gridy=0;
         gbc.gridheight=2;
@@ -473,7 +490,7 @@ public class MotionApp implements ChangeListener, DrawInterface
         System.out.println("canvas panel added "+canvasPanel);
 
         // Add the controls pane to the main window
-        gbc.fill=gbc.HORIZONTAL;
+        gbc.fill=GridBagConstraints.HORIZONTAL;
         gbc.gridx=1;
         gbc.gridy=0;
         gbc.gridheight=1;
@@ -486,7 +503,7 @@ public class MotionApp implements ChangeListener, DrawInterface
         System.out.println("pane controls added "+paneControls);
 
    // Add the position feedback pane to the main window
-        gbc.fill=gbc.HORIZONTAL;
+        gbc.fill=GridBagConstraints.HORIZONTAL;
         gbc.gridx=1;
         gbc.gridy=1;
         gbc.gridheight=1;
@@ -503,7 +520,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     */
         controlPositionX.setValue(0);
         controlPositionY.setValue(0);
-        controlPositionTheta.setValue(90);
+        controlPositionTheta.setValue(0);
         controlVelocityLeft.setValue(2.5);
         controlVelocityRight.setValue(2.4);
         controlAccelerationLeft.setValue(0.0);
@@ -541,7 +558,7 @@ public class MotionApp implements ChangeListener, DrawInterface
         } else if (controlPositionY.isEventSource(e)) {
             theWheels.setY0(controlPositionY.getValue());
         } else if (controlPositionTheta.isEventSource(e)) {
-            theWheels.setTheta0(controlPositionTheta.getValue());
+            currentPosition = controlPositionTheta.getValue();
         } else if (controlVelocityLeft.isEventSource(e)) {
             theWheels.setVelocityLeft(controlVelocityLeft.getValue());
         } else if (controlVelocityRight.isEventSource(e)) {
@@ -573,12 +590,10 @@ public class MotionApp implements ChangeListener, DrawInterface
             System.out.println(e.toString());
         }
 
-
         /*
          * Whatever the event, update the position feedback
          * readouts, and redraw the paths.
          */
-
         computePositionData();
         updatePositionValues();
         paneTracks.repaint();
@@ -603,25 +618,29 @@ public class MotionApp implements ChangeListener, DrawInterface
     /**
      * Update the true and dead-reckoned fields in the
      * position feedback pane.
+     * runData[0][numSteps] = err;
+     * runData[1][numSteps] = left;
+     * runData[2][numSteps] = right;
+     * runData[3][numSteps] = dterm;
+     * runData[4][numSteps] = iterm;
+     * runData[5][numSteps] = pid;
      */
     public void updatePositionValues(){
 
         if(panePosition==null)
             return;  // do nothing
-        Position pos  = theWheels.positionAt(simulationTime);
-        double vLeft  = theWheels.getVelocityLeft(simulationTime);
-        double vRight = theWheels.getVelocityRight(simulationTime);
+        Position pos  = theWheels.positionAt(currentPosition);
+        double vLeft  = theWheels.getVelocityLeft(currentPosition);
+        double vRight = theWheels.getVelocityRight(currentPosition);
 
         panePosition.setComputedValues(
                                       pos.x,
                                       pos.y,
                                       pos.theta,
-                                      deadReckonPos[nSegment].x,
-                                      deadReckonPos[nSegment].y,
-                                      deadReckonPos[nSegment].theta,
-                                      deadReckonMeanPos[nSegment].x,
-                                      deadReckonMeanPos[nSegment].y,
-                                      deadReckonMeanPos[nSegment].theta,
+                                      runData[0][(int) currentPosition],
+                                      runData[6][(int) currentPosition],
+                                      runData[5][(int) currentPosition],
+                                      runData[4][(int) currentPosition],
                                       vLeft,
                                       vRight
                                       );
@@ -637,26 +656,26 @@ public class MotionApp implements ChangeListener, DrawInterface
 
         //  compute the true position data
 
-        numSteps = theWheels.getSimpsonIntervals(simulationTime);
-        if(numSteps<30)
-           numSteps=30;
-        else if(numSteps>maxNumSteps)
-           numSteps=maxNumSteps;
-        stepSize = simulationTime / numSteps;
-        for (int i=0; i<=numSteps; i++) {
-            pos = theWheels.positionAt(i * stepSize);
-            plotData[i] = pos;
-            centerPoints[i] = pos;
-            leftPoints[i] = theWheels.LeftWheelLoc(pos);
-            rightPoints[i] = theWheels.RightWheelLoc(pos);
-        }
-
-
+        //numSteps = theWheels.getSimpsonIntervals(simulationTime);
+        //if(numSteps<30)
+        //   numSteps=30;
+        //else if(numSteps>maxNumSteps)
+         //  numSteps=maxNumSteps;
+        stepSize = 1; //simulationTime / numSteps;
+        //for (int i=0; i<=numSteps; i++) {
+        //    pos = theWheels.positionAt(i * stepSize);
+        //    plotData[i] = pos;
+        //    centerPoints[i] = pos;
+        //    leftPoints[i] = IdealDrive.LeftWheelLoc(pos);
+        //    rightPoints[i] = IdealDrive.RightWheelLoc(pos);
+        //}
 
         //compute the dead-reckoned position data
 
-        nSegment = (int)Math.floor(simulationTime/deadReckoningInterval);
+        nSegment = numSteps;//(int)Math.floor(simulationTime/deadReckoningInterval);
+        
         double deltaT = deadReckoningInterval;
+        /*
         if(simulationTime-nSegment*deltaT>0.01){
             // the simulation time does not come out to an even
             // multiple of deadReckoningIntervals
@@ -673,7 +692,7 @@ public class MotionApp implements ChangeListener, DrawInterface
             nSegment=maxDRSegments;
             deltaT=simulationTime/maxDRSegments;
         }
-
+         */
         deadReckonPos[0] = theWheels.positionAt(0);
         deadReckonMeanPos[0] = deadReckonPos[0];
         trueReckonPos[0] = deadReckonPos[0];
@@ -682,6 +701,7 @@ public class MotionApp implements ChangeListener, DrawInterface
         vLeft1  = theWheels.getVelocityLeft(0.0);
         vRight1 = theWheels.getVelocityRight(0.0);
         for (int iSegment=1; iSegment<=nSegment; iSegment++){
+        	
             if(iSegment==nSegment){
                 // we are on the last segment.  recall the simulation time
                 // isn't necessarily an even multiple of the dead-reckoning
@@ -723,7 +743,8 @@ public class MotionApp implements ChangeListener, DrawInterface
                               sMean*Math.sin(theta_mean),
                               theta
                     );
-            trueReckonPos[iSegment]=theWheels.positionAt(trueTime);
+             
+            trueReckonPos[iSegment]=theWheels.positionAt(iSegment/*trueTime*/);
         }
     }
 
@@ -766,14 +787,14 @@ public class MotionApp implements ChangeListener, DrawInterface
 
    // Use the padded limits to set the range of the FloatCanvas
         theFloatCanvas.setLimits(xMin, xMax, yMin, yMax);
-
+        /*
    // Draw the dead-reckoned wheel tracks.
    FPoint dPoly[] = new FPoint[5];
-        dPoly[0] = theWheels.LeftWheelLoc(deadReckonPos[0]);
-        dPoly[1] = theWheels.RightWheelLoc(deadReckonPos[0]);
+        dPoly[0] = IdealDrive.LeftWheelLoc(deadReckonPos[0]);
+        dPoly[1] = IdealDrive.RightWheelLoc(deadReckonPos[0]);
         for (int iSegment=1; iSegment<=nSegment; iSegment++){
-            dPoly[2] = theWheels.RightWheelLoc(deadReckonPos[iSegment]);
-            dPoly[3] = theWheels.LeftWheelLoc(deadReckonPos[iSegment]);
+            dPoly[2] = IdealDrive.RightWheelLoc(deadReckonPos[iSegment]);
+            dPoly[3] = IdealDrive.LeftWheelLoc(deadReckonPos[iSegment]);
             dPoly[4]=dPoly[0];
             theFloatCanvas.fillPolygon(dPoly, shadow);
             theFloatCanvas.drawPolygon(dPoly, Color.white);
@@ -782,40 +803,57 @@ public class MotionApp implements ChangeListener, DrawInterface
         }
 
         // draw the triangle at the end of the dead-reckoned track
-        fpd[0] = theWheels.LeftWheelLoc( deadReckonPos[nSegment]);
-        fpd[1] = theWheels.NoseLoc(      deadReckonPos[nSegment]);
-        fpd[2] = theWheels.RightWheelLoc(deadReckonPos[nSegment]);
+        fpd[0] = IdealDrive.LeftWheelLoc( deadReckonPos[nSegment]);
+        fpd[1] = IdealDrive.NoseLoc(      deadReckonPos[nSegment]);
+        fpd[2] = IdealDrive.RightWheelLoc(deadReckonPos[nSegment]);
         theFloatCanvas.fillPolygon(fpd,shadow);
 
 
         // Draw the triangles for the dead-reckoned positions
         for (int iSegment=1; iSegment<=nSegment; iSegment++){
-            fpd[0] = theWheels.LeftWheelLoc( deadReckonPos[iSegment]);
-            fpd[1] = theWheels.NoseLoc(      deadReckonPos[iSegment]);
-            fpd[2] = theWheels.RightWheelLoc(deadReckonPos[iSegment]);
+            fpd[0] = IdealDrive.LeftWheelLoc( deadReckonPos[iSegment]);
+            fpd[1] = IdealDrive.NoseLoc(      deadReckonPos[iSegment]);
+            fpd[2] = IdealDrive.RightWheelLoc(deadReckonPos[iSegment]);
             theFloatCanvas.drawPolygon(fpd, Color.darkGray);
 
-            fpd[0] = theWheels.LeftWheelLoc( deadReckonMeanPos[iSegment]);
-            fpd[1] = theWheels.NoseLoc(      deadReckonMeanPos[iSegment]);
-            fpd[2] = theWheels.RightWheelLoc(deadReckonMeanPos[iSegment]);
+            fpd[0] = IdealDrive.LeftWheelLoc( deadReckonMeanPos[iSegment]);
+            fpd[1] = IdealDrive.NoseLoc(      deadReckonMeanPos[iSegment]);
+            fpd[2] = IdealDrive.RightWheelLoc(deadReckonMeanPos[iSegment]);
             theFloatCanvas.drawPolygon(fpd, Color.cyan);
         }
-
-				// Draw the blue, green and red lines tracing the true track
+	*/
+        // Draw the shadow for inertial heading intended
+        FPoint dPoly[] = new FPoint[5];
+        dPoly[0] = leftPoints[0];
+        dPoly[1] = rightPoints[0];
+        dPoly[2] = new FPoint(numSteps,rightPoints[0].y);
+        dPoly[3] = new FPoint(numSteps,leftPoints[0].y);
+        dPoly[4]=dPoly[0];
+        theFloatCanvas.fillPolygon(dPoly, shadow);
+        theFloatCanvas.drawPolygon(dPoly, Color.white);
+        
+		// Draw the blue, green and red lines tracing the true track
         theFloatCanvas.drawPolyline(centerPoints, numSteps+1);
         theFloatCanvas.drawPolyline(leftPoints,   numSteps+1, Color.green);
         theFloatCanvas.drawPolyline(rightPoints,  numSteps+1, Color.red);
 
         // Draw the triangles for the true positions
-        for (int iSegment=0; iSegment<=nSegment; iSegment++){
-            fpd[0] = theWheels.LeftWheelLoc( trueReckonPos[iSegment]);
-            fpd[1] = theWheels.NoseLoc(      trueReckonPos[iSegment]);
-            fpd[2] = theWheels.RightWheelLoc(trueReckonPos[iSegment]);
-            theFloatCanvas.drawPolygon(fpd, Color.blue);
+        for (int iSegment=0; iSegment<=numSteps/*nSegment*/; iSegment++){
+            fpd[0] = IdealDrive.LeftWheelLoc( trueReckonPos[iSegment]);
+            fpd[1] = IdealDrive.NoseLoc(      trueReckonPos[iSegment]);
+            fpd[2] = IdealDrive.RightWheelLoc(trueReckonPos[iSegment]);
+            if( iSegment == currentPosition )
+            	theFloatCanvas.drawPolygon(fpd, Color.red);
+            else
+            	theFloatCanvas.drawPolygon(fpd, Color.blue);
         }
     }
     
     public static void main(String[] args) throws Exception {
+    	setPoint = args[0];
+       	CountDownLatch latch = new CountDownLatch(1);
+    	new Thread(new fileReader(latch)).start();
+    	latch.await();
 		SwingUtilities.invokeLater(new Runnable() {
 		    public void run() {
 		    	new MotionApp();
@@ -824,4 +862,105 @@ public class MotionApp implements ChangeListener, DrawInterface
 		});
     }
 
+    static class fileReader implements Runnable {
+    	private CountDownLatch latch;
+		public fileReader(CountDownLatch latch) {
+			this.latch = latch;
+		}
+
+		@Override
+    	public void run() {
+    		try {
+    			FileReader fis = new FileReader("motion.log");
+    			BufferedReader br = new BufferedReader(fis);
+    			String s = "";
+    			float err=0, left, right, dterm, iterm, pid, speed = 0;
+    			numSteps = 0;
+    			while(s != null) {
+    				s = br.readLine();
+    				if(s != null && s.startsWith("Inertial Setpoint="+setPoint) ) {
+    					int pl = s.indexOf("speedL=");
+    					// newline if it went into triangle solutions
+    					// if we found SPEEDL initially, we will also find 'SPEED'
+    					if( pl == -1 ) {
+    						// if we did NOT find SPEEDL initially, look for xxxxANGLE=
+    						int pa = s.indexOf("ANGLE="); // this has speed for this log line
+    						if( pa != -1 ) {
+    							speed = Float.valueOf(s.substring(pa+6,s.indexOf("|",pa+6)));
+    						} else {
+    							System.out.println("***"+numSteps+" CANT PROCESS SPEED LOOKING FOR xxxxANGLE="+s);
+    						}
+    						s = br.readLine(); // try again on next line
+    						pl = s.indexOf("speedL=");
+    					} else {
+     						int pa = s.indexOf("Speed="); // this has speed for this log line
+    						if( pa != -1 ) {
+    							speed = Float.valueOf(s.substring(pa+6,s.indexOf("|",pa+6)));
+    						} else {
+    							System.out.println("***"+numSteps+" CANT PROCESS SPEED LOOKING FOR Speed="+s);
+    						}
+    					}
+    					if( pl != -1 ) {
+    	  					System.out.println(s);
+    						left = Float.valueOf(s.substring(pl+7,s.indexOf("|",pl+7)));
+    						int pr = s.indexOf("speedR=");
+    						right = Float.valueOf(s.substring(pr+7,s.indexOf("|",pr+7)));
+    						// next line should be OUTPUT
+    						s = br.readLine();
+    						int p1 = s.indexOf("Err = ");
+    						if( p1 != -1 ) {
+    							err = Float.valueOf(s.substring(p1+6,s.indexOf(" ",p1+6)));
+    						} else {
+    							System.out.println("***"+numSteps+" CANT FIND ERR ENTRY="+s);
+    						}
+    						int p2 = s.indexOf("DTerm = ");
+    						if( p2 != -1) {
+    							dterm = Float.valueOf(s.substring(p2+8,s.indexOf(" ",p2+8)));
+    							int p3 = s.indexOf("ITerm = ");
+    							iterm = Float.valueOf(s.substring(p3+8,s.indexOf(" ",p3+8)));
+    							int p4 = s.indexOf("PID=");
+    							pid = Float.valueOf(s.substring(p4+4,s.indexOf(" ",p4+4)));
+    							System.out.println(s+" "+err+" "+left+" "+right+" "+dterm+" "+iterm+" "+pid);
+    							runData[0][numSteps] = err;
+    							runData[1][numSteps] = left;
+    							runData[2][numSteps] = right;
+    							runData[3][numSteps] = dterm;
+    							runData[4][numSteps] = iterm;
+    							runData[5][numSteps] = pid;
+    							runData[6][numSteps] = speed;
+    							// Calculate chord of offset error as radius
+    							// chord is 2Rsin(theta/2) ( we convert to radians first)
+    							//double chord = 2 * (IdealDrive.bodyWidth/2) * Math.sin((Math.abs(err/360.0) * (2.0 * Math.PI))/2);
+    							// step will increment as time along the X axis, chord is R
+    							//double x = numSteps + chord * Math.sin((err/360.0) * (2.0 * Math.PI));
+    							double y = IdealDrive.bodyWidth * Math.cos((err/360.0) * (2.0 * Math.PI));
+    							centerPoints[numSteps] =  new FPoint(numSteps,y*100);
+    							Position pos = new Position();
+    							pos.set(centerPoints[numSteps],((dterm/360.0) * (2.0 * Math.PI)));
+    							plotData[numSteps] = pos;
+    					        leftPoints[numSteps] = IdealDrive.LeftWheelLoc(pos);
+    					        rightPoints[numSteps] = IdealDrive.RightWheelLoc(pos);
+    							System.out.println(numSteps+"="+pos+" l/r locs:"+leftPoints[numSteps]+","+rightPoints[numSteps]);
+    							++numSteps;
+    						} else {
+    							System.out.println("***"+numSteps+" REJECTED CANT FIND PID LINE="+s);
+    						}
+    						
+    					}
+    				}
+    			}
+    			--numSteps;
+    			simulationTime = numSteps;
+    			System.out.println("Done..");
+    			br.close();
+    			fis.close();
+    			latch.countDown();
+    		} catch (Exception e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		}
+    	}
+    	
+    }
 }
+

@@ -23,19 +23,20 @@ class PositionPanel extends JPanel
       /*
     * Set up the border for this panel
     */
-        TitledBorder  tBorder = new TitledBorder("Actual and Dead " +
-                                                  "Reckoned Position " +
-																									"(DR2 - mean theta)");
+        TitledBorder  tBorder = new TitledBorder("Actual Position ");
         setBorder(tBorder);
         setForeground(tBorder.getTitleColor());
 
    /*
     * Use a "Grid Bag Layout" for this panel.  It will be laid
     * out like this:
-    * X:          <actual X>    <dr X>    <dr X err>   <dr2 X>   <dr2 X err>
-    * Y:          <actual Y>    <dr Y>    <dr Y err>   <dr2 Y>   <dr2 Y err>
-    * Theta:      <actual deg>  <dr deg>  <dr deg err> <dr2 deg> <dr2 deg err>
-		* Final Vel:  <actual L Vel><actual R final Vel>
+    * X:          <actual X>   
+    * Y:          <actual Y>   
+    * Theta(DTerm):      <actual deg>  
+	* Speed L/R:  <actual L Vel> <actual R final Vel>
+	* ITerm:	<integral of PID>
+	* PID:		<PID value>
+	* Err:		<Course deviation err>
     */
         GridBagLayout      gbl      = new GridBagLayout();
         GridBagConstraints gbc = new GridBagConstraints();
@@ -70,7 +71,7 @@ class PositionPanel extends JPanel
    /*
     * Set up the "Theta" label
     */
-        JLabel aJLabel = new JLabel("Theta:");
+        JLabel aJLabel = new JLabel("Theta (DTerm):");
         gbc.fill=gbc.HORIZONTAL;
         gbc.gridx=0;
         gbc.gridy=3;
@@ -80,9 +81,9 @@ class PositionPanel extends JPanel
         add(aJLabel);
 
     /*
-     * Set up the "Velocity" label
+     * Set up the Speed label
      */
-        JLabel vJLabel = new JLabel("Final Vel L/R:");
+        JLabel vJLabel = new JLabel("Speed L/R:");
         gbc.fill=gbc.HORIZONTAL;
         gbc.gridx=0;
         gbc.gridy=4;
@@ -92,45 +93,60 @@ class PositionPanel extends JPanel
         add(vJLabel);
 
     /*
-     * Set up the "Actual Pos" label
+     * Set up the Iterm label
      */
-        JLabel aposJLabel = new JLabel("Actual");
-        aposJLabel.setHorizontalAlignment(JLabel.RIGHT);
+        JLabel aposJLabel = new JLabel("ITerm:");
+        //aposJLabel.setHorizontalAlignment(JLabel.RIGHT);
         gbc.fill=gbc.HORIZONTAL;
-        gbc.gridx=1;
-        gbc.gridy=0;
+        gbc.gridx=0;
+        gbc.gridy=5;
         gbc.weightx=0;
         gbc.weighty=1;
         gbl.setConstraints(aposJLabel, gbc);
         add(aposJLabel);
 
-    /*
-     * Set up the "Dead Rec Pos" label
-     */
-        JLabel dJLabel = new JLabel("DR (Err)");
-        dJLabel.setHorizontalAlignment(JLabel.RIGHT);
-        gbc.fill=gbc.HORIZONTAL;
-        gbc.gridx=2;
-        gbc.gridy=0;
-        gbc.weightx=0;
-        gbc.weighty=1;
-        gbl.setConstraints(dJLabel, gbc);
-        add(dJLabel);
 
     /*
-     * Set up the "Dead Rec w/ mean Pos" label
+     * Set up the PID label
      */
-        JLabel dmJLabel = new JLabel("DR2 (Err)");
-        dmJLabel.setHorizontalAlignment(JLabel.RIGHT);
+        JLabel dmJLabel = new JLabel("PID:");
+        //dmJLabel.setHorizontalAlignment(JLabel.RIGHT);
         gbc.fill=gbc.HORIZONTAL;
-        gbc.gridx=4;
-        gbc.gridy=0;
+        gbc.gridx=0;
+        gbc.gridy=6;
         gbc.weightx=0;
         gbc.weighty=1;
         gbl.setConstraints(dmJLabel, gbc);
         add(dmJLabel);
+        
+     /*
+      * Set up the Err label
+      */
+        JLabel dJLabel = new JLabel("Err:");
+        //dJLabel.setHorizontalAlignment(JLabel.RIGHT);
+        gbc.fill=gbc.HORIZONTAL;
+        gbc.gridx=0;
+        gbc.gridy=7;
+        gbc.weightx=0;
+        gbc.weighty=1;
+        gbl.setConstraints(dJLabel, gbc);
+        add(dJLabel);
+        
+     /*
+      * Set up the Err label
+      */
+        JLabel sJLabel = new JLabel("Speed:");
+        //dJLabel.setHorizontalAlignment(JLabel.RIGHT);
+        gbc.fill=gbc.HORIZONTAL;
+        gbc.gridx=0;
+        gbc.gridy=8;
+        gbc.weightx=0;
+        gbc.weighty=1;
+        gbl.setConstraints(sJLabel, gbc);
+        add(sJLabel);
 
    /*
+    * Set up fields for data points.
     * Set up the text field for the actual X coordinate
     */
         xField = new JTextField(8);
@@ -177,8 +193,8 @@ class PositionPanel extends JPanel
 
 
    /*
-    * Set up the text field for the dead-reckoned X coordinate
-    */
+    * Set up the text field for the d
+    
         dxField = new JTextField(8);
         dxField.setEditable(false);
         dxField.setHorizontalAlignment(JTextField.RIGHT);
@@ -190,10 +206,10 @@ class PositionPanel extends JPanel
         gbc.weighty=1;
         gbl.setConstraints(dxField, gbc);
         add(dxField);
-
-   /*
-    * Set up the text field for the dead-reckoned Y coordinate
     */
+   /*
+    * Set up the text field for the 
+    
         dyField = new JTextField(8);
         dyField.setEditable(false);
         dyField.setHorizontalAlignment(JTextField.RIGHT);
@@ -205,21 +221,7 @@ class PositionPanel extends JPanel
         gbc.weighty=1;
         gbl.setConstraints(dyField, gbc);
         add(dyField);
-
-   /*
-    * Set up the text field for the dead-reckoned angle (theta)
-    */
-        daField = new JTextField(8);
-        daField.setEditable(false);
-        daField.setHorizontalAlignment(JTextField.RIGHT);
-        daField.setBorder(null);
-        gbc.fill=gbc.NONE;
-        gbc.gridx=2;
-        gbc.gridy=3;
-        gbc.weightx=1;
-        gbc.weighty=1;
-        gbl.setConstraints(daField, gbc);
-        add(daField);
+	*/        
 
    /*
     * Set up the text fields for left and right velocities
@@ -247,41 +249,71 @@ class PositionPanel extends JPanel
         gbc.weighty=1;
         gbl.setConstraints(vRightField, gbc);
         add(vRightField);
+    /*
+     * Set up the text field for the ITerm
+     */
+        itermField = new JTextField(8);
+        itermField.setEditable(false);
+        itermField.setHorizontalAlignment(JTextField.RIGHT);
+        itermField.setBorder(null);
+        gbc.fill=gbc.NONE;
+        gbc.gridx=1;
+        gbc.gridy=5;
+        gbc.weightx=1;
+        gbc.weighty=1;
+        gbl.setConstraints(itermField, gbc);
+        add(itermField);
 
 
    /*
-    * Set up the text field for the dead-reckoned with mean theta X coordinate
+    * Set up the text field for the PID value
     */
-        dmxField = new JTextField(8);
-        dmxField.setEditable(false);
-        dmxField.setHorizontalAlignment(JTextField.RIGHT);
-        dmxField.setBorder(null);
+        pidField = new JTextField(8);
+        pidField.setEditable(false);
+        pidField.setHorizontalAlignment(JTextField.RIGHT);
+        pidField.setBorder(null);
         gbc.fill=gbc.NONE;
-        gbc.gridx=4;
-        gbc.gridy=1;
+        gbc.gridx=1;
+        gbc.gridy=6;
         gbc.weightx=1;
         gbc.weighty=1;
-        gbl.setConstraints(dmxField, gbc);
-        add(dmxField);
+        gbl.setConstraints(pidField, gbc);
+        add(pidField);
 
-   /*
-    * Set up the text field for the dead-reckoned with mean theta Y coordinate
-    */
-        dmyField = new JTextField(8);
-        dmyField.setEditable(false);
-        dmyField.setHorizontalAlignment(JTextField.RIGHT);
-        dmyField.setBorder(null);
+    /*
+     * Set up the text field for the err
+     */ 
+        errField = new JTextField(8);
+        errField.setEditable(false);
+        errField.setHorizontalAlignment(JTextField.RIGHT);
+        errField.setBorder(null);
         gbc.fill=gbc.NONE;
-        gbc.gridx=4;
-        gbc.gridy=2;
+        gbc.gridx=1;
+        gbc.gridy=7;
         gbc.weightx=1;
         gbc.weighty=1;
-        gbl.setConstraints(dmyField, gbc);
-        add(dmyField);
+        gbl.setConstraints(errField, gbc);
+        add(errField);
 
+     /*
+      * Set up the text field for the speed
+      */
+        spdField = new JTextField(8);
+        spdField.setEditable(false);
+        spdField.setHorizontalAlignment(JTextField.RIGHT);
+        spdField.setBorder(null);
+        gbc.fill=gbc.NONE;
+        gbc.gridx=1;
+        gbc.gridy=8;
+        gbc.weightx=1;
+        gbc.weighty=1;
+        gbl.setConstraints(spdField, gbc);
+        add(spdField);
+  
    /*
     * Set up the text field for the dead-reckoned with mean theta angle (theta)
     */
+        /*
         dmaField = new JTextField(8);
         dmaField.setEditable(false);
         dmaField.setHorizontalAlignment(JTextField.RIGHT);
@@ -293,15 +325,16 @@ class PositionPanel extends JPanel
         gbc.weighty=1;
         gbl.setConstraints(dmaField, gbc);
         add(dmaField);
+        */
 
 
    /*
     * Create formatters for the coordinates and time (2 decimal places)
     * and the angles (1 decimal place, and the degrees symbol).
     */
-        df = new DecimalFormat("####0.00");
+        df = new DecimalFormat("####0.0000");
         dfs = new DecimalFormat("+####0.00;-####0.00");
-        da = new DecimalFormat("####0.0\u00b0");
+        da = new DecimalFormat("####0.0000\u00b0");
         das = new DecimalFormat("+####0.0\u00b0;-####0.0\u00b0");
 
    /*
@@ -309,9 +342,9 @@ class PositionPanel extends JPanel
     * which are set to 90 degrees.
     */
         setComputedValues(0.0, 0.0, 90.0, 
-				                  0.0, 0.0, 90.0, 
-				                  0.0, 0.0, 90.0, 
-													0.0, 0.0);
+				                90.0, 0,
+				                0.0, 0.0, 
+								0.0, 0.0);
     }
 
 
@@ -330,28 +363,36 @@ class PositionPanel extends JPanel
 
 
     /**
-     * Display both the true and dead-reckoned positions
+     * Display both the true and dead-reckoned positions. theta is dterm, or robot orientation, err is course deviation
+     * from center track.
      * (location and direction).
+     * runData[0][numSteps] = err;
+     * runData[1][numSteps] = left;
+     * runData[2][numSteps] = right;
+     * runData[3][numSteps] = dterm;
+     * runData[4][numSteps] = iterm;
+     * runData[5][numSteps] = pid;
+     * runData[6][numSteps] = speed;
      */
     void setComputedValues(double x, double y, double theta,
-                           double xDR, double yDR, double thetaDR,
-													 double xDRM, double yDRM, double thetaDRM,
+                           double err, double speed,
+						   double pid, double iterm, 
                            double vLeft, double vRight)
     {
         xField.setText(df.format(x));
         yField.setText(df.format(y));
         aField.setText(da.format(degree(theta)));
 
-        dxField.setText(df.format(xDR) + " ("+dfs.format(xDR-x)+")");
-        dyField.setText(df.format(yDR) + " ("+dfs.format(yDR-y)+")");
-        daField.setText(da.format(degree(thetaDR))+ 
-				                " ("+das.format(degree(thetaDR-theta))+")");
+        //dxField.setText(df.format(xDR) + " ("+dfs.format(xDR-x)+")");
+        //dyField.setText(df.format(yDR) + " ("+dfs.format(yDR-y)+")");
+        errField.setText(da.format(err));//+ 
+				                //" ("+das.format(degree(thetaDR-theta))+")");
+        spdField.setText(df.format(speed));
 
-
-        dmxField.setText(df.format(xDRM) + " ("+dfs.format(xDRM-x)+")");
-        dmyField.setText(df.format(yDRM) + " ("+dfs.format(yDRM-y)+")");
-        dmaField.setText(da.format(degree(thetaDRM))+ 
-				                " ("+das.format(degree(thetaDRM-theta))+")");
+        pidField.setText(df.format(pid));// + " ("+dfs.format(xDRM-x)+")");
+        itermField.setText(df.format(iterm));// + " ("+dfs.format(yDRM-y)+")");
+        //dmaField.setText(da.format(degree(thetaDRM)));//+ 
+				                //" ("+das.format(degree(thetaDRM-theta))+")");
 
         vLeftField.setText(df.format(vLeft));
         vRightField.setText(df.format(vRight));
@@ -385,13 +426,16 @@ class PositionPanel extends JPanel
     JTextField dyField;
 
     /** Field for displaying the dead-reckoned direction. */
-    JTextField daField;
+    JTextField errField;
 
     /** Field for displaying the dead-reckoned X coordinate. */
-    JTextField dmxField;
+    JTextField pidField;
+    
+    /** Field for displaying the dead-reckoned Y coordinate. */
+    JTextField spdField;
 
     /** Field for displaying the dead-reckoned Y coordinate. */
-    JTextField dmyField;
+    JTextField itermField;
 
     /** Field for displaying the dead-reckoned direction. */
     JTextField dmaField;

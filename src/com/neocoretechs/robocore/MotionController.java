@@ -106,7 +106,7 @@ public class MotionController extends AbstractNodeMain {
 	static float speedL, speedR;
 	static float pidOutput = 0;
 	static float kp = 0.9f;
-	static float ki = .85f;
+	static float ki = 0.9f;
 	static float kd = 3.0f;
 	static long lastTime = System.currentTimeMillis();
 	static float Input, Output, Setpoint, error;
@@ -363,15 +363,15 @@ public class MotionController extends AbstractNodeMain {
 					// In auto
 					if( Math.abs(Output) <= 45.0 ) {
 						if( Output < 0.0f ) { // increase right wheel power goal
-							// If between -15 and 0, use PID, between -16 and -30 use triangle solution
-							if( Output >= -5.0 ) {
+							// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
+							if( Output >= -10.0 ) {
 								rightPid(axes);
 							} else {
 								rightAngle(radius); // decrease left wheel power
 							}
 						} else {
 							if( Output > 0.0f ) { // increase left wheel power goal
-								if( Output <= 5.0) {
+								if( Output <= 10.0) {
 									leftPid(axes);
 								} else {
 									leftAngle(radius); // decrease right wheel power
@@ -430,7 +430,7 @@ public class MotionController extends AbstractNodeMain {
 				// goal is to increase power of right wheel
 				// We scale it by speed with the assumption that at full speed,
 				// the values from PID represent the ones necessary to work at top speed of 1000.
-				speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.0) );
+				speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
 				// if we cap at max, use the difference to retard opposite
 				if( speedR > 1000.0f ) {
 					float speeDif = speedR - 1000.0f;
@@ -454,7 +454,7 @@ public class MotionController extends AbstractNodeMain {
 				// goal is net increase of left wheel power
 				// We scale it by speed with the assumption that at full speed,
 				// the values from PID represent the ones necessary to work at top speed of 1000.
-				speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.0) );
+				speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
 				if( speedL > 1000.0f ) {
 					float speeDif = speedL - 1000.0f;
 					speedL = 1000.0f;
