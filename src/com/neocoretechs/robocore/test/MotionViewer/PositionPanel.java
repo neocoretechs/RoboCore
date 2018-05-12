@@ -133,7 +133,7 @@ class PositionPanel extends JPanel
         add(dJLabel);
         
      /*
-      * Set up the Err label
+      * Set up the Speed label
       */
         JLabel sJLabel = new JLabel("Speed:");
         //dJLabel.setHorizontalAlignment(JLabel.RIGHT);
@@ -144,6 +144,19 @@ class PositionPanel extends JPanel
         gbc.weighty=1;
         gbl.setConstraints(sJLabel, gbc);
         add(sJLabel);
+        
+     /*
+      * Set up the Speed label
+      */
+        JLabel iJLabel = new JLabel("IMU:");
+        //dJLabel.setHorizontalAlignment(JLabel.RIGHT);
+        gbc.fill=gbc.HORIZONTAL;
+        gbc.gridx=0;
+        gbc.gridy=9;
+        gbc.weightx=0;
+        gbc.weighty=1;
+        gbl.setConstraints(iJLabel, gbc);
+        add(iJLabel);
 
    /*
     * Set up fields for data points.
@@ -190,7 +203,6 @@ class PositionPanel extends JPanel
         gbc.weighty=1;
         gbl.setConstraints(aField, gbc);
         add(aField);
-
 
    /*
     * Set up the text field for the d
@@ -310,6 +322,20 @@ class PositionPanel extends JPanel
         gbl.setConstraints(spdField, gbc);
         add(spdField);
   
+      /*
+       * Set up the text field for the IMU
+       */
+       imuField = new JTextField(8);
+       imuField.setEditable(false);
+       imuField.setHorizontalAlignment(JTextField.RIGHT);
+       imuField.setBorder(null);
+       gbc.fill=gbc.NONE;
+       gbc.gridx=1;
+       gbc.gridy=9;
+       gbc.weightx=1;
+       gbc.weighty=1;
+       gbl.setConstraints(imuField, gbc);
+       add(imuField);
    /*
     * Set up the text field for the dead-reckoned with mean theta angle (theta)
     */
@@ -343,7 +369,7 @@ class PositionPanel extends JPanel
     */
         setComputedValues(0.0, 0.0, 90.0, 
 				                90.0, 0,
-				                0.0, 0.0, 
+				                0.0, 0.0, 0.0,
 								0.0, 0.0);
     }
 
@@ -373,10 +399,11 @@ class PositionPanel extends JPanel
      * runData[4][numSteps] = iterm;
      * runData[5][numSteps] = pid;
      * runData[6][numSteps] = speed;
+     * @param  
      */
     void setComputedValues(double x, double y, double theta,
                            double err, double speed,
-						   double pid, double iterm, 
+						   double pid, double iterm, double imu,
                            double vLeft, double vRight)
     {
         xField.setText(df.format(x));
@@ -393,6 +420,7 @@ class PositionPanel extends JPanel
         itermField.setText(df.format(iterm));// + " ("+dfs.format(yDRM-y)+")");
         //dmaField.setText(da.format(degree(thetaDRM)));//+ 
 				                //" ("+das.format(degree(thetaDRM-theta))+")");
+        imuField.setText(da.format(imu));
 
         vLeftField.setText(df.format(vLeft));
         vRightField.setText(df.format(vRight));
@@ -440,6 +468,9 @@ class PositionPanel extends JPanel
     /** Field for displaying the dead-reckoned direction. */
     JTextField dmaField;
 
+    /** IMU heading reading */
+    JTextField imuField;
+    
     /** Field for displaying the final velocities. */
     JTextField vLeftField;
     JTextField vRightField;

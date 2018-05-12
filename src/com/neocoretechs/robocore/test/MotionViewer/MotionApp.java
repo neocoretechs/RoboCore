@@ -241,8 +241,8 @@ public class MotionApp implements ChangeListener, DrawInterface
     /** Storage for the true path of the robot. */
     private static Position    trueReckonPos[] = new Position[maxDRSegments+1];
     
-    /** Log data from run. err, left speed, right speed, dterm, iterm, pid */
-    public static float[][] runData = new float[7][maxNumSteps+1];
+    /** Log data from run. err, left speed, right speed, dterm, iterm, pid, target speed, imu */
+    public static double[][] runData = new double[8][maxNumSteps+1];
     
     /** current position of data slider */
     public static double currentPosition = 0;
@@ -624,6 +624,8 @@ public class MotionApp implements ChangeListener, DrawInterface
      * runData[3][numSteps] = dterm;
      * runData[4][numSteps] = iterm;
      * runData[5][numSteps] = pid;
+     * [6] = speed
+     * [7] = imu
      */
     public void updatePositionValues(){
 
@@ -641,6 +643,7 @@ public class MotionApp implements ChangeListener, DrawInterface
                                       runData[6][(int) currentPosition],
                                       runData[5][(int) currentPosition],
                                       runData[4][(int) currentPosition],
+                                      runData[7][(int) currentPosition],
                                       vLeft,
                                       vRight
                                       );
@@ -874,7 +877,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     			FileReader fis = new FileReader("motion.log");
     			BufferedReader br = new BufferedReader(fis);
     			String s = "";
-    			float err=0, left, right, dterm, iterm, pid, speed = 0;
+    			float err=0, left, right, dterm, iterm, pid, speed = 0, imu = 0;
     			numSteps = 0;
     			while(s != null) {
     				s = br.readLine();
@@ -899,12 +902,26 @@ public class MotionApp implements ChangeListener, DrawInterface
     						} else {
     							System.out.println("***"+numSteps+" CANT PROCESS SPEED LOOKING FOR Speed="+s);
     						}
+    						// extract IMU heading reading
+      						int pi = s.indexOf("IMU=");
+    						if( pi != -1 ) {
+    							imu = Float.valueOf(s.substring(pi+4,s.indexOf("|",pi+4)));
+    						} else {
+    							System.out.println("***"+numSteps+" CANT PROCESS IMU LOOKING FOR IMU="+s);
+    						}
     					}
     					if( pl != -1 ) {
     	  					System.out.println(s);
     						left = Float.valueOf(s.substring(pl+7,s.indexOf("|",pl+7)));
     						int pr = s.indexOf("speedR=");
     						right = Float.valueOf(s.substring(pr+7,s.indexOf("|",pr+7)));
+    						// extract IMU heading reading
+      						int pi = s.indexOf("IMU=");
+    						if( pi != -1 ) {
+    							imu = Float.valueOf(s.substring(pi+4,s.indexOf("|",pi+4)));
+    						} else {
+    							System.out.println("***"+numSteps+" CANT PROCESS IMU LOOKING FOR IMU="+s);
+    						}
     						// next line should be OUTPUT
     						s = br.readLine();
     						int p1 = s.indexOf("Err = ");
@@ -928,6 +945,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     							runData[4][numSteps] = iterm;
     							runData[5][numSteps] = pid;
     							runData[6][numSteps] = speed;
+    							runData[7][numSteps] = imu;
     							// Calculate chord of offset error as radius
     							// chord is 2Rsin(theta/2) ( we convert to radians first)
     							//double chord = 2 * (IdealDrive.bodyWidth/2) * Math.sin((Math.abs(err/360.0) * (2.0 * Math.PI))/2);
