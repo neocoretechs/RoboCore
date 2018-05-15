@@ -390,7 +390,7 @@ public class IdealDrive {
      * Calculate the position of the robot at a given point in time.
      * Acceleration is also considered in the calculations.
      * <P>See the note at the top of this file for information about
-     * measurement units.</P>
+     * measurement units. This is invoked when position of display is moved up or down</P>
      */
 
     public Position positionAt(double t) {
@@ -464,10 +464,8 @@ public class IdealDrive {
            cachedTime = t;
 
            FPoint location = new FPoint();
-
            location.x = MotionApp.centerPoints[(int) t].x;//finalX;
            location.y = MotionApp.centerPoints[(int) t].y;//finalY;
-
            location = location.add(initialPos);
 
            return new Position(location.x, location.y, MotionApp.plotData[(int) t].theta);

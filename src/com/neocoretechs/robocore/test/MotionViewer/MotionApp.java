@@ -23,6 +23,8 @@ import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
+import com.neocoretechs.robocore.MotionController;
+
 
 
 /**
@@ -846,9 +848,14 @@ public class MotionApp implements ChangeListener, DrawInterface
             fpd[1] = IdealDrive.NoseLoc(      trueReckonPos[iSegment]);
             fpd[2] = IdealDrive.RightWheelLoc(trueReckonPos[iSegment]);
             if( iSegment == currentPosition )
-            	theFloatCanvas.drawPolygon(fpd, Color.red);
-            else
+            	theFloatCanvas.fillPolygon(fpd, Color.red);
+            if( Math.abs(runData[0][iSegment]) <= MotionController.PID_THRESHOLD)
             	theFloatCanvas.drawPolygon(fpd, Color.blue);
+            else
+            	if( Math.abs(runData[0][iSegment]) <= MotionController.TRIANGLE_THRESHOLD)
+            		theFloatCanvas.drawPolygon(fpd, Color.DARK_GRAY);
+            	else
+            		theFloatCanvas.drawPolygon(fpd, Color.MAGENTA); // arc solution
         }
     }
     
@@ -879,6 +886,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     			String s = "";
     			float err=0, left, right, dterm, iterm, pid, speed = 0, imu = 0;
     			numSteps = 0;
+    			double baseline = (IdealDrive.bodyWidth * Math.cos((2.0 * Math.PI)))*100;
     			while(s != null) {
     				s = br.readLine();
     				if(s != null && s.startsWith("Inertial Setpoint="+setPoint) ) {
@@ -951,8 +959,13 @@ public class MotionApp implements ChangeListener, DrawInterface
     							//double chord = 2 * (IdealDrive.bodyWidth/2) * Math.sin((Math.abs(err/360.0) * (2.0 * Math.PI))/2);
     							// step will increment as time along the X axis, chord is R
     							//double x = numSteps + chord * Math.sin((err/360.0) * (2.0 * Math.PI));
-    							double y = IdealDrive.bodyWidth * Math.cos((err/360.0) * (2.0 * Math.PI));
-    							centerPoints[numSteps] =  new FPoint(numSteps,y*100);
+    							double y = 0;
+    							if( err > 0 )
+    								// convert to get result above baseline
+    								y = baseline+(baseline-((IdealDrive.bodyWidth * Math.cos(((err/360.0) * (2.0 * Math.PI))))*100));
+    							else
+    								y = (IdealDrive.bodyWidth * Math.cos((err/360.0) * (2.0 * Math.PI)))*100;
+    							centerPoints[numSteps] =  new FPoint(numSteps,y);
     							Position pos = new Position();
     							pos.set(centerPoints[numSteps],((dterm/360.0) * (2.0 * Math.PI)));
     							plotData[numSteps] = pos;

@@ -98,6 +98,8 @@ public class MotionController extends AbstractNodeMain {
 	public static boolean isRangeUpperFront = false;
 	public static boolean isRangeLowerFront = false;
 	public static boolean isVision = false; // machine vision recognition event
+	public static final float PID_THRESHOLD  = 10; // point at which PID engages/disengages
+	public static final float TRIANGLE_THRESHOLD = 45; // Point at which geometric solution begins/disengages
 	
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
@@ -361,17 +363,17 @@ public class MotionController extends AbstractNodeMain {
 				if( holdBearing ) {
 					System.out.printf("Inertial Setpoint=%f | Hold=%b ", Setpoint, holdBearing);
 					// In auto
-					if( Math.abs(Output) <= 45.0 ) {
+					if( Math.abs(Output) <= TRIANGLE_THRESHOLD ) {
 						if( Output < 0.0f ) { // increase right wheel power goal
 							// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
-							if( Output >= -10.0 ) {
+							if( Math.abs(Output) <= PID_THRESHOLD ) {
 								rightPid(axes);
 							} else {
 								rightAngle(radius); // decrease left wheel power
 							}
 						} else {
 							if( Output > 0.0f ) { // increase left wheel power goal
-								if( Output <= 10.0) {
+								if( Output <= PID_THRESHOLD) {
 									leftPid(axes);
 								} else {
 									leftAngle(radius); // decrease right wheel power
@@ -381,7 +383,7 @@ public class MotionController extends AbstractNodeMain {
 								ITerm = 0;
 							}
 						}
-						System.out.printf("<=45 degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+						System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
 						// Exceeded tolerance, proceed to geometric solution, reset integral windup
 						ITerm = 0;
@@ -393,7 +395,7 @@ public class MotionController extends AbstractNodeMain {
 						else
 							if( Output > 0.0f )
 								speedR *= (arcin/arcout);
-						System.out.printf(">45 degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+						System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
@@ -801,15 +803,15 @@ public class MotionController extends AbstractNodeMain {
 	      error = Setpoint - Input;
 	      // This is specific to pid control of heading
 	      // reduce the angle  
-	      error =  error % 360; 
-	      // force it to be the positive remainder, so that 0 <= angle < 360  
-	      error = (error + 360) % 360;  
-	      // force into the minimum absolute value residue class, so that -180 < angle <= 180  
-	      if (error > 180)  
-	          error -= 360;  
-		  //if (error < -270) error += 360;
-		  //if (error >  270) error -= 360;  
-
+	      error =  error % 360; // angle or 360 - angle
+	      //force it to be the positive remainder, so that 0 <= angle < 360  
+	      //error = (error + 360) % 360;  
+	      //force into the minimum absolute value residue class, so that -180 < angle <= 180  
+	      if (error < -180.0)
+	            error += 360.0;
+	      if (error >= 180)  
+	         error -= 360;  
+	      //
 	      //float dInput = (Input - lastInput);
 	      // Compute PID Output, proportion
 	      Output = kp * error ;//+ ITerm - kd * dInput;

@@ -47,13 +47,27 @@ public class FPoint {
     }
 
     /**
+     * Sub one FPoint to another.  This can be used to
+     * sub separate offsets to each coordinate.
+     */
+    FPoint sub(FPoint fp) {
+        return new FPoint(this.x - fp.x, this.y - fp.y);
+    }
+   
+    /**
+     * Sub the same value to both coordinates.
+     */
+    FPoint sub(double k) {
+        return new FPoint( this.x - k, this.y - k);
+    }
+
+    /**
      * Add one FPoint to another.  This can be used to
      * add separate offsets to each coordinate.
      */
     FPoint add(FPoint fp) {
         return new FPoint(this.x + fp.x, this.y + fp.y);
     }
-   
     /**
      * Multiply both coordinate by the same value.
      */
