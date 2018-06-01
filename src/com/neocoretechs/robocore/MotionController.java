@@ -98,8 +98,10 @@ public class MotionController extends AbstractNodeMain {
 	public static boolean isRangeUpperFront = false;
 	public static boolean isRangeLowerFront = false;
 	public static boolean isVision = false; // machine vision recognition event
-	public static final float PID_THRESHOLD  = 10; // point at which PID engages/disengages
-	public static final float TRIANGLE_THRESHOLD = 45; // Point at which geometric solution begins/disengages
+	public static final float PID_THRESHOLD  = 45; // point at which PID engages/disengages
+	public static final float TRIANGLE_THRESHOLD = 90; // Point at which geometric solution begins/disengages
+	public static float SPEEDSCALE = 1000; // multiplier for throttle 0-1
+	public static float SPEEDLIMIT = 1000; // max speed allowable
 	
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
@@ -107,16 +109,17 @@ public class MotionController extends AbstractNodeMain {
 
 	static float speedL, speedR;
 	static float pidOutput = 0;
-	static float kp = 0.9f;
+	static float kp = 1.1f;
 	static float ki = 0.9f;
 	static float kd = 3.0f;
 	static long lastTime = System.currentTimeMillis();
-	static float Input, Output, Setpoint, error;
-	static float ITerm, DTerm, lastInput, lastError;
+	static float Input, lastInput, lastError, Setpoint, error;
+	static float ITerm, DTerm, PTerm;
 	static int SampleTime = 100; //.1 sec
 	static float outMin, outMax;
 	static boolean inAuto = false;
 	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
+	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
 	
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
@@ -186,7 +189,10 @@ public class MotionController extends AbstractNodeMain {
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.containsKey("__wheelbase") )
 			WHEELBASE = Float.parseFloat(remaps.get("__wheelbase"));
-		
+		if( remaps.containsKey("__speedscale") )
+			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
+		if( remaps.containsKey("__speedlimit") )
+			SPEEDLIMIT = Float.parseFloat(remaps.get("__speedlimit"));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
 		
@@ -225,7 +231,7 @@ public class MotionController extends AbstractNodeMain {
 		*/
 		//
 		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
-		// The code calculates the theoretical speed for each wheel in the 0-1000 scale based on target point vs IMU yaw angle.
+		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
 		// If the joystick chimes in the target point becomes the current course minus relative stick position,
 		// and the speed is modified by the Y value of the stick.
 		// Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
@@ -259,7 +265,7 @@ public class MotionController extends AbstractNodeMain {
 				}
 				// If the button square or circle is depressed, rotate in place at stick position Y speed
 				if( buttons[7] != 0 ) { // left pivot
-					speedR = -axes[2] * 1000.0f;
+					speedR = -axes[2] * SPEEDSCALE;
 					speedL = -speedR;
 					// set it up to send
 					ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
@@ -270,7 +276,7 @@ public class MotionController extends AbstractNodeMain {
 					return;
 				} else {
 					if( buttons[5] != 0 ) { // right
-						speedL = -axes[2] * 1000.0f;
+						speedL = -axes[2] * SPEEDSCALE;
 						speedR = -speedL;
 						// set it up to send
 						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
@@ -281,7 +287,7 @@ public class MotionController extends AbstractNodeMain {
 						return;
 					}
 				}
-	
+				// get radian measure of left stick x,y
 				float radians = (float) Math.atan2(axes[2], axes[0]);
 				float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 				// horizontal axis is 0 to -180 degrees, we want 0 at the top
@@ -290,28 +296,37 @@ public class MotionController extends AbstractNodeMain {
 				// we have absolute stickdegrees, offset the current IMU by that quantity to get new desired course
 				float offsetDegrees = (float) (eulers[0] - stickDegrees);
 			    // reduce the angle  
-			    offsetDegrees =  offsetDegrees % 360; 
+			    offsetDegrees =  offsetDegrees % 360;
+			    //
+			    if (offsetDegrees <= -180.0)
+			         offsetDegrees += 360.0;
+			    if (offsetDegrees >= 180)  
+			         offsetDegrees -= 360;
 			    // force it to be the positive remainder, so that 0 <= angle < 360  
-			    offsetDegrees = (offsetDegrees + 360) % 360;  
+			    //offsetDegrees = (offsetDegrees + 360) % 360;  
 			    // force into the minimum absolute value residue class, so that -180 < angle <= 180  
-			    if (offsetDegrees > 180)  
-			          offsetDegrees -= 360;
+			    //if (offsetDegrees > 180)  
+			    //      offsetDegrees -= 360;
+			      
 				//if( DEBUG )
 				//	System.out.println("Axes:"+axes[0]+","+axes[2]+" deg:"+bearingDegrees+" rad:"+radians);
-				// If we are pressing the triangle, dont update the setpoint with IMU yaw, this has the effect of locking
+				// If we are pressing the button, dont update the setpoint with IMU yaw, this has the effect of locking
 				// the course onto the absolute track relative to the way the robot is pointing offset by stick position
 				// rather than a continuous update of stick offset added to current orientation. so if you want the robot to track
-				// straight forward on its current orientation, hold triangle and push stick forward or back.
+				// straight forward on its current orientation, hold triangle/top and push stick forward or back.
 			    if( buttons[4] != 0 ) {   
 					// is it initial button press? then log current bearing of IMU to hold to
 					if( !holdBearing ) {
 						holdBearing = true;
+						outputNeg = false;
 						Setpoint = (float) eulers[0];
-						Output = 0.0f;
+						PTerm = 0.0f;
 						ITerm = 0.0f;
 						DTerm = 0.0f;
+						pidOutput = 0.0f;
+						wasPid = true; // start with PID control until we get out of tolerance
 						System.out.println("Stick absolute deg set:"+Setpoint);	
-					} // If we are pressing triangle, leave setpoint alone as initial bearing from IMU
+					}
 			    } else {
 			    	holdBearing = false;
 			    	Setpoint = offsetDegrees; // otherwise its the heading minus the joystick offset from 0
@@ -324,10 +339,10 @@ public class MotionController extends AbstractNodeMain {
 				// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
 				// or on the computed derivation from desired course if a straight line course is set.
 				// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, which is our speed control range 
-				speedR = -axes[2] * 1000.0f;
+				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
+				speedR = -axes[2] * SPEEDSCALE;
 				speedL = speedR;
-				// Output has the positive or negative difference in degrees (left or right offset)
+				// PTerm has the positive or negative difference in degrees (left or right offset)
 				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
 				// We determine the radius of the turn potential by the forward speed desired (joystick Y)
 				// For instance if at 0 we can spin at radius .5 of wheelbase if necessary, while at speed 500 out of 1000
@@ -344,8 +359,8 @@ public class MotionController extends AbstractNodeMain {
 				// but in reality we are using radius 0 to 1, and then 0 to 1 plus WHEELBASE scaled to finer granularity.
 				// This assumes that at half speed we can still make a 90 degree turn.
 				// We use value of IMU vs desired course to turn left or right via
-				// a plus or minus value from the Compute method set in the variable called Output.
-				float radius = Math.abs(axes[2]) * 1000.0f;
+				// a plus or minus value from the Compute method set in the variable called PTerm.
+				float radius = Math.abs(axes[2]) * SPEEDSCALE;
 				float arcin, arcout;
 				//
 				// If holding an inertially guided course, check for the tolerance of error proportion
@@ -363,20 +378,20 @@ public class MotionController extends AbstractNodeMain {
 				if( holdBearing ) {
 					System.out.printf("Inertial Setpoint=%f | Hold=%b ", Setpoint, holdBearing);
 					// In auto
-					if( Math.abs(Output) <= TRIANGLE_THRESHOLD ) {
-						if( Output < 0.0f ) { // increase right wheel power goal
+					if( Math.abs(error) <= TRIANGLE_THRESHOLD ) {
+						if( error < 0.0f ) { // decrease left wheel power goal
 							// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
-							if( Math.abs(Output) <= PID_THRESHOLD ) {
-								rightPid(axes);
+							if( Math.abs(error) <= PID_THRESHOLD ) {
+								rightPid(radius);
 							} else {
-								rightAngle(radius); // decrease left wheel power
+								rightAngle(radius);
 							}
 						} else {
-							if( Output > 0.0f ) { // increase left wheel power goal
-								if( Output <= PID_THRESHOLD) {
-									leftPid(axes);
+							if( error > 0.0f ) { // decrease right wheel power goal
+								if( error <= PID_THRESHOLD) {
+									leftPid(radius);
 								} else {
-									leftAngle(radius); // decrease right wheel power
+									leftAngle(radius);
 								}
 							} else {
 								// we are critically damped, set integral to 0
@@ -385,32 +400,35 @@ public class MotionController extends AbstractNodeMain {
 						}
 						System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
-						// Exceeded tolerance, proceed to geometric solution, reset integral windup
+						// Exceeded tolerance, proceed to geometric solution in arcs
 						ITerm = 0;
-						arcin = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * radius);
-						arcout = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
-						// Output is difference in degrees between setpoint and input
-						if( Output < 0.0f )
+						wasPid = false;
+						arcin = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * radius);
+						arcout = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+						// error is difference in degrees between setpoint and input
+						if( error < 0.0f )
 							speedL *= (arcin/arcout);
 						else
-							if( Output > 0.0f )
+							if( error > 0.0f )
 								speedR *= (arcin/arcout);
 						System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
-					arcin = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * radius);
-					arcout = (float) (Math.abs(Output/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
-					// Output is difference in degrees between setpoint and input
-					if( Output < 0.0f )
-						speedL *= (arcin/arcout);
-					else
-						if( Output > 0.0f )
-							speedR *= (arcin/arcout);
+					arcin = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * radius);
+					arcout = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+					// error is difference in degrees between setpoint and input
+					if( stickDegrees != -180.0 ) { // if we want to go straight backwards dont bother computing any ratios
+						if( error < 0.0f )
+							speedL *= (arcin/arcout);
+						else
+							if( error > 0.0f )
+								speedR *= (arcin/arcout);
+					}
 					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 				}
 	
-				System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Hold=%b\n",Output, DTerm, ITerm, error, pidOutput, holdBearing);
+				System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Hold=%b\n",PTerm, DTerm, ITerm, error, pidOutput, holdBearing);
 				// set it up to send
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 				speedVals.add((int)speedL);
@@ -422,58 +440,95 @@ public class MotionController extends AbstractNodeMain {
 			 * If we hit max we are going to decrease power to left wheel by splitting the difference
 			 * of leftover speed on right applied to left wheel decrease. whether these are equivalent in reality is
 			 * left to evaluation.
-			 * @param axes
+			 * @param speed the scaled velocity
 			 */
-			private void rightPid(float[] axes) {
+			private void rightPid(float speed) {
+				/*
 				if( !outputNeg ) { // prevent integral windup by checking when track is crossed via sign of course diff changing
 					ITerm = 0;
 				}
 				outputNeg = true;
+				// see if we are entering from the geometric realm, if so preload integral
+				if( !wasPid ) {
+					wasPid = true;
+					// get rid of old integral and replace with our preload windup
+					// Since we are in negative offsets we will subtract the maximum offset that is threshold value 
+					pidOutput = PTerm + DTerm + (-PID_THRESHOLD * ki);
+					// Now set up integral to reflect transition state
+					ITerm = -PID_THRESHOLD;
+				}
+				*/
+				// Reduce speed of left wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
+				// scale it by speed
+				speedL -= ( Math.abs(pidOutput) * (speed/350) );
+				/*
 				// goal is to increase power of right wheel
 				// We scale it by speed with the assumption that at full speed,
-				// the values from PID represent the ones necessary to work at top speed of 1000.
+				// the values from PID represent the ones necessary to work at top speed of 1000 or SPEEDLIMIT.
 				speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
 				// if we cap at max, use the difference to retard opposite
-				if( speedR > 1000.0f ) {
-					float speeDif = speedR - 1000.0f;
-					speedR = 1000.0f;
+				if( speedR > SPEEDLIMIT ) {
+					// over limit, split the difference
+					float speeDif = speedR - SPEEDLIMIT;
+					speedR = SPEEDLIMIT;
 					// left is decreased by the amount right went over max
 					speedL -= speeDif;
 					if( speedL < 0.0 ) speedL = 0.0f;
 					// and the robot is pivoting at max speed if everything was capped
 				}
+				*/
 			}
 			/**
 			 * Increase power of left wheel base don PID results. If we max out we are going to apply the leftover
 			 * power over maximum to decreasing the right wheel speed.
-			 * @param axes
+			 * @param speed The scaled velocity
 			 */
-			private void leftPid(float[] axes) {
+			private void leftPid(float speed) {
+				/*
 				if( outputNeg ) {
 					ITerm = 0;
 				}
 				outputNeg = false;
+				// see if we are entering from the geometric realm, if so preload integral
+				if( !wasPid ) {
+					wasPid = true;
+					// get rid of old integral and replace with our preload windup
+					// Since we are in positive offsets we will add the maximum threshold value for windup.
+					pidOutput = PTerm + DTerm + (PID_THRESHOLD * ki);
+					// Now set up integral to reflect transition state
+					ITerm = PID_THRESHOLD;
+				}
+				*/
+				// Reduce speed of right wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
+				// scale it by speed
+				speedR -= ( Math.abs(pidOutput) * (speed/350) );
+				/*
 				// goal is net increase of left wheel power
 				// We scale it by speed with the assumption that at full speed,
-				// the values from PID represent the ones necessary to work at top speed of 1000.
+				// the values from PID represent the ones necessary to work at top speed of 1000 or SPEEDLIMIT.
 				speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
-				if( speedL > 1000.0f ) {
-					float speeDif = speedL - 1000.0f;
-					speedL = 1000.0f;
+				if( speedL > SPEEDLIMIT ) {
+					// over limit, split the difference
+					float speeDif = speedL - SPEEDLIMIT;
+					speedL = SPEEDLIMIT;
 					speedR -= speeDif;
 					if( speedR < 0.0) speedR = 0.0f;
 				}
+				*/
+				
 			}
 			/**
 			 * Apply a solution in triangles as we do with solution in arcs to reduce left wheel speed.
-			 *  This presupposes we are within tolerance.
+			 * This presupposes we are within tolerance.
+			 * @param radius velocity-based value of turn radius component
 			 */
 			private void rightAngle(float radius) {
 				// Mitigate integral windup
 				ITerm = 0;
+				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
 				// chord is 2Rsin(theta/2) ( we convert to radians first)
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(error/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
@@ -485,13 +540,15 @@ public class MotionController extends AbstractNodeMain {
 			/**
 			 * Apply a solution in triangles as we do with solution in arcs to reduce right wheel speed.
 			 * This presupposes we are within tolerance.
+			 * @param radius Velocity based component of turning radius
 			 */
 			private void leftAngle(float radius) {
 				// Mitigate integral windup
 				ITerm = 0;
+				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
 				// chord is 2Rsin(theta/2), R is half wheelbase so we assume our robot is roughly 'square'
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(Output/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(error/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
@@ -650,7 +707,7 @@ public class MotionController extends AbstractNodeMain {
 				Setpoint = 0.0f; // 0 degrees yaw
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
-				SetOutputLimits(0.0f, 1000.0f);
+				SetOutputLimits(0.0f, SPEEDLIMIT);
 				SetMode(true);
 			}
 
@@ -788,7 +845,7 @@ public class MotionController extends AbstractNodeMain {
 		return val;
 	}
 	/**
-	 * Calculate the PID values, Output contains the proportion times scalar
+	 * Calculate the PID values, PTerm contains the proportion times scalar
 	 * DTerm is the derivative, ITerm is the integral of error variable.
 	 * pidOutput is output.
 	 */
@@ -807,14 +864,14 @@ public class MotionController extends AbstractNodeMain {
 	      //force it to be the positive remainder, so that 0 <= angle < 360  
 	      //error = (error + 360) % 360;  
 	      //force into the minimum absolute value residue class, so that -180 < angle <= 180  
-	      if (error < -180.0)
+	      if (error <= -180.0)
 	            error += 360.0;
 	      if (error >= 180)  
 	         error -= 360;  
 	      //
 	      //float dInput = (Input - lastInput);
 	      // Compute PID Output, proportion
-	      Output = kp * error ;//+ ITerm - kd * dInput;
+	      PTerm = kp * error ;//+ ITerm - kd * dInput;
 	      // derivative
 	      DTerm = kd * (error - lastError);
 	      // integral
@@ -839,9 +896,9 @@ public class MotionController extends AbstractNodeMain {
 	      //lastTime = now;
 	      //error is positive if current_heading > bearing (compass direction)
 	      // To Use the PD form, set ki to 0.0 default, thus eliminating integrator
-	      pidOutput = Output + ITerm + DTerm;
-	      //System.out.printf("P = %f | I = %f | D = %f | Output = %f | pidErr = %f\n",error,ITerm,dInput,Output,error);
-	      //System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Auto = %b\n",Output, DTerm, ITerm, error, pidOutput, holdBearing);
+	      pidOutput = PTerm /*+ ITerm*/ + DTerm;
+	      //System.out.printf("P = %f | I = %f | D = %f | PTerm = %f | pidErr = %f\n",error,ITerm,dInput,PTerm,error);
+	      //System.out.printf("PTerm = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Auto = %b\n",PTerm, DTerm, ITerm, error, pidOutput, holdBearing);
 	   //}
 	}
 	/**
@@ -880,18 +937,6 @@ public class MotionController extends AbstractNodeMain {
 	   if(Min > Max) return;
 	   outMin = Min;
 	   outMax = Max;
-	    
-	   if(Output > outMax) 
-		   Output = outMax;
-	   else 
-		   if(Output < outMin) 
-			   Output = outMin;
-	 
-	   if(ITerm > outMax) 
-		   ITerm= outMax;
-	   else 
-		   if(ITerm < outMin) 
-			   ITerm= outMin;
 	}
 	 
 	static void SetMode(boolean isAuto)
@@ -904,12 +949,12 @@ public class MotionController extends AbstractNodeMain {
 	    inAuto = isAuto;
 	}
 	/**
-	 * Init lastInput (last IMU), ITerm integral , and check for integral windup
+	 * Init lastInput (last IMU), ITerm integral, and check for integral windup
 	 */
 	static void Initialize()
 	{
 	   lastInput = Input;
-	   ITerm = Output;
+	   ITerm = PTerm;
 	   if(ITerm > outMax) 
 		   ITerm = outMax;
 	   else 

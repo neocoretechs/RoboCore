@@ -95,7 +95,7 @@ class PositionPanel extends JPanel
     /*
      * Set up the Iterm label
      */
-        JLabel aposJLabel = new JLabel("ITerm:");
+        JLabel aposJLabel = new JLabel("PTerm:");
         //aposJLabel.setHorizontalAlignment(JLabel.RIGHT);
         gbc.fill=gbc.HORIZONTAL;
         gbc.gridx=0;
@@ -264,17 +264,17 @@ class PositionPanel extends JPanel
     /*
      * Set up the text field for the ITerm
      */
-        itermField = new JTextField(8);
-        itermField.setEditable(false);
-        itermField.setHorizontalAlignment(JTextField.RIGHT);
-        itermField.setBorder(null);
+        ptermField = new JTextField(8);
+        ptermField.setEditable(false);
+        ptermField.setHorizontalAlignment(JTextField.RIGHT);
+        ptermField.setBorder(null);
         gbc.fill=gbc.NONE;
         gbc.gridx=1;
         gbc.gridy=5;
         gbc.weightx=1;
         gbc.weighty=1;
-        gbl.setConstraints(itermField, gbc);
-        add(itermField);
+        gbl.setConstraints(ptermField, gbc);
+        add(ptermField);
 
 
    /*
@@ -367,8 +367,8 @@ class PositionPanel extends JPanel
     * Initialize all displayed values to 0, except the angles,
     * which are set to 90 degrees.
     */
-        setComputedValues(0.0, 0.0, 90.0, 
-				                90.0, 0,
+        setComputedValues(0.0, 0.0, 0.0, 
+				                0.0, 0,
 				                0.0, 0.0, 0.0,
 								0.0, 0.0);
     }
@@ -403,7 +403,7 @@ class PositionPanel extends JPanel
      */
     void setComputedValues(double x, double y, double theta,
                            double err, double speed,
-						   double pid, double iterm, double imu,
+						   double pid, double pterm, double imu,
                            double vLeft, double vRight)
     {
         xField.setText(df.format(x));
@@ -417,7 +417,7 @@ class PositionPanel extends JPanel
         spdField.setText(df.format(speed));
 
         pidField.setText(df.format(pid));// + " ("+dfs.format(xDRM-x)+")");
-        itermField.setText(df.format(iterm));// + " ("+dfs.format(yDRM-y)+")");
+        ptermField.setText(df.format(pterm));// + " ("+dfs.format(yDRM-y)+")");
         //dmaField.setText(da.format(degree(thetaDRM)));//+ 
 				                //" ("+das.format(degree(thetaDRM-theta))+")");
         imuField.setText(da.format(imu));
@@ -453,17 +453,17 @@ class PositionPanel extends JPanel
     /** Field for displaying the dead-reckoned Y coordinate. */
     JTextField dyField;
 
-    /** Field for displaying the dead-reckoned direction. */
+    /** Field for displaying the heading error. */
     JTextField errField;
 
-    /** Field for displaying the dead-reckoned X coordinate. */
+    /** Field for displaying the PID. */
     JTextField pidField;
     
-    /** Field for displaying the dead-reckoned Y coordinate. */
+    /** Field for displaying the speed. */
     JTextField spdField;
 
-    /** Field for displaying the dead-reckoned Y coordinate. */
-    JTextField itermField;
+    /** Field for displaying the PTerm proportion. */
+    JTextField ptermField;
 
     /** Field for displaying the dead-reckoned direction. */
     JTextField dmaField;
