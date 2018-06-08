@@ -20,19 +20,19 @@ import au.edu.jcu.v4l4j.exceptions.StateException;
 import au.edu.jcu.v4l4j.exceptions.V4L4JException;
 
 /**
- * This class takes a series of images from V4L4j and remuxxes them onto the ROS bus.
+ * This class takes a series of stereoscopic images from V4L4j and remuxxes them onto the ROS bus.
  * The images are encoded jpeg via capture class, then the byte payload is sent downline.
  * Changing the capture class in initFrameGrabber of embedded videocapL class can change the format.
  * @author jg Copyright (C) NeoCoreTechs 2017,2018
  *
  */
-public class VideoPub extends AbstractNodeMain {
+public class VideoPubStereo extends AbstractNodeMain {
 	private static final boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
-	byte[] bbuf = null;// RGB buffer
 
-	boolean imageReady = false;
+	boolean imageReadyL = false;
+	boolean imageReadyR = false;
 	
 	private int lastSequenceNumber;
 	long time1;
@@ -41,14 +41,19 @@ public class VideoPub extends AbstractNodeMain {
 
 	int imwidth = 640, imheight = 480;
 	
-	Object vidMutex = new Object();
+	Object vidMutexL = new Object();
+	Object vidMutexR = new Object();
 	
 	private static int width = 640, height = 480, std = V4L4JConstants.STANDARD_WEBCAM, channel = 0;
-	private static String device = "/dev/video0";
-	private VideoDevice videoDevice;
-	private FrameGrabber frameGrabber;
+	private static String deviceL = "/dev/video0";
+	private static String deviceR = "/dev/video1";
+	private VideoDevice videoDeviceL;
+	private VideoDevice videoDeviceR;
+	private FrameGrabber frameGrabberL;
+	private FrameGrabber frameGrabberR;
 
-	ByteBuffer bb;
+	ByteBuffer bbL;
+	ByteBuffer bbR;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -75,18 +80,29 @@ public class VideoPub extends AbstractNodeMain {
 	 */
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
 		private int sequenceNumber;
-		videocap vidcap;
+		videocapL vidcapL;
+		videocapR vidcapR;
 		@Override
 		protected void setup() {
 			sequenceNumber = 0;
 			try {
-				vidcap = new videocap();
-				vidcap.initFrameGrabber();
+				vidcapL = new videocapL();
+				vidcapL.initFrameGrabber();
 			} catch (V4L4JException e1) {
-				System.out.println("Error setting up capture");
+				System.out.println("Error setting up capture for left camera");
 				e1.printStackTrace();
 				// cleanup and exit
-				vidcap.cleanupCapture();
+				vidcapL.cleanupCapture();
+				return;
+			}
+			try {
+				vidcapR = new videocapR();
+				vidcapR.initFrameGrabber();
+			} catch (V4L4JException e1) {
+				System.out.println("Error setting up capture for right camera");
+				e1.printStackTrace();
+				// cleanup and exit
+				vidcapR.cleanupCapture();
 				return;
 			}
 		}
@@ -103,7 +119,7 @@ public class VideoPub extends AbstractNodeMain {
  
 			//ByteArrayOutputStream os = new ByteArrayOutputStream();
 						
-			if( imageReady) {
+			if( imageReadyL && imageReadyR ) {
 				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
 					time1 = System.currentTimeMillis();
 					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber));
@@ -111,11 +127,11 @@ public class VideoPub extends AbstractNodeMain {
 				}
 				if( DEBUG )
 					System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
-				synchronized(vidMutex) {		
+				synchronized(vidMutexL) {		
 				//ImageIO.write(bi, "jpg", os);
 					//os.flush();
 					//bbuf = os.toByteArray();
-					imagemess.setData(bb);
+					imagemess.setData(bbL);
 					imagemess.setEncoding("JPG"/*"8UC3"*/);
 					imagemess.setWidth(imwidth);
 					imagemess.setHeight(imheight);
@@ -123,7 +139,8 @@ public class VideoPub extends AbstractNodeMain {
 					imagemess.setIsBigendian((byte)0);
 					imagemess.setHeader(imghead);
 					imgpub.publish(imagemess);
-					imageReady = false;
+					imageReadyL = false;
+					imageReadyR = false;
 					if( DEBUG )
 						System.out.println("Pub. Image:"+sequenceNumber);	
 				}
@@ -150,9 +167,9 @@ public class VideoPub extends AbstractNodeMain {
 	/**
 	 *  * A typical <code>FrameGrabber</code> use case is as follows:
 	 * <br>
-	 * Create the video device and frame grabber:
+	 * Create the video deviceL and frame grabber:
 	 * <code><br><br>
-	 * //create a new video device<br>
+	 * //create a new video deviceL<br>
 	 * VideoDevice vd = new VideoDevice("/dev/video0");<br>
 	 * // vd.setThreadFactory(myThreadFactory); // set your own thread factory if required.
 	 * <br>//Create an instance of FrameGrabber
@@ -177,7 +194,7 @@ public class VideoPub extends AbstractNodeMain {
 	 * <br>f.stopCapture();
 	 * <br>//Release the frame grabber
 	 * <br>vd.releaseFrameGrabber();
-	 * <br>//Release the video device
+	 * <br>//Release the video deviceL
 	 * <br>vd.release();
 	 * </code><br><br>
 	 * In myCallbackObject, when the capture is started, the following method is
@@ -191,38 +208,38 @@ public class VideoPub extends AbstractNodeMain {
 	 * </code>
 	 *
 	 */
-	class videocap implements CaptureCallback {
+	class videocapL implements CaptureCallback {
 		
 	private void initFrameGrabber() throws V4L4JException {
-		videoDevice = new VideoDevice(device);
-		DeviceInfo deviceInfo=videoDevice.getDeviceInfo();
-		if (deviceInfo.getFormatList().getNativeFormats().isEmpty()) {
-		    System.out.println("Couldn't detect native format for the device.");
+		videoDeviceL = new VideoDevice(deviceL);
+		DeviceInfo deviceInfoL=videoDeviceL.getDeviceInfo();
+		if (deviceInfoL.getFormatList().getNativeFormats().isEmpty()) {
+		    System.out.println("Couldn't detect native format for the left camera device.");
 		} else {
-			for(ImageFormat fi : deviceInfo.getFormatList().getNativeFormats() )
+			for(ImageFormat fi : deviceInfoL.getFormatList().getNativeFormats() )
 				System.out.println(fi);
 		}
 		  //ImageFormat imageFormat=deviceInfo.getFormatList().getNativeFormat(0);
 		
-		frameGrabber = videoDevice.getJPEGFrameGrabber(width, height, channel, std, 80);
-		frameGrabber.setCaptureCallback(this);
-		width = frameGrabber.getWidth();
-		height = frameGrabber.getHeight();
-		System.out.println("Starting capture at " + width + "x" + height);
-		frameGrabber.startCapture();
+		frameGrabberL = videoDeviceL.getJPEGFrameGrabber(width, height, channel, std, 80);
+		frameGrabberL.setCaptureCallback(this);
+		width = frameGrabberL.getWidth();
+		height = frameGrabberL.getHeight();
+		System.out.println("Starting capture of left camera at " + width + "x" + height);
+		frameGrabberL.startCapture();
 	}
 	
 	private void cleanupCapture() {
 		try {
-			frameGrabber.stopCapture();
+			frameGrabberL.stopCapture();
 		}
 		catch (StateException ex) {
 			// the frame grabber may be already stopped, so we just ignore
 			// any exception and simply continue.
 		}
-		// release the frame grabber and video device
-		videoDevice.releaseFrameGrabber();
-		videoDevice.release();
+		// release the frame grabber and video deviceL
+		videoDeviceL.releaseFrameGrabber();
+		videoDeviceL.release();
 	}
 	
 	@Override
@@ -230,11 +247,65 @@ public class VideoPub extends AbstractNodeMain {
 		// This method is called when a new frame is ready.
 		// Don't forget to recycle it when done dealing with the frame.
 		// draw the new frame onto the JLabel
-		synchronized(vidMutex) {
+		synchronized(vidMutexL) {
 			//bi = frame.getBufferedImage();
-			bb = ByteBuffer.wrap(frame.getBytes());
+			bbL = ByteBuffer.wrap(frame.getBytes());
 		}
-		imageReady = true;
+		imageReadyL = true;
+		// recycle the frame
+		frame.recycle();
+	}
+	
+	@Override
+	public void exceptionReceived(V4L4JException e) {
+		// This method is called by v4l4j if an exception
+		// occurs while waiting for a new frame to be ready.
+		// The exception is available through e.getCause()
+		e.printStackTrace();
+	}
+	}
+	
+	class videocapR implements CaptureCallback {
+		
+	private void initFrameGrabber() throws V4L4JException {
+		videoDeviceR = new VideoDevice(deviceR);
+		DeviceInfo deviceInfoR=videoDeviceR.getDeviceInfo();
+		if (deviceInfoR.getFormatList().getNativeFormats().isEmpty()) {
+		    System.out.println("Couldn't detect native format for the right camera device.");
+		} else {
+			for(ImageFormat fi : deviceInfoR.getFormatList().getNativeFormats() )
+				System.out.println(fi);
+		}
+		frameGrabberR = videoDeviceR.getJPEGFrameGrabber(width, height, channel, std, 80);
+		frameGrabberR.setCaptureCallback(this);
+		//width = frameGrabberR.getWidth();
+		//height = frameGrabberR.getHeight();
+		System.out.println("Starting capture of right camera at " + width + "x" + height);
+		frameGrabberR.startCapture();
+	}
+	
+	private void cleanupCapture() {
+		try {
+			frameGrabberR.stopCapture();
+		}
+		catch (StateException ex) {
+			// the frame grabber may be already stopped, so we just ignore
+			// any exception and simply continue.
+		}
+		// release the frame grabber and video deviceL
+		videoDeviceR.releaseFrameGrabber();
+		videoDeviceR.release();
+	}
+	
+	@Override
+	public void nextFrame(VideoFrame frame) {
+		// This method is called when a new frame is ready.
+		// Don't forget to recycle it when done dealing with the frame.
+		// draw the new frame onto the JLabel
+		synchronized(vidMutexR) {
+			bbR = ByteBuffer.wrap(frame.getBytes());
+		}
+		imageReadyR = true;
 		// recycle the frame
 		frame.recycle();
 	}

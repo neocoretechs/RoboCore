@@ -884,7 +884,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     			FileReader fis = new FileReader("motion.log");
     			BufferedReader br = new BufferedReader(fis);
     			String s = "";
-    			float err=0, left, right, dterm, iterm, pid, speed = 0, imu = 0;
+    			float err=0, left, right, dterm, pterm, pid, speed = 0, imu = 0;
     			numSteps = 0;
     			double baseline = (IdealDrive.bodyWidth * Math.cos((2.0 * Math.PI)))*100;
     			while(s != null) {
@@ -941,16 +941,16 @@ public class MotionApp implements ChangeListener, DrawInterface
     						int p2 = s.indexOf("DTerm = ");
     						if( p2 != -1) {
     							dterm = Float.valueOf(s.substring(p2+8,s.indexOf(" ",p2+8)));
-    							int p3 = s.indexOf("ITerm = ");
-    							iterm = Float.valueOf(s.substring(p3+8,s.indexOf(" ",p3+8)));
+    							int p3 = s.indexOf("Output = ");
+    							pterm = Float.valueOf(s.substring(p3+8,s.indexOf(" ",p3+9)));
     							int p4 = s.indexOf("PID=");
     							pid = Float.valueOf(s.substring(p4+4,s.indexOf(" ",p4+4)));
-    							System.out.println(s+" "+err+" "+left+" "+right+" "+dterm+" "+iterm+" "+pid);
+    							System.out.println(s+" "+err+" "+left+" "+right+" "+dterm+" "+pterm+" "+pid);
     							runData[0][numSteps] = err;
     							runData[1][numSteps] = left;
     							runData[2][numSteps] = right;
     							runData[3][numSteps] = dterm;
-    							runData[4][numSteps] = iterm;
+    							runData[4][numSteps] = pterm;
     							runData[5][numSteps] = pid;
     							runData[6][numSteps] = speed;
     							runData[7][numSteps] = imu;

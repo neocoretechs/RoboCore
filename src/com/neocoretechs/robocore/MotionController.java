@@ -109,7 +109,7 @@ public class MotionController extends AbstractNodeMain {
 
 	static float speedL, speedR;
 	static float pidOutput = 0;
-	static float kp = 1.1f;
+	static float kp = 1.5f;
 	static float ki = 0.9f;
 	static float kd = 3.0f;
 	static long lastTime = System.currentTimeMillis();
@@ -193,6 +193,10 @@ public class MotionController extends AbstractNodeMain {
 			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
 		if( remaps.containsKey("__speedlimit") )
 			SPEEDLIMIT = Float.parseFloat(remaps.get("__speedlimit"));
+		if( remaps.containsKey("__kp") )
+			kp = Float.parseFloat(remaps.get("__kp"));
+		if( remaps.containsKey("__kd") )
+			kd = Float.parseFloat(remaps.get("__kd"));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
 		
@@ -418,7 +422,8 @@ public class MotionController extends AbstractNodeMain {
 					arcin = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * radius);
 					arcout = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 					// error is difference in degrees between setpoint and input
-					if( stickDegrees != -180.0 ) { // if we want to go straight backwards dont bother computing any ratios
+					// Stick position will override any IMU tolerances
+					if( stickDegrees != -180.0 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
 						if( error < 0.0f )
 							speedL *= (arcin/arcout);
 						else

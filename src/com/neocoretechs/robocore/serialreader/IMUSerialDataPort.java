@@ -393,7 +393,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    		return 0;
 		    // read fail is EE, otherwise confustion
 		    //if( DEBUG )
-		    //	System.out.println("Did NOT receive expected 'bb' response in signalRead");
+		    //	System.out.println("Did NOT receive expected 0xBB response in signalRead");
 		    if( resp != (byte)0xEE ) {
 		    	System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
 		    	return (byte)0x07; // lets call this bus overrun from chip
