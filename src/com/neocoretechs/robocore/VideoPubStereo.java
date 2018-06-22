@@ -57,7 +57,7 @@ public class VideoPubStereo extends AbstractNodeMain {
 	
 	@Override
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("pubs_video");
+		return GraphName.of("pubs_stereovideo");
 	}
 
 	/**
@@ -67,8 +67,10 @@ public class VideoPubStereo extends AbstractNodeMain {
 	public void onStart(final ConnectedNode connectedNode) {
 
 		//final Log log = connectedNode.getLog();
-		final Publisher<sensor_msgs.Image> imgpub =
-		connectedNode.newPublisher("/sensor_msgs/Image", sensor_msgs.Image._TYPE);
+		final Publisher<stereo_msgs.StereoImage> imgpub =
+		connectedNode.newPublisher("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
+		//final Publisher<sensor_msgs.Image> rimgpub =
+		//		connectedNode.newPublisher("/sensor_msgs/rImage", sensor_msgs.Image._TYPE);
 		// caminfopub has camera info
 		//final Publisher<sensor_msgs.CameraInfo> caminfopub =
 		//connectedNode.newPublisher("/sensor_msgs/CameraInfo", sensor_msgs.CameraInfo._TYPE);
@@ -85,6 +87,7 @@ public class VideoPubStereo extends AbstractNodeMain {
 		@Override
 		protected void setup() {
 			sequenceNumber = 0;
+			
 			try {
 				vidcapL = new videocapL();
 				vidcapL.initFrameGrabber();
@@ -95,6 +98,7 @@ public class VideoPubStereo extends AbstractNodeMain {
 				vidcapL.cleanupCapture();
 				return;
 			}
+			
 			try {
 				vidcapR = new videocapR();
 				vidcapR.initFrameGrabber();
@@ -109,15 +113,23 @@ public class VideoPubStereo extends AbstractNodeMain {
 
 		@Override
 		protected void loop() throws InterruptedException {
+			
 			std_msgs.Header imghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
-	
 			imghead.setSeq(sequenceNumber);
 			tst = connectedNode.getCurrentTime();
 			imghead.setStamp(tst);
 			imghead.setFrameId(tst.toString());
-			sensor_msgs.Image imagemess = imgpub.newMessage();
- 
-			//ByteArrayOutputStream os = new ByteArrayOutputStream();
+			//sensor_msgs.Image imagemess = imgpub.newMessage();
+			//stereo_msgs.StereoImage imagemess = imgpub.newMessage();
+			stereo_msgs.StereoImage imagemess = connectedNode.getTopicMessageFactory().newFromType(stereo_msgs.StereoImage._TYPE);
+			/*
+			std_msgs.Header rimghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
+			rimghead.setSeq(sequenceNumber);
+			tst = connectedNode.getCurrentTime();
+			rimghead.setStamp(tst);
+			rimghead.setFrameId(tst.toString());
+			sensor_msgs.Image rimagemess = rimgpub.newMessage();
+ 			*/
 						
 			if( imageReadyL && imageReadyR ) {
 				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
@@ -127,18 +139,30 @@ public class VideoPubStereo extends AbstractNodeMain {
 				}
 				if( DEBUG )
 					System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
-				synchronized(vidMutexL) {		
-				//ImageIO.write(bi, "jpg", os);
-					//os.flush();
-					//bbuf = os.toByteArray();
+				
+				synchronized(vidMutexL) {
 					imagemess.setData(bbL);
-					imagemess.setEncoding("JPG"/*"8UC3"*/);
+					imagemess.setData2(bbR);
+					imagemess.setEncoding("JPG");
 					imagemess.setWidth(imwidth);
 					imagemess.setHeight(imheight);
 					imagemess.setStep(imwidth);
 					imagemess.setIsBigendian((byte)0);
 					imagemess.setHeader(imghead);
 					imgpub.publish(imagemess);
+					//
+				
+					/*
+					rimagemess.setData(bbR);
+					rimagemess.setEncoding("JPG");
+					rimagemess.setWidth(imwidth);
+					rimagemess.setHeight(imheight);
+					rimagemess.setStep(imwidth);
+					rimagemess.setIsBigendian((byte)0);
+					rimagemess.setHeader(rimghead);
+					rimgpub.publish(rimagemess);
+					*/
+					//
 					imageReadyL = false;
 					imageReadyR = false;
 					if( DEBUG )
@@ -155,7 +179,7 @@ public class VideoPubStereo extends AbstractNodeMain {
 				//System.out.println("Pub cam:"+imagemess);
 			} else {
 				if(DEBUG)
-					System.out.println("Image not ready "+sequenceNumber);
+					System.out.println("Image(s) not ready "+sequenceNumber);
 				Thread.sleep(1);
 				++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
 			}
