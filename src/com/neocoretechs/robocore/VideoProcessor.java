@@ -4,7 +4,6 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Graphics;
-
 import java.awt.image.BufferedImage;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -14,12 +13,18 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
+
+
+
+
 
 
 import org.ros.concurrent.CircularBlockingDeque;
@@ -55,7 +60,7 @@ public class VideoProcessor extends AbstractNodeMain
     private BufferedImage imageL = null;
     private BufferedImage imageR = null;
     private PlayerFrame displayPanel;
-    private Object mutex = new Object();
+    
     ByteBuffer cbL, cbR;
     byte[] bufferL = new byte[0];
     byte[] bufferR = new byte[0];
@@ -73,6 +78,8 @@ public class VideoProcessor extends AbstractNodeMain
     final static int corrWinRight = 3;
     CircularBlockingDeque<BufferedImage> queueL = new CircularBlockingDeque<BufferedImage>(10);
     CircularBlockingDeque<BufferedImage> queueR = new CircularBlockingDeque<BufferedImage>(10);
+    BlockingQueue<int[][]> corrWins = new ArrayBlockingQueue<int[][]>(307200, true); // 640x480
+    private Object mutex = new Object(); // to notify correspondence window generator thread of new image
     byte[] bqueue;
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
@@ -100,6 +107,47 @@ public class VideoProcessor extends AbstractNodeMain
 		}
 		// construct gaussian kernel with peak at 127
 		final int[][] kernel = ImgProcessor.gaussianNormal(127,corrWinSize);
+		/**
+		 * Thread to precompute the correspondence windows for each pixel in a new image and store those
+		 * to the array backed blocking queue for retrieval by the main processing thread.
+		 * This thread works strictly on left source image, while the main thread processes the right image with
+		 * the kernels generated here and stored on the queue.
+		 */
+		ThreadPoolManager.getInstance().spin(new Runnable() {
+				@Override
+				public void run() {
+					int[][] imgsrc = new int[corrWinSize][corrWinSize]; // left image subject pixel and surrounding
+			        while(true) {
+			        	synchronized(mutex) {
+			        		try {
+								mutex.wait();
+							} catch (InterruptedException e) {}
+			        	}
+			        	corrWins.clear();
+		        		
+		        		// xsrc is index for subject pixel
+		        		// correlation window assumed symmetric left/right/up/down with odd number of elements
+		        		for(int y = corrWinLeft; y < imageL.getHeight()-corrWinRight; y++) {
+		        			// for each subject pixel X in left image, sweep the scanline for that Y, move to next subject X
+		        			for(int xsrc = corrWinLeft; xsrc < imageL.getWidth()-corrWinRight; xsrc++) {
+		        				// sweep the epipolar scan line for each subject pixel in left image
+		        				// first create the subject pixel kernel and weight it
+		        				int kx = 0;
+		        				for(int i = xsrc-corrWinLeft; i < xsrc+corrWinRight; i++) {
+		        						int ky = 0;
+		        						for(int j = y-corrWinLeft; j < y+corrWinRight; j++) {
+		        							// weight the high 8 bits with our gaussian distro values which have 127 max so sign should be unaffected
+		        							imgsrc[kx][ky] = (imageL.getRGB(i,j) & 0xFFFFFF) | (kernel[kx][ky] << 24);
+		        							++ky;
+		        						}
+		        						++kx;
+		        				}
+		        				corrWins.add(imgsrc);
+		        			}
+		        		}
+			        }
+				}
+		}, "SYSTEM");
 		
 		ThreadPoolManager.getInstance().spin(new Runnable() {
 			int[] score = null;
@@ -115,6 +163,10 @@ public class VideoProcessor extends AbstractNodeMain
 			        		try {
 								imageL = queueL.takeFirst();
 				        		imageR = queueR.takeFirst();
+				        		// tell the correspondence window generator queue that a new image is ready
+				        		synchronized(mutex) {
+				        			mutex.notify();
+				        		}
 							} catch (InterruptedException e) {
 								// TODO Auto-generated catch block
 								e.printStackTrace();
@@ -125,7 +177,7 @@ public class VideoProcessor extends AbstractNodeMain
 			        		}
 			        		// SAD - sum of absolute differences. take the diff of RGB values of
 			        		// win 1 and 2 and sum them
-			        		int[][] imgsrc = new int[corrWinSize][corrWinSize]; // left image subject pixel and surrounding
+			        		// int[][] imgsrc = new int[corrWinSize][corrWinSize]; // left image subject pixel and surrounding
 			        		// xsrc is index for subject pixel
 			        		// correlation window assumed symmetric left/right/up/down with odd number of elements
 			        		for(int y = corrWinLeft; y < imageL.getHeight()-corrWinRight; y++) {
@@ -134,15 +186,19 @@ public class VideoProcessor extends AbstractNodeMain
 			        				// sweep the epipolar scan line for each subject pixel in left image
 			        				// first create the subject pixel kernel and weight it
 			        				int kx = 0;
-			        				for(int i = xsrc-corrWinLeft; i < xsrc+corrWinRight; i++) {
-			        						int ky = 0;
-			        						for(int j = y-corrWinLeft; j < y+corrWinRight; j++) {
-			        							// weight the high 8 bits with our gaussian distro values which have 127 max so sign should be unaffected
-			        							imgsrc[kx][ky] = (imageL.getRGB(i,j) & 0xFFFFFF) | (kernel[kx][ky] << 24);
-			        							++ky;
-			        						}
-			        						++kx;
-			        				}
+			        				//for(int i = xsrc-corrWinLeft; i < xsrc+corrWinRight; i++) {
+			        				//		int ky = 0;
+			        				//		for(int j = y-corrWinLeft; j < y+corrWinRight; j++) {
+			        				//			// weight the high 8 bits with our gaussian distro values which have 127 max so sign should be unaffected
+			        				//			imgsrc[kx][ky] = (imageL.getRGB(i,j) & 0xFFFFFF) | (kernel[kx][ky] << 24);
+			        				//			++ky;
+			        				//		}
+			        				//		++kx;
+			        				//}
+			        				int[][] imgsrc = null;
+									try {
+										imgsrc = corrWins.take();
+									} catch (InterruptedException e) {}
 			        				// now begin sweep of scanline at y beginning at 1 plus subject x
 			        				for(int x = xsrc+1; x < imageR.getWidth()-corrWinRight; x++) {
 			        						// imgsrc at kx,ky is target in weighted left correlation window
