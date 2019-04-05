@@ -54,13 +54,17 @@ import com.neocoretechs.machinevision.ImgProcessor;
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.
  * The methodology is a variation of standard stereo block matching wherein we create a correspondence window
- * of a normal 2D gaussian distribution as weight to weigh the high order 8 bits of a 32 bit RGB value of the pixels
- * in the left and right windows. We then use standard SAD (sum of absolute differences) on the weighted RGB values to discover
+ * of kernWinSize square in the left and right windows where we can, or corrWinSize where we approach a boundary. 
+ * We perform a forward discrete cosine transform on the 2 windows to push the major features. 
+ * We then use standard SAD (sum of absolute differences) on the DCT arrays to discover
  * a correlation to which the disparity calculation of (focal length * baseline)/ (XRight - XLeft) is applied.
  * The edges are dealt with as non viable boundary areas that receive inaccurate or no disparity data at the width of
  * half the correlation window size. In general we scan a larger region than each tile index as we oversample to the level
- * of the kerWinSize except at boundaries where we default to corrWinSize
- * @author jg (C) NeoCoreTechs 2018
+ * of the kernWinSize except at boundaries where we default to corrWinSize. We assign the depth values to a corrWinSize square
+ * even where we oversample to kernWinSize where we can.
+ * We break the image into 3 bands and assign each band to a processing thread. We have an option to write a file that
+ * can be read by CloudCompare for testing.
+ * @author jg (C) NeoCoreTechs 2018,2019
  *
  */
 public class VideoProcessor extends AbstractNodeMain 
@@ -110,9 +114,9 @@ public class VideoProcessor extends AbstractNodeMain
     final static int corrWinLeft = 2; // number of left/up elements in corr window
     final static int corrWinRight = 3;// number of right/down elements in corr window
     // kernel window example 9, 4, 5 for 9x9 gaussian compare kernel
-    final static int kernWinSize = 5; // gaussian distribution correspondence window size square. kernel window, corrWin is a subset, area to compare
-    final static int kernWinLeft = 2; // number of left/up elements in kernel window
-    final static int kernWinRight = 3;// number of right/down elements in kernel window
+    final static int kernWinSize = 9; // gaussian distribution correspondence window size square. kernel window, corrWin is a subset, area to compare
+    final static int kernWinLeft = 4; // number of left/up elements in kernel window
+    final static int kernWinRight = 5;// number of right/down elements in kernel window
 
     CircularBlockingDeque<BufferedImage> queueL = new CircularBlockingDeque<BufferedImage>(10);
     CircularBlockingDeque<BufferedImage> queueR = new CircularBlockingDeque<BufferedImage>(10);
@@ -120,11 +124,12 @@ public class VideoProcessor extends AbstractNodeMain
     byte[] bqueue;
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
-	private static float[] coeffsL = null;
-	private static float[] coeffsR = null;
+
 	Object mutex = new Object();
-	FloatDCT_2D fdct2dL = new FloatDCT_2D(kernWinSize, kernWinSize);
-	FloatDCT_2D fdct2R = new FloatDCT_2D(kernWinSize, kernWinSize);
+	FloatDCT_2D fdct2dL = new FloatDCT_2D(corrWinSize, corrWinSize);
+	FloatDCT_2D fdct2dR = new FloatDCT_2D(corrWinSize, corrWinSize);
+	FloatDCT_2D fdct2dLK = new FloatDCT_2D(kernWinSize, kernWinSize);
+	FloatDCT_2D fdct2dRK = new FloatDCT_2D(kernWinSize, kernWinSize);
     CannyEdgeDetector ced = null;
 	
 	@Override
@@ -993,7 +998,7 @@ public class VideoProcessor extends AbstractNodeMain
 	 * In practice the processing threads will segment the image into several regions to be processed in parallel
 	 * differentiated by yStart and yEnd. We will try to oversample the region to kernWinSize, but if
 	 * not possible due to boundary condition, use corrWinSize, which is smallest window always guaranteed to fit, usually 5.
-	 * An inverse discrete cosine transform is created for both subwindows and the sum of absolute difference is used
+	 * A discrete cosine transform is created for both subwindows and the sum of absolute difference is used
 	 * to correlate each chunk along the epipolar plane from left to right row.
 	 * @param imageL Left image from bus
 	 * @param imageR Right image from bus
@@ -1004,12 +1009,12 @@ public class VideoProcessor extends AbstractNodeMain
 	public void processImageChunk(BufferedImage imageL, BufferedImage imageR, int yStart, int yEnd, short[][][] simage) {	
 			int width = imageL.getWidth();
     		int[] score = new int[width];
-    		//
     		// SAD - sum of absolute differences. take the diff of RGB values of
     		// win 1 and 2 and sum them		
     		int[] imgsrcL = new int[width*kernWinSize]; // left image scan line and kernel window
      		int[] imgsrcR = new int[width*kernWinSize]; // right image scan line and kernel window
-  
+     		float[] coeffsL = null;
+     		float[] coeffsR = null;
     		// xsrc is index for subject pixel
     		// correlation window assumed symmetric left/right/up/down with odd number of elements
     		// so we use corrWinLeft as top half of array size and corrwinRight as bottom half
@@ -1018,16 +1023,24 @@ public class VideoProcessor extends AbstractNodeMain
      		int far = 0;
     		for(int y = yStart; y < yEnd; y+=corrWinSize/*y++*/) {
     			int winSize = kernWinSize;
-    			if( (y-yStart) < kernWinLeft || (yEnd-y) < kernWinRight )
+    			if( (y-yStart) < kernWinLeft || (yEnd-y) < kernWinSize ) {
     				winSize = corrWinSize;
+    			}
+				if( imgsrcL == null || imgsrcL.length != (width*winSize) ) {
+			  		imgsrcL = new int[width*winSize]; // left image scan line and kernel window
+		     		imgsrcR = new int[width*winSize]; // right image scan line and kernel window
+				}
+				//System.out.println("y="+y+" yStart="+yStart+" yEnd="+yEnd+" width="+width+" winSize="+winSize+"@"+Thread.currentThread().getName());
     			synchronized(imageL) {
     				imageL.getRGB(0, y, width, winSize, imgsrcL, 0 , width);
     			}
     			synchronized(imageR) {
     				imageR.getRGB(0, y, width, winSize, imgsrcR, 0 , width);
     			}
-				coeffsR = new float[winSize*winSize];
-				coeffsL = new float[winSize*winSize];
+    			if( coeffsL == null || coeffsL.length != (winSize*winSize) ) {
+    				coeffsR = new float[winSize*winSize];
+    				coeffsL = new float[winSize*winSize];
+    			}
 				//
     			// for each subject pixel X in left image, sweep the scanline for that Y, move to next subject X
     			// We always process in corrWinSize chunks though if we have room we use kernWinSize chunks to compare
@@ -1062,7 +1075,11 @@ public class VideoProcessor extends AbstractNodeMain
 					}
 					// try DCT
 					//fdct2dL.inverse(coeffsL, false);
-					fdct2dL.forward(coeffsL, false);
+					//System.out.println("winsize="+winSize+"winL="+winL+" winR="+winR+" coeffsLlen="+coeffsL.length+" coeffs index"+coeffsLi);
+					if(winSize == corrWinSize)
+						fdct2dL.forward(coeffsL, false);
+					else
+						fdct2dLK.forward(coeffsL, false);
     				// now begin sweep of scanline at y beginning at 1 plus subject x
     				for(int x = xsrc+1; x < winR; x++) {
     						int sum = 0;
@@ -1070,13 +1087,14 @@ public class VideoProcessor extends AbstractNodeMain
     						// correlation window size, to x+1 + right half of correlation window size
     						int xCorrWinL;
     						int xCorrWinR;
-    						if( xsrc < kernWinLeft || xsrc > (width-kernWinRight) || winSize != kernWinSize) {
+    						if( x < kernWinLeft || x > (width-kernWinRight) || winSize != kernWinSize) {
     							xCorrWinL = x-corrWinLeft;
         						xCorrWinR = x+corrWinRight;
     						} else {
     							xCorrWinL = x-kernWinLeft;
         						xCorrWinR = x+kernWinRight;
     						}
+    						//System.out.println("X scan="+x+" winsize="+winSize+" xCorrWinL="+xCorrWinL+" xCoorWinR="+xCorrWinR+"@"+Thread.currentThread().getName());
   							//
 							int coeffsRi = 0;
 							//
@@ -1110,7 +1128,10 @@ public class VideoProcessor extends AbstractNodeMain
     							}
     						}
     						//fdct2R.inverse(coeffsR, false);
-    						fdct2R.forward(coeffsR, false);
+							if(winSize == corrWinSize)
+								fdct2dR.forward(coeffsR, false);
+							else
+								fdct2dRK.forward(coeffsR, false);
     						// Compute the sum of absolute difference SAD between the 2 matrixes representing
     						// the left subject subset and right target subset
     						sum = 0;
