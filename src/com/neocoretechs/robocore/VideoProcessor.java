@@ -20,8 +20,10 @@ import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.Map;
 import java.util.Vector;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -120,7 +122,7 @@ public class VideoProcessor extends AbstractNodeMain
     
 	CyclicBarrier latchTrans = new CyclicBarrier(camHeight/corrWinSize);
 	
-    static int threads = 0;
+    //static int threads = 0;
 
     byte[] bqueue;
 	private int sequenceNumber,lastSequenceNumber;
@@ -131,6 +133,16 @@ public class VideoProcessor extends AbstractNodeMain
 	FloatDCT_2D fdct2dR = new FloatDCT_2D(corrWinSize, corrWinSize);
 
     CannyEdgeDetector ced = null;
+    
+	BufferedImage bimage = null;
+	short[][][] simage = null; // [x][y]([r][g][b][d])
+	//CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
+	//CyclicBarrier latchOut = new CyclicBarrier(camHeight/corrWinSize+1);
+	CyclicBarrier latch = new CyclicBarrier(2);
+	CyclicBarrier latchOut = new CyclicBarrier(2);
+	Matrix3 transform;
+	//int yStart;
+	int threads = 0;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -205,58 +217,82 @@ public class VideoProcessor extends AbstractNodeMain
 		}, "SYSTEM");
 		*/
 		/*
+		 * Main worker thread for image data. 
+		 * Wait at synch barrier for completion of all processing threads, then display disparity 
+		 */
+		final AtomicInteger yStart = new AtomicInteger(0);
+		ThreadPoolManager.getInstance().spin(new Runnable() {
+				@Override
+				public void run() {
+					System.out.println("Correspondence window size="+corrWinSize+" processing="+(camHeight-corrWinSize));
+					while(true) {
+					//
+					// Spin the threads for each chunk of image
+					//
+					try {
+					  latch.await();
+					  yStart.set(0);
+					  for(int xStart = 0; xStart < camHeight-corrWinSize; xStart++) {
+						//for(; threads < camHeight/corrWinSize; threads++) {
+						//System.out.println("Spinning thread "+yStart);
+						//ThreadPoolManager.getInstance().spin(new Runnable() {
+						FixedThreadPoolManager.getInstance(camHeight/corrWinSize).spin(new Runnable() {
+						  //int yStart = threads*corrWinSize;
+						  //int yEnd = yStart+corrWinSize-1;
+						  @Override
+						  public void run() {
+							//try {
+									//while(true) {
+										//try {
+											//latch.await();
+											// Since we run a continuous loop inside run we have to have a way
+											// to synchronize everything at the beginning of a new image, then
+											// await completion of all processing threads and signal a reset to
+											// resume processing at the start of another new image, hence the two barrier
+											// synchronization latches
+											switch(mode) {
+												// Display results as greyscale bands of depth overlayed on image in a java window
+												case "display":
+													processImageChunk(imageL, imageR, yStart.getAndIncrement(), camWidth, bimage);
+													break;
+												// Display a 3Dish rendering of image with depth values and sliders for orientation
+												case "display3D":
+													processImageChunk3D(imageL, imageR, yStart.getAndIncrement(), camWidth, bimage);
+													break;
+												// Perform canny edge detect then depth value those and overlay, writing CloudCompare file
+												case "edge":
+													processImageChunkEdge(imageL, imageR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, simage);
+													break;
+												// Perform depth then deliver array of values
+												default:
+													//processImageChunk(imageL, imageR, imageT, yStart, camWidth, transform, true, simage);
+													processImageChunk(imageL, imageR, imageT, yStart.getAndIncrement(), camWidth, null, true, simage);
+											}
+											//latchOut.await();
+										//} catch (BrokenBarrierException e) { System.out.println("<<BARRIER BREAK>> "+this);}
+									//}
+							//} catch (InterruptedException e) { e.printStackTrace(); }
+						  } // run
+					    }, "SYSTEMFIX");
+					  //}, "SYSTEM");
+					  } // for yStart
+					  BlockingQueue<Runnable> bq = FixedThreadPoolManager.getInstance(camHeight-corrWinSize).getQueue();
+					  while(!bq.isEmpty()) Thread.sleep(1);
+					  latchOut.await();
+					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
+					} // while true
+			} // run
+			//} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
+		}, "SYSTEM");
+					
+		/**
 		 * Main processing thread for image data. Extract image queue elements from ROS bus and then
 		 * notify waiting worker threads to process them.
 		 * Wait at synch barrier for completion of all processing threads, then display disparity 
 		 */
-		ThreadPoolManager.getInstance().spin(new Runnable() {
-			BufferedImage bimage = null;
-			short[][][] simage = null; // [x][y]([r][g][b][d])
-			CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
-			CyclicBarrier latchOut = new CyclicBarrier(camHeight/corrWinSize+1);
-			Matrix3 transform;
-				@Override
+		ThreadPoolManager.getInstance().spin(new Runnable() {			
 				public void run() {
-					//
-					// Spin the threads for each chunk of image
-					//
-					System.out.println("Correspondence window size="+corrWinSize+" threads="+camHeight/corrWinSize);
-					for(; threads < camHeight/corrWinSize; threads++) {
-					  ThreadPoolManager.getInstance().spin(new Runnable() {
-						int yStart = threads*corrWinSize;
-						int yEnd = yStart+corrWinSize-1;
-						@Override
-						public void run() {
-							try {
-									while(true) {
-										try {
-											latch.await();
-											// wait for new image, a reset, then image from queue, then wait at barrier
-											switch(mode) {
-												// Display results as greyscale bands of depth overlayed on image in a java window
-												case "display":
-													processImageChunk(imageL, imageR, yStart, camWidth, bimage);
-													break;
-												// Display a 3Dish rendering of image with depth values and sliders for orientation
-												case "display3D":
-													processImageChunk3D(imageL, imageR, yStart, camWidth, bimage);
-													break;
-												// Perform canny edge detect then depth value those and overlay, writing CloudCompare file
-												case "edge":
-													processImageChunkEdge(imageL, imageR, imageLx, imageRx, yStart, camWidth, simage);
-													break;
-												// Perform depth then deliver array of values
-												default:
-													processImageChunk(imageL, imageR, imageT, yStart, camWidth, transform, false, simage);
-											}
-											latchOut.await();
-										} catch (BrokenBarrierException e) { /*System.out.println("<<BARRIER BREAK>> "+this);*/}
-									}
-							} catch (InterruptedException e) {}
-						}
-					  }, "SYSTEM");
-					}
-					
+					System.out.println("Image queue..");
 					/**
 					 * Main processing loop, extract images from queue, notify worker threads, then display disparity
 					 */
@@ -364,11 +400,16 @@ public class VideoProcessor extends AbstractNodeMain
 				        	     	default:
 				        				imageL = imageLx;
 				        				imageR = imageRx;
-				        				transform = new Matrix3(new double[] {0.99939083, 0.01020363, -0.03337455,
+				        				/*
+				        				transform = new Matrix3(new double[] /*{0.99939083, 0.01020363, -0.03337455,
 				        						0.00000000, 0.95630476, 0.29237170,
 				        						0.03489950, -0.29219360,0.95572220});
+				        							{0.99984770,    -0.00091339,    -0.01742849,
+				        						    0.00000000,     0.99862953,    -0.05233596,
+				        						    0.01745241,     0.05232799,     0.99847744});
 				        				if( imageT == null )
-					        				imageT = new BufferedImage(outWidth, outHeight, BufferedImage.TYPE_INT_ARGB);
+					        				imageT = new BufferedImage(outWidth, outHeight, BufferedImage.TYPE_INT_RGB);
+				        				*/
 				        				if( simage == null)
 				        					simage = new short[outWidth][outHeight][4];
 				        		   		// write source images
@@ -378,15 +419,17 @@ public class VideoProcessor extends AbstractNodeMain
 				        	     		synchronized(imageR) {
 				        	       			writeFile("sourceR", imageR, files);
 				        	     		}
-				        	     		latchTrans.reset();
+				        	     		//latchTrans.reset();
 				        				latch.await();
 				        	     		latchOut.await();
 				        	     		synchronized(simage) {
 				        	     			writeFile(simage);
 				        	     		}
+				        	     		/*
 				        	     		synchronized(imageT) {
 				        	     			writeFile("sourceT", imageT, files);
 				        	     		}
+				        	     		*/
 				        	     		break;
 				        				//navigate(simage, 213, 426);
 				        			
@@ -402,10 +445,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        		//imageL = null;
 			        		//imageR = null;
 			        	}
-	        			
-			        }
-				}
-		
+			        } // while true
+				} // run      
 		}, "SYSTEM");
 		
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
@@ -659,18 +700,12 @@ public class VideoProcessor extends AbstractNodeMain
 		        						// replace weighted gaussian distro value with computed disparity val and 3D xform
 		        						// z depth negative since positive is toward viewer
 		        						int ks, ms;
-		        						if( xsrc <= camWidth/2 )
-		        							ks = (camWidth/2) - xsrc;
-		        						else
-		        							ks = xsrc - (camWidth/2);
-		        						if( (yStart+l) <= camHeight/2 )
-		        							ms = (camHeight/2) - (yStart+l);
-		        						else
-		        							ms = (yStart+l) - (camHeight/2);
-		        						Point t = new Point(ks, ms, 0, new Color(imgsrcR[l*width+xsrc]) );
+		        						int[] c = scale(xsrc,l+yStart, transform);
+		        						ks = c[0];
+		        						ms = c[1];
 		        						//Vertex v0 = depthToVertex(k, m+l, pix, camWidth, camHeight, FOV);
 		        						//Point t = new Point(v0, new Color(((imgsrcL[l*width+k] & 0xFFFFFF))));
-		               					Vertex v1 = transform.transform(t);
+		               					//Vertex v1 = transform.transform(t);
 		               					//Vertex norm = new Vertex(v1.x,v1.y,v1.z);       
 		               					//double normalLength = Math.sqrt(norm.x * norm.x + norm.y * norm.y + norm.z * norm.z);
 		               					//norm.x /= normalLength;
@@ -680,16 +715,7 @@ public class VideoProcessor extends AbstractNodeMain
 		               					//int zIndex = (int)v1.y * outWidth + (int)v1.x;
 		               					//System.out.println(v1.x+","+v1.y+","+v1.z+","+zIndex+" anglecos="+angleCos);
 		               					
-		               					// send it back to original frame and xor with left image, this experiment tries to align
-		               					// images for calibration manually using the sliders
-		           						if( xsrc <= camWidth/2 )
-		        							ks = (camWidth/2) - (int)v1.x;
-		        						else
-		        							ks = (int)v1.x + (camWidth/2);
-		        						if( (yStart+l) <= camHeight/2 )
-		        							ms = (camHeight/2) - (int)v1.y;
-		        						else
-		        							ms = (int)v1.y + (camHeight/2);
+		               					
 		        						// ks and ms should now be transformed to coord of right image that slides to left
 		        						
 		               					//if( zIndex < zBuffer.length && zIndex >= 0) {
@@ -1111,29 +1137,35 @@ public class VideoProcessor extends AbstractNodeMain
  		int xminR = 0;
  		int xmaxR = 0;
  		
+ 		//System.out.println("images:"+imageL+" "+imageR+" "+Thread.currentThread().getName());
 		synchronized(imageL) {
 			imageL.getRGB(0, yStart, width, corrWinSize, imgsrcL, 0 , width);
 		}
 		synchronized(imageR) {
 			imageR.getRGB(0, yStart, width, corrWinSize, imgsrcR, 0 , width);
 		}
-		synchronized(imageT) {
-			for(int x = 0; x < width; x++) {
-				for(int y = 0; y < corrWinSize; y++) {
-					int[] tcoords = scale(x,y+yStart,transform);
-					imageT.setRGB(tcoords[0], tcoords[1], imgsrcR[y*width+x]);
+		//System.out.println("Image bands "+Thread.currentThread().getName());
+		
+		if( transform != null ) {
+			synchronized(imageT) {
+				//System.out.println(imageT.getColorModel()+" orig="+imageR.getColorModel());
+				for(int x = 0; x < width; x++) {
+					for(int y = 0; y < corrWinSize; y++) {
+						int[] tcoords = scale(x,y+yStart,transform);
+						imageT.setRGB(tcoords[0], tcoords[1], imgsrcR[y*width+x]);
+					}
 				}
 			}
-		}
-		// wait for all processing bands to complete the newly transformed image
-		try {
-			latchTrans.await();
-		} catch (InterruptedException | BrokenBarrierException e) {
+			// wait for all processing bands to complete the newly transformed image
+			try {
+				latchTrans.await();
+			} catch (InterruptedException | BrokenBarrierException e) {
 				System.out.println("Barrer break, return "+Thread.currentThread().getName());
 				return;
-		}
-		synchronized(imageT) {
+			}
+			synchronized(imageT) {
 				imageT.getRGB(0, yStart, width, corrWinSize, imgsrcR, 0 , width);
+			}
 		}
 
 		//
@@ -1173,9 +1205,11 @@ public class VideoProcessor extends AbstractNodeMain
 					}
 				}
 			}
+			synchronized(fdct2dR) {
 			fdct2dR.forward(coeffsR[x], false);
+			}
 		}
-			
+			//System.out.println("right image precomp "+Thread.currentThread().getName());
 			// for each subject pixel X in left image, sweep the scanline for that Y, move to next subject X
 			// We always process in corrWinSize chunks
 			loop:
@@ -1192,7 +1226,6 @@ public class VideoProcessor extends AbstractNodeMain
 				int pix = 0;
 			    // process left image data, fill IDCT array row major order.
 				// Remember, we have extracted the corrWinSize*width band from image, and now deal with that
-				// If the chunk is all black, ignore
 				int coeffsLi = 0; // DCT float array counter left
 				for(int ly = 0; ly < corrWinSize; ly++) {
 					for(int lx = xminL; lx < xmaxL; lx++) {
@@ -1213,7 +1246,9 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 				// try DCT
 				//fdct2dL.inverse(coeffsL, false);
+				synchronized(fdct2dL) {
 				fdct2dL.forward(coeffsL, false);
+				}
 				//
 				// Left image window set up, now begin sweep of scanline at y in right image.
 				// variable x tracks the right image x position
@@ -1221,8 +1256,6 @@ public class VideoProcessor extends AbstractNodeMain
 				int sum = 0;
     			for(int x = 0; x < width; x++) {
     				// skip the subject
-    				//if( x == xsrc ) {
-    				// skip the subject and if the right chunk starting at x is devoid of edge, skip as well
     				if( x == xsrc ) {
     					score[x] = Integer.MAX_VALUE;
     					continue;
@@ -1258,12 +1291,12 @@ public class VideoProcessor extends AbstractNodeMain
 	        			}
 	        			synchronized(simage) {
 	        				//for( int k = xsrc-corrWinLeft; k < xsrc+corrWinRight; k++) {
-	        					for(int l = 0; l < corrWinSize; l++) {
-	         						simage[xsrc][yStart+l][0] = (short) ((imgsrcL[l*width+xsrc] & 0x00FF0000) >> 16 );
-	        						simage[xsrc][yStart+l][1] = (short) ((imgsrcL[l*width+xsrc] & 0x0000FF00) >> 8);
-	        						simage[xsrc][yStart+l][2] = (short) ((imgsrcL[l*width+xsrc] & 0x000000FF) );
-	        						simage[xsrc][yStart+l][3] = (short)pix;
-	        					}
+	        					//for(int l = 0; l < corrWinSize; l++) {
+	         						simage[xsrc][yStart/*+l*/][0] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x00FF0000) >> 16 );
+	        						simage[xsrc][yStart/*+l*/][1] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x0000FF00) >> 8);
+	        						simage[xsrc][yStart/*+l*/][2] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x000000FF) );
+	        						simage[xsrc][yStart/*+l*/][3] = (short)pix;
+	        					//}
 	        				//}
 	        					//for(int l = y; l < y+corrWinSize; l++) {
 	               				//for(int l = yStart; l < yStart+corrWinSize; l++) {
@@ -1310,12 +1343,12 @@ public class VideoProcessor extends AbstractNodeMain
 					pix = maxHorizontalSep;
 				}
 				synchronized(simage) {
-						for(int l = 0; l < corrWinSize; l++) {
-							simage[xsrc][l+yStart][0] = (short) ((imgsrcL[l*width+xsrc] & 0x00FF0000) >> 16 );
-							simage[xsrc][l+yStart][1] = (short) ((imgsrcL[l*width+xsrc] & 0x0000FF00) >> 8);
-							simage[xsrc][l+yStart][2] = (short) ((imgsrcL[l*width+xsrc] & 0x000000FF) );
-							simage[xsrc][l+yStart][3] = (short)pix;
-						}
+						//for(int l = 0; l < corrWinSize; l++) {
+							simage[xsrc][/*l+*/yStart][0] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x00FF0000) >> 16 );
+							simage[xsrc][/*l+*/yStart][1] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x0000FF00) >> 8);
+							simage[xsrc][/*l+*/yStart][2] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x000000FF) );
+							simage[xsrc][/*l*/+yStart][3] = (short)pix;
+						//}
 					//}
     					//for(int l = y; l < y+corrWinSize; l++) {
    						//for(int l = yStart; l < yStart+corrWinSize; l++) {
@@ -1711,6 +1744,8 @@ public class VideoProcessor extends AbstractNodeMain
 			ms = (camHeight/2) - (int)v1.y;
 		else
 			ms = (int)v1.y + (camHeight/2);
+		if( ks < 0 || ks >= camWidth || ms < 0 || ms >=camHeight)
+			System.out.println("Coords transformed out of range:"+ks+","+ms+" from:"+x+","+y);
 		// ks and ms should now be transformed to coord of right image that slides to left
 		return new int[]{ks,ms};
 		

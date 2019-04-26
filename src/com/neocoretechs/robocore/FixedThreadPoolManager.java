@@ -4,41 +4,52 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * Class to manage thread resources throughout the application. Singleton. cached thread pool.
+ * Class to manage thread resources throughout the application. Singleton. Fixed thread pool.
  * @author jg
  *
  */
-public class ThreadPoolManager {
+public class FixedThreadPoolManager {
 	int threadNum = 0;
     DaemonThreadFactory dtf ;//= new PoolThreadFactory();
     private static Map<String, ExecutorService> executor = new HashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
 
-	public static ThreadPoolManager threadPoolManager = null;
-	private ThreadPoolManager() { }
+	public static FixedThreadPoolManager threadPoolManager = null;
+	private FixedThreadPoolManager() { }
 	
-	public static ThreadPoolManager getInstance() {
+	public static FixedThreadPoolManager getInstance(int maxThreads) {
 		if( threadPoolManager == null ) {
-			threadPoolManager = new ThreadPoolManager();
+			threadPoolManager = new FixedThreadPoolManager();
 			// set up pool for system processes
-			executor.put("SYSTEM", Executors.newCachedThreadPool(getInstance().new DaemonThreadFactory("SYSTEM")));
+			ThreadPoolExecutor tpx = (ThreadPoolExecutor) Executors.newFixedThreadPool(maxThreads, getInstance(maxThreads).new DaemonThreadFactory("SYSTEMFIX"));
+			tpx.prestartAllCoreThreads();
+			executor.put("SYSTEMFIX",tpx );		
 		}
 		return threadPoolManager;
 	}
-	
 	/**
 	 * Create an array of Executors that manage a cached thread pool for
 	 * reading topics. One thread pool per topic to notify listeners of data ready
 	 * @param threadGroupNames The topics for which thread groups are established
 	 */
-	public static void init(String[] threadGroupNames) {
+	public static void init(int maxThreads, String[] threadGroupNames) {
 		for(String tgn : threadGroupNames) {
-			executor.put(tgn, Executors.newCachedThreadPool(getInstance().new DaemonThreadFactory(tgn)));
+			executor.put(tgn, Executors.newFixedThreadPool(maxThreads, getInstance(maxThreads).new DaemonThreadFactory(tgn)));
 		}
+	}
+	
+	public BlockingQueue<Runnable> getQueue(String group) {
+		return ((ThreadPoolExecutor)executor.get(group)).getQueue();
+	}
+	
+	public BlockingQueue<Runnable> getQueue() {
+		return ((ThreadPoolExecutor)executor.get("SYSTEMFIX")).getQueue();
 	}
 	
 	public void waitGroup(String group) {
