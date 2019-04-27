@@ -278,18 +278,18 @@ public class VideoProcessor extends AbstractNodeMain
 									//}
 							//} catch (InterruptedException e) { e.printStackTrace(); }
 						  } // run
-					    }, "SYSTEMFIX");
-					  //}, "SYSTEM");
+					    }); // spin
 					  } // for syStart
 					  //BlockingQueue<Runnable> bq = FixedThreadPoolManager.getInstance(camHeight-corrWinSize).getQueue();
 					  // wait for the y scan atomic counter to reach max
-					  while(yStart.get() < camHeight-corrWinSize) Thread.sleep(1);
+					  //while(yStart.get() < camHeight-corrWinSize) Thread.sleep(1);
+					  FixedThreadPoolManager.getInstance(camHeight/corrWinSize).waitForGroupTofinish();
 					  latchOut.await();
 					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
 					} // while true
 			} // run
 			//} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
-		}, "SYSTEM");
+		}); // spin
 					
 		/**
 		 * Main processing thread for image data. Extract image queue elements from ROS bus and then
@@ -453,7 +453,7 @@ public class VideoProcessor extends AbstractNodeMain
 			        	}
 			        } // while true
 				} // run      
-		}, "SYSTEM");
+		}); // spin
 		
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
@@ -1125,8 +1125,9 @@ public class VideoProcessor extends AbstractNodeMain
 	}
 	/**
 	 * Process the stereo images into a 3D array of RGBD indexed by [x][y][R,G,B,D]
+	 * Optionally convert to greyscale and preprocess with transformation matrix to rotate image.
 	 * In practice the processing threads will segment the image into several regions to be processed in parallel
-	 * differentiated by yStart and yEnd. corrWinSize window always guaranteed to fit evenly.
+	 * differentiated by yStart. corrWinSize window always guaranteed to fit evenly.
 	 * A discrete cosine transform is created for both subwindows and the sum of absolute difference is used
 	 * to correlate each chunk along the epipolar plane from left to right row.
 	 * @param imageL Left image from bus

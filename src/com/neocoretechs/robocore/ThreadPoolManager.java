@@ -76,6 +76,10 @@ public class ThreadPoolManager {
 	    executor.get(group).execute(r);
 	}
 	
+	public void spin(Runnable r) {
+	    executor.get("SYSTEM").execute(r);
+	}
+	
 	public void shutdown() {
 		Collection<ExecutorService> ex = executor.values();
 		for(ExecutorService e : ex) {
@@ -99,4 +103,5 @@ public class ThreadPoolManager {
 	        return thread;
 	    }
 	}
+
 }

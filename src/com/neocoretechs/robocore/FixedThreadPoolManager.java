@@ -17,6 +17,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  */
 public class FixedThreadPoolManager {
 	int threadNum = 0;
+	static int maxThreads = 32;
     DaemonThreadFactory dtf ;//= new PoolThreadFactory();
     private static Map<String, ExecutorService> executor = new HashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
 
@@ -26,8 +27,9 @@ public class FixedThreadPoolManager {
 	public static FixedThreadPoolManager getInstance(int maxThreads) {
 		if( threadPoolManager == null ) {
 			threadPoolManager = new FixedThreadPoolManager();
+			threadPoolManager.maxThreads = maxThreads;
 			// set up pool for system processes
-			ThreadPoolExecutor tpx = (ThreadPoolExecutor) Executors.newFixedThreadPool(maxThreads, getInstance(maxThreads).new DaemonThreadFactory("SYSTEMFIX"));
+			ThreadPoolExecutor tpx = (ThreadPoolExecutor)Executors.newFixedThreadPool(maxThreads, getInstance(maxThreads).new DaemonThreadFactory("SYSTEMFIX"));
 			tpx.prestartAllCoreThreads();
 			executor.put("SYSTEMFIX",tpx );		
 		}
@@ -50,6 +52,49 @@ public class FixedThreadPoolManager {
 	
 	public BlockingQueue<Runnable> getQueue() {
 		return ((ThreadPoolExecutor)executor.get("SYSTEMFIX")).getQueue();
+	}
+	/**
+	 * Wait for threads in the specified group to finish. Because we pre spin threads in the pool
+	 * they will be left in WAIT state, to which isAlive return true. We check for status RUNNING and
+	 * for any elements left in queue.
+	 * @param group
+	 */
+	public void waitForGroupToFinish(String group) {
+		if( threadNum == 0 ) // none have ever been created yet
+			return;
+		while(true) {
+			boolean alive = false;
+			BlockingQueue<Runnable> bqr = getQueue(group);
+			if( bqr.isEmpty() ) { // queue empty, check for running threads
+				ThreadGroup tf = ((DaemonThreadFactory)((ThreadPoolExecutor)executor.get(group)).getThreadFactory()).getThreadGroup();
+				Thread[] threads = new Thread[threadNum];
+				int n = tf.enumerate(threads);
+				//if( n != threadNum) {
+				//	System.out.println("DEBUG: thread count inconsistent, enumerated="+n+" created="+threadNum);
+				//}
+				for(int i = 0; i < n; i++) {
+					if(threads[i].getState().equals(Thread.State.NEW) || 
+					   threads[i].getState().equals(Thread.State.RUNNABLE) ||
+					   threads[i].getState().equals(Thread.State.BLOCKED)) {
+						//System.out.println("thread is living="+threads[i].getName()+" "+threads[i].getState().name());
+						alive = true;
+						break;
+					}
+				}
+			} else {
+				//System.out.println("Blocking queue not empty="+bqr.size());
+				alive = true; // queue non empty, assumption is that only viable threads are queued
+			}
+			if( !alive )
+				return;
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {}
+		} // while true
+	}
+	
+	public void waitForGroupTofinish() {
+		waitForGroupToFinish("SYSTEMFIX");
 	}
 	
 	public void waitGroup(String group) {
@@ -85,6 +130,10 @@ public class FixedThreadPoolManager {
 	
 	public void spin(Runnable r, String group) {
 	    executor.get(group).execute(r);
+	}
+	
+	public void spin(Runnable r) {
+	    executor.get("SYSTEMFIX").execute(r);
 	}
 	
 	public void shutdown() {
