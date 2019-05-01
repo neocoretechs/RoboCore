@@ -72,7 +72,8 @@ import com.neocoretechs.machinevision.ImgProcessor;
 public class VideoProcessor extends AbstractNodeMain 
 {
 	private static boolean DEBUG = false;
-	private static final boolean SAMPLERATE = true; // display pubs per second
+	private static final boolean SAMPLERATE = false; // display pubs per second
+	private static final boolean TIMER = true;
 
     private BufferedImage imageL = null;
     private BufferedImage imageR = null;
@@ -236,12 +237,13 @@ public class VideoProcessor extends AbstractNodeMain
 					//
 					try {
 					  latch.await();
+					  long etime = System.currentTimeMillis();
 					  yStart.set(0);
 					  for(int syStart = 0; syStart < camHeight-corrWinSize; syStart++) {
 						//for(; threads < camHeight/corrWinSize; threads++) {
 						//System.out.println("Spinning thread "+yStart);
 						//ThreadPoolManager.getInstance().spin(new Runnable() {
-						FixedThreadPoolManager.getInstance(camHeight/corrWinSize).spin(new Runnable() {
+						SynchronizedFixedThreadPoolManager.getInstance(camHeight/corrWinSize, camHeight-corrWinSize).spin(new Runnable() {
 						  //int yStart = threads*corrWinSize;
 						  //int yEnd = yStart+corrWinSize-1;
 						  @Override
@@ -271,7 +273,7 @@ public class VideoProcessor extends AbstractNodeMain
 												// Perform depth then deliver array of values
 												default:
 													//processImageChunk(imageL, imageR, imageT, yStart, camWidth, transform, true, simage);
-													processImageChunk(imageL, imageR, imageT, yStart.getAndIncrement(), camWidth, null, true, simage);
+													processImageChunk(imageL, imageR, imageT, yStart.getAndIncrement(), camWidth, null, false, simage);
 											}
 											//latchOut.await();
 										//} catch (BrokenBarrierException e) { System.out.println("<<BARRIER BREAK>> "+this);}
@@ -283,7 +285,9 @@ public class VideoProcessor extends AbstractNodeMain
 					  //BlockingQueue<Runnable> bq = FixedThreadPoolManager.getInstance(camHeight-corrWinSize).getQueue();
 					  // wait for the y scan atomic counter to reach max
 					  //while(yStart.get() < camHeight-corrWinSize) Thread.sleep(1);
-					  FixedThreadPoolManager.getInstance(camHeight/corrWinSize).waitForGroupTofinish();
+					  SynchronizedFixedThreadPoolManager.getInstance(camHeight/corrWinSize, camHeight-corrWinSize).waitForGroupToFinish();
+					  if( TIMER )
+						  System.out.println("Process time="+(System.currentTimeMillis()-etime));
 					  latchOut.await();
 					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
 					} // while true
@@ -1228,9 +1232,9 @@ public class VideoProcessor extends AbstractNodeMain
 						coeffsR[x][coeffsRi++] = rrgb & 0xFFFFFF;
 				}
 			}
-			synchronized(fdct2dR) {
-				fdct2dR.forward(coeffsR[x], false);
-			}
+			//synchronized(fdct2dR) {
+			//	fdct2dR.forward(coeffsR[x], false);
+			//}
 		}
 		//System.out.println("right image precomp "+Thread.currentThread().getName());
 		// for each subject pixel X in left image, sweep the scanline for that Y, move to next subject X
@@ -1268,9 +1272,9 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 				// try DCT
 				//fdct2dL.inverse(coeffsL, false);
-				synchronized(fdct2dL) {
-					fdct2dL.forward(coeffsL, false);
-				}
+				//synchronized(fdct2dL) {
+				//	fdct2dL.forward(coeffsL, false);
+				//}
 				//
 				// Left image window set up, now begin sweep of scanline at y in right image.
 				// variable x tracks the right image x position
@@ -1295,7 +1299,7 @@ public class VideoProcessor extends AbstractNodeMain
 						//sum += Math.abs(coeffsL[isum]-coeffsR[isum]);
 						sum += Math.abs(coeffsL[isum]-coeffsR[x][isum]);
 						// sum of squared diffs
-						//sum += Math.pow((coeffsL[isum]-coeffsR[isum]),2);
+						//sum += Math.pow((coeffsL[isum]-coeffsR[x][isum]),2);
 					}
 					// score array is sized to image width and we ignore irrelevant edge elements
 					score[x] = sum;
@@ -1497,6 +1501,12 @@ public class VideoProcessor extends AbstractNodeMain
 						fdct2dR.forward(coeffsR[x], false);
 					}
 				}
+				/*
+				for(int i = 0; i < coeffsR[x].length; i++) {
+					System.out.print(x+","+i+"="+coeffsR[x][i]+" ");
+				}
+				System.out.println();
+				*/
 			}
 				
 				

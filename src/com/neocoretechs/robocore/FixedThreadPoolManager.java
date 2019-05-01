@@ -93,7 +93,7 @@ public class FixedThreadPoolManager {
 		} // while true
 	}
 	
-	public void waitForGroupTofinish() {
+	public void waitForGroupToFinish() {
 		waitForGroupToFinish("SYSTEMFIX");
 	}
 	
