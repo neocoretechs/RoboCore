@@ -237,22 +237,30 @@ public class VideoPubStereo extends AbstractNodeMain {
 	private void initFrameGrabber() throws V4L4JException {
 		videoDeviceL = new VideoDevice(deviceL);
 		DeviceInfo deviceInfoL=videoDeviceL.getDeviceInfo();
+		System.out.println("Video Device Name LEFT: "+deviceInfoL.getName());
+		System.out.println("Device file: "+deviceInfoL.getDeviceFile());
+		System.out.println("Supported formats:"); 
 		if (deviceInfoL.getFormatList().getNativeFormats().isEmpty()) {
-		    System.out.println("Couldn't detect native format for the left camera device.");
+		    System.out.println("Couldn't detect native format for the camera device on the LEFT.");
 		} else {
 			for(ImageFormat fi : deviceInfoL.getFormatList().getNativeFormats() )
-				System.out.println(fi);
+				System.out.println("\t"+fi.toNiceString());
 		}
 		  //ImageFormat imageFormat=deviceInfo.getFormatList().getNativeFormat(0);
 		
-		frameGrabberL = videoDeviceL.getJPEGFrameGrabber(width, height, channel, std, 80);
+		frameGrabberL = videoDeviceL.getJPEGFrameGrabber(width, height, channel, std, V4L4JConstants.MAX_JPEG_QUALITY);
 		frameGrabberL.setCaptureCallback(this);
 		width = frameGrabberL.getWidth();
 		height = frameGrabberL.getHeight();
-		System.out.println("Starting capture of left camera at " + width + "x" + height);
+		System.out.println("Starting capture of camera on the LEFT at " + width + "x" + height);
 		frameGrabberL.startCapture();
 	}
 	
+	/**
+	 * Release the video device after stopping capture.
+	 * The frame grabber may be already stopped, so we just ignore
+	 * any exception and simply continue.
+	 */
 	private void cleanupCapture() {
 		try {
 			frameGrabberL.stopCapture();
@@ -266,11 +274,13 @@ public class VideoPubStereo extends AbstractNodeMain {
 		videoDeviceL.release();
 	}
 	
+	/**
+	 * This method is called when a new frame is ready.
+	 * Synchronized around video mutex, the left byte buffer is the frame wrapped by ByteBuffer.wrap.
+	 * The frame is recycled after wrapping.
+	 */
 	@Override
 	public void nextFrame(VideoFrame frame) {
-		// This method is called when a new frame is ready.
-		// Don't forget to recycle it when done dealing with the frame.
-		// draw the new frame onto the JLabel
 		synchronized(vidMutexL) {
 			//bi = frame.getBufferedImage();
 			bbL = ByteBuffer.wrap(frame.getBytes());
@@ -280,47 +290,64 @@ public class VideoPubStereo extends AbstractNodeMain {
 		frame.recycle();
 	}
 	
+	/**
+	 * This method is called by v4l4j if an exception
+	 * occurs while waiting for a new frame to be ready.
+	 * The exception is available through e.getCause()
+	 */
 	@Override
 	public void exceptionReceived(V4L4JException e) {
-		// This method is called by v4l4j if an exception
-		// occurs while waiting for a new frame to be ready.
-		// The exception is available through e.getCause()
 		e.printStackTrace();
 	}
 	}
 	
+	/**
+	 * This is the right grabber class. They are organized in this manner due to sets of global resources being required for
+	 * each global video device.
+	 *
+	 */
 	class videocapR implements CaptureCallback {
 		
 	private void initFrameGrabber() throws V4L4JException {
 		videoDeviceR = new VideoDevice(deviceR);
 		DeviceInfo deviceInfoR=videoDeviceR.getDeviceInfo();
+		System.out.println("Video Device Name RIGHT: "+deviceInfoR.getName());
+		System.out.println("Device file: "+deviceInfoR.getDeviceFile());
+		System.out.println("Supported formats:"); 
 		if (deviceInfoR.getFormatList().getNativeFormats().isEmpty()) {
-		    System.out.println("Couldn't detect native format for the right camera device.");
+		    System.out.println("Couldn't detect native format for the camera device on the RIGHT.");
 		} else {
 			for(ImageFormat fi : deviceInfoR.getFormatList().getNativeFormats() )
 				System.out.println(fi);
 		}
-		frameGrabberR = videoDeviceR.getJPEGFrameGrabber(width, height, channel, std, 80);
+		frameGrabberR = videoDeviceR.getJPEGFrameGrabber(width, height, channel, std, V4L4JConstants.MAX_JPEG_QUALITY);
 		frameGrabberR.setCaptureCallback(this);
 		//width = frameGrabberR.getWidth();
 		//height = frameGrabberR.getHeight();
-		System.out.println("Starting capture of right camera at " + width + "x" + height);
+		System.out.println("Starting capture of camera on the RIGHT at " + width + "x" + height);
 		frameGrabberR.startCapture();
 	}
-	
+	/**
+	 * Release the video device after stopping capture.
+	 * The frame grabber may be already stopped, so we just ignore
+	 * any exception and simply continue.
+	 */
 	private void cleanupCapture() {
 		try {
 			frameGrabberR.stopCapture();
 		}
 		catch (StateException ex) {
-			// the frame grabber may be already stopped, so we just ignore
-			// any exception and simply continue.
 		}
 		// release the frame grabber and video deviceL
 		videoDeviceR.releaseFrameGrabber();
 		videoDeviceR.release();
 	}
 	
+	/**
+	 * This method is called when a new frame is ready.
+	 * Synchronized around video mutex, the right byte buffer is the frame wrapped by ByteBuffer.wrap.
+	 * The frame is recycled after wrapping.
+	 */
 	@Override
 	public void nextFrame(VideoFrame frame) {
 		// This method is called when a new frame is ready.
@@ -334,11 +361,13 @@ public class VideoPubStereo extends AbstractNodeMain {
 		frame.recycle();
 	}
 	
+	/**
+	 * This method is called by v4l4j if an exception
+	 * occurs while waiting for a new frame to be ready.
+	 * The exception is available through e.getCause()
+	 */
 	@Override
 	public void exceptionReceived(V4L4JException e) {
-		// This method is called by v4l4j if an exception
-		// occurs while waiting for a new frame to be ready.
-		// The exception is available through e.getCause()
 		e.printStackTrace();
 	}
 	}

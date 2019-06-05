@@ -16,8 +16,10 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Vector;
 import java.util.concurrent.BlockingQueue;
@@ -41,8 +43,10 @@ import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
-import org.jtransforms.dct.FloatDCT_2D;
-import org.jtransforms.utils.IOUtils;
+//import org.jtransforms.dct.FloatDCT_2D;
+//import org.jtransforms.utils.IOUtils;
+
+
 
 import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.machinevision.HoughElem;
@@ -130,13 +134,15 @@ public class VideoProcessor extends AbstractNodeMain
 	long time1;
 
 	Object mutex = new Object();
-	FloatDCT_2D fdct2dL = new FloatDCT_2D(corrWinSize, corrWinSize);
-	FloatDCT_2D fdct2dR = new FloatDCT_2D(corrWinSize, corrWinSize);
+	//FloatDCT_2D fdct2dL = new FloatDCT_2D(corrWinSize, corrWinSize);
+	//FloatDCT_2D fdct2dR = new FloatDCT_2D(corrWinSize, corrWinSize);
 
     CannyEdgeDetector ced = null;
     
 	BufferedImage bimage = null;
-	short[][][] simage = null; // [x][y]([r][g][b][d])
+	double[][][] simage = null; // [x][y]([r][g][b][d])
+	int[] dataL; // left array return from canny with magnitudes
+	int[] dataR; // right canny array with magnitudes
 	//CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
 	//CyclicBarrier latchOut = new CyclicBarrier(camHeight/corrWinSize+1);
 	CyclicBarrier latch = new CyclicBarrier(2);
@@ -268,7 +274,7 @@ public class VideoProcessor extends AbstractNodeMain
 													break;
 												// Perform canny edge detect then depth value those and overlay, writing CloudCompare file
 												case "edge":
-													processImageChunkEdge(imageL, imageR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, simage);
+													processImageChunkEdge(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, simage);
 													break;
 												// Perform depth then deliver array of values
 												default:
@@ -368,7 +374,7 @@ public class VideoProcessor extends AbstractNodeMain
 				        				if( bimage == null )
 					        				bimage = new BufferedImage(outWidth, outHeight, BufferedImage.TYPE_INT_ARGB);
 				        				if( simage == null)
-				        					simage = new short[outWidth][outHeight][4];
+				        					simage = new double[outWidth][outHeight][4];
 				        				latch.await();
 				        				latchOut.await();
 				        				processHough(bimage, simage, outWidth, outHeight);
@@ -380,20 +386,22 @@ public class VideoProcessor extends AbstractNodeMain
 					        	     	synchronized(imageLx) {
 					        	     		ced = new CannyEdgeDetector();
 					        				ced.setSourceImage(imageLx);
-					            			ced.process();
-					            			imageL = ced.getEdgesImage();
+					        				dataL = ced.semiProcess();
+					            			//ced.process();
+					            			//imageL = ced.getEdgesImage();
 					        	     	}
 					        	     	synchronized(imageRx) {
 					        	     		ced = new CannyEdgeDetector();
 					        				ced.setSourceImage(imageRx);
-					            			ced.process();
-					            			imageR = ced.getEdgesImage();
+					        				dataR = ced.semiProcess();
+					            			//ced.process();
+					            			//imageR = ced.getEdgesImage();
 					        	     	}
 					        	     		
 				        				imageL = imageLx;
 				        				imageR = imageRx;	
 				        				if( simage == null)
-				        					simage = new short[outWidth][outHeight][4];
+				        					simage = new double[outWidth][outHeight][4];
 				        		   		// write source images
 				        	     		synchronized(imageL) {
 				        	     			writeFile("sourceL", imageL, ++files);
@@ -421,7 +429,7 @@ public class VideoProcessor extends AbstractNodeMain
 					        				imageT = new BufferedImage(outWidth, outHeight, BufferedImage.TYPE_INT_RGB);
 				        				*/
 				        				if( simage == null)
-				        					simage = new short[outWidth][outHeight][4];
+				        					simage = new double[outWidth][outHeight][4];
 				        		   		// write source images
 				        	     		synchronized(imageL) {
 				        	     			writeFile("sourceL", imageL, ++files);
@@ -539,26 +547,26 @@ public class VideoProcessor extends AbstractNodeMain
 	/**
 	 * Write CloudCompare point cloud viewer compatible file
 	 * for each point - X,Y,Z,R,G,B ascii delimited by space
-	 * @param simage the processed array chunks of [x][y][0]=R, [x][y][1]=G, [x][y][2]=B, [x][y][3]=D
+	 * @param simage2 the processed array chunks of [x][y][0]=R, [x][y][1]=G, [x][y][2]=B, [x][y][3]=D
 	 */
-	protected void writeFile(short[][][] simage) {
+	protected void writeFile(double[][][] simage2) {
 		DataOutputStream dos = null;
 		File f = new File(outDir+"/roscoe"+(++frames)+".asc");
 		try {
 			dos = new DataOutputStream(new FileOutputStream(f));
 			for(int y = 0; y < outHeight; y++) {
 				for(int x = 0; x < outWidth; x++) {
-					dos.writeBytes(String.valueOf(x));
+					dos.writeBytes(String.valueOf((double)x)); // X
 					dos.writeByte(' ');
-					dos.writeBytes(String.valueOf(y));
+					dos.writeBytes(String.valueOf((double)y));// Y
 					dos.writeByte(' ');
-					dos.writeBytes(String.valueOf(simage[x][y][3])); // Z
+					dos.writeBytes(String.valueOf(simage2[x][y][3])); // Z
 					dos.writeByte(' ');
-					dos.writeBytes(String.valueOf(simage[x][y][0]));
+					dos.writeBytes(String.valueOf((int)simage2[x][y][0])); // R
 					dos.writeByte(' ');
-					dos.writeBytes(String.valueOf(simage[x][y][1]));
+					dos.writeBytes(String.valueOf((int)simage2[x][y][1])); // G
 					dos.writeByte(' ');
-					dos.writeBytes(String.valueOf(simage[x][y][2]));
+					dos.writeBytes(String.valueOf((int)simage2[x][y][2])); // B
 					dos.writeByte('\r');
 					dos.writeByte('\n');
 				}
@@ -704,15 +712,15 @@ public class VideoProcessor extends AbstractNodeMain
 		        				//bimage.setRGB(xsrc, y, (byte)pix); //greyscale option, not so hot
 		        				//for( int k = xsrc-corrWinLeft; k < xsrc+corrWinRight; k++) {
 		        					//int m = y - corrWinLeft;
-		        					//for(int l = 0; l < corrWinSize; l++) {		
+		        					for(int l = 0; l < corrWinSize; l++) {		
 		        					//for(int l = y-corrWinLeft; l < y+corrWinRight; l++) {
 		        						//bimage.setRGB(k, l, ((imageL.getRGB(k,l) & 0xFFFFFF) | pix<<24));
 		        						// replace weighted gaussian distro value with computed disparity val and 3D xform
 		        						// z depth negative since positive is toward viewer
-		        						int ks, ms;
-		        						int[] c = scale(xsrc,/*l+*/yStart, transform);
-		        						ks = c[0];
-		        						ms = c[1];
+		        						//int ks, ms;
+		        						//int[] c = scale(xsrc,/*l+*/yStart, transform);
+		        						//ks = c[0];
+		        						//ms = c[1];
 		        						//Vertex v0 = depthToVertex(k, m+l, pix, camWidth, camHeight, FOV);
 		        						//Point t = new Point(v0, new Color(((imgsrcL[l*width+k] & 0xFFFFFF))));
 		               					//Vertex v1 = transform.transform(t);
@@ -732,23 +740,59 @@ public class VideoProcessor extends AbstractNodeMain
 		               					//	synchronized(zBuffer) {
 		               					//		if (zBuffer[zIndex] < v1.z) {
 		               					//			boolean oob = false;
-		        									int lgbr = 0xFFFF0000;
-		        									synchronized(imageL) {
-		        										try {
-		        											lgbr = imageL.getRGB(ks, ms);
-		        										} catch(ArrayIndexOutOfBoundsException aioob) {}
-		        									}
+		        									//int lgbr = 0xFFFF0000;
+		        									//synchronized(imageL) {
+		        										//try {
+		        											//lgbr = imageL.getRGB(ks, ms);
+		        										//} catch(ArrayIndexOutOfBoundsException aioob) {}
+		        										
+		        									//}
+		        						if ((imgsrcL[l*width+xsrc] & 0x00FF0000) == 0x00FF0000 &&
+		        							(((imgsrcL[l*width+xsrc] & 0x0000FF00) >>8) >= 135)  &&
+		        							(((imgsrcL[l*width+xsrc] & 0x0000FF00) >>8) <= 220)  &&
+  	               							(((imgsrcL[l*width+xsrc] & 0x000000FF)) >= 135) &&
+  	               							(((imgsrcL[l*width+xsrc] & 0x000000FF)) <= 220)) {
 		               								synchronized(bimage) {
-		               									try {	
+		               									try {
+		               										bimage.setRGB(xsrc, yStart+l, 0xFFFF0000);
 		               										//bimage.setRGB((int)v1.x, (int)v1.y, getShade(t.color, angleCos).getRGB());
 		               										// original right target pixel, translated up and over, xor with left subject pixel
-		               										bimage.setRGB(ks, ms, lgbr ^ (imgsrcR[/*l*width+*/xsrc] & 0xFFFFFF));
+		               										//bimage.setRGB(ks, ms, lgbr ^ (imgsrcR[/*l*width+*/xsrc] & 0xFFFFFF));
 		               									} catch(ArrayIndexOutOfBoundsException aioob) {
-		               										System.out.println("Coord out of bounds:"+ks+","+ms+" "+Thread.currentThread().getName());
-		               										bimage.setRGB(xsrc, yStart/*+l*/, 0xFFFF0000); // make red
+		               										//System.out.println("Coord out of bounds:"+ks+","+ms+" "+Thread.currentThread().getName());
+		               										//bimage.setRGB(xsrc, yStart/*+l*/, 0xFFFF0000); // make red
 		               					//					oob = true;
 		               									}
 		               								}
+		      										System.out.println("LEFT:"+xsrc+","+(yStart+l)+"|"+
+		      												((imgsrcL[l*width+xsrc] & 0xFF000000) >>24)+"|"+
+		      	               								((imgsrcL[l*width+xsrc] & 0x00FF0000) >>16)+"|"+
+		      	               								((imgsrcL[l*width+xsrc] & 0x0000FF00) >>8)+"|"+
+		      	               								(imgsrcL[l*width+xsrc] & 0x000000FF));
+		        						}
+		        						if ((imgsrcR[l*width+xsrc] & 0x00FF0000) == 0x00FF0000 &&
+			        							(((imgsrcR[l*width+xsrc] & 0x0000FF00) >>8) >= 135)  &&
+			        							(((imgsrcR[l*width+xsrc] & 0x0000FF00) >>8) <= 220)  &&
+	  	               							(((imgsrcR[l*width+xsrc] & 0x000000FF)) >= 135) &&
+	  	               							(((imgsrcR[l*width+xsrc] & 0x000000FF)) <= 220)) {
+               								synchronized(bimage) {
+               									try {
+               										bimage.setRGB(xsrc, yStart+l, 0xFF0000FF); //BLUE for right
+               										//bimage.setRGB((int)v1.x, (int)v1.y, getShade(t.color, angleCos).getRGB());
+               										// original right target pixel, translated up and over, xor with left subject pixel
+               										//bimage.setRGB(ks, ms, lgbr ^ (imgsrcR[/*l*width+*/xsrc] & 0xFFFFFF));
+               									} catch(ArrayIndexOutOfBoundsException aioob) {
+               										//System.out.println("Coord out of bounds:"+ks+","+ms+" "+Thread.currentThread().getName());
+               										//bimage.setRGB(xsrc, yStart/*+l*/, 0xFFFF0000); // make red
+               					//					oob = true;
+               									}
+               								}
+               								System.out.println("RIGHT:"+xsrc+","+(yStart+l)+"|"+
+               								((imgsrcR[l*width+xsrc] & 0xFF000000) >>24)+"|"+
+               								((imgsrcR[l*width+xsrc] & 0x00FF0000) >>16)+"|"+
+               								((imgsrcR[l*width+xsrc] & 0x0000FF00) >>8)+"|"+
+               								(imgsrcR[l*width+xsrc] & 0x000000FF)+"|");
+		        						}
 		               					//			if( oob )
 		               					//				System.out.println("Coord out of bounds:"+v1+" point:"+t+" orig:"+k+","+(m+l)+","+pix);
 		               					//			zBuffer[zIndex] = v1.z;
@@ -760,7 +804,7 @@ public class VideoProcessor extends AbstractNodeMain
 		               					
 		        						//imgsrcL[l*width+k] = ((imgsrcL[l*width+k] & 0xFFFFFF) | pix<<24);
 		               					//++m;
-		        					//}
+		        					}
 		        				//}
 		        				// move to next x at outer x scanline loop
     							//continue loop;
@@ -950,9 +994,9 @@ public class VideoProcessor extends AbstractNodeMain
 							//sum += Math.abs((pixL /*| (kernel[kx][ky] << 16)*/) - (pixR /*| (kernel[kx][ky] << 16)*/));
 					}
 				}
-				synchronized(fdct2dR) {
-					fdct2dR.forward(coeffsR[x], false);
-				}
+				//synchronized(fdct2dR) {
+				//	fdct2dR.forward(coeffsR[x], false);
+				//}
 			}
   			// for each subject pixel X in left image, sweep the scanline for that Y, move to next subject X
 			// We always process in corrWinSize chunks
@@ -967,7 +1011,7 @@ public class VideoProcessor extends AbstractNodeMain
    					xminL = width-corrWinSize;
 				}
 				int rank = 0;
-				int pix = 0;
+				double pix = 0;
 			    // process left image data, fill IDCT array row major order.
 				// Remember, we have extracted the corrWinSize*width band from image, and now deal with that
 				int coeffsLi = 0; // DCT float array counter left
@@ -987,9 +1031,9 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 				// try DCT
 				//fdct2dL.inverse(coeffsL, false);
-				synchronized(fdct2dL) {
-					fdct2dL.forward(coeffsL, false);
-				}
+				//synchronized(fdct2dL) {
+				//	fdct2dL.forward(coeffsL, false);
+				//}
 				//
 				// Left image window set up, now begin sweep of scanline at y in right image.
 				// variable x tracks the right image x position
@@ -1030,7 +1074,7 @@ public class VideoProcessor extends AbstractNodeMain
 						// set sadZero to current y value to signal kernel generator to progress to next y
 						//sadZero.set(y);
 						rank = x;
-	        			pix = (int) (Bf/Math.abs(xsrc-rank));
+	        			pix = Bf/(double)Math.abs(xsrc-rank);
 		        		//System.out.print(xsrc+","+y+" p="+pix+"|");
 		        		if( pix > 255) {
 		        			//	System.out.println("CLOSE PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
@@ -1083,7 +1127,7 @@ public class VideoProcessor extends AbstractNodeMain
     			//System.out.println("For x="+rank+" subject="+xsrc+" scanline y="+y+" score="+drank);
     			//System.out.println("------------------------");
     			//calc the disparity and insert into disparity map image
-    			pix = (int) (Bf/Math.abs(xsrc-rank));
+    			pix = Bf/(double)Math.abs(xsrc-rank);
     			//if( pix <=0 || pix >=maxHorizontalSep)
     			//	System.out.print(xsrc+","+y+" p="+pix+"|");
     			if( pix > 255) {
@@ -1106,7 +1150,7 @@ public class VideoProcessor extends AbstractNodeMain
     						// replace weighted gaussian distro value with computed disparity val in alpha channel
     						//imgsrcL[l*width+k] = ((imgsrcL[l*width+k] & 0xFFFFFF) | pix<<24);
     						// try a simulated greyscale
-    						int pixG = (int) (((float)pix *.299) + ((float)pix *.587) + ((float)pix *.114));
+    						int pixG = (int) ((pix *.299) + (pix *.587) + (pix *.114));
     						imgsrcL[/*l*width+*/xsrc] = ((imgsrcL[/*l*width+*/xsrc] & 0x00FFFFFF) | 127<<24);
     						imgsrcL[/*l*width+*/xsrc] = ((imgsrcL[/*l*width+*/xsrc] & 0xFF00FFFF) | pixG<<16);
     						imgsrcL[/*l*width+*/xsrc] = ((imgsrcL[/*l*width+*/xsrc] & 0xFFFF00FF) | pixG<<8);
@@ -1141,18 +1185,16 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param width width of image band
 	 * @param transform The 3D rotation matrix
 	 * @param convToGrey flag to perform greyscale conversion first.
-	 * @param simage 3D short array to hold result. [x][y][0]=R, [x][y][1]=G, [x][y][2]=B, [x][y][3]=D
+	 * @param simage2 3D short array to hold result. [x][y][0]=R, [x][y][1]=G, [x][y][2]=B, [x][y][3]=D
 	 */
-	public final void processImageChunk(BufferedImage imageL, BufferedImage imageR, BufferedImage imageT, int yStart, int width, Matrix3 transform, boolean convToGrey, short[][][] simage) {	
+	public final void processImageChunk(BufferedImage imageL, BufferedImage imageR, BufferedImage imageT, int yStart, int width, Matrix3 transform, boolean convToGrey, double[][][] simage2) {	
 		long etime = System.currentTimeMillis();
 		// SAD - sum of absolute differences. take the diff of RGB values of
 		// win 1 and 2 and sum them, result in score array
-		int[] score = new int[width];
+		long[] score = new long[width];
 		int[] imgsrcL = new int[width*corrWinSize]; // left image scan line and kernel window
  		int[] imgsrcR = new int[width*corrWinSize]; // right image scan line and kernel window
- 		float[] coeffsL = new float[corrWinSize*corrWinSize];
  		// precompute right side DCT values since we will be sweeping over them repeatedly as we march forward in left X
- 		float[][] coeffsR = new float[width][corrWinSize*corrWinSize];
 
 		// correlation window assumed symmetric left/right/up/down with odd number of elements
 		// so we use corrWinLeft as top half of window array size and corrwinRight as bottom half
@@ -1199,43 +1241,6 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 		}*/
 
-		//
-		// Precompute DCTs in right image.
-		// 
-		for(int x = 0; x < width; x++) {
-  			xminR = x;
-  			xmaxR = x+corrWinSize;
-			if(  x > width-corrWinSize) {
-					xmaxR = width;
-					xminR = width-corrWinSize;
-			}
-			// loop sweeps x in right image, we increment by one
-			// because we need to find every potential match. 
-			//System.out.println("X scan="+x+" winsize="+winSize+" xCorrWinL="+xCorrWinL+" xCoorWinR="+xCorrWinR+"@"+Thread.currentThread().getName());
-			//
-			int coeffsRi = 0;
-			//
-			// j increments in y for right image
-			for(int j = 0; j < corrWinSize; j++) {
-				// search at current pixel offset left
-				// i increments in x, row major order
-				for(int i = xminR; i < xmaxR; i++) {
-					int rrgb = imgsrcR[j*width+i];
-					// Convert to greyscale if indicated
-					if( convToGrey ) {
-							int rr = (rrgb & 0xFF0000) >> 16;
-							int rg = (rrgb & 0x00FF00) >> 8;
-							int rb = (rrgb & 0x0000FF);
-							coeffsR[x][coeffsRi++] = rr + rg + rb;
-							//int pixR = (int) (((float)rr *.299) + ((float)rg *.587) + ((float)rb *.114));
-					} else
-						coeffsR[x][coeffsRi++] = rrgb & 0xFFFFFF;
-				}
-			}
-			//synchronized(fdct2dR) {
-			//	fdct2dR.forward(coeffsR[x], false);
-			//}
-		}
 		//System.out.println("right image precomp "+Thread.currentThread().getName());
 		// for each subject pixel X in left image, sweep the scanline for that Y, move to next subject X
 		// We always process in corrWinSize chunks
@@ -1250,40 +1255,18 @@ public class VideoProcessor extends AbstractNodeMain
    					xminL = width-corrWinSize;
 				}
 				int rank = 0;
-				int pix = 0;
-			    // process left image data, fill IDCT array row major order.
+				double pix = 0;
+			    // process left image data, process array row major order.
 				// Remember, we have extracted the corrWinSize*width band from image, and now deal with that
-				int coeffsLi = 0; // DCT float array counter left
-				for(int ly = 0; ly < corrWinSize; ly++) {
-					for(int lx = xminL; lx < xmaxL; lx++) {
-						int lrgb = imgsrcL[ly*width+lx];
-						if( convToGrey ) {
-							int lr = (lrgb & 0xFF0000) >> 24;
-							int lg = (lrgb & 0x00FF00) >> 16;
-    						int lb = (lrgb & 0x0000FF);
-    						//System.out.println(lr+" "+lg+" "+lb);
-    						//int pixL = lr + lg + lb; // greyscale
-    						//int pixL = (int) (((float)lr *.299) + ((float)lg *.587) + ((float)lb *.114)); // human greyscale
-    						coeffsL[coeffsLi++] = lr + lg + lb;
-						} else {
-							coeffsL[coeffsLi++] = lrgb & 0xFFFFFF;
-						}
-					}
-				}
-				// try DCT
-				//fdct2dL.inverse(coeffsL, false);
-				//synchronized(fdct2dL) {
-				//	fdct2dL.forward(coeffsL, false);
-				//}
 				//
 				// Left image window set up, now begin sweep of scanline at y in right image.
 				// variable x tracks the right image x position
 				// 
-				int sum = 0;
+				long sum = 0;
     			for(int x = 0; x < width; x++) {
     				// skip the subject
     				if( x == xsrc ) {
-    					score[x] = Integer.MAX_VALUE;
+    					score[x] = Long.MAX_VALUE;
     					continue;
     				}
     	  			xminR = x;
@@ -1292,88 +1275,74 @@ public class VideoProcessor extends AbstractNodeMain
 	   					xmaxR = width;
 	   					xminR = width-corrWinSize;
 					}
-					// Compute the sum of absolute difference SAD between the 2 matrixes representing
+    				// Compute the sum of absolute difference SAD between the 2 matrixes representing
 					// the left subject subset and right target subset
-					sum = 0;
-					for(int isum = 0; isum < corrWinSize*corrWinSize; isum++) {
-						//sum += Math.abs(coeffsL[isum]-coeffsR[isum]);
-						sum += Math.abs(coeffsL[isum]-coeffsR[x][isum]);
-						// sum of squared diffs
-						//sum += Math.pow((coeffsL[isum]-coeffsR[x][isum]),2);
-					}
+    				sum = 0;
+       				for(int ly = 0; ly < corrWinSize; ly++) {
+       					int rx = xminR;
+    					for(int lx = xminL; lx < xmaxL; lx++) {
+    						sum += Math.abs((imgsrcL[ly*width+lx] & 0x00FFFFFF) - (imgsrcR[ly*width+rx] & 0x00FFFFFF));
+    						/*
+    						int lr = (imgsrcL[ly*width+lx] & 0x00FF0000) >> 16;
+    						int lg = (imgsrcL[ly*width+lx] & 0x0000FF00) >> 8;
+							int lb = (imgsrcL[ly*width+lx] & 0x000000FF);
+							int rr = (imgsrcR[ly*width+rx] & 0x00FF0000) >> 16;
+    						int rg = (imgsrcR[ly*width+rx] & 0x0000FF00) >> 8;
+							int rb = (imgsrcR[ly*width+rx] & 0x000000FF);
+    						sum += (Math.abs(lr - rr) + Math.abs(lg - rg) + Math.abs(lb - rb));
+    						*/
+    						++rx;
+    					}
+       				}
 					// score array is sized to image width and we ignore irrelevant edge elements
 					score[x] = sum;
- 					// If we have a value thats as small as possible, we can assume the differences are zero and this is our target
-					// This is just an optimization to save time computing smallest element
-					if( sum == 0) {
-						++close;
-						// set sadZero to current y value to signal kernel generator to progress to next y
-						//sadZero.set(y);
-						rank = x;
-	        			pix = (int) (Bf/Math.abs(xsrc-rank));
-	        			if( pix >=maxHorizontalSep) {
-	        				//System.out.println("PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
-	        				pix = maxHorizontalSep;
-	        			}
-	        			synchronized(simage) {
-	        				//for( int k = xsrc-corrWinLeft; k < xsrc+corrWinRight; k++) {
-	        					//for(int l = 0; l < corrWinSize; l++) {
-	         						simage[xsrc][yStart/*+l*/][0] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x00FF0000) >> 16 );
-	        						simage[xsrc][yStart/*+l*/][1] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x0000FF00) >> 8);
-	        						simage[xsrc][yStart/*+l*/][2] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x000000FF) );
-	        						simage[xsrc][yStart/*+l*/][3] = (short)pix;
-	        					//}
-	        				//}
-	        					//for(int l = y; l < y+corrWinSize; l++) {
-	               				//for(int l = yStart; l < yStart+corrWinSize; l++) {
-	        					//	simage[xsrc][l][0] = (short) ((imageLx2.getRGB(xsrc,l) & 0x00FF0000) >> 16 );
-	        					//	simage[xsrc][l][1] = (short) ((imageLx2.getRGB(xsrc,l) & 0x0000FF00) >> 8);
-	        					//	simage[xsrc][l][2] = (short) ((imageLx2.getRGB(xsrc,l) & 0x000000FF) );
-	        						//if( simage[xsrc][l][3] == 0 )
-	        					//		simage[xsrc][l][3] = (short)pix;
-	        						//else 
-	        							// average depth from last images
-	        							//simage[xsrc][l][3] = (short) ((simage[xsrc][1][3]+pix)/2);
-	        					//}
-	        				//}
-	        			}
-	        			// move to next x at outer x scanline loop
-						continue loop;
-					} // sum = 0
-							
 				} // x
 				// now calculate the one closest to zero from sum of differences
 				// rank = 0
 				++far;
-				int drank = Integer.MAX_VALUE;
+				long tscore = Long.MAX_VALUE;
 				// move through array of differences we built in above scan loops
 				//for(int s = xsrc+1; s < winR; s++) {
  				//for(int s = corrWinLeft; s < winR; s++) {
 				for(int s = 0; s < width; s++) {
 					//System.out.print("Y="+y+" score "+s+"="+score[s]+" ");
- 					if( s == xsrc )
- 						continue;
-					if (score[s] < drank) {
+ 					//if( s == xsrc )
+ 					//	continue;
+					if (score[s] < tscore) {
 						rank = s;
-						drank = score[s];
+						tscore = score[s];
 					}
 				}
+				// failsafe
+				if( rank == xsrc || tscore < 0 ) {
+					System.out.println("***FAIL to rank pixel x="+xsrc+" y="+yStart+" score="+tscore);
+					synchronized(simage2) {
+						//for(int l = 0; l < corrWinSize; l++) {
+							simage2[xsrc][/*l+*/yStart][0] = 255;
+							simage2[xsrc][/*l+*/yStart][1] = 0;
+							simage2[xsrc][/*l+*/yStart][2] = 0;
+							simage2[xsrc][/*l*/+yStart][3] = 0;
+					}
+					continue;
+				}
+					
 				//System.out.println();
 				//System.out.println("------------------------");
 				//System.out.println("For x="+rank+" subject="+xsrc+" scanline y="+y+" score="+drank);
 				//System.out.println("------------------------");
-				//calc the disparity and insert into disparity map image
-				pix = (int) (Bf/Math.abs(xsrc-rank));
+				//calc the disparity and insert into disparity map
+				pix = Bf/(double)Math.abs(xsrc-rank);
 				if( pix >=maxHorizontalSep) {
 					//System.out.println("PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
 					pix = maxHorizontalSep;
-				}
-				synchronized(simage) {
+				} /*else
+					System.out.println("x="+xsrc+", y="+yStart+" score="+drank);*/
+				synchronized(simage2) {
 						//for(int l = 0; l < corrWinSize; l++) {
-							simage[xsrc][/*l+*/yStart][0] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x00FF0000) >> 16 );
-							simage[xsrc][/*l+*/yStart][1] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x0000FF00) >> 8);
-							simage[xsrc][/*l+*/yStart][2] = (short) ((imgsrcL[/*l*width+*/xsrc] & 0x000000FF) );
-							simage[xsrc][/*l*/+yStart][3] = (short)pix;
+							simage2[xsrc][/*l+*/yStart][0] = ((imgsrcL[/*l*width+*/xsrc] & 0x00FF0000) >> 16 );
+							simage2[xsrc][/*l+*/yStart][1] = ((imgsrcL[/*l*width+*/xsrc] & 0x0000FF00) >> 8);
+							simage2[xsrc][/*l+*/yStart][2] = ((imgsrcL[/*l*width+*/xsrc] & 0x000000FF) );
+							simage2[xsrc][/*l*/+yStart][3] = pix;
 						//}
 					//}
     					//for(int l = y; l < y+corrWinSize; l++) {
@@ -1404,15 +1373,15 @@ public class VideoProcessor extends AbstractNodeMain
 	 * A discrete cosine transform is created for both subwindows and the sum of absolute difference is used
 	 * to correlate each chunk along the epipolar plane from left to right row. yStart to yEnd should be evenly divisible by corrWinSize.
 	 * THIS METHOD IS TO BE USED IN A SINGLE THREAD, PROCESSING A SINGLE MAGE BAND OF corrWinSize
-	 * @param imageL Left image from bus
-	 * @param imageR Right image from bus
+	 * @param imageL Left image from canny
+	 * @param imageR Right image from canny
 	 * @param imageRx2 
 	 * @param imageLx2 
 	 * @param yStart Starting Y band to process
 	 * @param width width of image band
-	 * @param simage 3D short array to hold result. [x][y][0]=R, [x][y][1]=G, [x][y][2]=B, [x][y][3]=D
+	 * @param simage2 3D short array to hold result. [x][y][0]=R, [x][y][1]=G, [x][y][2]=B, [x][y][3]=D
 	 */
-	public final void processImageChunkEdge(BufferedImage imageL, BufferedImage imageR, BufferedImage imageLx2, BufferedImage imageRx2, int yStart, int width, short[][][] simage) {
+	public final void processImageChunkEdge(int[] imageL, int[] imageR, BufferedImage imageLx2, BufferedImage imageRx2, int yStart, int width, double[][][] simage2) {
 			long etime = System.currentTimeMillis();
 			boolean convToGrey = false;
     		// SAD - sum of absolute differences. take the diff of RGB values of
@@ -1420,9 +1389,9 @@ public class VideoProcessor extends AbstractNodeMain
 			int[] score = new int[width];
     		int[] imgsrcL = new int[width*corrWinSize]; // left image scan line and kernel window
      		int[] imgsrcR = new int[width*corrWinSize]; // right image scan line and kernel window
-     		float[] coeffsL = new float[corrWinSize*corrWinSize];
+     		//float[] coeffsL = new float[corrWinSize*corrWinSize];
      		// precompute right side DCT values since we will be sweeping over them repeatedly as we march forward in left X
-     		float[][] coeffsR = new float[width][corrWinSize*corrWinSize];
+     		//float[][] coeffsR = new float[width][corrWinSize*corrWinSize];
      		boolean emptyRight[] = new boolean[width]; // whether chunk was found to be devoid of edges during precompute
     		// xsrc is index for subject pixel
     		// correlation window assumed symmetric left/right/up/down with odd number of elements
@@ -1436,10 +1405,12 @@ public class VideoProcessor extends AbstractNodeMain
      		int xmaxR = 0;
      		
  			synchronized(imageL) {
-				imageL.getRGB(0, yStart, width, corrWinSize, imgsrcL, 0 , width);
+ 				System.arraycopy(Arrays.copyOfRange(imageL, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcL, 0, width*corrWinSize);
+				//imageL.getRGB(0, yStart, width, corrWinSize, imgsrcL, 0 , width);
 			}
 			synchronized(imageR) {
-				imageR.getRGB(0, yStart, width, corrWinSize, imgsrcR, 0 , width);
+				System.arraycopy(Arrays.copyOfRange(imageR, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcR, 0, width*corrWinSize);
+				//imageR.getRGB(0, yStart, width, corrWinSize, imgsrcR, 0 , width);
 			}
 			// Convert to greyscale if indicated
 			if( convToGrey ) {
@@ -1456,7 +1427,7 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 			}
 			//
-			// Precompute DCTs in right image.
+			// Precompute right image.
 			// 
 			for(int x = 0; x < width; x++) {
 	  			xminR = x;
@@ -1469,20 +1440,22 @@ public class VideoProcessor extends AbstractNodeMain
 				// because we need to find every potential match. 
 				//System.out.println("X scan="+x+" winsize="+winSize+" xCorrWinL="+xCorrWinL+" xCoorWinR="+xCorrWinR+"@"+Thread.currentThread().getName());
 					//
-				int coeffsRi = 0;
+				//int coeffsRi = 0;
 				//
 				// j increments in y for right image
 				emptyRight[x] = true;
+				loop0:
 				for(int j = 0; j < corrWinSize; j++) {
-					// recall; symmetric left/right up down
-					// search at current pixel offset left, to current pixel + offset right, applied to y
 					// i increments in x, row major order
 					for(int i = xminR; i < xmaxR; i++) {
-						int rrgb = imgsrcR[j*width+i];
-						int rb = (rrgb & 0x0000FF);
-						if( rb != 0 )
+						//int rrgb = imgsrcR[j*width+i];
+						//int rb = (rrgb & 0x0000FF);
+						//if( rb != 0 )
+						if( imgsrcR[j*width+i] != 0) {
 							emptyRight[x] = false;
-						coeffsR[x][coeffsRi++] = rrgb;
+							break loop0;
+						}
+						//coeffsR[x][coeffsRi++] = rrgb;
 						   // Normalize and gamma correct:
 					        //double rfrr = Math.pow(rr / 255.0, 2.2);
 					        //double rfgg = Math.pow(rg / 255.0, 2.2);
@@ -1496,11 +1469,11 @@ public class VideoProcessor extends AbstractNodeMain
 					}
 				}
 				// if no edge anywhere in window, move along
-				if( !emptyRight[x] ) {
-					synchronized(fdct2dR) {
-						fdct2dR.forward(coeffsR[x], false);
-					}
-				}
+				//if( !emptyRight[x] ) {
+				//	synchronized(fdct2dR) {
+				//		fdct2dR.forward(coeffsR[x], false);
+				//	}
+				//}
 				/*
 				for(int i = 0; i < coeffsR[x].length; i++) {
 					System.out.print(x+","+i+"="+coeffsR[x][i]+" ");
@@ -1526,7 +1499,10 @@ public class VideoProcessor extends AbstractNodeMain
     			// We always process in corrWinSize chunks
     			loop:
     			//for(int xsrc = corrWinLeft; xsrc < width-corrWinRight; /*xsrc+=corrWinSize*/xsrc++) {
-    	  		for(int xsrc = 0; xsrc < width; xsrc++) {	
+    	  		for(int xsrc = 0; xsrc < width; xsrc++) {
+    				// If the left image pixel which is the target to receive the depth value is not edge, continue
+					if(imgsrcL[xsrc] == 0)
+						continue loop;
     				// sweep the epipolar scan line for each subject pixel in left image
       	  			xminL = xsrc;
     	  			xmaxL = xsrc+corrWinSize;
@@ -1540,33 +1516,36 @@ public class VideoProcessor extends AbstractNodeMain
 						}
 					}*/
 					int rank = 0;
-					int pix = 0;
-				    // process left image data, fill IDCT array row major order.
+					double pix = 0;
 					// Remember, we have extracted the corrWinSize*width band from image, and now deal with that
-					// If the chunk is all black, ignore
-					boolean foundEdge = false;
-					int coeffsLi = 0; // DCT float array counter left
-					for(int ly = 0; ly < corrWinSize; ly++) {
-						for(int lx = xminL; lx < xmaxL; lx++) {
-							int lrgb = imgsrcL[ly*width+lx];
+	
+				    // process left image data, fill IDCT array row major order.
+					//int coeffsLi = 0; // DCT float array counter left
+					//loop2:
+					//for(int ly = 0; ly < corrWinSize; ly++) {
+						//for(int lx = xminL; lx < xmaxL; lx++) {
+							//int lrgb = imgsrcL[ly*width+lx];
 							//lrgb &= 0xFFFFFF;
 							//coeffsL[coeffsLi++] = lrgb;
-							int lb = (lrgb & 0x0000FF);
-							if( lb != 0 )
-								foundEdge = true;
+							//int lb = (lrgb & 0x0000FF);
+							//if( lb != 0 )
+							//if( imgsrcL[ly*width+lx] != 0 ) {
+							//	foundEdge = true;
+								//break loop2;
+							//}
 							//System.out.println(lr+" "+lg+" "+lb);
 							//int pixL = (int) (((float)lr *.299) + ((float)lg *.587) + ((float)lb *.114)); // human greyscale
-							coeffsL[coeffsLi++] = lrgb;
-						}
-					}
+							//coeffsL[coeffsLi++] = lrgb;
+						//}
+					//}
 					// source contains no edges
-					if(!foundEdge)
-						continue loop;
+					//if(!foundEdge)
+					//	continue loop;
 					// try DCT
 					//fdct2dL.inverse(coeffsL, false);
-					synchronized(fdct2dL) {
-						fdct2dL.forward(coeffsL, false);
-					}
+					//synchronized(fdct2dL) {
+					//	fdct2dL.forward(coeffsL, false);
+					//}
 					//
     				// Left image window set up, now begin sweep of scanline at y in right image.
 					// variable x tracks the right image x position
@@ -1600,8 +1579,6 @@ public class VideoProcessor extends AbstractNodeMain
 						// j increments in y for right image
 						//foundEdge = false;
 						//for(int j = 0; j < corrWinSize; j++) {
-    						// recall; symmetric left/right up down
-    						// search at current pixel offset left, to current pixel + offset right, applied to y
 							// i increments in x, row major order
     						//for(int i = xminR; i < xmaxR; i++) {
     							//int rrgb = imgsrcR[j*width+i];
@@ -1639,12 +1616,20 @@ public class VideoProcessor extends AbstractNodeMain
     					// Compute the sum of absolute difference SAD between the 2 matrixes representing
     					// the left subject subset and right target subset
     					sum = 0;
-    					for(int isum = 0; isum < corrWinSize*corrWinSize; isum++) {
+						for(int j = 0; j < corrWinSize; j++) {
+							// i increments in x, row major order
+    						for(int i = 0; i < corrWinSize; i++) {
+    							int rdata = imgsrcR[j*width+(i+xminR)];
+    							int ldata = imgsrcL[j*width+(i+xminL)];
+    							sum += Math.abs(rdata-ldata);
+    						}
+						}
+    					//for(int isum = 0; isum < corrWinSize*corrWinSize; isum++) {
     						//sum += Math.abs(coeffsL[isum]-coeffsR[isum]);
-    						sum += Math.abs(coeffsL[isum]-coeffsR[x][isum]);
+    						//sum += Math.abs(coeffsL[isum]-coeffsR[x][isum]);
     						// sum of squared diffs
     						//sum += Math.pow((coeffsL[isum]-coeffsR[isum]),2);
-    					}
+    					//}
     					/*
     						synchronized(mutex) {
     							System.out.println("*** xsrc="+xsrc+" x="+x+" y="+y);
@@ -1660,44 +1645,6 @@ public class VideoProcessor extends AbstractNodeMain
     					*/
     					// score array is sized to image width and we ignore irrelevant edge elements
     					score[x] = sum;
-     					// If we have a value thats as small as possible, we can assume the differences are zero and this is our target
-    					// This is just an optimization to save time computing smallest element
-    					if( sum == 0) {
-    						++close;
-    						// set sadZero to current y value to signal kernel generator to progress to next y
-    						//sadZero.set(y);
-    						rank = x;
-		        			pix = (int) (Bf/Math.abs(xsrc-rank));
-		        			if( pix >=maxHorizontalSep) {
-		        				//System.out.println("PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
-		        				pix = maxHorizontalSep;
-		        			}
-		        			synchronized(simage) {
-		        				//for( int k = xsrc-corrWinLeft; k < xsrc+corrWinRight; k++) {
-		        					//for(int l = 0; l < corrWinSize; l++) {
-		         						//simage[k][y+l][0] = (short) ((imgsrcL[l*width+k] & 0x00FF0000) >> 16 );
-		        						//simage[k][y+l][1] = (short) ((imgsrcL[l*width+k] & 0x0000FF00) >> 8);
-		        						//simage[k][y+l][2] = (short) ((imgsrcL[l*width+k] & 0x000000FF) );
-		        						//simage[k][y+l][3] = (short)pix;
-		        					//}
-		        				//}
-		        				//for(int k = xminL; k < xmaxL; k++) {
-		        					//for(int l = y; l < y+corrWinSize; l++) {
-		               				//for(int l = yStart; l < yStart+corrWinSize; l++) {
-		        						simage[xsrc][yStart/*l*/][0] = (short) ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x00FF0000) >> 16 );
-		        						simage[xsrc][yStart/*l*/][1] = (short) ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x0000FF00) >> 8);
-		        						simage[xsrc][yStart/*l*/][2] = (short) ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x000000FF) );
-		        						//if( simage[xsrc][l][3] == 0 )
-		        							simage[xsrc][yStart/*l*/][3] = (short)pix;
-		        						//else 
-		        							// average depth from last images
-		        							//simage[xsrc][l][3] = (short) ((simage[xsrc][1][3]+pix)/2);
-		        					//}
-		        				//}
-		        			}
-		        			// move to next x at outer x scanline loop
-    						continue loop;
-    					}
     							
     				} // x
     				// now calculate the one closest to zero from sum of differences
@@ -1716,17 +1663,22 @@ public class VideoProcessor extends AbstractNodeMain
     						drank = score[s];
     					}
     				}
+    				// possibly the entire right scan was blank?
+    				if( drank == Integer.MAX_VALUE )
+    					continue;
     				//System.out.println();
     				//System.out.println("------------------------");
     				//System.out.println("For x="+rank+" subject="+xsrc+" scanline y="+y+" score="+drank);
     				//System.out.println("------------------------");
     				//calc the disparity and insert into disparity map image
-    				pix = (int) (Bf/Math.abs(xsrc-rank));
+    				pix = Bf/(double)Math.abs(xsrc-rank);
     				if( pix >=maxHorizontalSep) {
     					//System.out.println("PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
     					pix = maxHorizontalSep;
-    				}
-    				synchronized(simage) {
+    				} /*else {
+    					System.out.println("Score:"+xsrc+","+yStart+" score="+drank+" p="+pix);
+    				}*/
+    				synchronized(simage2) {
     					//for( int k = xsrc-corrWinLeft; k < xsrc+corrWinRight; k++) {
     						//for(int l = 0; l < corrWinSize; l++) {
     							//simage[k][y+l][0] = (short) ((imgsrcL[l*width+k] & 0x00FF0000) >> 16 );
@@ -1738,11 +1690,11 @@ public class VideoProcessor extends AbstractNodeMain
         				//for(int k = xminL; k < xmaxL; k++) {
         					//for(int l = y; l < y+corrWinSize; l++) {
        						//for(int l = yStart; l < yStart+corrWinSize; l++) {
-        						simage[xsrc][yStart/*l*/][0] = (short) ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x00FF0000) >> 16 );
-        						simage[xsrc][yStart/*l*/][1] = (short) ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x0000FF00) >> 8);
-        						simage[xsrc][yStart/*l*/][2] = (short) ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x000000FF) );
+        						simage2[xsrc][yStart/*l*/][0] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x00FF0000) >> 16 );
+        						simage2[xsrc][yStart/*l*/][1] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x0000FF00) >> 8);
+        						simage2[xsrc][yStart/*l*/][2] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x000000FF) );
         						//if( simage[xsrc][l][3] == 0 )
-        							simage[xsrc][yStart/*l*/][3] = (short)pix;
+        							simage2[xsrc][yStart/*l*/][3] = pix;
         						//else 
         							// average depth from last images
         							//simage[xsrc][l][3] = (short) ((simage[xsrc][1][3]+pix)/2);
@@ -1792,16 +1744,16 @@ public class VideoProcessor extends AbstractNodeMain
 	}
 	/**
 	 * Generate hough transform and resultant image
-	 * @param simage
+	 * @param simage2
 	 * @param width
 	 * @param height
 	 * @return
 	 */
-	public void processHough(BufferedImage bimage, short[][][] simage, int width, int height) {
+	public void processHough(BufferedImage bimage, double[][][] simage2, int width, int height) {
 		HoughTransform3 h = new HoughTransform3(width, height, 128);
 		for(int xsrc = corrWinLeft; xsrc < width-corrWinRight; xsrc+=corrWinSize) {
 			for(int y = corrWinLeft; y < height-corrWinRight; y+=corrWinSize) {
-				h.addPoint(xsrc,y, simage[xsrc][y][3]);
+				h.addPoint(xsrc,y, (int) simage2[xsrc][y][3]);
 			}
 		}
 		//return h.getHoughArrayImage();
