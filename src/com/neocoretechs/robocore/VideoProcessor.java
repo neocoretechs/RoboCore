@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Vector;
@@ -48,13 +49,17 @@ import org.ros.node.topic.Subscriber;
 
 
 
+
+
+
 import com.neocoretechs.machinevision.CannyEdgeDetector;
-import com.neocoretechs.machinevision.HoughElem;
-import com.neocoretechs.machinevision.HoughLine;
-import com.neocoretechs.machinevision.HoughLine3;
-import com.neocoretechs.machinevision.HoughTransform;
-import com.neocoretechs.machinevision.HoughTransform3;
 import com.neocoretechs.machinevision.ImgProcessor;
+import com.neocoretechs.machinevision.hough2d.HoughElem;
+import com.neocoretechs.machinevision.hough2d.HoughLine;
+import com.neocoretechs.machinevision.hough2d.HoughTransform;
+import com.neocoretechs.machinevision.hough3d.Vector4d;
+import com.neocoretechs.machinevision.hough3d.octree_t;
+import com.neocoretechs.machinevision.hough3d.writer_file;
 
 
 /**
@@ -141,12 +146,21 @@ public class VideoProcessor extends AbstractNodeMain
     
 	BufferedImage bimage = null;
 	double[][][] simage = null; // [x][y]([r][g][b][d])
+	octree_t node = null;
+	octree_t nodel = null;
+	octree_t noder = null;
+	HoughTransform htL = null;
+	HoughTransform htR = null;
+	ArrayList<? extends HoughElem> hlL;
+	ArrayList<? extends HoughElem> hlR;
 	int[] dataL; // left array return from canny with magnitudes
 	int[] dataR; // right canny array with magnitudes
 	//CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
 	//CyclicBarrier latchOut = new CyclicBarrier(camHeight/corrWinSize+1);
 	CyclicBarrier latch = new CyclicBarrier(2);
 	CyclicBarrier latchOut = new CyclicBarrier(2);
+	CyclicBarrier latch2 = new CyclicBarrier(2);
+	CyclicBarrier latchOut2 = new CyclicBarrier(2);
 	Matrix3 transform;
 	//int yStart;
 	int threads = 0;
@@ -274,7 +288,10 @@ public class VideoProcessor extends AbstractNodeMain
 													break;
 												// Perform canny edge detect then depth value those and overlay, writing CloudCompare file
 												case "edge":
-													processImageChunkEdge(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, simage);
+													processImageChunkEdge(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, node);
+													break;
+												case "test":
+													processImageChunkTest(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, nodel, noder/*hlL, hlR*/);
 													break;
 												// Perform depth then deliver array of values
 												default:
@@ -293,8 +310,36 @@ public class VideoProcessor extends AbstractNodeMain
 					  //while(yStart.get() < camHeight-corrWinSize) Thread.sleep(1);
 					  SynchronizedFixedThreadPoolManager.getInstance(camHeight/corrWinSize, camHeight-corrWinSize).waitForGroupToFinish();
 					  if( TIMER )
-						  System.out.println("Process time="+(System.currentTimeMillis()-etime));
+						  System.out.println("Process time one="+(System.currentTimeMillis()-etime));
 					  latchOut.await();
+					  //
+					  // next parallel processing step, if any
+					  //
+					  switch(mode) {
+						case "test":
+							latch2.await();
+							etime = System.currentTimeMillis();
+							yStart.set(0);
+							final ArrayList<octree_t> nodelA = nodel.get_nodes();
+							final ArrayList<octree_t> noderA = noder.get_nodes();
+							for(int syStart = 0; syStart < camHeight-corrWinSize; syStart++) {
+								SynchronizedFixedThreadPoolManager.getInstance(camHeight/corrWinSize, camHeight-corrWinSize).spin(new Runnable() {
+									@Override
+									public void run() {
+										// set the left nodes with depth
+										processImageChunkTest2(yStart.getAndIncrement(), camWidth, nodelA, noderA);
+									} // run									
+								}); // spin
+							} // for syStart
+							SynchronizedFixedThreadPoolManager.getInstance(camHeight/corrWinSize, camHeight-corrWinSize).waitForGroupToFinish();
+							if( TIMER )
+								System.out.println("Process time two="+(System.currentTimeMillis()-etime));
+							latchOut2.await();
+						break;
+						//
+						default:
+					}
+					// global barrier break
 					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
 					} // while true
 			} // run
@@ -321,6 +366,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        		try {
 			        			// If we are waiting at either cyclic barrier, the reset will cause it to
 			        			// to return to top level barrier
+			        			latchOut2.reset();
+			        			latch2.reset();
 			        			latchOut.reset();
 			        			latch.reset();
 								imageLx = queueL.takeFirst();
@@ -368,20 +415,6 @@ public class VideoProcessor extends AbstractNodeMain
 			        				displayPanel.invalidate();
 			        				displayPanel.updateUI();
 			        				break;
-				        		case "hough":
-					        			imageL = imageLx;
-					        			imageR = imageRx;
-				        				if( bimage == null )
-					        				bimage = new BufferedImage(outWidth, outHeight, BufferedImage.TYPE_INT_ARGB);
-				        				if( simage == null)
-				        					simage = new double[outWidth][outHeight][4];
-				        				latch.await();
-				        				latchOut.await();
-				        				processHough(bimage, simage, outWidth, outHeight);
-				        				displayPanel.setLastFrame(bimage);
-				        				displayPanel.invalidate();
-				        				displayPanel.updateUI();
-				        				break;
 				        		case "edge":		
 					        	     	synchronized(imageLx) {
 					        	     		ced = new CannyEdgeDetector();
@@ -400,8 +433,10 @@ public class VideoProcessor extends AbstractNodeMain
 					        	     		
 				        				imageL = imageLx;
 				        				imageR = imageRx;	
-				        				if( simage == null)
-				        					simage = new double[outWidth][outHeight][4];
+				        				//if( simage == null)
+				        				//	simage = new double[outWidth][outHeight][4];
+				        				node = new octree_t();
+				        				octree_t.buildStart(node);
 				        		   		// write source images
 				        	     		synchronized(imageL) {
 				        	     			writeFile("sourceL", imageL, ++files);
@@ -411,10 +446,101 @@ public class VideoProcessor extends AbstractNodeMain
 				        	     		}
 				        				latch.await();
 				        	     		latchOut.await();
-				        	     		synchronized(simage) {
-				        	     			writeFile(simage);
+				        	     		//synchronized(simage) {
+				        	     		//	writeFile(simage);
+				        	     		//	writeOctree(simage);
+				        	     		//}
+				        	     		//break;
+				        	     		synchronized(node) {
+				        	     			octree_t.buildEnd(node);
+				        	     			node.subdivide();
+				        	     			writeFile(node,"/roscoe"+(++frames));
+				        	     			writer_file.writePerp(node, "planars"+frames);
 				        	     		}
 				        	     		break;
+				        		case "test":
+				        			/*
+				        			if( htL == null)
+				        				htL = new HoughTransform(camWidth, camHeight);
+				        			else
+				        				htL.clear();
+				        			if( htR == null)
+				        				htR = new HoughTransform(camWidth, camHeight);
+				        			else
+				        				htR.clear();
+				        			*/
+				        	     	synchronized(imageLx) {
+				        	     		ced = new CannyEdgeDetector();
+				        				ced.setSourceImage(imageLx);
+				        				dataL = ced.semiProcess();
+				        				/*
+				        				for(int j = 0; j < camWidth; j++) {
+				        					for(int i = 0; i < camHeight; i++) {
+				        						if( dataL[j*camWidth+i] != 0) {
+				        							htL.addPoint(j, i);
+				        						}
+				        					}
+				        				}
+				        				*/
+				            			//ced.process();
+				            			//imageL = ced.getEdgesImage();
+				        	     	}
+				        	     	synchronized(imageRx) {
+				        	     		ced = new CannyEdgeDetector();
+				        				ced.setSourceImage(imageRx);
+				        				dataR = ced.semiProcess();
+				        				/*
+				        				for(int j = 0; j < camWidth; j++) {
+				        					for(int i = 0; i < camHeight; i++) {
+				        						if( dataR[j*camWidth+i] != 0) {
+				        							htR.addPoint(j, i);
+				        						}
+				        					}
+				        				}
+				        				*/
+				            			//ced.process();
+				            			//imageR = ced.getEdgesImage();
+				        	     	}
+				        	     	/*
+				        	     	hlL = htL.getLines(10);
+				        	     	hlR = htR.getLines(10);
+				        	     	*/
+			        				imageL = imageLx;
+			        				imageR = imageRx;	
+			        				nodel = new octree_t();
+			        				octree_t.buildStart(nodel);
+			        				noder = new octree_t();
+			        				octree_t.buildStart(noder);
+			        		   		// write source images
+			        	     		synchronized(imageL) {
+			        	     			writeFile("sourceL", imageL, ++files);
+			        	     		}
+			        	     		synchronized(imageR) {
+			        	       			writeFile("sourceR", imageR, files);
+			        	     		}
+			        	     		// first step end multi thread barrier synch
+			        				latch.await();
+			        	     		latchOut.await();
+			        	     		synchronized(nodel) {
+			        	     			octree_t.buildEnd(nodel);
+			        	     			nodel.subdivide();
+			        	     			//writeFile(nodel,"/roscoeL"+(++frames));
+			        	     			writer_file.writePerp(nodel, "planarsL"+files);
+			        	     		}
+			        	     		synchronized(noder) {
+			        	     			octree_t.buildEnd(noder);
+			        	     			noder.subdivide();
+			        	     			writeFile(noder,"/roscoeR"+files);
+			        	     			writer_file.writePerp(noder, "planarsR"+files);
+			        	     		}
+			        	     		// second step end multi thread barrier synch
+			        	     		latch2.await();
+			        	     		latchOut2.await();
+			        	     		// at this point nodel should be loaded with z
+			        	     		synchronized(nodel) {
+			        	     			writeFile(nodel,"/roscoeL"+files);
+			        	     		}
+			        	     		break;
 				        	     	default:
 				        				imageL = imageLx;
 				        				imageR = imageRx;
@@ -552,15 +678,24 @@ public class VideoProcessor extends AbstractNodeMain
 	protected void writeFile(double[][][] simage2) {
 		DataOutputStream dos = null;
 		File f = new File(outDir+"/roscoe"+(++frames)+".asc");
+		int ks, ms;
+		double os;
 		try {
 			dos = new DataOutputStream(new FileOutputStream(f));
 			for(int y = 0; y < outHeight; y++) {
 				for(int x = 0; x < outWidth; x++) {
-					dos.writeBytes(String.valueOf((double)x)); // X
+					// output only valid data
+					if( mode.equals("edge") && simage2[x][y][0] == 0 )
+						continue;
+					// transform to 3D plane offsets
+					ks = x - (camWidth/2);
+					ms = y - (camHeight/2);
+					os = (Bf/2) - simage2[x][y][3] ;//simage2[x][y][3] - (Bf/2);
+					dos.writeBytes(String.valueOf((double)ks/*x*/)); // X
 					dos.writeByte(' ');
-					dos.writeBytes(String.valueOf((double)y));// Y
+					dos.writeBytes(String.valueOf((double)ms/*y*/));// Y
 					dos.writeByte(' ');
-					dos.writeBytes(String.valueOf(simage2[x][y][3])); // Z
+					dos.writeBytes(String.valueOf(os/*simage2[x][y][3]*/)); // Z
 					dos.writeByte(' ');
 					dos.writeBytes(String.valueOf((int)simage2[x][y][0])); // R
 					dos.writeByte(' ');
@@ -587,6 +722,69 @@ public class VideoProcessor extends AbstractNodeMain
 		}
 		
 	}
+	
+	protected void writeFile(octree_t node, String filename) {
+		DataOutputStream dos = null;
+		File f = new File(outDir+filename+".asc");
+		int ks, ms;
+		double os;
+		try {
+			dos = new DataOutputStream(new FileOutputStream(f));
+			for(int i = 0; i < node.m_points.size(); i++) {
+				Vector4d pnode = node.m_points.get(i);
+				Vector4d pcolor = node.m_colors.get(i);
+				dos.writeBytes(String.valueOf(pnode.x)); // X
+					dos.writeByte(' ');
+					dos.writeBytes(String.valueOf(pnode.y));// Y
+					dos.writeByte(' ');
+					dos.writeBytes(String.valueOf(pnode.z)); // Z
+					dos.writeByte(' ');
+					dos.writeBytes(String.valueOf((int)pcolor.x)); // R
+					dos.writeByte(' ');
+					dos.writeBytes(String.valueOf((int)pcolor.y)); // G
+					dos.writeByte(' ');
+					dos.writeBytes(String.valueOf((int)pcolor.z)); // B
+					dos.writeByte('\r');
+					dos.writeByte('\n');
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+			return;
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				if( dos != null ) {
+					dos.flush();
+					dos.close();
+				}
+			} catch (IOException e) {
+			}		
+		}
+		
+	}
+	
+	protected void writeOctree(double[][][] simage2) {
+		octree_t node = new octree_t();
+		octree_t.buildStart(node);
+		for(int y = 0; y < outHeight; y++) {
+			for(int x = 0; x < outWidth; x++) {
+				// output only valid data
+				if( mode.equals("edge") && simage2[x][y][0] == 0 )
+					continue;
+				// transform to 3D plane offsets
+				double ks = x - (camWidth/2);
+				double ms = y - (camHeight/2);
+				double os = (Bf/2) - simage2[x][y][3] ;//simage2[x][y][3] - (Bf/2);
+				octree_t.build(node, (double)ks, (double)ms, os, simage2[x][y][0], simage2[x][y][1], simage2[x][y][2]);
+			}
+		}
+		octree_t.buildEnd(node);
+		node.subdivide();
+		writer_file.writePerp(node, "planars"+frames);
+	}
+	
+
 	/**
 	 * Write JPEG file 
 	 * @param fname File name
@@ -613,8 +811,7 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param imageR Right image from bus
 	 * @param yStart Starting Y band to process
 	 * @param width width of image band
-	 * @param simage buffered image to hold 3D rendering
-	 * @param kernel Gaussian weighted kernel for correlation
+	 * @param bimage buffered image to hold 3D rendering
 	 */
 	public void processImageChunk3D(BufferedImage imageL, BufferedImage imageR, int yStart, int width, BufferedImage bimage) {
 			double heading = Math.toRadians(headingSlider.getValue());
@@ -1332,11 +1529,11 @@ public class VideoProcessor extends AbstractNodeMain
 				//System.out.println("------------------------");
 				//calc the disparity and insert into disparity map
 				pix = Bf/(double)Math.abs(xsrc-rank);
-				if( pix >=maxHorizontalSep) {
+				//if( pix >=maxHorizontalSep) {
 					//System.out.println("PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
-					pix = maxHorizontalSep;
-				} /*else
-					System.out.println("x="+xsrc+", y="+yStart+" score="+drank);*/
+					//pix = maxHorizontalSep;
+				//} /*else
+					//System.out.println("x="+xsrc+", y="+yStart+" score="+drank);*/
 				synchronized(simage2) {
 						//for(int l = 0; l < corrWinSize; l++) {
 							simage2[xsrc][/*l+*/yStart][0] = ((imgsrcL[/*l*width+*/xsrc] & 0x00FF0000) >> 16 );
@@ -1381,7 +1578,7 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param width width of image band
 	 * @param simage2 3D short array to hold result. [x][y][0]=R, [x][y][1]=G, [x][y][2]=B, [x][y][3]=D
 	 */
-	public final void processImageChunkEdge(int[] imageL, int[] imageR, BufferedImage imageLx2, BufferedImage imageRx2, int yStart, int width, double[][][] simage2) {
+	public final void processImageChunkEdge(int[] imageL, int[] imageR, BufferedImage imageLx2, BufferedImage imageRx2, int yStart, int width, octree_t node) {
 			long etime = System.currentTimeMillis();
 			boolean convToGrey = false;
     		// SAD - sum of absolute differences. take the diff of RGB values of
@@ -1389,6 +1586,8 @@ public class VideoProcessor extends AbstractNodeMain
 			int[] score = new int[width];
     		int[] imgsrcL = new int[width*corrWinSize]; // left image scan line and kernel window
      		int[] imgsrcR = new int[width*corrWinSize]; // right image scan line and kernel window
+       		int[] imgsrcLx = new int[width*corrWinSize]; // left image scan line and kernel window
+     		int[] imgsrcRx = new int[width*corrWinSize]; // right image scan line and kernel window
      		//float[] coeffsL = new float[corrWinSize*corrWinSize];
      		// precompute right side DCT values since we will be sweeping over them repeatedly as we march forward in left X
      		//float[][] coeffsR = new float[width][corrWinSize*corrWinSize];
@@ -1404,13 +1603,19 @@ public class VideoProcessor extends AbstractNodeMain
      		int xminR = 0;
      		int xmaxR = 0;
      		
- 			synchronized(imageL) {
- 				System.arraycopy(Arrays.copyOfRange(imageL, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcL, 0, width*corrWinSize);
-				//imageL.getRGB(0, yStart, width, corrWinSize, imgsrcL, 0 , width);
+     		synchronized(imageL) {
+     			// gradient magnitude
+     			System.arraycopy(Arrays.copyOfRange(imageL, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcL, 0, width*corrWinSize);
+     		}
+ 			synchronized(imageLx2) {
+				imageLx2.getRGB(0, yStart, width, corrWinSize, imgsrcLx, 0 , width);
 			}
-			synchronized(imageR) {
-				System.arraycopy(Arrays.copyOfRange(imageR, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcR, 0, width*corrWinSize);
-				//imageR.getRGB(0, yStart, width, corrWinSize, imgsrcR, 0 , width);
+    		synchronized(imageR) {
+     			// gradient magnitude
+     			System.arraycopy(Arrays.copyOfRange(imageR, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcR, 0, width*corrWinSize);
+     		}
+			synchronized(imageRx2) {
+				imageRx2.getRGB(0, yStart, width, corrWinSize, imgsrcRx, 0 , width);
 			}
 			// Convert to greyscale if indicated
 			if( convToGrey ) {
@@ -1506,7 +1711,7 @@ public class VideoProcessor extends AbstractNodeMain
     				// sweep the epipolar scan line for each subject pixel in left image
       	  			xminL = xsrc;
     	  			xmaxL = xsrc+corrWinSize;
-       				if(  xsrc > width-corrWinSize) {
+       				if(xsrc > width-corrWinSize) {
 	   					xmaxL = width;
 	   					xminL = width-corrWinSize;
 					}/* else {
@@ -1619,8 +1824,8 @@ public class VideoProcessor extends AbstractNodeMain
 						for(int j = 0; j < corrWinSize; j++) {
 							// i increments in x, row major order
     						for(int i = 0; i < corrWinSize; i++) {
-    							int rdata = imgsrcR[j*width+(i+xminR)];
-    							int ldata = imgsrcL[j*width+(i+xminL)];
+    							int rdata = imgsrcRx[j*width+(i+xminR)] & 0x00FFFFFF;//imgsrcR[j*width+(i+xminR)];
+    							int ldata = imgsrcLx[j*width+(i+xminL)] & 0x00FFFFFF;//imgsrcL[j*width+(i+xminL)];
     							sum += Math.abs(rdata-ldata);
     						}
 						}
@@ -1678,34 +1883,236 @@ public class VideoProcessor extends AbstractNodeMain
     				} /*else {
     					System.out.println("Score:"+xsrc+","+yStart+" score="+drank+" p="+pix);
     				}*/
-    				synchronized(simage2) {
-    					//for( int k = xsrc-corrWinLeft; k < xsrc+corrWinRight; k++) {
-    						//for(int l = 0; l < corrWinSize; l++) {
-    							//simage[k][y+l][0] = (short) ((imgsrcL[l*width+k] & 0x00FF0000) >> 16 );
-    							//simage[k][y+l][1] = (short) ((imgsrcL[l*width+k] & 0x0000FF00) >> 8);
-    							//simage[k][y+l][2] = (short) ((imgsrcL[l*width+k] & 0x000000FF) );
-    							//simage[k][y+l][3] = (short)pix;
-    						//}
-    					//}
-        				//for(int k = xminL; k < xmaxL; k++) {
-        					//for(int l = y; l < y+corrWinSize; l++) {
-       						//for(int l = yStart; l < yStart+corrWinSize; l++) {
-        						simage2[xsrc][yStart/*l*/][0] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x00FF0000) >> 16 );
-        						simage2[xsrc][yStart/*l*/][1] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x0000FF00) >> 8);
-        						simage2[xsrc][yStart/*l*/][2] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x000000FF) );
-        						//if( simage[xsrc][l][3] == 0 )
-        							simage2[xsrc][yStart/*l*/][3] = pix;
-        						//else 
-        							// average depth from last images
-        							//simage[xsrc][l][3] = (short) ((simage[xsrc][1][3]+pix)/2);
-        					//}
-        				//}
+    				
+    				//synchronized(simage2) {
+        			//			simage2[xsrc][yStart/*l*/][0] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x00FF0000) >> 16 );
+        			//			simage2[xsrc][yStart/*l*/][1] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x0000FF00) >> 8);
+        			//			simage2[xsrc][yStart/*l*/][2] = ((imageLx2.getRGB(xsrc,yStart/*l*/) & 0x000000FF) );
+        			//			simage2[xsrc][yStart/*l*/][3] = pix;
+    				//}
+    				double ks = xsrc - (camWidth/2);
+    				double ms = yStart - (camHeight/2);
+    				double os = (Bf/2) - pix ;
+
+    				synchronized(node) {
+    					octree_t.build(node, (double)ks, (double)ms, os, 
+    						((imgsrcLx[xsrc] & 0x00FF0000) >> 16 ), 
+    						((imgsrcLx[xsrc] & 0x0000FF00) >> 8), 
+    						((imgsrcLx[xsrc] & 0x000000FF) ));
     				}
     			} //++xsrc  move to next x subject in left image at this scanline y
     			//System.out.println("Y scan="+y);
     		//} // next y
     		if( SAMPLERATE )
     			System.out.println("*****IMAGE FROM "+yStart+" to "+(yStart+corrWinSize)+" close="+close+" far="+far+" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
+	}
+	
+	public final void processImageChunkTest(int[] imageL, int[] imageR, BufferedImage imageLx2, BufferedImage imageRx2, int yStart, int width, /*ArrayList<? extends HoughElem> hl, ArrayList<? extends HoughElem> hr*/ octree_t nodel, octree_t noder) {
+		long etime = System.currentTimeMillis();
+		boolean convToGrey = false;
+		int[] imgsrcL = new int[width*corrWinSize]; // left image scan line and kernel window
+ 		int[] imgsrcR = new int[width*corrWinSize]; // right image scan line and kernel window
+   		int[] imgsrcLx = new int[width*corrWinSize]; // left image scan line and kernel window
+ 		int[] imgsrcRx = new int[width*corrWinSize]; // right image scan line and kernel window
+ 		//float[] coeffsL = new float[corrWinSize*corrWinSize];
+ 		// precompute right side DCT values since we will be sweeping over them repeatedly as we march forward in left X
+ 		//float[][] coeffsR = new float[width][corrWinSize*corrWinSize];
+ 		boolean emptyRight[] = new boolean[width]; // whether chunk was found to be devoid of edges during precompute
+		// xsrc is index for subject pixel
+		// correlation window assumed symmetric left/right/up/down with odd number of elements
+		// so we use corrWinLeft as top half of window array size and corrwinRight as bottom half
+ 		// this is the target area but the search area is larger if we wont hit edges of image
+ 		int close = 0;
+ 		int far = 0;
+ 		int xminL = 0;
+ 		int xmaxL = 0;
+ 		int xminR = 0;
+ 		int xmaxR = 0;
+ 		
+ 		synchronized(imageL) {
+ 			// gradient magnitude
+ 			System.arraycopy(Arrays.copyOfRange(imageL, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcL, 0, width*corrWinSize);
+ 		}
+			synchronized(imageLx2) {
+			imageLx2.getRGB(0, yStart, width, corrWinSize, imgsrcLx, 0 , width);
+		}
+		synchronized(imageR) {
+ 			// gradient magnitude
+ 			System.arraycopy(Arrays.copyOfRange(imageR, yStart*width, (yStart+corrWinSize)*width), 0, imgsrcR, 0, width*corrWinSize);
+ 		}
+		synchronized(imageRx2) {
+			imageRx2.getRGB(0, yStart, width, corrWinSize, imgsrcRx, 0 , width);
+		}
+		// Convert to greyscale if indicated
+		if( convToGrey ) {
+			for(int j = 0; j < width*corrWinSize ; j++) {
+				int rr = (imgsrcR[j] & 0xFF0000) >> 24;
+				int rg = (imgsrcR[j] & 0x00FF00) >> 16;
+				int rb = (imgsrcR[j] & 0x0000FF);
+				imgsrcR[j] = rr + rg + rb;
+				rr = (imgsrcL[j] & 0xFF0000) >> 24;
+				rg = (imgsrcL[j] & 0x00FF00) >> 16;
+				rb = (imgsrcL[j] & 0x0000FF);
+				imgsrcL[j] = rr + rg + rb;
+				//int pixR = (int) (((float)rr *.299) + ((float)rg *.587) + ((float)rb *.114));
+			}
+		}
+			loop:
+			//for(int xsrc = corrWinLeft; xsrc < width-corrWinRight; /*xsrc+=corrWinSize*/xsrc++) {
+	  		for(int xsrc = 0; xsrc < width; xsrc++) {
+				// If the left image pixel which is the target to receive the depth value is not edge, continue
+				if(imgsrcL[xsrc] == 0)
+					continue loop;
+				double ks = xsrc - (camWidth/2);
+				double ms = yStart - (camHeight/2);
+				double os = 1;//(Bf/2) - imgsrcL[xsrc]; // gradient intensity
+
+				synchronized(nodel) {
+					octree_t.build(nodel, (double)ks, (double)ms, os, 
+						((imgsrcLx[xsrc] & 0x00FF0000) >> 16 ), 
+						((imgsrcLx[xsrc] & 0x0000FF00) >> 8), 
+						((imgsrcLx[xsrc] & 0x000000FF) ));
+				}
+			} //++xsrc  move to next x subject in left image at this scanline y
+		loop2:
+		//for(int xsrc = corrWinLeft; xsrc < width-corrWinRight; /*xsrc+=corrWinSize*/xsrc++) {
+  		for(int xsrc = 0; xsrc < width; xsrc++) {
+			// If the left image pixel which is the target to receive the depth value is not edge, continue
+			if(imgsrcR[xsrc] == 0)
+				continue loop2;
+			double ks = xsrc - (camWidth/2);
+			double ms = yStart - (camHeight/2);
+			double os = 1;//(Bf/2) - imgsrcR[xsrc]; // gradient intensity
+
+			synchronized(noder) {
+				octree_t.build(noder, (double)ks, (double)ms, os, 
+					((imgsrcRx[xsrc] & 0x00FF0000) >> 16 ), 
+					((imgsrcRx[xsrc] & 0x0000FF00) >> 8), 
+					((imgsrcRx[xsrc] & 0x000000FF) ));
+			}
+		} //++xsrc  move to next x subject in left image at this scanline y
+			//System.out.println("Y scan="+y);
+		//} // next y
+		if( SAMPLERATE )
+			System.out.println("*****IMAGE FROM "+yStart+" to "+(yStart+corrWinSize)+" close="+close+" far="+far+" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
+	}
+	/**
+	 * 
+	 * @param yStart
+	 * @param camwidth
+	 * @param nodelA
+	 * @param noderA
+	 */
+	private void processImageChunkTest2(int yStart, int camwidth,ArrayList<octree_t> nodelA,ArrayList<octree_t> noderA) {
+		long etime = System.currentTimeMillis();
+		octree_t tnodel = null;
+		ArrayList<octree_t> leftNodes = new ArrayList<octree_t>();
+		ArrayList<octree_t> rightNodes = new ArrayList<octree_t>();
+		// get all nodes along this Y axis, if any
+		synchronized(nodelA) {
+			for( octree_t inode : nodelA) {
+				if( ((int)inode.getCentroid().y) == yStart ) {
+					leftNodes.add(inode);
+				}
+			}		
+		}
+		// get the right nodes, where the octree cell has same basic number points and plane nornal
+		if( leftNodes.size() == 0) {
+			System.out.println("processImageChunkTest2 no elements found for left image scan line at "+yStart);
+			return;
+		}
+		System.out.println("processImageChunkTest2 left nodes="+leftNodes.size()+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" ***");
+		// cross product of normals zero and same number points for each left node compared to all right nodes
+		//synchronized(noderA) {
+		//	for( int i = 0; i < leftNodes.size(); i++) {
+		//		for(int j = 0; j < noderA.size(); j++) {
+		//			if( leftNodes.get(i).getIndexes().size() == noderA.get(j).getIndexes().size() &&
+		//				leftNodes.get(i).getNormal1().multiplyVectorial(noderA.get(j).getNormal1()).getLength() < .001) {
+		//					rightNodes.add(noderA.get(j));
+		//			}
+		//		}
+		//	}		
+		//}
+		//if( rightNodes.size() == 0 ) {
+		//	System.out.println("processImageChunkTest2 no right image nodes found for left image scan line at "+yStart);
+		//	return;
+		//}
+		int iscore = 0;
+		int[] score = null;
+		octree_t[] oscore = null;
+		for( octree_t inode : leftNodes) {
+			for(int j = 0; j < noderA.size(); j++) {
+				if( inode.getIndexes().size() == noderA.get(j).getIndexes().size() &&
+					inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength() < .001) {
+				// Compute the sum of absolute difference SAD between the 2 matrixes representing
+				// the left subject subset and right target subset
+				// each point in left and right octree cells
+				int sum = 0;
+				score = new int[noderA.get(j).getIndexes().size()];
+				oscore = new octree_t[score.length];
+				// all right nodes that qualified
+				iscore = 0;
+				for(int c = 0; c < inode.getIndexes().size(); c++) {
+					Vector4d lcolor = null;
+					Vector4d rcolor = null;
+					if(inode.getIndexes().size() != noderA.get(j).getIndexes().size())
+						throw new RuntimeException("procesImageChunkTest2 size mismatch:"+inode.getIndexes().size()+" "+noderA.get(j).getIndexes().size()+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" ***");
+					synchronized(inode.getRoot().m_colors) {
+						synchronized(inode) {
+							lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
+						}
+						synchronized(noderA.get(j)) {
+							rcolor = inode.getRoot().m_colors.get(noderA.get(j).getIndexes().get(c));
+						}
+					}
+					sum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
+				}
+				oscore[iscore] = noderA.get(j);
+				score[iscore++] = sum;
+				}
+			}
+			if( iscore == 0 ) {
+				System.out.println("processImageChunkTest2 no right image nodes found for left image scan line at "+yStart+" ***** "+Thread.currentThread().getName()+" ***");
+				return;
+			}
+			
+			// now calculate the one closest to zero from sum of differences
+			// rank = 0
+			int drank = Integer.MAX_VALUE;
+			int rank = 0;
+			// move through array of differences we built in above scan loops
+			for(int s = 0; s < iscore; s++) {
+				if (score[s] < drank) {
+					rank = s;
+					drank = score[s];
+				}
+			}
+			System.out.println("processImageChunkTest2 got total of "+iscore+" scores with best="+drank+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
+			//System.out.println();
+			//System.out.println("------------------------");
+			//System.out.println("For x="+rank+" subject="+xsrc+" scanline y="+y+" score="+drank);
+			//System.out.println("------------------------");
+			//calc the disparity and insert into disparity map image
+			// we will call disparity difference of octree centroid x values
+			double pix = Bf/Math.abs(inode.getCentroid().x-oscore[rank].getCentroid().x);
+			//if( pix >=maxHorizontalSep) {
+				//System.out.println("PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
+				//pix = maxHorizontalSep;
+			//} else {
+			//	System.out.println("Score:"+xsrc+","+yStart+" score="+drank+" p="+pix);
+			//}
+			// now set all points in left octree node to this disparity value
+			synchronized(inode.getRoot().m_points) {
+				for(int c = 0; c < inode.getIndexes().size(); c++) {
+					Vector4d tpoint = inode.getRoot().m_points.get(inode.getIndexes().get(c));
+					tpoint.z = pix;//(Bf/2) - pix ;
+				}
+			}
+			System.out.println("processImageChunkTest2 node left="+inode+" set "+inode.getIndexes().size()+" points to "+pix+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
+		} // left octree nodes
+
+		if( SAMPLERATE )
+			System.out.println("*****IMAGE SCAN LINE "+yStart+" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
 	/**
 	 * Transform the coord at x,y by the Matrix3 transform provided, translate and rotate.
@@ -1742,30 +2149,7 @@ public class VideoProcessor extends AbstractNodeMain
 		return new int[]{ks,ms};
 		
 	}
-	/**
-	 * Generate hough transform and resultant image
-	 * @param simage2
-	 * @param width
-	 * @param height
-	 * @return
-	 */
-	public void processHough(BufferedImage bimage, double[][][] simage2, int width, int height) {
-		HoughTransform3 h = new HoughTransform3(width, height, 128);
-		for(int xsrc = corrWinLeft; xsrc < width-corrWinRight; xsrc+=corrWinSize) {
-			for(int y = corrWinLeft; y < height-corrWinRight; y+=corrWinSize) {
-				h.addPoint(xsrc,y, (int) simage2[xsrc][y][3]);
-			}
-		}
-		//return h.getHoughArrayImage();
-		 // get the lines out 
-        Vector<? extends HoughElem> lines = h.getLines(0); 
- 
-        // draw the lines back onto the image 
-        for (int j = 0; j < lines.size(); j++) { 
-            HoughLine3 line = (HoughLine3) lines.elementAt(j); 
-            line.draw(bimage, Color.RED.getRGB()); 
-        } 
-	}
+
 	
 	/**
 	 * Plot a course based on visual data
