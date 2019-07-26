@@ -66,6 +66,25 @@ public class SynchronizedFixedThreadPoolManager {
 		}
 		return threadPoolManager;
 	}
+	
+	public static SynchronizedFixedThreadPoolManager getInstance() {
+		if( threadPoolManager == null )
+			threadPoolManager = new SynchronizedFixedThreadPoolManager();
+		return threadPoolManager;
+	}
+	
+	public void init(int maxThreads, int executionLimit, String group) {
+		FactoryThreadsLimit ftl = executor.get(group);
+		if( ftl != null ) {
+			ftl.exs.shutdownNow();
+			executor.remove(ftl);
+		}
+		DaemonThreadFactory dtf = new DaemonThreadFactory(group);
+		ExecutorService tpx = new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf);
+		executor.put(group, new FactoryThreadsLimit(group, dtf, tpx, maxThreads, executionLimit));
+		((ExtendedExecutor)tpx).prestartAllCoreThreads();
+	}
+	
 	/**
 	 * Create an array of Executors that manage a cached thread pool for
 	 * reading topics. One thread pool per topic to notify listeners of data ready
@@ -221,7 +240,7 @@ public class SynchronizedFixedThreadPoolManager {
 		}
 		@Override
 		public boolean equals(Object o) {
-			return group.equals(o);
+			return group.equals(((FactoryThreadsLimit)o).group);
 		}
 		@Override
 		public int hashCode() {

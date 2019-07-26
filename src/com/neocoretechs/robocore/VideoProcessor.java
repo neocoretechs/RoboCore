@@ -366,7 +366,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  //BlockingQueue<Runnable> bq = FixedThreadPoolManager.getInstance(camHeight-corrWinSize).getQueue();
 					  // wait for the y scan atomic counter to reach max
 					  //while(yStart.get() < camHeight-corrWinSize) Thread.sleep(1);
-					  SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit).waitForGroupToFinish();
+					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish();
 					  if( TIMER )
 						  System.out.println("Process time one="+(System.currentTimeMillis()-etime));
 					  latchOut.await();
@@ -383,7 +383,7 @@ public class VideoProcessor extends AbstractNodeMain
 							indexDepth = Collections.synchronizedList(new ArrayList<IndexDepth>());
 							indexUnproc = Collections.synchronizedList(new ArrayList<IndexDepth>());
 							for(int syStart = 0; syStart < execLimit; syStart++) {
-								SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit).spin(new Runnable() {
+								SynchronizedFixedThreadPoolManager.getInstance().spin(new Runnable() {
 									@Override
 									public void run() {
 										// set the left nodes with depth
@@ -391,7 +391,7 @@ public class VideoProcessor extends AbstractNodeMain
 									} // run									
 								}); // spin
 							} // for syStart
-							SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit).waitForGroupToFinish();
+							SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish();
 							if( TIMER )
 								System.out.println("Process time two="+(System.currentTimeMillis()-etime));
 							latchOut2.await();
@@ -411,8 +411,9 @@ public class VideoProcessor extends AbstractNodeMain
 							final int nSize = nodelA.size();
 							final int nSizeT = Math.min(nodelA.size(), 32);
 							// gen 1 thread for each array element up to limit
+							SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT, nSize, "SETPOINT");
 							for(int syStart = 0; syStart < nSize; syStart++) {
-								SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize, "SETPOINT").spin(new Runnable() {
+								SynchronizedFixedThreadPoolManager.getInstance().spin(new Runnable() {
 									@Override
 									public void run() {
 										// set the left nodes with depth
@@ -420,7 +421,7 @@ public class VideoProcessor extends AbstractNodeMain
 									} // run									
 								},"SETPOINT"); // spin
 							} // for syStart
-							SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize).waitForGroupToFinish("SETPOINT");
+							SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("SETPOINT");
 							if( TIMER )
 								System.out.println("Process time three="+(System.currentTimeMillis()-etime));
 							latchOut3.await();
