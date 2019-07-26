@@ -6,12 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -25,21 +21,48 @@ import java.util.concurrent.TimeUnit;
  */
 public class SynchronizedFixedThreadPoolManager {
 	int threadNum = 0;
-    DaemonThreadFactory dtf ;//= new PoolThreadFactory();
-    private static Map<String, ExecutorService> executor = new HashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
+    //DaemonThreadFactory dtf ;//= new PoolThreadFactory();
+    //private static Map<String, ExecutorService> executor = new HashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
+    private static Map<String, FactoryThreadsLimit> executor = new HashMap<String, FactoryThreadsLimit>();
 	public static SynchronizedFixedThreadPoolManager threadPoolManager = null;
-	int totalThreads;
 	private SynchronizedFixedThreadPoolManager() { }
-	
+	/**
+	 * Create a manager with the number of working threads and total threads to execute in the
+	 * default SYSTEMSYNC group
+	 * @param maxThreads
+	 * @param executionLimit
+	 * @return
+	 */
 	public static SynchronizedFixedThreadPoolManager getInstance(int maxThreads, int executionLimit) {
 		if( threadPoolManager == null ) {
 			threadPoolManager = new SynchronizedFixedThreadPoolManager();
-			threadPoolManager.dtf = getInstance(maxThreads, executionLimit).new DaemonThreadFactory("SYSTEMSYNC");
-			threadPoolManager.totalThreads = executionLimit;
-			// set up pool for system processes
-			ThreadPoolExecutor tpx = getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit));
-			tpx.prestartAllCoreThreads();
-			executor.put("SYSTEMSYNC",tpx );		
+			//threadPoolManager.dtf = getInstance(maxThreads, executionLimit).new DaemonThreadFactory("SYSTEMSYNC");
+			//threadPoolManager.totalThreads = executionLimit;
+			DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory("SYSTEMSYNC"));
+			ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
+			executor.put("SYSTEMSYNC", 
+					(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit("SYSTEMSYNC", dtf, tpx, maxThreads, executionLimit)));
+			((ExtendedExecutor)tpx).prestartAllCoreThreads();
+			//executor.put("SYSTEMSYNC",tpx );		
+		}
+		return threadPoolManager;
+	}
+	/**
+	 * Create a manager with the number of working threads and total threads to execute in the
+	 * default named group
+	 * @param maxThreads
+	 * @param executionLimit
+	 * @param group The group name, to differentiate between working sets of different operation or thread counts
+	 * @return
+	 */
+	public static SynchronizedFixedThreadPoolManager getInstance(int maxThreads, int executionLimit, String group) {
+		if( threadPoolManager == null ) {
+			threadPoolManager = new SynchronizedFixedThreadPoolManager();
+			DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory(group));
+			ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
+			executor.put(group, 
+					(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit(group, dtf, tpx, maxThreads, executionLimit)));
+			((ExtendedExecutor)tpx).prestartAllCoreThreads();
 		}
 		return threadPoolManager;
 	}
@@ -50,34 +73,51 @@ public class SynchronizedFixedThreadPoolManager {
 	 */
 	public static void init(int maxThreads, int executionLimit, String[] threadGroupNames) {
 		for(String tgn : threadGroupNames) {
-			executor.put(tgn, getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit)));
+			//executor.put(tgn, getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit)));
+			DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory(tgn));
+			ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
+			executor.put(tgn, 
+					(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit(tgn, dtf, tpx, maxThreads, executionLimit)));
+			((ExtendedExecutor)tpx).prestartAllCoreThreads();
 		}
 	}
 	
 	public void waitForGroupToFinish(String group) throws InterruptedException {
-		((ExtendedExecutor)executor.get(group)).getLatch().await();
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group));
+		ExecutorService exe = ftl.exs;
+		((ExtendedExecutor)exe).getLatch().await();
 		// now reset latch
-		((ExtendedExecutor)executor.get(group)).latch = new CountDownLatch(totalThreads);
+		((ExtendedExecutor)exe).latch = new CountDownLatch(ftl.totalThreads);
 	}
 	
 	public void waitForGroupToFinish() throws InterruptedException {
-		((ExtendedExecutor)executor.get("SYSTEMSYNC")).getLatch().await();
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get("SYSTEMSYNC"));
+		ExecutorService exe = ftl.exs;
+		((ExtendedExecutor)exe).getLatch().await();
 		// now reset latch
-		((ExtendedExecutor)executor.get("SYSTEMSYNC")).latch = new CountDownLatch(totalThreads);
+		((ExtendedExecutor)exe).latch = new CountDownLatch(ftl.totalThreads);
 	}
 	
 	public BlockingQueue<Runnable> getQueue(String group) {
-		return ((ThreadPoolExecutor)executor.get(group)).getQueue();
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group));
+		ExecutorService exe = ftl.exs;
+		return ((ExtendedExecutor)exe).getQueue();
+		//return ((ThreadPoolExecutor)executor.get(group)).getQueue();
 	}
 	
 	public BlockingQueue<Runnable> getQueue() {
-		return ((ThreadPoolExecutor)executor.get("SYSTEMSYNC")).getQueue();
+		//return ((ThreadPoolExecutor)executor.get("SYSTEMSYNC")).getQueue();
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get("SYSTEMSYNC"));
+		ExecutorService exe = ftl.exs;
+		return ((ExtendedExecutor)exe).getQueue();
 	}
 
 	
 	public void waitGroup(String group) {
 		try {
-			ExecutorService w = executor.get(group);
+			FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group));
+			ExecutorService w = ftl.exs;
+			//ExecutorService w = executor.get(group);
 			synchronized(w) {
 				w.wait();
 			}
@@ -87,7 +127,9 @@ public class SynchronizedFixedThreadPoolManager {
 	
 	public void waitGroup(String group, long millis) {
 		try {
-			ExecutorService w = executor.get(group);
+			FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group));
+			ExecutorService w = ftl.exs;
+			//ExecutorService w = executor.get(group);
 			synchronized(w) {
 				w.wait(millis);
 			}
@@ -96,28 +138,37 @@ public class SynchronizedFixedThreadPoolManager {
 	}
 	
 	public void notifyGroup(String group) {
-			ExecutorService w = executor.get(group);
-			synchronized(w) {
-				w.notifyAll();
-			}
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group));
+		ExecutorService w = ftl.exs;
+		//ExecutorService w = executor.get(group);
+		synchronized(w) {
+			w.notifyAll();
+		}
 	}
 	
 	public void spin(Runnable r, ThreadGroup group) {
-	    executor.get(group.getName()).execute(r);
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group.getName()));
+		ExecutorService exe = ftl.exs;
+	    /*executor.get(group.getName())*/exe.execute(r);
 	}
 	
 	public void spin(Runnable r, String group) {
-	    executor.get(group).execute(r);
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group));
+		ExecutorService exe = ftl.exs;
+	    /*executor.get(group)*/exe.execute(r);
 	}
 	
 	public void spin(Runnable r) {
-	    executor.get("SYSTEMSYNC").execute(r);
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get("SYSTEMSYNC"));
+		ExecutorService exe = ftl.exs;
+	    /*executor.get("SYSTEMSYNC")*/exe.execute(r);
 	}
 	
 	public void shutdown() {
-		Collection<ExecutorService> ex = executor.values();
-		for(ExecutorService e : ex) {
-			List<Runnable> spun = e.shutdownNow();
+		//Collection<ExecutorService> ex = executor.values();
+		Collection<FactoryThreadsLimit> ex = executor.values();
+		for(/*ExecutorService*/FactoryThreadsLimit e : ex) {
+			List<Runnable> spun = e.exs.shutdownNow();
 			for(Runnable rs : spun) {
 				System.out.println("Marked for Termination:"+rs.toString()+" "+e.toString());
 			}
@@ -140,7 +191,7 @@ public class SynchronizedFixedThreadPoolManager {
 	
 	class ExtendedExecutor extends ThreadPoolExecutor {
 		public CountDownLatch latch;
-		public ExtendedExecutor(int maxThreads, int totalThreads, BlockingQueue<Runnable> threadQueue) {
+		public ExtendedExecutor(int maxThreads, int totalThreads, BlockingQueue<Runnable> threadQueue, DaemonThreadFactory dtf) {
 			super(maxThreads, totalThreads, Long.MAX_VALUE, TimeUnit.DAYS, threadQueue, dtf );
 			latch = new CountDownLatch(totalThreads);
 		}
@@ -153,5 +204,28 @@ public class SynchronizedFixedThreadPoolManager {
 			latch.countDown();
 		}
 		
+	}
+	
+	class FactoryThreadsLimit {
+		public DaemonThreadFactory dtf;
+		public ExecutorService exs;
+		public int totalThreads;
+		public int maxThreads;
+		public String group;
+		public FactoryThreadsLimit(String group, DaemonThreadFactory dtf, ExecutorService exs, int totalThreads, int maxThreads ) {
+			this.group = group;
+			this.dtf = dtf;
+			this.exs = exs;
+			this.totalThreads = totalThreads;
+			this.maxThreads = maxThreads;
+		}
+		@Override
+		public boolean equals(Object o) {
+			return group.equals(o);
+		}
+		@Override
+		public int hashCode() {
+			return group.hashCode();
+		}
 	}
 }

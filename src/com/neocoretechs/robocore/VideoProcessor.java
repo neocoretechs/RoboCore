@@ -412,15 +412,15 @@ public class VideoProcessor extends AbstractNodeMain
 							final int nSizeT = Math.min(nodelA.size(), 32);
 							// gen 1 thread for each array element up to limit
 							for(int syStart = 0; syStart < nSize; syStart++) {
-								SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize).spin(new Runnable() {
+								SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize, "SETPOINT").spin(new Runnable() {
 									@Override
 									public void run() {
 										// set the left nodes with depth
 										findEnclosedRegionsSetPointDepth(yStart.getAndIncrement(), nodelA, indexDepth);
 									} // run									
-								}); // spin
+								},"SETPOINT"); // spin
 							} // for syStart
-							SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize).waitForGroupToFinish();
+							SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize).waitForGroupToFinish("SETPOINT");
 							if( TIMER )
 								System.out.println("Process time three="+(System.currentTimeMillis()-etime));
 							latchOut3.await();
@@ -2199,7 +2199,7 @@ public class VideoProcessor extends AbstractNodeMain
 		// get the right nodes, where the octree cell has same basic number points and plane nornal
 		if( leftNodes.size() == 0) {
 			if(DEBUGTEST2)
-				System.out.println("matchRegionsAssignDepth no left image nodes at centroid Y="+(yStart-(camheight/2)) );
+				System.out.println("matchRegionsAssignDepth no left image nodes at centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***" );
 			return;
 		}
 		if(DEBUGTEST2)
