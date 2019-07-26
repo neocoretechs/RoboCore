@@ -21,6 +21,8 @@ import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 import java.util.concurrent.BlockingQueue;
@@ -44,15 +46,6 @@ import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
-//import org.jtransforms.dct.FloatDCT_2D;
-//import org.jtransforms.utils.IOUtils;
-
-
-
-
-
-
-
 
 import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.machinevision.ImgProcessor;
@@ -64,10 +57,9 @@ import com.neocoretechs.machinevision.hough3d.hough_settings;
 import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
 
-
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.
- * We break the image into height/corrWinSize bands and assign each band to a processing thread. 
+ * We break the image into  bands and assign each band to a processing thread. 
  * We have an option to write files that can be read by CloudCompare for testing.
  *  __mode:= option on commandline determines how we process, such as 'edge','display', 'display3D',etc.
  *  
@@ -116,7 +108,7 @@ import com.neocoretechs.machinevision.hough3d.writer_file;
 public class VideoProcessor extends AbstractNodeMain 
 {
 	private static boolean DEBUG = false;
-	private static boolean DEBUGTEST3 = false;
+	private static boolean DEBUGTEST3 = true;
 	private static boolean DEBUGTEST2 = true;
 	private static final boolean SAMPLERATE = false; // display pubs per second
 	private static final boolean TIMER = true;
@@ -186,8 +178,8 @@ public class VideoProcessor extends AbstractNodeMain
 	octree_t node = null;
 	octree_t nodel = null;
 	octree_t noder = null;
-	ArrayList<IndexDepth> indexDepth;
-	ArrayList<IndexDepth> indexUnproc;
+	List<IndexDepth> indexDepth;
+	List<IndexDepth> indexUnproc;
 	HoughTransform htL = null;
 	HoughTransform htR = null;
 	ArrayList<? extends HoughElem> hlL;
@@ -357,7 +349,7 @@ public class VideoProcessor extends AbstractNodeMain
 													processImageChunkEdge(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, node);
 													break;
 												case "test":
-													processImageChunkTest(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, nodel, noder/*hlL, hlR*/);
+													imagesToOctrees(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, camHeight, nodel, noder/*hlL, hlR*/);
 													break;
 												// Perform depth then deliver array of values
 												default:
@@ -386,16 +378,16 @@ public class VideoProcessor extends AbstractNodeMain
 							latch2.await();
 							etime = System.currentTimeMillis();
 							yStart.set(0);
-							final ArrayList<octree_t> nodelA = nodel.get_nodes();
-							final ArrayList<octree_t> noderA = noder.get_nodes();
-							indexDepth = new ArrayList<IndexDepth>();
-							indexUnproc = new ArrayList<IndexDepth>();
+							final List<octree_t> nodelA = Collections.synchronizedList(nodel.get_nodes());
+							final List<octree_t> noderA = Collections.synchronizedList(noder.get_nodes());
+							indexDepth = Collections.synchronizedList(new ArrayList<IndexDepth>());
+							indexUnproc = Collections.synchronizedList(new ArrayList<IndexDepth>());
 							for(int syStart = 0; syStart < execLimit; syStart++) {
 								SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit).spin(new Runnable() {
 									@Override
 									public void run() {
 										// set the left nodes with depth
-										processImageChunkTest2(yStart.getAndIncrement(), camWidth, nodelA, noderA, indexDepth, indexUnproc);
+										matchRegionsAssignDepth(yStart.getAndIncrement(), camWidth, camHeight, nodelA, noderA, indexDepth, indexUnproc);
 									} // run									
 								}); // spin
 							} // for syStart
@@ -415,19 +407,20 @@ public class VideoProcessor extends AbstractNodeMain
 							latch3.await();
 							etime = System.currentTimeMillis();
 							yStart.set(0);
-							final ArrayList<octree_t> nodelA = nodel.get_nodes();
+							final List<octree_t> nodelA = Collections.synchronizedList(nodel.get_nodes());
 							final int nSize = nodelA.size();
-							// gen 1 thread for each array element
+							final int nSizeT = Math.min(nodelA.size(), 32);
+							// gen 1 thread for each array element up to limit
 							for(int syStart = 0; syStart < nSize; syStart++) {
-								//SynchronizedFixedThreadPoolManager.getInstance(nSize/10, nSize).spin(new Runnable() {
-									//@Override
-									//public void run() {
+								SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize).spin(new Runnable() {
+									@Override
+									public void run() {
 										// set the left nodes with depth
-										processImageChunkTest3(yStart.getAndIncrement(), nodelA, indexDepth);
-									//} // run									
-								//}); // spin
+										findEnclosedRegionsSetPointDepth(yStart.getAndIncrement(), nodelA, indexDepth);
+									} // run									
+								}); // spin
 							} // for syStart
-							//SynchronizedFixedThreadPoolManager.getInstance(nSize/10, nSize).waitForGroupToFinish();
+							SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize).waitForGroupToFinish();
 							if( TIMER )
 								System.out.println("Process time three="+(System.currentTimeMillis()-etime));
 							latchOut3.await();
@@ -443,7 +436,7 @@ public class VideoProcessor extends AbstractNodeMain
 							latch4.await();
 							etime = System.currentTimeMillis();
 							if( !indexDepth.isEmpty() ) {
-								yStart.set(0);
+								//yStart.set(0);
 								final ArrayList<octree_t> nodelA = nodel.get_nodes();
 								final int nSize = nodelA.size();
 								// gen 1 thread for each array element
@@ -452,7 +445,7 @@ public class VideoProcessor extends AbstractNodeMain
 									//@Override
 									//public void run() {
 										// set the left nodes with depth
-										processImageChunkTest3(yStart.getAndIncrement(), nodelA, indexDepth);
+									findEnclosedRegionsSetPointDepth(syStart /*yStart.getAndIncrement()*/, nodelA, indexDepth);
 									//} // run									
 								//}); // spin
 								} // for syStart
@@ -673,7 +666,9 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		latch2.await();
 			        	     		latchOut2.await();
 			        	     		// write unmatched minimal envelopes
-			        	     		writeFile(indexUnproc, "/lvl7uncorrL"+files);
+			        	     		synchronized(indexUnproc) {
+			        	     			writeFile(indexUnproc, "/lvl7uncorrL"+files);
+			        	     		}
 			        	     		// reset level then regenerate tree with maximal coplanar points
 			        	     		synchronized(nodel) {
 			        	     			// set our new maximal level
@@ -706,7 +701,10 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		latch4.await();
 			        	     		latchOut4.await();
 			        	     		// write the remaining unprocessed envelopes from minimal
-			        	     		writeFile(indexDepth,"/lvl7unencL"+files);
+			        	     		if(!indexDepth.isEmpty())
+			        	     			synchronized(indexDepth) {
+			        	     				writeFile(indexDepth,"/lvl7unencL"+files);
+			        	     			}
 			        	     		// at this point the entire point set should be loaded with z
 			        	     		synchronized(nodel) {
 			        	     			writeFile(nodel,"/roscoeL"+files);
@@ -934,7 +932,7 @@ public class VideoProcessor extends AbstractNodeMain
 		}
 		
 	}
-	protected void writeFile(ArrayList<IndexDepth> d, String filename) {
+	protected void writeFile(List<IndexDepth> d, String filename) {
 		DataOutputStream dos = null;
 		File f = new File(outDir+filename+".asc");
 		try {
@@ -2104,27 +2102,29 @@ public class VideoProcessor extends AbstractNodeMain
     			System.out.println("*****IMAGE FROM "+yStart+" to "+(yStart+corrWinSize)+" close="+close+" far="+far+" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
 	
-	public final void processImageChunkTest(int[] imageL, int[] imageR, BufferedImage imageLx2, BufferedImage imageRx2, int yStart, int width, /*ArrayList<? extends HoughElem> hl, ArrayList<? extends HoughElem> hr*/ octree_t nodel, octree_t noder) {
+	/**
+	 * Translate 2 edge detected image integer linear arrays of edge data and their corresponding RGB images
+	 * into 2 octrees where the Z is set to 1. Intended to be 1 scan line in multithreaded parallel thread group.
+	 * @param imageL Left image result of Canny edge detector
+	 * @param imageR Right image Canny array
+	 * @param imageLx2 RGB image source left
+	 * @param imageRx2 RGB image source right
+	 * @param yStart The Y scan line to process, this should be Atomic Integer incrementing per thread assignment
+	 * @param width width of images
+	 * @param height height of images
+	 * @param nodel Left octree root node, filled by this method partially
+	 * @param noder Right octree root node, also built and written to by this method
+	 */
+	public final void imagesToOctrees(int[] imageL, int[] imageR, 
+											BufferedImage imageLx2, BufferedImage imageRx2, 
+											int yStart, 
+											int width, int height,
+											octree_t nodel, octree_t noder) {
 		long etime = System.currentTimeMillis();
 		int[] imgsrcL = new int[width]; // left image scan line 
  		int[] imgsrcR = new int[width]; // right image scan line
    		int[] imgsrcLx = new int[width]; // left image scan line 
  		int[] imgsrcRx = new int[width]; // right image scan line
- 		//float[] coeffsL = new float[corrWinSize*corrWinSize];
- 		// precompute right side DCT values since we will be sweeping over them repeatedly as we march forward in left X
- 		//float[][] coeffsR = new float[width][corrWinSize*corrWinSize];
- 		boolean emptyRight[] = new boolean[width]; // whether chunk was found to be devoid of edges during precompute
-		// xsrc is index for subject pixel
-		// correlation window assumed symmetric left/right/up/down with odd number of elements
-		// so we use corrWinLeft as top half of window array size and corrwinRight as bottom half
- 		// this is the target area but the search area is larger if we wont hit edges of image
- 		int close = 0;
- 		int far = 0;
- 		int xminL = 0;
- 		int xmaxL = 0;
- 		int xminR = 0;
- 		int xmaxR = 0;
- 		
  		synchronized(imageL) {
  			// gradient magnitude
  			System.arraycopy(Arrays.copyOfRange(imageL, yStart*width, (yStart+1)*width), 0, imgsrcL, 0, width);
@@ -2139,31 +2139,27 @@ public class VideoProcessor extends AbstractNodeMain
 		synchronized(imageRx2) {
 			imageRx2.getRGB(0, yStart, width, 1, imgsrcRx, 0, width);
 		}
-			loop:
-			//for(int xsrc = corrWinLeft; xsrc < width-corrWinRight; /*xsrc+=corrWinSize*/xsrc++) {
-	  		for(int xsrc = 0; xsrc < width; xsrc++) {
-				// If the left image pixel which is the target to receive the depth value is not edge, continue
-				if(imgsrcL[xsrc] == 0)
-					continue loop;
-				double ks = xsrc - (camWidth/2);
-				double ms = yStart - (camHeight/2);
-				double os = 1;//(Bf/2) - imgsrcL[xsrc]; // gradient intensity
+	  	for(int xsrc = 0; xsrc < width; xsrc++) {
+	  		// If the left image pixel which is the target to receive the depth value is not edge, continue
+			if(imgsrcL[xsrc] == 0)
+					continue;
+			double ks = xsrc - (width/2);
+			double ms = yStart - (height/2);
+			double os = 1;//(Bf/2) - imgsrcL[xsrc]; // gradient intensity
 
-				synchronized(nodel) {
-					octree_t.build(nodel, (double)ks, (double)ms, os, 
-						((imgsrcLx[xsrc] & 0x00FF0000) >> 16 ), 
-						((imgsrcLx[xsrc] & 0x0000FF00) >> 8), 
-						((imgsrcLx[xsrc] & 0x000000FF) ));
-				}
-			} //++xsrc  move to next x subject in left image at this scanline y
-		loop2:
-		//for(int xsrc = corrWinLeft; xsrc < width-corrWinRight; /*xsrc+=corrWinSize*/xsrc++) {
+			synchronized(nodel) {
+				octree_t.build(nodel, (double)ks, (double)ms, os, 
+					((imgsrcLx[xsrc] & 0x00FF0000) >> 16 ), 
+					((imgsrcLx[xsrc] & 0x0000FF00) >> 8), 
+					((imgsrcLx[xsrc] & 0x000000FF) ));
+			}
+		} //++xsrc  move to next x subject in left image at this scanline y
   		for(int xsrc = 0; xsrc < width; xsrc++) {
 			// If the left image pixel which is the target to receive the depth value is not edge, continue
 			if(imgsrcR[xsrc] == 0)
-				continue loop2;
-			double ks = xsrc - (camWidth/2);
-			double ms = yStart - (camHeight/2);
+				continue;
+			double ks = xsrc - (width/2);
+			double ms = yStart - (height/2);
 			double os = 1;//(Bf/2) - imgsrcR[xsrc]; // gradient intensity
 
 			synchronized(noder) {
@@ -2176,7 +2172,7 @@ public class VideoProcessor extends AbstractNodeMain
 			//System.out.println("Y scan="+y);
 		//} // next y
 		if( SAMPLERATE )
-			System.out.println("*****IMAGE FROM "+yStart+" to "+(yStart+corrWinSize)+" close="+close+" far="+far+" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
+			System.out.println("imagesToOctrees IMAGE SCAN LINE Y="+yStart+" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
 	/**
 	 * 
@@ -2185,24 +2181,29 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param nodelA
 	 * @param noderA
 	 */
-	private void processImageChunkTest2(int yStart, int camwidth,ArrayList<octree_t> nodelA,ArrayList<octree_t> noderA, ArrayList<IndexDepth> indexDepth, ArrayList<IndexDepth> indexUnproc) {
+	private void matchRegionsAssignDepth(int yStart, 
+										int camwidth, int camheight, 
+										List<octree_t> nodelA, List<octree_t> noderA, 
+										List<IndexDepth> indexDepth2, List<IndexDepth> indexUnproc2) {
 		long etime = System.currentTimeMillis();
 		octree_t tnodel = null;
 		ArrayList<octree_t> leftNodes = new ArrayList<octree_t>();
 		// get all nodes along this Y axis, if any
+		synchronized(nodelA) {
 		for( octree_t inode : nodelA) {
-			if( ((int)inode.getCentroid().y) == yStart ) {
+			if( ((int)inode.getCentroid().y) == (yStart-(camheight/2)) ) {
 				leftNodes.add(inode);
-			}		
+			}
+		}
 		}
 		// get the right nodes, where the octree cell has same basic number points and plane nornal
 		if( leftNodes.size() == 0) {
 			if(DEBUGTEST2)
-				System.out.println("processImageChunkTest2 no elements found for left image scan line at "+yStart);
+				System.out.println("matchRegionsAssignDepth no left image nodes at centroid Y="+(yStart-(camheight/2)) );
 			return;
 		}
 		if(DEBUGTEST2)
-			System.out.println("processImageChunkTest2 left nodes="+leftNodes.size()+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" ***");
+			System.out.println("matchRegionsAssignDepth "+leftNodes.size()+" left nodes with centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***");
 		// cross product of normals zero and same number points for each left node compared to all right nodes
 		//synchronized(noderA) {
 		//	for( int i = 0; i < leftNodes.size(); i++) {
@@ -2218,101 +2219,125 @@ public class VideoProcessor extends AbstractNodeMain
 		//	System.out.println("processImageChunkTest2 no right image nodes found for left image scan line at "+yStart);
 		//	return;
 		//}
-		int iscore = 0;
-		int[] score = null;
-		octree_t[] oscore = null;
+		//int[] score = null;
+		octree_t oscore = null;
+		//double minscore = Double.MAX_VALUE;
 		for( octree_t inode : leftNodes) {
+			int iscore = 0;
+			int isize = 0;
+			synchronized(noderA) {
 			for(int j = 0; j < noderA.size(); j++) {
-				if( inode.getIndexes().size() == noderA.get(j).getIndexes().size() &&
-					inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength() < .001) {
-				// Compute the sum of absolute difference SAD between the 2 matrixes representing
-				// the left subject subset and right target subset
-				// each point in left and right octree cells
-				int sum = 0;
-				score = new int[noderA.get(j).getIndexes().size()];
-				oscore = new octree_t[score.length];
-				// all right nodes that qualified
-				iscore = 0;
-				for(int c = 0; c < inode.getIndexes().size(); c++) {
-					Vector4d lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
-					Vector4d rcolor = inode.getRoot().m_colors.get(noderA.get(j).getIndexes().get(c));				
-					sum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
-				}
-				oscore[iscore] = noderA.get(j);
-				score[iscore++] = sum;
-				}
-			}
-			if( iscore == 0 ) {
-				if(DEBUGTEST2)
-					System.out.println("processImageChunkTest2 no right image nodes found for left image scan line at "+yStart+" ***** "+Thread.currentThread().getName()+" ***");
-				synchronized(indexUnproc) {
-					indexUnproc.add(new IndexDepth(inode.getMiddle(), inode.getSize(), 0));
-				}
-				return;
-			}
-			
-			// now calculate the one closest to zero from sum of differences
-			// rank = 0
-			int drank = Integer.MAX_VALUE;
-			int rank = 0;
-			// move through array of differences we built in above scan loops
-			for(int s = 0; s < iscore; s++) {
-				if (score[s] < drank) {
-					rank = s;
-					drank = score[s];
-				}
-			}
-			if(DEBUGTEST2)
-				System.out.println("processImageChunkTest2 got total of "+iscore+" scores with best="+drank+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
-			//System.out.println();
-			//System.out.println("------------------------");
-			//System.out.println("For x="+rank+" subject="+xsrc+" scanline y="+y+" score="+drank);
-			//System.out.println("------------------------");
-			//calc the disparity and insert into disparity map image
-			// we will call disparity difference of octree centroid x values
-			double pix = Bf/Math.hypot(Math.abs(inode.getCentroid().x-oscore[rank].getCentroid().x),
-									   Math.abs(inode.getCentroid().y-oscore[rank].getCentroid().y) );
-			
-			//if( pix >=maxHorizontalSep) {
-				//System.out.println("PIX TRUNCATED FROM:"+xsrc+","+y+" p="+pix);
-				//pix = maxHorizontalSep;
-			//} else {
-			//	System.out.println("Score:"+xsrc+","+yStart+" score="+drank+" p="+pix);
-			//}
-			// now set all points in left octree node to this disparity value
-			if( pix < maxHorizontalSep) {
-					//for(int c = 0; c < inode.getIndexes().size(); c++) {
-						//Vector4d tpoint = inode.getRoot().m_points.get(inode.getIndexes().get(c));
-						//tpoint.z = pix;//(Bf/2) - pix ;
-						//tpoint.w = -1; // mark it as having been set
-						synchronized(indexDepth) {
-							indexDepth.add(new IndexDepth(inode.getMiddle(), inode.getSize(), pix));
+				synchronized(inode) {
+					isize = inode.getIndexes().size();
+					//synchronized(inode.getRoot().m_colors) {
+						// vector cross product of middle eigenvectors < .001 magnitude tolerance
+						// get the one with closest cross to 0
+						double cscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();
+						if( isize == noderA.get(j).getIndexes().size() && cscore < .001) {
+							++iscore;
+							// Option 0 go with first one, as .001 is a rather small magnitude that might as well be 0, AKA epsilon
+							oscore = noderA.get(j);
+							break;
+							// option 1 find smallest magnitude difference below tolerance
+							//if( cscore < minscore ) {
+							//	minscore = cscore;
+							//	oscore = noderA.get(j);
+							//}
+							// option 2
+							// Compute the sum of absolute difference SAD between the 2 matrixes representing
+							// the left subject subset and right target subset
+							// each point in left and right octree cells. In practice we never get here but as a fallback
+							// we can resort to this old standby
+							//int sum = 0;
+							//score = new int[noderA.get(j).getIndexes().size()];
+							//oscore = new octree_t[score.length];
+							// all right nodes that qualified
+							//iscore = 0;
+							//for(int c = 0; c < inode.getIndexes().size(); c++) {
+							//	Vector4d lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
+							//	Vector4d rcolor = inode.getRoot().m_colors.get(noderA.get(j).getIndexes().get(c));				
+							//	sum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
+							//}
+							//oscore[iscore] = noderA.get(j);
+							//score[iscore++] = sum;
 						}
 					//}
+				} // inode synch
+			} // right node loop
+			} // right node array synch
+			if( iscore == 0 ) {
 				if(DEBUGTEST2)
-					System.out.println("processImageChunkTest2 node left="+inode+" set "+inode.getIndexes().size()+" points to "+pix+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
-			} else
+					System.out.println("matchRegionsAssignDepth no matching right image nodes found for left at Y="+(yStart-(camheight/2)) +" ***** "+Thread.currentThread().getName()+" ***");
+				//synchronized(indexUnproc2) {
+					indexUnproc2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), 0));
+				//}
+				return;
+			}
+			// Option 2 continues..
+			// now calculate the one closest to zero from sum of differences
+			//int drank = Integer.MAX_VALUE;
+			//int rank = 0;
+			// move through array of differences we built in above scan loops
+			//for(int s = 0; s < iscore; s++) {
+			//	if (score[s] < drank) {
+			//		rank = s;
+			//		drank = score[s];
+			//	}
+			//}
+			if(DEBUGTEST2)
+				if(iscore> 1)
+					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+iscore+" scores ***** "+Thread.currentThread().getName()+" *** ");
+			//calc the disparity and insert into collection
+			// we will call disparity difference of octree centroid x values
+			double pix = Bf/Math.hypot(Math.abs(inode.getCentroid().x-oscore/*[rank]*/.getCentroid().x),
+									   Math.abs(inode.getCentroid().y-oscore/*[rank]*/.getCentroid().y) );
+			
+			if( pix >=maxHorizontalSep) {
 				if(DEBUGTEST2)
-					System.out.println("processImageChunkTest2 node left="+inode+" of "+inode.getIndexes().size()+" points NOT SET "+pix+" out of tolerance for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
+					System.out.println("matchRegionsAssignDepth left node at Y="+(yStart-(camheight/2))+" PIX TRUNCATED FROM:"+pix+" ***** "+Thread.currentThread().getName()+" *** ");
+				pix = maxHorizontalSep;
+				//if( pix < maxHorizontalSep) {
+				// set points in octree cell to this disparity
+				//for(int c = 0; c < inode.getIndexes().size(); c++) {
+					//Vector4d tpoint = inode.getRoot().m_points.get(inode.getIndexes().get(c));
+					//tpoint.z = pix;//(Bf/2) - pix ;
+					//tpoint.w = -1; // mark it as having been set
+					//synchronized(indexDepth2) {
+					//		indexDepth2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), pix));
+					//}
+				//}
+				//if(DEBUGTEST2)
+				//	System.out.println("processImageChunkTest2 node left="+inode+" set "+inode.getIndexes().size()+" points to "+pix+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
+			} //else
+			synchronized(indexDepth2) {
+					indexDepth2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), pix));
+			}
+			//	if(DEBUGTEST2)
+			//		System.out.println("processImageChunkTest2 node left="+inode+" of "+inode.getIndexes().size()+" points NOT SET "+pix+" out of tolerance for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
+			if(DEBUGTEST2)
+				System.out.println("matchRegionsAssignDepth node centroid at Y="+(yStart-(camheight/2))+" set "+isize+" points to "+pix+" ***** "+Thread.currentThread().getName()+" *** ");
 		} // left octree nodes
 
 		if( SAMPLERATE )
-			System.out.println("*****IMAGE SCAN LINE "+yStart+" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
+			System.out.println("matchRegionAssignDepth IMAGE SCAN LINE Y="+(yStart-(camheight/2)) +" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
 	/**
 	 * Process the minimal nodes we collected in the last step against the maximal nodes we generated now.
 	 * The indexDepth collection has verified minimal octree node middle point and edge size that we use to determine
-	 * whether they fall in the maximal envelope.
+	 * whether they fall in the maximal envelope. If so find the points in the maximal envelope that fall within the minimal one and
+	 * assign the depth of the minimal region to those points. If the point in question falls within no
+	 * minimal region, find the edge of the closes minimal region to the point and assign the depth of the minimal region
+	 * to that point. This process can be repeated until all the enclosed minimal regions are
+	 * all assigned, by clearing the octree, setting the minimum subdivide level one step higher (s_level), and then
+	 * calling the subdivide method and getting the new node arraylist via get_nodes.
 	 * @param nodelA contains maximal octree nodes
-	 * @param indexDepth contains envelopes of minimal octree nodes previously computed
+	 * @param indexDepth2 contains envelopes of minimal octree nodes previously computed
 	 */
-	private void processImageChunkTest3(int yStart, ArrayList<octree_t> nodelA, ArrayList<IndexDepth> indexDepth) {
+	private void findEnclosedRegionsSetPointDepth(int yStart, List<octree_t> nodelA, List<IndexDepth> indexDepth2) {
 		octree_t inode = null;
 		double tdepth = -1;
 		Vector4d iMiddle = null;
 		double iSize;
-		if( nodelA.isEmpty() )
-			return;
 		// get first available octree node and process it for this thread
 		inode = nodelA.get(yStart);
 		iMiddle = inode.getMiddle();
@@ -2321,9 +2346,9 @@ public class VideoProcessor extends AbstractNodeMain
 		ArrayList<IndexDepth> enclosed = new ArrayList<IndexDepth>();
 		
 		// find all minimal nodes with an envelope inside this node from previous step
-		synchronized(indexDepth) {
-			for(int j = 0; j < indexDepth.size(); j++) {
-				IndexDepth d = indexDepth.get(j);
+		synchronized(indexDepth2) {
+			for(int j = 0; j < indexDepth2.size(); j++) {
+				IndexDepth d = indexDepth2.get(j);
 				if(d.enclosedBy(iMiddle, iSize)) {
 					//indexDepth.remove(j);
 					enclosed.add(d); // save for later point assignment
@@ -2334,11 +2359,11 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 			}
 			for(IndexDepth r : enclosed)
-				indexDepth.remove(r);
+				indexDepth2.remove(r);
 		}
 		if(enclosed.isEmpty()) {
 			if(DEBUGTEST3)
-				System.out.println("processImageChunkTest3 node="+iMiddle+" "+iSize+" encloses 0 nodes of "+indexDepth.size()+" ***** "+Thread.currentThread().getName()+" *** ");
+				System.out.println("findEnclosedRegionsSetPointDepth node="+yStart+" middle="+iMiddle+" size="+iSize+" encloses 0 nodes of "+indexDepth2.size()+" ***** "+Thread.currentThread().getName()+" *** ");
 			return;
 		}
 		// done with indexDepth, process enclosed array for each point, assign depth
@@ -2375,18 +2400,18 @@ public class VideoProcessor extends AbstractNodeMain
 					// did we assign the target point in maximal node to one of the minimal nodes inside?
 					if( notAssigned ) {
 						if(DEBUGTEST3)
-							System.out.println("processImageChunkTest3 node="+inode+" point="+tpoint+" not enclosed by any "+enclosed.size()+" minimal areas, assigning default depth "+tdepth+" ***** "+Thread.currentThread().getName()+" *** ");
+							System.out.println("findEnclosedRegionsSetPointDepth node "+yStart+"="+inode+" point="+tpoint+" not enclosed by any "+enclosed.size()+" minimal areas, assigning default depth "+tdepth+" ***** "+Thread.currentThread().getName()+" *** ");
 						tpoint.z = tdepth;
 					} else 
 						if(DEBUGTEST3)
-							System.out.println("processImageChunkTest3 node="+inode+" point="+tpoint+" assigned depth "+tpoint.z+" ***** "+Thread.currentThread().getName()+" *** ");		
+							System.out.println("findEnclosedRegionsSetPointDepth node "+yStart+"="+inode+" point="+tpoint+" assigned depth "+tpoint.z+" ***** "+Thread.currentThread().getName()+" *** ");		
 				}
 				
 			}
 		}
 
 		if(DEBUGTEST3)
-			System.out.println("processImageChunkTest3 Maximal Envelope "+yStart+" "+inode+" exits with "+indexDepth.size()+" minimal envelopes ***** "+Thread.currentThread().getName()+" *** ");
+			System.out.println("findEnclosedRegionsSetPointDepth Maximal Envelope "+yStart+" of "+nodelA.size()+" node="+inode+" exits with "+indexDepth2.size()+" minimal envelopes ***** "+Thread.currentThread().getName()+" *** ");
 	}
 	/**
 	 * Transform the coord at x,y by the Matrix3 transform provided, translate and rotate.
