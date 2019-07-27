@@ -486,6 +486,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        			// to return to top level barrier
 			        			// the latches represent each 'step', or group of parallel processing tasks
 			        			// use as many steps as needed, unused latches ignored
+								imageLx = queueL.takeFirst();
+				        		imageRx = queueR.takeFirst();
 			        			latchOut4.reset();
 			        			latch4.reset();
 			        			latchOut3.reset();
@@ -494,8 +496,6 @@ public class VideoProcessor extends AbstractNodeMain
 			        			latch2.reset();
 			        			latchOut.reset();
 			        			latch.reset();
-								imageLx = queueL.takeFirst();
-				        		imageRx = queueR.takeFirst();
 				        		//
 				        		switch(mode) {
 				        		case "display3D":
@@ -2226,10 +2226,11 @@ public class VideoProcessor extends AbstractNodeMain
 		for( octree_t inode : leftNodes) {
 			int iscore = 0;
 			int isize = 0;
+			synchronized(inode) {
+			isize = inode.getIndexes().size();
+			// check all right nodes against the ones on this scan line
 			synchronized(noderA) {
 			for(int j = 0; j < noderA.size(); j++) {
-				synchronized(inode) {
-					isize = inode.getIndexes().size();
 					//synchronized(inode.getRoot().m_colors) {
 						// vector cross product of middle eigenvectors < .001 magnitude tolerance
 						// get the one with closest cross to 0
@@ -2263,16 +2264,15 @@ public class VideoProcessor extends AbstractNodeMain
 							//score[iscore++] = sum;
 						}
 					//}
-				} // inode synch
+	
 			} // right node loop
+			} // inode synch
 			} // right node array synch
 			if( iscore == 0 ) {
 				if(DEBUGTEST2)
 					System.out.println("matchRegionsAssignDepth no matching right image nodes found for left at Y="+(yStart-(camheight/2)) +" ***** "+Thread.currentThread().getName()+" ***");
-				//synchronized(indexUnproc2) {
-					indexUnproc2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), 0));
-				//}
-				return;
+				indexUnproc2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), 0));
+				continue;
 			}
 			// Option 2 continues..
 			// now calculate the one closest to zero from sum of differences
@@ -2286,8 +2286,10 @@ public class VideoProcessor extends AbstractNodeMain
 			//	}
 			//}
 			if(DEBUGTEST2)
-				if(iscore> 1)
-					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+iscore+" scores ***** "+Thread.currentThread().getName()+" *** ");
+				if(iscore > 1)
+					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+iscore+" scores, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
+				else
+					System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score of "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
 			//calc the disparity and insert into collection
 			// we will call disparity difference of octree centroid x values
 			double pix = Bf/Math.hypot(Math.abs(inode.getCentroid().x-oscore/*[rank]*/.getCentroid().x),
@@ -2316,7 +2318,7 @@ public class VideoProcessor extends AbstractNodeMain
 			//	if(DEBUGTEST2)
 			//		System.out.println("processImageChunkTest2 node left="+inode+" of "+inode.getIndexes().size()+" points NOT SET "+pix+" out of tolerance for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
 			if(DEBUGTEST2)
-				System.out.println("matchRegionsAssignDepth node centroid at Y="+(yStart-(camheight/2))+" set "+isize+" points to "+pix+" ***** "+Thread.currentThread().getName()+" *** ");
+				System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" should set set "+isize+" points to "+pix+" ***** "+Thread.currentThread().getName()+" *** ");
 		} // left octree nodes
 
 		if( SAMPLERATE )
@@ -2341,8 +2343,10 @@ public class VideoProcessor extends AbstractNodeMain
 		double iSize;
 		// get first available octree node and process it for this thread
 		inode = nodelA.get(yStart);
-		iMiddle = inode.getMiddle();
-		iSize = inode.getSize();
+		synchronized(inode) {
+			iMiddle = inode.getMiddle();
+			iSize = inode.getSize();
+		}
 		
 		ArrayList<IndexDepth> enclosed = new ArrayList<IndexDepth>();
 		
