@@ -22,6 +22,7 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
@@ -108,10 +109,11 @@ import com.neocoretechs.machinevision.hough3d.writer_file;
 public class VideoProcessor extends AbstractNodeMain 
 {
 	private static boolean DEBUG = false;
-	private static boolean DEBUGTEST3 = true;
+	private static boolean DEBUGTEST3 = false;
 	private static boolean DEBUGTEST2 = true;
 	private static final boolean SAMPLERATE = false; // display pubs per second
 	private static final boolean TIMER = true;
+	private static final boolean WRITEFILES = true;
 
     private BufferedImage imageL = null;
     private BufferedImage imageR = null;
@@ -155,6 +157,7 @@ public class VideoProcessor extends AbstractNodeMain
     final static int corrWinSize = 15; // Size of eventual depth patch
     final static int corrWinLeft = 7; // number of left/up elements in corr window
     final static int corrWinRight = 8;// number of right/down elements in corr window
+    final static int yTolerance = 50; // pixel diff in y of potential candidates
 
     CircularBlockingDeque<BufferedImage> queueL = new CircularBlockingDeque<BufferedImage>(10);
     CircularBlockingDeque<BufferedImage> queueR = new CircularBlockingDeque<BufferedImage>(10);
@@ -375,11 +378,22 @@ public class VideoProcessor extends AbstractNodeMain
 					  //
 					  switch(mode) {
 						case "test":
+							final Comparator<octree_t> yComp = new Comparator<octree_t>() {         
+							    @Override         
+							    public int compare(octree_t jc1, octree_t jc2) {             
+							      return (jc2.getCentroid().y < jc1.getCentroid().y ? -1 :                     
+							              (jc2.getCentroid().y == jc1.getCentroid().y ? 0 : 1));           
+							    }     
+							  }; 
 							latch2.await();
 							etime = System.currentTimeMillis();
 							yStart.set(0);
-							final List<octree_t> nodelA = Collections.synchronizedList(nodel.get_nodes());
-							final List<octree_t> noderA = Collections.synchronizedList(noder.get_nodes());
+							ArrayList<octree_t> tnodel = nodel.get_nodes();
+							ArrayList<octree_t> tnoder = noder.get_nodes();
+							Collections.sort(tnodel, yComp);
+							Collections.sort(tnoder, yComp);
+							final List<octree_t> nodelA = Collections.synchronizedList(tnodel);
+							final List<octree_t> noderA = Collections.synchronizedList(tnoder);
 							indexDepth = Collections.synchronizedList(new ArrayList<IndexDepth>());
 							indexUnproc = Collections.synchronizedList(new ArrayList<IndexDepth>());
 							for(int syStart = 0; syStart < execLimit; syStart++) {
@@ -432,6 +446,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  //
 					  // next parallel processing step, if any
 					  //
+					  /*
 					  switch(mode) {
 						case "test":
 							latch4.await();
@@ -446,7 +461,7 @@ public class VideoProcessor extends AbstractNodeMain
 									//@Override
 									//public void run() {
 										// set the left nodes with depth
-									findEnclosedRegionsSetPointDepth(syStart /*yStart.getAndIncrement()*/, nodelA, indexDepth);
+									findEnclosedRegionsSetPointDepth(yStart.getAndIncrement(), nodelA, indexDepth);
 									//} // run									
 								//}); // spin
 								} // for syStart
@@ -457,6 +472,7 @@ public class VideoProcessor extends AbstractNodeMain
 							latchOut4.await();
 						break;
 					  }
+					  */
 					// global barrier break
 					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
 					} // while true
@@ -488,8 +504,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        			// use as many steps as needed, unused latches ignored
 								imageLx = queueL.takeFirst();
 				        		imageRx = queueR.takeFirst();
-			        			latchOut4.reset();
-			        			latch4.reset();
+			        			//latchOut4.reset();
+			        			//latch4.reset();
 			        			latchOut3.reset();
 			        			latch3.reset();
 			        			latchOut2.reset();
@@ -640,12 +656,14 @@ public class VideoProcessor extends AbstractNodeMain
 			        				noder = new octree_t();
 			        				octree_t.buildStart(noder);
 			        		   		// write source images
-			        	     		synchronized(imageL) {
-			        	     			writeFile("sourceL", imageL, ++files);
-			        	     		}
-			        	     		synchronized(imageR) {
-			        	       			writeFile("sourceR", imageR, files);
-			        	     		}
+			        				if( WRITEFILES ) {
+			        					synchronized(imageL) {
+			        						writeFile("sourceL", imageL, ++files);
+			        					}
+			        					synchronized(imageR) {
+			        						writeFile("sourceR", imageR, files);
+			        					}
+			        				}
 			        	     		// first step end multi thread barrier synch
 			        				latch.await();
 			        	     		latchOut.await();
@@ -655,38 +673,28 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     			hough_settings.max_distance2plane = 5;
 			        	     			nodel.subdivide();
 			        	     			//writeFile(nodel,"/roscoeL"+(++frames));
-			        	     			writer_file.writePerp(nodel, "planarsL"+files);
+			        	     			if( WRITEFILES)
+			        	     				writer_file.writePerp(nodel, "planarsL"+files);
 			        	     		}
 			        	     		synchronized(noder) {
 			        	     			octree_t.buildEnd(noder);
 			        	     			noder.subdivide();
-			        	     			writeFile(noder,"/roscoeR"+files);
-			        	     			writer_file.writePerp(noder, "planarsR"+files);
+			        	     			if( WRITEFILES) {
+			        	     				writeFile(noder,"/roscoeR"+files);
+			        	     				writer_file.writePerp(noder, "planarsR"+files);
+			        	     			}
 			        	     		}
 			        	     		// second step end multi thread barrier synch
 			        	     		latch2.await();
 			        	     		latchOut2.await();
 			        	     		// write unmatched minimal envelopes
-			        	     		synchronized(indexUnproc) {
-			        	     			writeFile(indexUnproc, "/lvl7uncorrL"+files);
+			        	     		if( WRITEFILES) {
+			        	     			synchronized(indexUnproc) {
+			        	     				writeFile(indexUnproc, "/lvl7uncorrL"+files);
+			        	     			}
 			        	     		}
+			        	     		System.out.println("Uncorrelated regions="+indexUnproc.size()+" correlated="+indexDepth.size()+", "+(((float)indexUnproc.size()/(float)(indexUnproc.size()+indexDepth.size()))*100.0)+"%");
 			        	     		// reset level then regenerate tree with maximal coplanar points
-			        	     		synchronized(nodel) {
-			        	     			// set our new maximal level
-			        	     			hough_settings.s_level = 5;
-			        	     			// set the distance to plane large to not throw out as outliers points we recently assigned a z
-			        	     			// this is a divisor so we set to 1
-			        	     			hough_settings.max_distance2plane = 1;
-			        	     			nodel.clear();
-			        	     			nodel.subdivide();
-			        	     			// write the display cloud with maximal envelopes
-			        	     			writer_file.writeEnv(nodel, "lvl5envL"+files);
-			        	     		}
-			        	     		// third step wait for completion
-			        	     		latch3.await();
-			        	     		latchOut3.await();
-			        	     		// start step 4
-			        	     		System.out.println("Remaining unenclosed minimal envelopes="+indexDepth.size());
 			        	     		synchronized(nodel) {
 			        	     			// set our new maximal level
 			        	     			hough_settings.s_level = 4;
@@ -695,20 +703,42 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     			hough_settings.max_distance2plane = 1;
 			        	     			nodel.clear();
 			        	     			nodel.subdivide();
+			        	     			// write the display cloud with maximal envelopes
+			        	     			//if(WRITEFILES)
+			        	     			//	writer_file.writeEnv(nodel, "lvl5envL"+files);
+			        	     		}
+			        	     		// third step wait for completion
+			        	     		latch3.await();
+			        	     		latchOut3.await();
+			        	     		// start step 4
+			        	     		System.out.println("Remaining unenclosed minimal envelopes="+indexDepth.size());
+			        	     		synchronized(nodel) {
+			        	     			// set our new maximal level
+			        	     			hough_settings.s_level = 5;
+			        	     			// set the distance to plane large to not throw out as outliers points we recently assigned a z
+			        	     			// this is a divisor so we set to 1
+			        	     			hough_settings.max_distance2plane = 5;
+			        	     			nodel.clear();
+			        	     			nodel.subdivide();
 			        	     			// write the display cloud with maximal planes detected
-			        	     			writer_file.writeEnv(nodel, "lvl4envL"+files);
+			        	     			if(WRITEFILES) {
+			        	     				writer_file.writeEnv(nodel, "planenvL"+files);
+			        	     				writer_file.writePerp(nodel, "planesL"+files);
+			        	     			}
 			        	     		}
 			        	     		// wait for step 4 complete
-			        	     		latch4.await();
-			        	     		latchOut4.await();
-			        	     		// write the remaining unprocessed envelopes from minimal
-			        	     		if(!indexDepth.isEmpty())
-			        	     			synchronized(indexDepth) {
-			        	     				writeFile(indexDepth,"/lvl7unencL"+files);
+			        	     		//latch4.await();
+			        	     		//latchOut4.await();
+			        	     		if(WRITEFILES) {
+			        	     			// write the remaining unprocessed envelopes from minimal
+			        	     			if(!indexDepth.isEmpty())
+			        	     				synchronized(indexDepth) {
+			        	     					writeFile(indexDepth,"/lvl7unencL"+files);
+			        	     				}
+			        	     			// at this point the entire point set should be loaded with z
+			        	     			synchronized(nodel) {
+			        	     				writeFile(nodel,"/roscoeL"+files);
 			        	     			}
-			        	     		// at this point the entire point set should be loaded with z
-			        	     		synchronized(nodel) {
-			        	     			writeFile(nodel,"/roscoeL"+files);
 			        	     		}
 			        	     		break;
 				        	     	default:
@@ -2187,22 +2217,44 @@ public class VideoProcessor extends AbstractNodeMain
 										List<octree_t> nodelA, List<octree_t> noderA, 
 										List<IndexDepth> indexDepth2, List<IndexDepth> indexUnproc2) {
 		long etime = System.currentTimeMillis();
-		octree_t tnodel = null;
-		ArrayList<octree_t> leftNodes = new ArrayList<octree_t>();
+		octree_t tnodel = new octree_t();
+		tnodel.getCentroid().y = (double)(yStart-(camheight/2));
+		//ArrayList<octree_t> leftNodes = new ArrayList<octree_t>();
+		List<octree_t> leftNodes;
 		// get all nodes along this Y axis, if any
+		boolean found = false;
 		synchronized(nodelA) {
-		for( octree_t inode : nodelA) {
-			if( ((int)inode.getCentroid().y) == (yStart-(camheight/2)) ) {
-				leftNodes.add(inode);
+			int i1 = 0;
+			int i0 = 0;
+			for( octree_t inode : nodelA) {
+				if( ((int)inode.getCentroid().y) == (yStart-(camheight/2)) ) {
+					if( !found ) { 
+						found = true;
+						i0 = i1; // found first =, set lower range
+					} 
+					++i1; // found or not, bump 'to' range	
+				} else {
+					if( !found ) { // not found, not = , keep searching
+						++i1;
+					} else {
+						break; // was found, now not =
+					}
+				}
 			}
+			if(!found) {
+				if(DEBUGTEST2)
+					System.out.println("matchRegionsAssignDepth no left image nodes at centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***" );
+				return;
+			}
+			leftNodes = nodelA.subList(i0, i1);
 		}
-		}
+		
 		// get the right nodes, where the octree cell has same basic number points and plane nornal
-		if( leftNodes.size() == 0) {
-			if(DEBUGTEST2)
-				System.out.println("matchRegionsAssignDepth no left image nodes at centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***" );
-			return;
-		}
+		//if( leftNodes.size() == 0) {
+		//	if(DEBUGTEST2)
+		//		System.out.println("matchRegionsAssignDepth no left image nodes at centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***" );
+		//	return;
+		//}
 		if(DEBUGTEST2)
 			System.out.println("matchRegionsAssignDepth "+leftNodes.size()+" left nodes with centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***");
 		// cross product of normals zero and same number points for each left node compared to all right nodes
@@ -2225,26 +2277,50 @@ public class VideoProcessor extends AbstractNodeMain
 		//double minscore = Double.MAX_VALUE;
 		for( octree_t inode : leftNodes) {
 			int iscore = 0;
+			int nscore = 0;
+			int yscore = 0;
 			int isize = 0;
+			double yDiffScore = Double.MAX_VALUE;
 			synchronized(inode) {
 			isize = inode.getIndexes().size();
 			// check all right nodes against the ones on this scan line
+			found = false;
 			synchronized(noderA) {
-			for(int j = 0; j < noderA.size(); j++) {
-					//synchronized(inode.getRoot().m_colors) {
-						// vector cross product of middle eigenvectors < .001 magnitude tolerance
-						// get the one with closest cross to 0
+				for(int j = 0; j < noderA.size(); j++) {
+					double yDiff =  Math.abs(inode.getCentroid().y-noderA.get(j).getCentroid().y);
+					if( yDiff <= yTolerance ) {
+						if( !found ) { 
+							found = true;
+						}
+						// found in range
 						double cscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();
-						if( isize == noderA.get(j).getIndexes().size() && cscore < .001) {
+						double dscore = inode.getNormal3().multiplyVectorial(noderA.get(j).getNormal3()).getLength();
+						if(cscore < .001 && dscore < .001) {
+							if(yDiff < yDiffScore) {
+								yDiffScore = yDiff;
+								++yscore;
+								// Option 0 go with first one, as .001 is a rather small magnitude that might as well be 0, AKA epsilon
+								oscore = noderA.get(j);
+							}
 							++iscore;
-							// Option 0 go with first one, as .001 is a rather small magnitude that might as well be 0, AKA epsilon
-							oscore = noderA.get(j);
-							break;
-							// option 1 find smallest magnitude difference below tolerance
-							//if( cscore < minscore ) {
-							//	minscore = cscore;
-							//	oscore = noderA.get(j);
-							//}
+						} else
+							++nscore;
+						//++i1; // found or not, bump 'to' range	
+					} else {
+						if( !found ) { // not found, not <= , keep searching
+							//++i1;
+							continue;
+						} else {
+							break; // was found, now not <=, y will only increase
+						}
+					}
+				} // right node loop
+				if(!found) {
+					if(DEBUGTEST2)
+							System.out.println("matchRegionsAssignDepth no right image nodes in tolerance at centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***" );
+					indexUnproc2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), 0));
+					continue; // next left node
+				}
 							// option 2
 							// Compute the sum of absolute difference SAD between the 2 matrixes representing
 							// the left subject subset and right target subset
@@ -2261,16 +2337,14 @@ public class VideoProcessor extends AbstractNodeMain
 							//	sum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
 							//}
 							//oscore[iscore] = noderA.get(j);
-							//score[iscore++] = sum;
-						}
-					//}
+							//score[iscore++] = sum
 	
-			} // right node loop
+			} // right node array synch	
 			} // inode synch
-			} // right node array synch
+	
 			if( iscore == 0 ) {
 				if(DEBUGTEST2)
-					System.out.println("matchRegionsAssignDepth no matching right image nodes found for left at Y="+(yStart-(camheight/2)) +" ***** "+Thread.currentThread().getName()+" ***");
+					System.out.println("matchRegionsAssignDepth no matching right image nodes found for left at Y="+(yStart-(camheight/2)) +" out of "+nscore+" possible ***** "+Thread.currentThread().getName()+" ***");
 				indexUnproc2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), 0));
 				continue;
 			}
@@ -2285,16 +2359,17 @@ public class VideoProcessor extends AbstractNodeMain
 			//		drank = score[s];
 			//	}
 			//}
+			double xDiff = Math.abs(inode.getCentroid().x-oscore/*[rank]*/.getCentroid().x);
+			double yDiff =  Math.abs(inode.getCentroid().y-oscore/*[rank]*/.getCentroid().y);
 			if(DEBUGTEST2)
-				if(iscore > 1)
-					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+iscore+" scores, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
-				else
-					System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score of "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
+				if(iscore > 1) {
+					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+iscore+" on plane scores,"+nscore+" off plane, "+yscore+" on-plane weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
+				} else {
+						System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score of "+oscore+" disparity="+xDiff+", "+nscore+" off plane ***** "+Thread.currentThread().getName()+" *** ");
+				}
 			//calc the disparity and insert into collection
-			// we will call disparity difference of octree centroid x values
-			double pix = Bf/Math.hypot(Math.abs(inode.getCentroid().x-oscore/*[rank]*/.getCentroid().x),
-									   Math.abs(inode.getCentroid().y-oscore/*[rank]*/.getCentroid().y) );
-			
+			// we will call disparity the distance to centroid of right
+			double pix = Bf/Math.hypot(xDiff, yDiff);	
 			if( pix >=maxHorizontalSep) {
 				if(DEBUGTEST2)
 					System.out.println("matchRegionsAssignDepth left node at Y="+(yStart-(camheight/2))+" PIX TRUNCATED FROM:"+pix+" ***** "+Thread.currentThread().getName()+" *** ");
@@ -2756,7 +2831,7 @@ public class VideoProcessor extends AbstractNodeMain
 		    return new Vertex(vx,vy,vz);
 		}
 		
-		class IndexDepth {
+		final class IndexDepth {
 			public Vector4d middle;
 			public double xmin, ymin, xmax, ymax;
 			public double depth;
