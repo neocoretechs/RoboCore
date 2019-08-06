@@ -110,10 +110,10 @@ public class VideoProcessor extends AbstractNodeMain
 {
 	private static boolean DEBUG = false;
 	private static boolean DEBUGTEST3 = false;
-	private static boolean DEBUGTEST2 = true;
+	private static boolean DEBUGTEST2 = false;
 	private static final boolean SAMPLERATE = false; // display pubs per second
 	private static final boolean TIMER = true;
-	private static final boolean WRITEFILES = true;
+	private static final boolean WRITEFILES = false;
 
     private BufferedImage imageL = null;
     private BufferedImage imageR = null;
@@ -157,7 +157,7 @@ public class VideoProcessor extends AbstractNodeMain
     final static int corrWinSize = 15; // Size of eventual depth patch
     final static int corrWinLeft = 7; // number of left/up elements in corr window
     final static int corrWinRight = 8;// number of right/down elements in corr window
-    final static int yTolerance = 50; // pixel diff in y of potential candidates
+    final static int yTolerance = 25; // pixel diff in y of potential candidates
 
     CircularBlockingDeque<BufferedImage> queueL = new CircularBlockingDeque<BufferedImage>(10);
     CircularBlockingDeque<BufferedImage> queueR = new CircularBlockingDeque<BufferedImage>(10);
@@ -2280,7 +2280,8 @@ public class VideoProcessor extends AbstractNodeMain
 			int nscore = 0;
 			int yscore = 0;
 			int isize = 0;
-			double yDiffScore = Double.MAX_VALUE;
+			double cScore = Double.MAX_VALUE;
+			double dScore = Double.MAX_VALUE;
 			synchronized(inode) {
 			isize = inode.getIndexes().size();
 			// check all right nodes against the ones on this scan line
@@ -2296,8 +2297,9 @@ public class VideoProcessor extends AbstractNodeMain
 						double cscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();
 						double dscore = inode.getNormal3().multiplyVectorial(noderA.get(j).getNormal3()).getLength();
 						if(cscore < .001 && dscore < .001) {
-							if(yDiff < yDiffScore) {
-								yDiffScore = yDiff;
+							if(cscore < cScore && dscore < dScore) {
+								cScore = cscore;
+								dScore = dscore;
 								++yscore;
 								// Option 0 go with first one, as .001 is a rather small magnitude that might as well be 0, AKA epsilon
 								oscore = noderA.get(j);
