@@ -1141,32 +1141,55 @@ public class VideoProcessor extends AbstractNodeMain
 	private void findZeroEnclosedSetPointDepth(int yStart, List<envInterface> env, List<envInterface> zenc) {
 		envInterface senv = zenc.get(yStart);
 		octree_t inode = ((IndexMax)senv).node;
+		double smean = 0;
+		ArrayList<envInterface> enclosed = new ArrayList<envInterface>();
 		synchronized(env) {
 			// try all maximal for this zero encloser, if we find one, use it and bail
 			for(envInterface e: env) {
 				if( e.enclosedBy(senv) || senv.enclosedBy(e)) {
-					senv.setDepth(e.getDepth());
+					smean += e.getDepth();
+					enclosed.add(e);
+				}
+			}
+		}
+			if( !enclosed.isEmpty()) {
+				smean /= (double)enclosed.size();
+					//senv.setDepth(e.getDepth());
 					synchronized(inode) {
 					synchronized(inode.getRoot().m_points) {
 						// for each point in this maximal node
 						for(int c = 0; c < inode.getIndexes().size(); c++) {
-							//double cdist = Double.MAX_VALUE;
 							Vector4d tpoint = inode.getRoot().m_points.get(inode.getIndexes().get(c));
 							if(tpoint.z != 1.0) {
 								if(DEBUGTEST4)
-									System.out.println("findZeroEnclosedSetPointDepth node="+yStart+" WARNING point may have been assigned depth already, tpoint="+tpoint+" ***** "+Thread.currentThread().getName()+" *** ");
+									System.out.println("findZeroEnclosedSetPointDepth node="+yStart+" WARNING point has depth already, point="+tpoint+" ***** "+Thread.currentThread().getName()+" *** ");
 							} else {
-								tpoint.z = e.getDepth();
-								if(DEBUGTEST4)
-									System.out.println("findZeroEnclosedSetPointDepth node "+yStart+"="+inode+" point="+tpoint+" assigned depth "+tpoint.z+" ***** "+Thread.currentThread().getName()+" *** ");	
+								// find the envelope this point lie in, if none, give it the mean of all regions
+								boolean notAssigned = true;
+								// for each minimal node that was enclosed by maximal, does target point lie within?
+								for( envInterface d : enclosed ) {
+									//System.out.println("processImageChunkTest3 node="+inode+" encloses "+d+" ***** "+Thread.currentThread().getName()+" *** ");
+									if(d.encloses(tpoint)) {
+										notAssigned = false;
+										tpoint.z = d.getDepth();
+										if(DEBUGTEST4)
+											System.out.println("findZeroEnclosedSetPointDepth node "+yStart+"="+inode+" point="+tpoint+" env="+d+" from "+enclosed.size()+" envelopes. ***** "+Thread.currentThread().getName()+" *** ");	
+										break;
+									} //else {
+								}
+								if(notAssigned) {
+									tpoint.z = smean;//e.getDepth();
+									if(DEBUGTEST4)
+										System.out.println("findZeroEnclosedSetPointDepth node "+yStart+"="+inode+" point="+tpoint+" set from mean, none found in "+enclosed.size()+" envelopes. ***** "+Thread.currentThread().getName()+" *** ");
+								}
 							}
 						}
 					}
 					}
 					return;
-				}
+				//} original if(e.enclosed
 			}
-		}
+		//} synchronized env
 		if(DEBUGTEST4)
 			System.out.println("findZeroEnclosedSetPointDepth node "+yStart+"="+inode+" found no valid alternate envelope ***** "+Thread.currentThread().getName()+" *** ");	
 	}
