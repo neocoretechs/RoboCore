@@ -182,8 +182,56 @@ public class VideoProcessor extends AbstractNodeMain
 	
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-
 		//Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		// bring up all parallel  processing threads
+		spinUp();
+		// subscribe to stereo image bus to start flow of images into queue
+		final Subscriber<stereo_msgs.StereoImage> imgsub =
+				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
+		/**
+		 * Image extraction from bus, then image processing, then on to display section.
+		 */
+		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
+		@Override
+		public void onNewMessage(stereo_msgs.StereoImage img) {
+			long slew = System.currentTimeMillis() - time1;
+			if( SAMPLERATE && slew >= 1000) {
+				time1 = System.currentTimeMillis();
+				System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber)+". Slew rate="+(slew-1000));
+				lastSequenceNumber = sequenceNumber;
+			}
+			try {
+				//synchronized(mutex) {
+					cbL = img.getData();
+					bufferL = cbL.array();
+					InputStream in = new ByteArrayInputStream(bufferL);
+					BufferedImage imageL1 = ImageIO.read(in);
+					in.close();
+					cbR = img.getData2();
+					bufferR = cbR.array();
+					in = new ByteArrayInputStream(bufferR);
+					BufferedImage imageR1 = ImageIO.read(in);
+					in.close();
+					queueL.addLast(imageL1);
+					queueR.addLast(imageR1);
+				//}
+				//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
+				if( DEBUG ) {
+					System.out.println("New left/right images "+img.getWidth()+","+img.getHeight()+" size:"+bufferL.length/*ib.limit()*/);
+				}
+			} catch (IOException e1) {
+				System.out.println("Could not convert image payload due to:"+e1.getMessage());
+				return;
+			}
+			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+		}
+	  });
+		
+	} // onstart
+	/**
+	 * Spin all parallel processing threads
+	 */
+	public void spinUp() {
 		/*
 		 * Main worker thread for image data. 
 		 * Wait at synch barrier for completion of all processing threads, then display disparity 
@@ -522,51 +570,7 @@ public class VideoProcessor extends AbstractNodeMain
 			        } // while true
 				} // run      
 		}); // spin
-		
-		final Subscriber<stereo_msgs.StereoImage> imgsub =
-				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
-	
-		/**
-		 * Image extraction from bus, then image processing, then on to display section.
-		 */
-		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
-		@Override
-		public void onNewMessage(stereo_msgs.StereoImage img) {
-			long slew = System.currentTimeMillis() - time1;
-			if( SAMPLERATE && slew >= 1000) {
-				time1 = System.currentTimeMillis();
-				System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber)+". Slew rate="+(slew-1000));
-				lastSequenceNumber = sequenceNumber;
-			}
-			try {
-				//synchronized(mutex) {
-					cbL = img.getData();
-					bufferL = cbL.array();
-					InputStream in = new ByteArrayInputStream(bufferL);
-					BufferedImage imageL1 = ImageIO.read(in);
-					in.close();
-					cbR = img.getData2();
-					bufferR = cbR.array();
-					in = new ByteArrayInputStream(bufferR);
-					BufferedImage imageR1 = ImageIO.read(in);
-					in.close();
-					queueL.addLast(imageL1);
-					queueR.addLast(imageR1);
-				//}
-				//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
-				if( DEBUG ) {
-					System.out.println("New left/right images "+img.getWidth()+","+img.getHeight()+" size:"+bufferL.length/*ib.limit()*/);
-				}
-			} catch (IOException e1) {
-				System.out.println("Could not convert image payload due to:"+e1.getMessage());
-				return;
-			}
-			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
-		}
-	  });
-		
-	} // onstart
-	
+	}
 	/**
 	 * Write CloudCompare point cloud viewer compatible file
 	 * for each point - X,Y,Z,R,G,B ascii delimited by space
@@ -803,16 +807,16 @@ public class VideoProcessor extends AbstractNodeMain
 	}
 	/**
 	 * Match the regions at minimal level from left to right image. Weed out the ones beyond yTolerance
-	 * and match the vector cross product of the 2 secondary eigenvectors if the difference between the left
+	 * and match the arccosine of vector dot product of the secondary eigenvector if the difference between the left
 	 * node eigenvectors and right is below tolerance. From the candidates below tolerance, select the one
-	 * that has the mnimum difference in left an right eigenvectors. Take the distance between centroids as disparity.
+	 * that has the mnimum difference in eigenvector dot. Take the distance between centroids as disparity.
 	 * @param yStart Starting Y scan line for this thread.
 	 * @param camwidth width of image
 	 * @param camheight height of image
 	 * @param nodelA list of left octree nodes at smallest level, sorted by centroid y
 	 * @param noderA list of right octree nodes at smallest level, sorted by centroid y
-	 * @param indexDepth2 resulting array filled with IndexDepth instances of matched regions
-	 * @param indexunproc2 resulting array of IndexDepth filled with unmatched minimal regions
+	 * @param indexDepth2 resulting array filled with envInterface instances of matched regions
+	 * @param indexunproc2 resulting array of envInterface filled with unmatched minimal regions
 	 */
 	private void matchRegionsAssignDepth(int yStart, 
 										int camwidth, int camheight, 
@@ -824,6 +828,7 @@ public class VideoProcessor extends AbstractNodeMain
 		//ArrayList<octree_t> leftNodes = new ArrayList<octree_t>();
 		List<octree_t> leftNodes;
 		// get all nodes along this Y axis, if any
+		// we are just trying to establish a range to sublist
 		boolean found = false;
 		synchronized(nodelA) {
 			int i1 = 0;
@@ -881,9 +886,12 @@ public class VideoProcessor extends AbstractNodeMain
 			int iscore = 0;
 			int nscore = 0;
 			int yscore = 0;
+			int zscore = 0;
 			int isize = 0;
 			double cScore = Double.MAX_VALUE;
 			double dScore = Double.MAX_VALUE;
+			int iScore = Integer.MAX_VALUE;
+			int tScore = 0;
 			synchronized(inode) {
 			isize = inode.getIndexes().size();
 			// check all right nodes against the ones on this scan line
@@ -895,63 +903,77 @@ public class VideoProcessor extends AbstractNodeMain
 						if( !found ) { 
 							found = true;
 						}
-						// found in range
-						double cscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();
-						double dscore = inode.getNormal3().multiplyVectorial(noderA.get(j).getNormal3()).getLength();
-						if(cscore < .001 && dscore < .001) {
-							if(cscore < cScore && dscore < dScore) {
+						// found in range, acos of dot product
+						double cscore = Math.acos(inode.getNormal2().and(noderA.get(j).getNormal2()));
+						//if(DEBUGTEST2) {
+						//	double tcscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();	
+						//	System.out.println("matchRegionsAssignDepth segment scores for centroid Y="+(yStart-(camheight/2))+" cross score ="+tcscore+" dot score ="+cscore+" part="+(inode.getNormal2().and(noderA.get(j).getNormal2()))+" ***** "+Thread.currentThread().getName()+" ***" );
+						//}
+						if(cscore < .1) {
+							if(cscore < cScore) {
 								cScore = cscore;
-								dScore = dscore;
-								++yscore;
-								// Option 0 go with first one, as .001 is a rather small magnitude that might as well be 0, AKA epsilon
+								iScore = noderA.get(j).getIndexes().size();
+								++yscore; // weedout when less
 								oscore = noderA.get(j);
-							}
-							++iscore;
+							} else {
+								if(cscore == cScore) { // equal , match number of points
+									if( Math.abs(isize-noderA.get(j).getIndexes().size()) < Math.abs(isize-iScore) ) {
+										iScore = noderA.get(j).getIndexes().size();
+										++zscore; // weedout when equal
+										oscore = noderA.get(j);
+									} else
+										++iscore; // points less matching
+									/*
+									int sum = 0;
+									// all right nodes that qualified
+									int lim = Math.min(inode.getIndexes().size(), noderA.get(j).getIndexes().size());
+									synchronized(inode.getRoot().m_colors) {
+										for(int c = 0; c < lim; c++) {
+											Vector4d lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
+											Vector4d rcolor = noderA.get(j).getRoot().m_colors.get(noderA.get(j).getIndexes().get(c));				
+											sum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
+										}
+									}
+									if( sum < score) {
+										++yscore;
+										oscore = noderA.get(j);
+										score = sum;
+									}
+									*/
+								} else
+									++iscore; // >, on plane, but no better
+							}	
 						} else
-							++nscore;
+							++nscore; // off plane, beyond tolerance
 						//++i1; // found or not, bump 'to' range	
-					} else {
-						if( !found ) { // not found, not <= , keep searching
+					} else { // y out of tolerance
+						if( !found ) { // y not found, y not <= , keep searching
 							//++i1;
 							continue;
 						} else {
-							break; // was found, now not <=, y will only increase
+							break; // y was previously found, y now not <=, y will only increase
 						}
 					}
 				} // right node loop
 				if(!found) {
 					if(DEBUGTEST2)
-							System.out.println("matchRegionsAssignDepth no right image nodes in tolerance at centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***" );
+							System.out.println("matchRegionsAssignDepth left node centroid Y="+(yStart-(camheight/2))+", no right image nodes in tolerance ***** "+Thread.currentThread().getName()+" ***" );
 					indexUnproc2.add(new IndexDepth(inode.getCentroid(), inode.getSize(), 0));
 					continue; // next left node
 				}
-							// option 2
-							// Compute the sum of absolute difference SAD between the 2 matrixes representing
-							// the left subject subset and right target subset
-							// each point in left and right octree cells. In practice we never get here but as a fallback
-							// we can resort to this old standby
-							//int sum = 0;
-							//score = new int[noderA.get(j).getIndexes().size()];
-							//oscore = new octree_t[score.length];
-							// all right nodes that qualified
-							//iscore = 0;
-							//for(int c = 0; c < inode.getIndexes().size(); c++) {
-							//	Vector4d lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
-							//	Vector4d rcolor = inode.getRoot().m_colors.get(noderA.get(j).getIndexes().get(c));				
-							//	sum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
-							//}
-							//oscore[iscore] = noderA.get(j);
-							//score[iscore++] = sum
-	
-			} // right node array synch	
-			} // inode synch
-	
-			if( iscore == 0 ) {
+			} // right node array synch
+			// tScore the number of actual assignments that occured
+			tScore = yscore+zscore;
+			// If we made no matches or we made multiple matches and we tried to match a vertical line
+			// which removes our confidence factor
+			if( tScore == 0 || (tScore > 1 && inode.getNormal2().x == 0 && inode.getNormal2().y == 1)) {
 				if(DEBUGTEST2)
-					System.out.println("matchRegionsAssignDepth no matching right image nodes found for left at Y="+(yStart-(camheight/2)) +" out of "+nscore+" possible ***** "+Thread.currentThread().getName()+" ***");
+					System.out.println("matchRegionsAssignDepth rejection left node Y="+(yStart-(camheight/2))+" with "+tScore+" assignments, "+iscore+" failed assigments, "+nscore+" out of tolerance ***** "+Thread.currentThread().getName()+" ***");
 				indexUnproc2.add(new IndexDepth(inode.getCentroid(), inode.getSize(), 0));
 				continue;
 			}
+			} // inode synch
+	
 			// Option 2 continues..
 			// now calculate the one closest to zero from sum of differences
 			//int drank = Integer.MAX_VALUE;
@@ -966,10 +988,10 @@ public class VideoProcessor extends AbstractNodeMain
 			double xDiff = Math.abs(inode.getCentroid().x-oscore/*[rank]*/.getCentroid().x);
 			double yDiff =  Math.abs(inode.getCentroid().y-oscore/*[rank]*/.getCentroid().y);
 			if(DEBUGTEST2)
-				if(iscore > 1) {
-					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+iscore+" on plane scores,"+nscore+" off plane, "+yscore+" on-plane weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
+				if(tScore > 1) {
+					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+tScore+" assignments,"+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
 				} else {
-					System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score of "+oscore+" disparity="+xDiff+", "+nscore+" off plane ***** "+Thread.currentThread().getName()+" *** ");
+					System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score, disparity="+xDiff+", "+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
 				}
 			//calc the disparity and insert into collection
 			//we will call disparity the distance to centroid of right
@@ -1002,7 +1024,7 @@ public class VideoProcessor extends AbstractNodeMain
 		} // left octree nodes
 
 		if( SAMPLERATE )
-			System.out.println("matchRegionAssignDepth IMAGE SCAN LINE Y="+(yStart-(camheight/2)) +" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
+			System.out.println("matchRegionAssignDepth left node Y="+(yStart-(camheight/2)) +" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
 	/**
 	 * Process the minimal nodes we collected in the last step against the maximal nodes we generated now.
@@ -1147,6 +1169,12 @@ public class VideoProcessor extends AbstractNodeMain
 			// try all maximal for this zero encloser, if we find one, use it and bail
 			for(envInterface e: env) {
 				if( e.enclosedBy(senv) || senv.enclosedBy(e)) {
+					if(DEBUGTEST4) {
+						if( e.enclosedBy(senv) )
+							System.out.println("findZeroEnclosedSetPointDepth node="+yStart+" main envelope "+e+" enclosed by zero "+senv+" ***** "+Thread.currentThread().getName()+" *** ");
+						else
+							System.out.println("findZeroEnclosedSetPointDepth node="+yStart+" zero envelope "+senv+" enclosed by main "+e+" ***** "+Thread.currentThread().getName()+" *** ");
+					}
 					smean += e.getDepth();
 					enclosed.add(e);
 				}
@@ -1173,7 +1201,7 @@ public class VideoProcessor extends AbstractNodeMain
 										notAssigned = false;
 										tpoint.z = d.getDepth();
 										if(DEBUGTEST4)
-											System.out.println("findZeroEnclosedSetPointDepth node "+yStart+"="+inode+" point="+tpoint+" env="+d+" from "+enclosed.size()+" envelopes. ***** "+Thread.currentThread().getName()+" *** ");	
+											System.out.println("findZeroEnclosedSetPointDepth node "+yStart+"="+inode+" point="+tpoint+" set from env="+d+" from "+enclosed.size()+" envelopes. ***** "+Thread.currentThread().getName()+" *** ");	
 										break;
 									} //else {
 								}
@@ -1598,7 +1626,7 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 			@Override
 			public String toString() {
-				return "IndexDepth xmin="+xmin+" ymin="+ymin+" xmax="+xmax+"ymax="+ymax+" depth="+depth;
+				return "IndexDepth xmin="+xmin+" ymin="+ymin+" xmax="+xmax+" ymax="+ymax+" depth="+depth+" middle="+middle;
 			}
 			@Override
 			public double[] getEnv() {
@@ -1681,7 +1709,7 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 			@Override
 			public String toString() {
-				return "IndexMax xmin="+xmin+" ymin="+ymin+" xmax="+xmax+"ymax="+ymax+" depth="+depth;
+				return "IndexMax xmin="+xmin+" ymin="+ymin+" xmax="+xmax+" ymax="+ymax+" depth="+depth+" node="+node;
 			}
 			@Override
 			public double[] getEnv() {
@@ -1695,6 +1723,16 @@ public class VideoProcessor extends AbstractNodeMain
 			public void setDepth(double depth) {
 				this.depth = depth;
 			}
+			
+		}
+		
+		public static void main(String[] args) throws Exception {
+			VideoProcessor vp = new VideoProcessor();
+			vp.spinUp();
+			BufferedImage imageL1 = ImageIO.read(new File(vp.outDir+"/sourceL1.jpg"));
+			BufferedImage imageR1 = ImageIO.read(new File(vp.outDir+"/sourceR1.jpg"));
+			vp.queueL.addLast(imageL1);
+			vp.queueR.addLast(imageR1);
 			
 		}
 
