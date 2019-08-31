@@ -887,6 +887,7 @@ public class VideoProcessor extends AbstractNodeMain
 			int nscore = 0;
 			int yscore = 0;
 			int zscore = 0;
+			int tscore = 0;
 			int isize = 0;
 			double cScore = Double.MAX_VALUE;
 			double dScore = Double.MAX_VALUE;
@@ -905,6 +906,8 @@ public class VideoProcessor extends AbstractNodeMain
 						}
 						// found in range, acos of dot product
 						double cscore = Math.acos(inode.getNormal2().and(noderA.get(j).getNormal2()));
+						double tcscore = Math.abs(inode.getVariance2()-noderA.get(j).getVariance2());
+						//double dscore = Math.acos(inode.getNormal3().and(noderA.get(j).getNormal3()));
 						//if(DEBUGTEST2) {
 						//	double tcscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();	
 						//	System.out.println("matchRegionsAssignDepth segment scores for centroid Y="+(yStart-(camheight/2))+" cross score ="+tcscore+" dot score ="+cscore+" part="+(inode.getNormal2().and(noderA.get(j).getNormal2()))+" ***** "+Thread.currentThread().getName()+" ***" );
@@ -912,17 +915,27 @@ public class VideoProcessor extends AbstractNodeMain
 						if(cscore < .1) {
 							if(cscore < cScore) {
 								cScore = cscore;
+								dScore = tcscore;
 								iScore = noderA.get(j).getIndexes().size();
 								++yscore; // weedout when less
 								oscore = noderA.get(j);
 							} else {
-								if(cscore == cScore) { // equal , match number of points
-									if( Math.abs(isize-noderA.get(j).getIndexes().size()) < Math.abs(isize-iScore) ) {
+								if(cscore == cScore) { // equal , match eigenvalue, then number points
+									if( tcscore < dScore) {
+										dScore = tcscore;
 										iScore = noderA.get(j).getIndexes().size();
-										++zscore; // weedout when equal
+										++tscore; // weedout when less
 										oscore = noderA.get(j);
 									} else
-										++iscore; // points less matching
+									//if(DEBUGTEST2) {		
+									//	System.out.println("matchRegionsAssignDepth segment scores for centroid Y="+(yStart-(camheight/2))+" normal2 score ="+cscore+" variance2 diff="+tcscore+" point diff="+Math.abs(isize-noderA.get(j).getIndexes().size())+" ***** "+Thread.currentThread().getName()+" ***" );
+									//}
+										if( tcscore == dScore && Math.abs(isize-noderA.get(j).getIndexes().size()) < Math.abs(isize-iScore) ) {
+											iScore = noderA.get(j).getIndexes().size();
+											++zscore; // weedout when equal
+											oscore = noderA.get(j);
+										} else
+											++iscore; // points less matching
 									/*
 									int sum = 0;
 									// all right nodes that qualified
@@ -989,9 +1002,9 @@ public class VideoProcessor extends AbstractNodeMain
 			double yDiff =  Math.abs(inode.getCentroid().y-oscore/*[rank]*/.getCentroid().y);
 			if(DEBUGTEST2)
 				if(tScore > 1) {
-					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+tScore+" assignments,"+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
+					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+tScore+" assignments,"+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+tscore+" variance weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
 				} else {
-					System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score, disparity="+xDiff+", "+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
+					System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score, disparity="+xDiff+", "+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+tscore+" variance weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
 				}
 			//calc the disparity and insert into collection
 			//we will call disparity the distance to centroid of right
@@ -1729,8 +1742,8 @@ public class VideoProcessor extends AbstractNodeMain
 		public static void main(String[] args) throws Exception {
 			VideoProcessor vp = new VideoProcessor();
 			vp.spinUp();
-			BufferedImage imageL1 = ImageIO.read(new File(vp.outDir+"/sourceL1.jpg"));
-			BufferedImage imageR1 = ImageIO.read(new File(vp.outDir+"/sourceR1.jpg"));
+			BufferedImage imageL1 = ImageIO.read(new File(vp.outDir+"/"+args[0]));
+			BufferedImage imageR1 = ImageIO.read(new File(vp.outDir+"/"+args[1]));
 			vp.queueL.addLast(imageL1);
 			vp.queueR.addLast(imageR1);
 			
