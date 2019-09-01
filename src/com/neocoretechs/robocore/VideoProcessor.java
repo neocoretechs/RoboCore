@@ -103,12 +103,13 @@ import com.neocoretechs.machinevision.hough3d.writer_file;
 public class VideoProcessor extends AbstractNodeMain 
 {
 	private static boolean DEBUG = false;
-	private static boolean DEBUGTEST3 = true;
-	private static boolean DEBUGTEST2 = true;
-	private static boolean DEBUGTEST4 = true;
+	private static boolean DEBUGTEST3 = false;
+	private static boolean DEBUGTEST2 = false;
+	private static boolean DEBUGTEST4 = false;
 	private static final boolean SAMPLERATE = false; // display pubs per second
 	private static final boolean TIMER = true;
-	private static final boolean WRITEFILES = true;
+	private static final boolean WRITEFILES = false;
+	private static final boolean ASSIGNPOINTS = false;
 
     private BufferedImage imageL = null;
     private BufferedImage imageR = null;
@@ -159,6 +160,7 @@ public class VideoProcessor extends AbstractNodeMain
 	List<envInterface> indexUnproc; // uncorrelated minimal regions
 	List<envInterface> maxEnv; // maximal regions that enclose one or more minimal regions
 	List<envInterface> zeroEnc; // maximal regions that enclose zero minimal regions
+	List<int[]> leftYRange; // from/to position in array for sorted Y centroid processing
 	int[] dataL; // left array return from canny with magnitudes
 	int[] dataR; // right canny array with magnitudes
 	//CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
@@ -297,16 +299,34 @@ public class VideoProcessor extends AbstractNodeMain
 					  final List<octree_t> noderA = Collections.synchronizedList(tnoder);
 					  indexDepth = Collections.synchronizedList(new ArrayList<envInterface>());
 					  indexUnproc = Collections.synchronizedList(new ArrayList<envInterface>());
-					  for(int syStart = 0; syStart < execLimit; syStart++) {
-							SynchronizedFixedThreadPoolManager.getInstance().spin(new Runnable() {
+					  leftYRange = Collections.synchronizedList(new ArrayList<int[]>());
+					  // form list of start/end common Y values from sorted Y centroid list to partition parallel work
+					  double y = nodelA.get(0).getMiddle().y;
+					  int iPosStart = 0;
+					  int iPosEnd = 0;
+					  for(int i = 0 ; i < nodelA.size(); i++) {
+						   if( y != nodelA.get(i).getCentroid().y) {
+							   iPosEnd = i;
+							   leftYRange.add(new int[]{iPosStart, iPosEnd});
+							   iPosStart = i;
+							   y = nodelA.get(i).getCentroid().y;
+						   }
+					  }
+					  iPosEnd = nodelA.size();
+					  leftYRange.add(new int[]{iPosStart, iPosEnd});
+					  final int nSize = leftYRange.size();
+					  final int nSizeT = Math.min(leftYRange.size(), 32);
+					  SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT, nSize, "MATCHREGION");
+					  for(int syStart = 0; syStart < nSize; syStart++) {
+							SynchronizedFixedThreadPoolManager.getInstance(nSizeT, nSize, "MATCHREGION").spin(new Runnable() {
 								@Override
 								public void run() {
 									// set the left nodes with depth
-									matchRegionsAssignDepth(yStart.getAndIncrement(), camWidth, camHeight, nodelA, noderA, indexDepth, indexUnproc);
+									matchRegionsAssignDepth(yStart.getAndIncrement(), leftYRange, camWidth, camHeight, nodelA, noderA, indexDepth, indexUnproc);
 								} // run									
-							}); // spin
+							},"MATCHREGION"); // spin
 					  } // for syStart
-					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish();
+					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("MATCHREGION");
 					  if( TIMER )
 							System.out.println("Process time two="+(System.currentTimeMillis()-etime));
 					  latchOut2.await();
@@ -320,12 +340,12 @@ public class VideoProcessor extends AbstractNodeMain
 					  zeroEnc = Collections.synchronizedList(new ArrayList<envInterface>());
 					  // Octree reset to higher level, re-get nodes
 					  final List<octree_t> nodelB = Collections.synchronizedList(nodel.get_nodes());
-					  final int nSize = nodelB.size();
-					  final int nSizeT = Math.min(nodelB.size(), 32);
+					  final int nSizeu = nodelB.size();
+					  final int nSizeU = Math.min(nodelB.size(), 32);
 					  // gen 1 thread for each array element up to limit
-					  SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT, nSize, "SETPOINT");
-					  for(int syStart = 0; syStart < nSize; syStart++) {
-						SynchronizedFixedThreadPoolManager.getInstance().spin(new Runnable() {
+					  SynchronizedFixedThreadPoolManager.getInstance().init(nSizeU, nSizeu, "SETPOINT");
+					  for(int syStart = 0; syStart < nSizeu; syStart++) {
+						SynchronizedFixedThreadPoolManager.getInstance(nSizeU, nSizeu, "SETPOINT").spin(new Runnable() {
 							@Override
 							public void run() {
 								// set the left nodes with depth
@@ -810,7 +830,8 @@ public class VideoProcessor extends AbstractNodeMain
 	 * and match the arccosine of vector dot product of the secondary eigenvector if the difference between the left
 	 * node eigenvectors and right is below tolerance. From the candidates below tolerance, select the one
 	 * that has the mnimum difference in eigenvector dot. Take the distance between centroids as disparity.
-	 * @param yStart Starting Y scan line for this thread.
+	 * @param yStart position leftYRange containing from/to positions in left node list for this thread.
+	 * @param leftYRange2 list containing from/to of common Y centroid elements in sorted left node list
 	 * @param camwidth width of image
 	 * @param camheight height of image
 	 * @param nodelA list of left octree nodes at smallest level, sorted by centroid y
@@ -819,19 +840,19 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param indexunproc2 resulting array of envInterface filled with unmatched minimal regions
 	 */
 	private void matchRegionsAssignDepth(int yStart, 
+										List<int[]> leftYRange2, 
 										int camwidth, int camheight, 
 										List<octree_t> nodelA, List<octree_t> noderA, 
 										List<envInterface> indexDepth2, List<envInterface> indexUnproc2) {
 		long etime = System.currentTimeMillis();
-		octree_t tnodel = new octree_t();
-		tnodel.getCentroid().y = (double)(yStart-(camheight/2));
-		//ArrayList<octree_t> leftNodes = new ArrayList<octree_t>();
+		//octree_t tnodel = new octree_t();
+		//tnodel.getCentroid().y = (double)(yStart-(camheight/2));
 		List<octree_t> leftNodes;
 		// get all nodes along this Y axis, if any
 		// we are just trying to establish a range to sublist
 		boolean found = false;
 		synchronized(nodelA) {
-			int i1 = 0;
+			/*int i1 = 0;
 			int i0 = 0;
 			for( octree_t inode : nodelA) {
 				if( ((int)inode.getCentroid().y) == (yStart-(camheight/2)) ) {
@@ -854,6 +875,9 @@ public class VideoProcessor extends AbstractNodeMain
 				return;
 			}
 			leftNodes = nodelA.subList(i0, i1);
+			*/
+			int[] irange = leftYRange2.get(yStart);
+			leftNodes = nodelA.subList(irange[0], irange[1]);
 		}
 		
 		// get the right nodes, where the octree cell has same basic number points and plane nornal
@@ -1116,6 +1140,7 @@ public class VideoProcessor extends AbstractNodeMain
 		if( DEBUGTEST3 )
 			  System.out.println("findEnclosedRegionsSetPointDepth node="+yStart+" Mean="+smean/*+" variance="+svariance+" standard deviation="+ssigma*/+" ***** "+Thread.currentThread().getName()+" *** ");
 		// done with indexDepth, process enclosed array for each point, assign depth
+		if(ASSIGNPOINTS) {
 		synchronized(inode) {
 			synchronized(inode.getRoot().m_points) {
 				// for each point in this maximal node
@@ -1161,6 +1186,7 @@ public class VideoProcessor extends AbstractNodeMain
 				
 			}
 		}
+		}
 
 		if(DEBUGTEST3)
 			System.out.println("findEnclosedRegionsSetPointDepth Maximal Envelope "+yStart+" of "+nodelA.size()+" node="+inode+" exits with "+indexDepth2.size()+" minimal envelopes ***** "+Thread.currentThread().getName()+" *** ");
@@ -1196,6 +1222,7 @@ public class VideoProcessor extends AbstractNodeMain
 			if( !enclosed.isEmpty()) {
 				smean /= (double)enclosed.size();
 					//senv.setDepth(e.getDepth());
+				if(ASSIGNPOINTS) {
 					synchronized(inode) {
 					synchronized(inode.getRoot().m_points) {
 						// for each point in this maximal node
@@ -1228,7 +1255,7 @@ public class VideoProcessor extends AbstractNodeMain
 					}
 					}
 					return;
-				//} original if(e.enclosed
+				}
 			}
 		//} synchronized env
 		if(DEBUGTEST4)
@@ -1542,7 +1569,8 @@ public class VideoProcessor extends AbstractNodeMain
 			double txmax = Math.max(cen4.x+zdiff,Math.max(cen3.x+zdiff, Math.max(cen1.x+zdiff, cen2.x+zdiff)));
 			double tymin = Math.min(cen4.y,Math.min(cen3.y, Math.min(cen1.y, cen2.y)));
 			double tymax = Math.max(cen4.y,Math.max(cen3.y, Math.max(cen1.y, cen2.y)));
-			System.out.println("getEnvelope txmin="+txmin+" tymin="+tymin+" txmax="+txmax+" tymax="+tymax);
+			if(DEBUG)
+				System.out.println("getEnvelope txmin="+txmin+" tymin="+tymin+" txmax="+txmax+" tymax="+tymax);
 			return new double[]{txmin, tymin, txmax, tymax};
 		}
 		
