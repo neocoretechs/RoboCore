@@ -102,7 +102,7 @@ import com.neocoretechs.machinevision.hough3d.writer_file;
  */
 public class VideoProcessor extends AbstractNodeMain 
 {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static boolean DEBUGTEST3 = false;
 	private static boolean DEBUGTEST2 = false;
 	private static boolean DEBUGTEST4 = false;
@@ -128,7 +128,7 @@ public class VideoProcessor extends AbstractNodeMain
 	String mode = "";
 	String outDir = "/users/jg/workspace/robocore/motionclouds";
 	int frames = 0;
-	int files = 0;
+	static int files = 0;
 	// optical parameters
     final static float f = 4.4f; // focal length mm
     final static float B = 205.0f; // baseline mm
@@ -469,9 +469,10 @@ public class VideoProcessor extends AbstractNodeMain
 			        			noder = new octree_t();
 			        			octree_t.buildStart(noder);
 			        		   	// write source images
+			        			++files;
 			        			if( WRITEFILES ) {
 			        				synchronized(imageL) {
-			        					writeFile("sourceL", imageL, ++files);
+			        					writeFile("sourceL", imageL, files);
 			        				}
 			        				synchronized(imageR) {
 			        					writeFile("sourceR", imageR, files);
@@ -558,7 +559,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	}
 			        	     	
 			        	     	// end of parallel processing
-			        	     	synchronized(nodel) {
+			        	     	if(WRITEFILES) {
+			        	     		synchronized(nodel) {
 			        	     			// set our new maximal level
 			        	     			hough_settings.s_level = 5;
 			        	     			// set the distance to plane to increase order in plane formation
@@ -568,21 +570,18 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     			nodel.clear();
 			        	     			nodel.subdivide();
 			        	     			// write the display cloud with maximal planes detected
-			        	     			if(WRITEFILES) {
-			        	     				writer_file.writePerp(nodel, "planesL"+files);
-			        	     			}
-			        	     	}
-			        	     	if(WRITEFILES) {
+			        	     			writer_file.writePerp(nodel, "planesL"+files);
+			        	     	
 			        	     		// write the remaining unprocessed envelopes from minimal
 			        	     		if(!indexDepth.isEmpty())
 			        	     			synchronized(indexDepth) {
 			        	     				writeFile(indexDepth,"/lvl7unencL"+files);
 			        	     			}
 			        	     		// at this point the entire point set should be loaded with z
-			        	     		synchronized(nodel) {
 			        	     			writeFile(nodel,"/roscoeL"+files);
 			        	     		}
 			        	     	}
+			        	     	genNav(maxEnv);
 							} catch (InterruptedException | BrokenBarrierException e) {
 								e.printStackTrace();
 							}
@@ -591,6 +590,161 @@ public class VideoProcessor extends AbstractNodeMain
 				} // run      
 		}); // spin
 	}
+	
+	public static void genNav(List<envInterface> nodes) {
+	   final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
+			  @Override         
+			  public int compare(envInterface jc1, envInterface jc2) {
+				  double y1 = jc1.getEnv()[1]+((jc1.getEnv()[3]-jc1.getEnv()[1])/2);
+				  double y2 = jc2.getEnv()[1]+((jc2.getEnv()[3]-jc2.getEnv()[1])/2);
+				      return (y2 < y1 ? -1 : (y2 == y1 ? 0 : 1));           
+			  }     
+	   };
+	   final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
+			  @Override         
+			  public int compare(envInterface jc1, envInterface jc2) {
+				  double x1 = jc1.getEnv()[0]+((jc1.getEnv()[2]-jc1.getEnv()[0])/2);
+				  double x2 = jc2.getEnv()[0]+((jc2.getEnv()[2]-jc2.getEnv()[0])/2);
+				      return (x2 < x1 ? -1 : (x2 == x1 ? 0 : 1));           
+			  }     
+	   };
+	   Collections.sort(nodes, yComp);
+	   DataOutputStream dos = null;
+	   File f = new File(hough_settings.file+"NavLine"+files+hough_settings.extension);
+	   try {
+		   dos = new DataOutputStream(new FileOutputStream(f));
+		   double y = nodes.get(0).getEnv()[1]+((nodes.get(0).getEnv()[3]-nodes.get(0).getEnv()[1])/2);
+		   int iPosStart = 0;
+		   int iPosEnd = 0;
+		   for(int i = 0 ; i < nodes.size(); i++) {
+			   if( y != nodes.get(i).getEnv()[1]+((nodes.get(i).getEnv()[3]-nodes.get(i).getEnv()[1])/2)) {
+				   iPosEnd = i;
+				   genRow(dos, iPosStart, iPosEnd, nodes);
+				   iPosStart = i;
+				   y = nodes.get(i).getEnv()[1]+((nodes.get(i).getEnv()[3]-nodes.get(i).getEnv()[1])/2);
+			   }
+		   }
+		   iPosEnd = nodes.size();
+		   genRow(dos, iPosStart, iPosEnd, nodes);
+		   // col and min depth marker
+		   Collections.sort(nodes, xComp);
+		   double x = nodes.get(0).getEnv()[0]+((nodes.get(0).getEnv()[2]-nodes.get(0).getEnv()[0])/2);
+		   iPosStart = 0;
+		   iPosEnd = 0;
+		   for(int i = 0 ; i < nodes.size(); i++) {
+			   if( x != nodes.get(i).getEnv()[0]+((nodes.get(i).getEnv()[2]-nodes.get(i).getEnv()[0])/2)) {
+				   iPosEnd = i;
+				   genColHist(dos, iPosStart, iPosEnd, nodes);
+				   iPosStart = i;
+				   x = nodes.get(i).getEnv()[0]+((nodes.get(i).getEnv()[2]-nodes.get(i).getEnv()[0])/2);
+			   }
+		   }
+		   iPosEnd = nodes.size();
+		   genColHist(dos, iPosStart, iPosEnd, nodes);
+	   } catch (FileNotFoundException e) {
+			e.printStackTrace();
+			return;  
+	  } catch (IOException e) {
+		e.printStackTrace();
+	  } finally {
+			try {
+				if( dos != null ) {
+					dos.flush();
+					dos.close();
+				}
+			} catch (IOException e) {}		
+	  }
+	   
+}
+
+public static void genRow(DataOutputStream dos, int yStart, int yEnd, List<envInterface> nodelA) throws IOException{
+	if(DEBUG)
+		System.out.println("genRow from="+yStart+" to="+yEnd);
+		List<envInterface> subNodes = nodelA.subList(yStart, yEnd);
+		final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
+				  @Override         
+				  public int compare(envInterface jc1, envInterface jc2) {
+					  double x1 = jc1.getEnv()[0]+((jc1.getEnv()[2]-jc1.getEnv()[0])/2);
+					  double x2 = jc2.getEnv()[0]+((jc2.getEnv()[2]-jc2.getEnv()[0])/2);
+					      return (x2 < x1 ? -1 : (x2 == x1 ? 0 : 1));           
+				  }     
+		};
+		Collections.sort(subNodes, xComp);
+		// sorted now by x and y
+		for(int i = 0; i < subNodes.size(); i++) {
+			if( i < subNodes.size()-1) {
+				int ix0 = (int)subNodes.get(i).getEnv()[0]+(((int)subNodes.get(i).getEnv()[2]-(int)subNodes.get(i).getEnv()[0])/2);
+				int iy0 = (int)subNodes.get(i).getEnv()[1]+(((int)subNodes.get(i).getEnv()[3]-(int)subNodes.get(i).getEnv()[1])/2);
+				int iz0 = (int)subNodes.get(i).getDepth()*10;
+				int ix1 = (int)subNodes.get(i+1).getEnv()[0]+(((int)subNodes.get(i+1).getEnv()[2]-(int)subNodes.get(i+1).getEnv()[0])/2);
+				int iy1 = (int)subNodes.get(i+1).getEnv()[1]+(((int)subNodes.get(i+1).getEnv()[3]-(int)subNodes.get(i+1).getEnv()[1])/2);
+				int iz1 = (int)subNodes.get(i+1).getDepth()*10;
+				writer_file.line3D(dos, ix0, iy0, iz0, ix1, iy1, iz1, 0, 255, 255);
+			}
+		}
+
+}
+public static void genColHist(DataOutputStream dos, int xStart, int xEnd, List<envInterface> nodelA) throws IOException{
+	if(DEBUG)
+		System.out.println("genColHist from="+xStart+" to="+xEnd);
+		List<envInterface> subNodes = nodelA.subList(xStart, xEnd);
+		final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
+				  @Override         
+				  public int compare(envInterface jc1, envInterface jc2) {
+					  double y1 = jc1.getEnv()[1]+((jc1.getEnv()[3]-jc1.getEnv()[1])/2);
+					  double y2 = jc2.getEnv()[1]+((jc2.getEnv()[3]-jc2.getEnv()[1])/2);
+					      return (y2 < y1 ? -1 : (y2 == y1 ? 0 : 1));           
+				  }     
+		};
+		Collections.sort(subNodes, yComp);
+		double zMin = Double.MAX_VALUE;
+		int ix0 = 0;
+		int iy0 = 0;
+		int iz0 = 0;
+		int ix1 = 0;
+		int iy1 = 0;
+		int iz1 = 0;
+		envInterface cnode = null;
+		// sorted now by x and y
+		for(int i = 0; i < subNodes.size(); i++) {
+			if( i < subNodes.size()-1) {
+				ix0 = (int)subNodes.get(i).getEnv()[0]+(((int)subNodes.get(i).getEnv()[2]-(int)subNodes.get(i).getEnv()[0])/2);
+				iy0 = (int)subNodes.get(i).getEnv()[1]+(((int)subNodes.get(i).getEnv()[3]-(int)subNodes.get(i).getEnv()[1])/2);
+				iz0 = (int)subNodes.get(i).getDepth()*10;
+				ix1 = (int)subNodes.get(i+1).getEnv()[0]+(((int)subNodes.get(i+1).getEnv()[2]-(int)subNodes.get(i+1).getEnv()[0])/2);
+				iy1 = (int)subNodes.get(i+1).getEnv()[1]+(((int)subNodes.get(i+1).getEnv()[3]-(int)subNodes.get(i+1).getEnv()[1])/2);
+				iz1 = (int)subNodes.get(i+1).getDepth()*10;
+				writer_file.line3D(dos, ix0, iy0, iz0, ix1, iy1, iz1, 0, 255, 255);
+				if( DEBUG ) 
+					System.out.println("genColHist line3D x="+ix0+" y="+iy0+" z="+iz0+" to x="+iz1+" y="+iy1+" z="+iz1);
+			}
+			if(iy0 >= 0 && subNodes.get(i).getDepth() < zMin) {
+				zMin = subNodes.get(i).getDepth();
+				cnode = subNodes.get(i);
+			}
+		}
+		//  min depth
+		if( cnode != null ) {
+		Vector4d cen1 = new Vector4d();
+		Vector4d cen2 = new Vector4d();
+		cen1.x = cnode.getEnv()[0];
+		cen1.y = cnode.getEnv()[1];
+		cen1.z = cnode.getDepth()*10;//cnode.getCentroid().z - (cnode.getSize()/2);
+		cen2.x = cnode.getEnv()[2];
+		cen2.y = cnode.getEnv()[3];
+		cen2.z = cnode.getDepth()*10;//cnode.getCentroid().z + (cnode.getSize()/2);
+		if( DEBUG )
+			System.out.println("genColHist env minx,y,z="+cen1+" maxx,y,z="+cen2+" centroid node="+cnode);
+		// xmin, ymin, xmax, ymin
+		writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
+		// xmax, ymin, xmax, ymax
+		writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
+		// xmax, ymax, xmin, ymax
+		writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
+		// xmin, ymax, xmin, ymin
+		writer_file.line3D(dos, (int)cen1.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
+		}
+}
 	/**
 	 * Write CloudCompare point cloud viewer compatible file
 	 * for each point - X,Y,Z,R,G,B ascii delimited by space
