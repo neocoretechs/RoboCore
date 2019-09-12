@@ -111,12 +111,12 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean SAMPLERATE = false; // display thread timing performance data
 	private static final boolean TIMER = true; // display global performance data
 	private static final boolean WRITEFILES = false; // write full set of display files
-	private static final boolean WRITEGRID = true; // write occupancy grid
+	private static final boolean WRITEGRID = false; // write occupancy grid
 	private static final boolean WRITEPLANARS = false; // write planars and planes
-	private static final boolean WRITEUNCORR = true; // write uncorrelated minimal planars
+	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
 	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
-	private static final boolean WRITEEDGES = true; // write left and right edge detect, if ASSIGNPOINTS true left file has 3D
+	private static final boolean WRITEEDGES = false; // write left and right edge detect, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
 	private static final boolean ASSIGNPOINTS = false; // assign depth to points in file vs simply compute planars
 
@@ -157,7 +157,7 @@ public class VideoProcessor extends AbstractNodeMain
 	//FloatDCT_2D fdct2dL = new FloatDCT_2D(corrWinSize, corrWinSize);
 	//FloatDCT_2D fdct2dR = new FloatDCT_2D(corrWinSize, corrWinSize);
 
-    CannyEdgeDetector ced = null;
+    //CannyEdgeDetector ced = null;
     
 	BufferedImage bimage = null;
 	octree_t node = null;
@@ -192,8 +192,12 @@ public class VideoProcessor extends AbstractNodeMain
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 		//Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		System.out.println("Processing "+camWidth+" by "+camHeight);
 		// bring up all parallel  processing threads
 		spinUp();
+		// spin the edge generator class and threads
+		final EdgeGen edgeGen = new EdgeGen();
+		edgeGen.spinEdge();
 		// subscribe to stereo image bus to start flow of images into queue
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
@@ -208,8 +212,6 @@ public class VideoProcessor extends AbstractNodeMain
 			ByteBuffer cbL, cbR;
 			byte[] bufferL;
 			byte[] bufferR;
-			int[] dataLx; // left array return from canny with magnitudes
-			int[] dataRx; // right canny array with magnitudes
 			long slew = System.currentTimeMillis() - time1;
 			// We will collect as many image as possible in 500 ms, then signal processing by placing the last in queue
 			// We will composite the edge detected images to achieve greater resolution
@@ -224,33 +226,29 @@ public class VideoProcessor extends AbstractNodeMain
 					in = new ByteArrayInputStream(bufferR);
 					imageR1 = ImageIO.read(in);
 					in.close();
-					//			        	   
-	        	    ced = new CannyEdgeDetector();
-	        	    ced.setLowThreshold(0.1f);//0.5f
-	        	    ced.setHighThreshold(0.5f);//1f
-	        	    ced.setSourceImage(imageL1);
-	        	    dataLx = ced.semiProcess();
-	        	    //
-	        	    ced = new CannyEdgeDetector();
-	        	    ced.setLowThreshold(0.1f);
-	        	    ced.setHighThreshold(0.5f);
-	        	    ced.setSourceImage(imageR1);
-	        	    dataRx = ced.semiProcess();
-	        	    if( dataLp != null && slew < imageIntegrate) {
-	        	    		 for(int i = 0; i < dataLp.length; i++) {
-	        	    			 dataLp[i] = dataLp[i] | dataLx[i];
-	        	    		 }
-	        	    } else
-	        	    	 dataLp = dataLx;
-	        	    if( dataRp != null && slew < imageIntegrate) {
-	        	    		 for(int i = 0; i < dataRp.length; i++) {
-	        	    			 dataRp[i] = dataRp[i] | dataRx[i];
-	        	    		 }
-	        	    } else
-	        	    	 dataRp = dataRx;
+					//
+					edgeGen.imageL1 = imageL1;
+					edgeGen.imageR1 = imageR1;
+					edgeGen.latchOutL.reset();
+					edgeGen.latchOutR.reset();
+					edgeGen.latchL.reset();
+					edgeGen.latchR.reset();
+					long edgeTime = System.currentTimeMillis();
+					try {
+						edgeGen.latchL.await();
+						edgeGen.latchR.await();
+					} catch (InterruptedException | BrokenBarrierException e) {System.out.println("<<Unexpected InLatch barrier break>>");}
+					try {
+						edgeGen.latchOutL.await();
+						edgeGen.latchOutR.await();
+					} catch (InterruptedException | BrokenBarrierException e) {System.out.println("<<Unexpected OutLatch barrier break>>");}
+					if(TIMER)
+						System.out.println("Edge generator time="+(System.currentTimeMillis()-edgeTime)+" ms.");
 	        	    // We have a set amount of time to resolve our view then send it down the line
 					if( slew >= imageIntegrate ) {
 						queueI.addLast(new Object[]{imageL1,imageR1,dataLp,dataRp});
+						dataLp = null;
+						dataRp = null;
 						time1 = System.currentTimeMillis();
 						if(TIMER)
 							System.out.println("Queued framesets:"+(sequenceNumber-lastSequenceNumber)+" file index:"+files);
@@ -268,6 +266,8 @@ public class VideoProcessor extends AbstractNodeMain
 	  });
 		
 	} // onstart
+	
+
 	/**
 	 * Spin all parallel processing threads
 	 */
@@ -280,7 +280,6 @@ public class VideoProcessor extends AbstractNodeMain
 		ThreadPoolManager.getInstance().spin(new Runnable() {
 				@Override
 				public void run() {
-					System.out.println("Processing "+camWidth+" by "+camHeight);
 					while(true) {
 					//
 					// Spin the threads for each chunk of image
@@ -422,7 +421,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  }
 					  
 					// global barrier break
-					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+this);}
+					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+files);}
 					} // while true
 			} // run
 		}); // spin
@@ -641,8 +640,8 @@ public class VideoProcessor extends AbstractNodeMain
 									System.out.println("DCT RMS Mean="+meanRMS+" variance="+varianceRMS+" standard deviation="+sigmaRMS);
 			        	     		System.out.println("RMS err="+rms+" file index:"+files);
 			        				// if we are more than n standard deviation from the overall mean, do something
-			    					if( rms > (meanRMS+sigmaRMS) ) //sigmaRMS*2 is 2 standard deviations
-			        	     			System.out.println("<<<<<<<<<<<<<<<<<< IMAGE SHIFT ALERT!!!! >>>>>>>>>>>>>>>>>>>");
+			    					if( rms > (meanRMS+(sigmaRMS*1.3)) ) //sigmaRMS*2 is 2 standard deviations
+			        	     			System.out.println("<<<< IMAGE SHIFT ALERT!!!! >>>> rms="+rms+" err="+(meanRMS+(sigmaRMS*1.3))+" file index:"+files);
 			        	     	}
 			        	    	prevDCT = a;
 							} catch (InterruptedException | BrokenBarrierException e) {
@@ -2171,6 +2170,83 @@ public class VideoProcessor extends AbstractNodeMain
 				this.depth = depth;
 			}
 			
+		}
+		/**
+		 * Parallel left/right image Edge generator class:
+		 * To initialize:
+		 *  EdgeGen edgeGen = new EdgeGen();
+		 *  edgeGen.spinEdge();
+		 * Then for each iteration of new image set:
+		 * 	edgeGen.imageL1 = imageL1;
+		 *	edgeGen.imageR1 = imageR1;
+		 *  edgeGen.latchOutL.reset(); // reset to synch at barrier
+		 *  edgeGen.latchOutR.reset();
+		 *  edgeGen.latchL.reset(); // after all resets we wait at these barriers at top of thread processing
+		 *  edgeGen.latchR.reset();
+		 *  edgeGen.latchL.await(); // these trip the barriers to start the threads
+		 *  edgeGen.latchR.await();
+		 *  edgeGen.latchOutL.await(); // once these 2 barriers are tripped we are done
+		 *  edgeGen.latchOutR.await();
+		 * @author jg
+		 *
+		 */
+		final class EdgeGen {
+			private static final boolean DEBUG = true;
+			private int[] dataLx; // left array return from canny with magnitudes
+			private int[] dataRx; // right canny array with magnitudes
+			BufferedImage imageL1 = null;
+			BufferedImage imageR1 = null;
+			CyclicBarrier latchL = new CyclicBarrier(2);
+			CyclicBarrier latchOutL = new CyclicBarrier(2);
+			CyclicBarrier latchR = new CyclicBarrier(2);
+			CyclicBarrier latchOutR = new CyclicBarrier(2);
+			public void spinEdge() {
+				if(DEBUG)
+					System.out.println("Spinning Left Edge Generator");
+				ThreadPoolManager.getInstance().spin(new Runnable() {
+					@Override
+					public void run() {			
+						while(true) {
+							try {
+								latchL.await();
+								dataLx = genEdge(imageL1, dataLp);
+								if( dataLp == null )
+									dataLp = dataLx;
+								latchOutL.await();
+							} catch (InterruptedException| BrokenBarrierException e) {}
+						}
+					}
+				});
+				if(DEBUG)
+					System.out.println("Spinning Right Edge Generator");
+				ThreadPoolManager.getInstance().spin(new Runnable() {
+					@Override
+					public void run() {	
+						while(true) {
+							try {
+								latchR.await();
+								dataRx = genEdge(imageR1, dataRp);
+								if( dataRp == null )
+									dataRp = dataRx;
+								latchOutR.await();
+							} catch (InterruptedException | BrokenBarrierException e) {}
+						}
+					}
+				});
+			}	
+			private int[] genEdge(BufferedImage img, int[] datap) {
+		   	    CannyEdgeDetector ced = new CannyEdgeDetector();
+			    ced.setLowThreshold(0.1f);
+			    ced.setHighThreshold(0.5f);
+			    ced.setSourceImage(img);
+			    int[] datax = ced.semiProcess();
+			    if(datap != null) {
+			    	for(int i = 0; i < datap.length; i++) {
+			    			 datap[i] = datap[i] | datax[i];
+			    	}
+			    }
+			    return datax;
+			}
 		}
 		
 		public static void main(String[] args) throws Exception {
