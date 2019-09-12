@@ -17,15 +17,18 @@ public class ThreadPoolManager {
 	int threadNum = 0;
     DaemonThreadFactory dtf ;//= new PoolThreadFactory();
     private static Map<String, ExecutorService> executor = new HashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
-
-	public static ThreadPoolManager threadPoolManager = null;
+	public static volatile ThreadPoolManager threadPoolManager = null;
 	private ThreadPoolManager() { }
 	
 	public static ThreadPoolManager getInstance() {
 		if( threadPoolManager == null ) {
-			threadPoolManager = new ThreadPoolManager();
-			// set up pool for system processes
-			executor.put("SYSTEM", Executors.newCachedThreadPool(getInstance().new DaemonThreadFactory("SYSTEM")));
+			synchronized(ThreadPoolManager.class) {
+				if(threadPoolManager == null) {
+					threadPoolManager = new ThreadPoolManager();
+					// set up pool for system processes
+					executor.put("SYSTEM", Executors.newCachedThreadPool(getInstance().new DaemonThreadFactory("SYSTEM")));
+				}
+			}
 		}
 		return threadPoolManager;
 	}

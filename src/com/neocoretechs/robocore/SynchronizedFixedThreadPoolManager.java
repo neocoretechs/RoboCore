@@ -21,10 +21,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class SynchronizedFixedThreadPoolManager {
 	int threadNum = 0;
-    //DaemonThreadFactory dtf ;//= new PoolThreadFactory();
-    //private static Map<String, ExecutorService> executor = new HashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
     private static Map<String, FactoryThreadsLimit> executor = new HashMap<String, FactoryThreadsLimit>();
-	public static SynchronizedFixedThreadPoolManager threadPoolManager = null;
+	public static volatile SynchronizedFixedThreadPoolManager threadPoolManager = null;
 	private SynchronizedFixedThreadPoolManager() { }
 	/**
 	 * Create a manager with the number of working threads and total threads to execute in the
@@ -35,15 +33,16 @@ public class SynchronizedFixedThreadPoolManager {
 	 */
 	public static SynchronizedFixedThreadPoolManager getInstance(int maxThreads, int executionLimit) {
 		if( threadPoolManager == null ) {
-			threadPoolManager = new SynchronizedFixedThreadPoolManager();
-			//threadPoolManager.dtf = getInstance(maxExecution, executionLimit).new DaemonThreadFactory("SYSTEMSYNC");
-			//threadPoolManager.totalThreads = executionLimit;
-			DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory("SYSTEMSYNC"));
-			ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
-			executor.put("SYSTEMSYNC", 
-					(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit("SYSTEMSYNC", dtf, tpx, maxThreads, executionLimit)));
-			((ExtendedExecutor)tpx).prestartAllCoreThreads();
-			//executor.put("SYSTEMSYNC",tpx );		
+			synchronized(SynchronizedFixedThreadPoolManager.class) {
+				if(threadPoolManager == null) {
+					threadPoolManager = new SynchronizedFixedThreadPoolManager();
+					DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory("SYSTEMSYNC"));
+					ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
+					executor.put("SYSTEMSYNC", 
+							(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit("SYSTEMSYNC", dtf, tpx, maxThreads, executionLimit)));
+					((ExtendedExecutor)tpx).prestartAllCoreThreads();
+				}
+			}
 		}
 		return threadPoolManager;
 	}
