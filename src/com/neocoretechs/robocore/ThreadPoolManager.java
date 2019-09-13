@@ -1,9 +1,9 @@
 package com.neocoretechs.robocore;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -16,7 +16,7 @@ import java.util.concurrent.ThreadFactory;
 public class ThreadPoolManager {
 	int threadNum = 0;
     DaemonThreadFactory dtf ;//= new PoolThreadFactory();
-    private static Map<String, ExecutorService> executor = new HashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
+    private static Map<String, ExecutorService> executor = new ConcurrentHashMap<String, ExecutorService>();// = Executors.newCachedThreadPool(dtf);
 	public static volatile ThreadPoolManager threadPoolManager = null;
 	private ThreadPoolManager() { }
 	

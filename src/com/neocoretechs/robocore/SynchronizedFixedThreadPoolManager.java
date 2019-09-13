@@ -1,11 +1,11 @@
 package com.neocoretechs.robocore;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class SynchronizedFixedThreadPoolManager {
 	int threadNum = 0;
-    private static Map<String, FactoryThreadsLimit> executor = new HashMap<String, FactoryThreadsLimit>();
+    private static Map<String, FactoryThreadsLimit> executor = new ConcurrentHashMap<String, FactoryThreadsLimit>();
 	public static volatile SynchronizedFixedThreadPoolManager threadPoolManager = null;
 	private SynchronizedFixedThreadPoolManager() { }
 	/**
@@ -56,19 +56,27 @@ public class SynchronizedFixedThreadPoolManager {
 	 */
 	public static SynchronizedFixedThreadPoolManager getInstance(int maxThreads, int executionLimit, String group) {
 		if( threadPoolManager == null ) {
-			threadPoolManager = new SynchronizedFixedThreadPoolManager();
-			DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory(group));
-			ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
-			executor.put(group, 
-					(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit(group, dtf, tpx, maxThreads, executionLimit)));
-			((ExtendedExecutor)tpx).prestartAllCoreThreads();
+			synchronized(SynchronizedFixedThreadPoolManager.class) {
+				if(threadPoolManager == null) {
+					threadPoolManager = new SynchronizedFixedThreadPoolManager();
+					DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory(group));
+					ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
+					executor.put(group, 
+							(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit(group, dtf, tpx, maxThreads, executionLimit)));
+					((ExtendedExecutor)tpx).prestartAllCoreThreads();
+				}
+			}
 		}
 		return threadPoolManager;
 	}
 	
 	public static SynchronizedFixedThreadPoolManager getInstance() {
 		if( threadPoolManager == null )
-			threadPoolManager = new SynchronizedFixedThreadPoolManager();
+			synchronized(SynchronizedFixedThreadPoolManager.class) {
+				if(threadPoolManager == null) {
+					threadPoolManager = new SynchronizedFixedThreadPoolManager();
+				}
+			}
 		return threadPoolManager;
 	}
 	
