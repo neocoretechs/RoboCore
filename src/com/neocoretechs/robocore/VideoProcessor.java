@@ -119,7 +119,7 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean WRITEFILES = false; // write full set of display files
 	private static final boolean WRITEGRID = true; // write occupancy grid
 	private static final boolean WRITEPLANARS = false; // write planars
-	private static final boolean WRITEPLANES = false; // write final planes approximations
+	private static final boolean WRITEPLANES = true; // write final planes approximations
 	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
 	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
@@ -473,46 +473,7 @@ public class VideoProcessor extends AbstractNodeMain
 			        			latch2.reset();
 			        			latchOut.reset();
 			        			latch.reset();
-				        		/*
-				        	    synchronized(imageLx) {
-				        	     ced = new CannyEdgeDetector();
-				        	     ced.setLowThreshold(0.1f);//0.5f
-				        	     ced.setHighThreshold(0.5f);//1f
-				        	     ced.setSourceImage(imageLx);
-				        	     dataL = ced.semiProcess();
-				        	     //
-				        			//for(int j = 0; j < camWidth; j++) {
-				        			//for(int i = 0; i < camHeight; i++) {
-				        			//	if( dataL[j*camWidth+i] != 0) {
-				        			//		htL.addPoint(j, i);
-				        			//	}
-				        			//}
-				        			//}
-				        	     //ced.process();
-				        	     //imageL = ced.getEdgesImage();
-				        	    }*/
-			        			/*
-				        	    synchronized(imageRx) {
-				        	     ced = new CannyEdgeDetector();
-				        	     ced.setLowThreshold(0.1f);
-				        	     ced.setHighThreshold(0.5f);
-				        	     ced.setSourceImage(imageRx);
-				        	     dataR = ced.semiProcess();
-				        		 //
-				        			//for(int j = 0; j < camWidth; j++) {
-				        			//for(int i = 0; i < camHeight; i++) {
-				        			//	if( dataR[j*camWidth+i] != 0) {
-				        			//		htR.addPoint(j, i);
-				        			//	}
-				        			//}
-				        			//}
-				        	     //ced.process();
-				        	     //imageR = ced.getEdgesImage();
-				        	   	}*/
-				        	   	/*
-				        	    hlL = htL.getLines(10);
-				        	    hlR = htR.getLines(10);
-				        	    */
+			        			//
 				        	    imageL = imageLx;
 				        	    imageR = imageRx;	
 			        			nodel = new octree_t();
@@ -586,9 +547,6 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		hough_settings.min_isotropy = .01; // prevent elongated or vertical funky planes
 			        	     		nodel.clear();
 			        	     		nodel.subdivide();
-			        	     		// write the display cloud with maximal envelopes
-			        	     		//if(WRITEFILES)
-			        	     		//		writer_file.writeEnv(nodel, "lvl4planenvL"+files);
 			        	     	}
 			        	     	// third step wait for completion
 			        	     	latch3.await();
@@ -615,35 +573,29 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	}
 			        	     	
 			        	     	// end of parallel processing
+			        	     	float[] a = null;
 			        	     	synchronized(nodel) {
-			        	     		// set our new maximal level
-					        	     if(WRITEFILES || WRITEPLANES || WRITEENCZERO) {
-			        	     			hough_settings.s_level = 5;
-			        	     			// set the distance to plane to increase order in plane formation
-			        	     			// this is a divisor
-			        	     			hough_settings.max_distance2plane = 5;
-				        	     		hough_settings.min_isotropy = .015; // increase order among planes
-			        	     			nodel.clear();
-			        	     			nodel.subdivide();
-			        	     			// write the display cloud with maximal planes detected
+			        	     		// at this point processing of image is essentially complete. If ASSIGNPOINTS is true
+			        	     		// the z coords in the point cloud are populated, otherwise we have a list of maximal
+			        	     		// planar regions with depth.
+			        	     		if(WRITEFILES || WRITEEDGES)
+			        	     			writeFile(nodel,"/roscoeL"+files);
+			        	     		//
+			        	     		// write the remaining unprocessed envelopes from minimal
+			        	     		if(WRITEFILES || WRITEENCZERO)
+			        	     			if(!indexDepth.isEmpty())
+			        	     				synchronized(indexDepth) {
+			        	     					writeFile(indexDepth,"/lvl7unencL"+files);
+			        	     				}
+			        	     		synchronized(maxEnv) {
 			        	     			if(WRITEFILES || WRITEPLANES)
-			        	     				writer_file.writePerp(nodel, "planesL"+files);
-			        	     			// write the remaining unprocessed envelopes from minimal
-			        	     			if(WRITEFILES || WRITEENCZERO)
-			        	     				if(!indexDepth.isEmpty())
-			        	     					synchronized(indexDepth) {
-			        	     						writeFile(indexDepth,"/lvl7unencL"+files);
-			        	     					}
-					        	     }
-			        	     		// at this point the entire point set should be loaded with z
-					        	     if(WRITEFILES || WRITEEDGES)
-					        	    	 writeFile(nodel,"/roscoeL"+files);   	
+			        	     				writeFile(maxEnv, "/lvl5MaxEnv"+files);
+			        	     			if(WRITEFILES || WRITEGRID)
+			        	     				genNav2(maxEnv);
+			        	     			a = genDCT(maxEnv);
+			        	     		}
 			        	     	}
-			        	     	if(WRITEFILES || WRITEGRID) {
-			        	     		writeFile(maxEnv, "/lvl5MaxEnv"+files);
-			        	     		genNav2(maxEnv);
-			        	     	}
-			        	     	float[] a = genDCT(maxEnv);
+	
 			        	     	if(prevDCT != null) {
 			        	     		double rms = IOUtils.computeRMSE(a, prevDCT, 0, Math.min(a.length,prevDCT.length));
 									meanRMS += rms;
@@ -1616,14 +1568,14 @@ public class VideoProcessor extends AbstractNodeMain
 			try {
 				dos = new DataOutputStream(new FileOutputStream(f));
 				for(envInterface id : d) {
-					writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, 1, 
-							(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, 1, 0, 255, 255);
-					writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, 1, 
-							(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, 1, 0, 255, 255);
-					writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, 1, 
-							(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, 1, 0, 255, 255);
-					writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, 1, 
-							(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, 1, 0, 255, 255);
+					writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, (int)id.getDepth()*10, 
+							(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, (int)id.getDepth()*10, 0, 255, 255);
+					writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, (int)id.getDepth()*10, 
+							(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, (int)id.getDepth()*10, 0, 255, 255);
+					writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, (int)id.getDepth()*10, 
+							(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)id.getDepth()*10, 0, 255, 255);
+					writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)id.getDepth()*10, 
+							(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, (int)id.getDepth()*10, 0, 255, 255);
 				}
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
