@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -39,6 +40,7 @@ import com.neocoretechs.machinevision.hough3d.Vector4d;
 import com.neocoretechs.machinevision.hough3d.hough_settings;
 import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
+import com.neocoretechs.robocore.VideoProcessor.envInterface;
 
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.
@@ -63,10 +65,14 @@ import com.neocoretechs.machinevision.hough3d.writer_file;
  * synchronization of the build step. Multiple threads not necessary as this step is fast.
  *
  * 4.) Process the left image coplanar regions against the right coplanar regions by comparing 
- * the vector cross products of the eigenvectors second and third axis for all minimal right regions in the
- * yTolerance of the left Y scan line assigned to the thread calling the method. 
- * Experiments have found that this yields a single candidate in most real world cases so far but the code is such 
- * that in case of multiple matches the one with the smallest difference in eigenvector values to the left region is chosen.
+ * the cosine of dot products of the eigenvectors second axis and the magnitude of the eigenvalue
+ * for all minimal right regions in the yTolerance of the left Y scan line assigned to the thread calling the method. 
+ * Match the regions at minimal level from left to right image. Weed out the ones beyond yTolerance
+ * and match the arccosine of vector dot product of the secondary eigenvector if the difference between the left
+ * node eigenvectors and right is below tolerance. From the candidates below tolerance, select the one
+ * that has the minimum difference in eigenvector dot. Where they are the same compare eigenvalue and take the
+ * least difference. Finally, all things being equal count the points in the region and find closest. In the case of vertical
+ * lines with multiple matches, reject the match, if one match to a vertical line, then use that.
  * The minimum points per octree cell can be changed in hough_settings but typically minimum 5 points. 
  * The coplanar region found by PCA may contain more however.
  * This is analogous to the standard stereo block matching (SBM) done by brute force sum of absolute differences (SAD) of the RGB
@@ -90,7 +96,7 @@ import com.neocoretechs.machinevision.hough3d.writer_file;
  *
  * 10.) After processing a larger region, remove the smaller regions it encloses from consideration.
  *
- * 11.) Regenerate coplanar regions via PCA  at a higher octree level, using level 4, if there are unprocessed smaller
+ * 11.) Regenerate coplanar regions via PCA  at a higher octree level, using level 5, if there are unprocessed smaller
  *  regions (regions that were not enclosed by a larger one) .
  *
  * 12.) For all minimal regions not previously processed, perform steps 7,8,9,10 although it seems that in 
@@ -111,13 +117,15 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean SAMPLERATE = false; // display thread timing performance data
 	private static final boolean TIMER = true; // display global performance data
 	private static final boolean WRITEFILES = false; // write full set of display files
-	private static final boolean WRITEGRID = false; // write occupancy grid
-	private static final boolean WRITEPLANARS = false; // write planars and planes
+	private static final boolean WRITEGRID = true; // write occupancy grid
+	private static final boolean WRITEPLANARS = false; // write planars
+	private static final boolean WRITEPLANES = false; // write final planes approximations
 	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
 	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
 	private static final boolean WRITEEDGES = false; // write left and right edge detect, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
+	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
 	private static final boolean ASSIGNPOINTS = false; // assign depth to points in file vs simply compute planars
 
     private BufferedImage imageL = null;
@@ -147,6 +155,7 @@ public class VideoProcessor extends AbstractNodeMain
     final static double Bf = B*f;// calc the Bf of Bf/d
     final static int maxHorizontalSep = (int) (Bf-1)/4; // max pixel disparity
     final static int yTolerance = 25; // pixel diff in y of potential candidates
+    final static double aTolerance = .001; // minimum angle dot product of eigenvectors
     final static int imageIntegrate = 750; // millis to accumulate images and integrate edge detects
 
     CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(10);
@@ -586,26 +595,29 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	latchOut3.await();
 			        	     	// start step 4
 			        	     	System.out.println("Unenclosed minimal envelopes="+indexDepth.size()+" zero enclosing maximal envelopes="+zeroEnc.size());
-			        	     	
 		        	     		// if any unenclosing envelopes, try to assign points using another enclosed maximal area
 			        	     	if( !zeroEnc.isEmpty()) {
 			        	     		latch4.await();
 			        	     		latchOut4.await();
-			        	     		int iZer = 0;
-			        	     		for(envInterface e : zeroEnc) {
-			        	     			if(e.getDepth() == 0)
-			        	     				++iZer;
+			        	     		Iterator<envInterface> it = zeroEnc.iterator();
+			        	     		//for(envInterface e : zeroEnc) {
+			        	     		while(it.hasNext()) {
+			        	     			envInterface e = (envInterface) it.next();
+			        	     			if(e.getDepth() != 0) {
+			        	     				maxEnv.add(e);
+			        	     				it.remove();
+			        	     			}
 			        	     		}
 			        	     		// write the display cloud with maximal envelopes
 			        	     		if(WRITEFILES || WRITEZEROENC)
 			        	     				writeFile(zeroEnc, "/lvl5zeroenvL"+files);
-			        	     		System.out.println("Final zero enclosing maximal envelopes="+iZer+" out of "+zeroEnc.size());
+			        	     		System.out.println("Final zero enclosing maximal envelopes="+zeroEnc.size());
 			        	     	}
 			        	     	
 			        	     	// end of parallel processing
 			        	     	synchronized(nodel) {
 			        	     		// set our new maximal level
-					        	     if(WRITEFILES || WRITEPLANARS || WRITEENCZERO) {
+					        	     if(WRITEFILES || WRITEPLANES || WRITEENCZERO) {
 			        	     			hough_settings.s_level = 5;
 			        	     			// set the distance to plane to increase order in plane formation
 			        	     			// this is a divisor
@@ -614,7 +626,7 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     			nodel.clear();
 			        	     			nodel.subdivide();
 			        	     			// write the display cloud with maximal planes detected
-			        	     			if(WRITEFILES || WRITEPLANARS)
+			        	     			if(WRITEFILES || WRITEPLANES)
 			        	     				writer_file.writePerp(nodel, "planesL"+files);
 			        	     			// write the remaining unprocessed envelopes from minimal
 			        	     			if(WRITEFILES || WRITEENCZERO)
@@ -627,8 +639,10 @@ public class VideoProcessor extends AbstractNodeMain
 					        	     if(WRITEFILES || WRITEEDGES)
 					        	    	 writeFile(nodel,"/roscoeL"+files);   	
 			        	     	}
-			        	     	if(WRITEFILES || WRITEGRID)
+			        	     	if(WRITEFILES || WRITEGRID) {
+			        	     		writeFile(maxEnv, "/lvl5MaxEnv"+files);
 			        	     		genNav2(maxEnv);
+			        	     	}
 			        	     	float[] a = genDCT(maxEnv);
 			        	     	if(prevDCT != null) {
 			        	     		double rms = IOUtils.computeRMSE(a, prevDCT, 0, Math.min(a.length,prevDCT.length));
@@ -640,8 +654,13 @@ public class VideoProcessor extends AbstractNodeMain
 									System.out.println("DCT RMS Mean="+meanRMS+" variance="+varianceRMS+" standard deviation="+sigmaRMS);
 			        	     		System.out.println("RMS err="+rms+" file index:"+files);
 			        				// if we are more than n standard deviation from the overall mean, do something
-			    					if( rms > (meanRMS+(sigmaRMS*1.3)) ) //sigmaRMS*2 is 2 standard deviations
+			    					if( rms > (meanRMS+(sigmaRMS*1.3)) ) { //sigmaRMS*2 is 2 standard deviations
 			        	     			System.out.println("<<<< IMAGE SHIFT ALERT!!!! >>>> rms="+rms+" err="+(meanRMS+(sigmaRMS*1.3))+" file index:"+files);
+			        	     			if( WRITERMS )
+			        	     				synchronized(nodel) {
+			        	     					writeFile(nodel,"/RMS"+(int)rms+"."+files);
+			        	     				}
+			    					}
 			        	     	}
 			        	    	prevDCT = a;
 							} catch (InterruptedException | BrokenBarrierException e) {
@@ -730,7 +749,10 @@ public class VideoProcessor extends AbstractNodeMain
 	 * Match the regions at minimal level from left to right image. Weed out the ones beyond yTolerance
 	 * and match the arccosine of vector dot product of the secondary eigenvector if the difference between the left
 	 * node eigenvectors and right is below tolerance. From the candidates below tolerance, select the one
-	 * that has the mnimum difference in eigenvector dot. Take the distance between centroids as disparity.
+	 * that has the minimum difference in eigenvector dot. Where they are the same compare eigenvalue and take the
+	 * least difference. Finally, count the points in the region and find closest. In the case of vertical
+	 * lines with multiple matches, reject the match, if one match to a vertical line, then use that.
+	 * Take the distance between centroids as disparity.
 	 * @param yStart position leftYRange containing from/to positions in left node list for this thread.
 	 * @param leftYRange2 list containing from/to of common Y centroid elements in sorted left node list
 	 * @param camwidth width of image
@@ -837,7 +859,7 @@ public class VideoProcessor extends AbstractNodeMain
 						//	double tcscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();	
 						//	System.out.println("matchRegionsAssignDepth segment scores for centroid Y="+(yStart-(camheight/2))+" cross score ="+tcscore+" dot score ="+cscore+" part="+(inode.getNormal2().and(noderA.get(j).getNormal2()))+" ***** "+Thread.currentThread().getName()+" ***" );
 						//}
-						if(cscore < .1) {
+						if(cscore < aTolerance) {
 							if(cscore < cScore) {
 								cScore = cscore;
 								dScore = tcscore;
@@ -976,7 +998,8 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param yStart Index into left maximal node array
 	 * @param nodelA contains maximal octree nodes
 	 * @param indexDepth2 contains envelopes of minimal octree nodes previously computed
-	 * @param maxEnv 
+	 * @param maxEnv maximal envelopes to which a depth was assigned, a list filled by this method
+	 * @param zeroEnc zero enclosing maximal envelopes that did not go to maxEnv, a list filled by this method
 	 */
 	private void findEnclosedRegionsSetPointDepth(int yStart, List<octree_t> nodelA, List<envInterface> indexDepth2, List<envInterface> maxEnv, List<envInterface> zeroEnc) {
 		octree_t inode = null;
@@ -1120,11 +1143,11 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 			}
 		}
-			if( !enclosed.isEmpty()) {
-				smean /= (double)enclosed.size();
-					//senv.setDepth(e.getDepth());
-				if(ASSIGNPOINTS) {
-					synchronized(inode) {
+		if( !enclosed.isEmpty()) {
+			smean /= (double)enclosed.size();
+			//senv.setDepth(e.getDepth());
+			if(ASSIGNPOINTS) {
+				synchronized(inode) {
 					synchronized(inode.getRoot().m_points) {
 						// for each point in this maximal node
 						for(int c = 0; c < inode.getIndexes().size(); c++) {
@@ -1154,10 +1177,12 @@ public class VideoProcessor extends AbstractNodeMain
 							}
 						}
 					}
-					}
-					return;
 				}
 			}
+			// move the former zero encloser to maximal nodes with mean of all the maximals that enclose it/it encloses
+			senv.setDepth(smean);
+			return;
+		}
 		//} synchronized env
 		if(DEBUGTEST4)
 			System.out.println("findZeroEnclosedSetPointDepth node "+yStart+"="+inode+" found no valid alternate envelope ***** "+Thread.currentThread().getName()+" *** ");	
