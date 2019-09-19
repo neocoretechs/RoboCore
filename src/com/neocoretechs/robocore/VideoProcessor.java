@@ -347,7 +347,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  indexUnproc = Collections.synchronizedList(new ArrayList<envInterface>());
 					  leftYRange = Collections.synchronizedList(new ArrayList<int[]>());
 					  // form list of start/end common Y values from sorted Y centroid list to partition parallel work
-					  double y = nodelA.get(0).getMiddle().y;
+					  double y = nodelA.get(0).getCentroid().y;
 					  int iPosStart = 0;
 					  int iPosEnd = 0;
 					  for(int i = 0 ; i < nodelA.size(); i++) {
@@ -723,6 +723,7 @@ public class VideoProcessor extends AbstractNodeMain
 		//octree_t tnodel = new octree_t();
 		//tnodel.getCentroid().y = (double)(yStart-(camheight/2));
 		List<octree_t> leftNodes;
+		List<octree_t> rightNodes;
 		// get all nodes along this Y axis, if any
 		// we are just trying to establish a range to sublist
 		boolean found = false;
@@ -754,7 +755,39 @@ public class VideoProcessor extends AbstractNodeMain
 			int[] irange = leftYRange2.get(yStart);
 			leftNodes = nodelA.subList(irange[0], irange[1]);
 		}
-		
+		int rpos1 = 0;
+		int rpos2 = 0;
+		synchronized(noderA) {		
+			octree_t lnode = leftNodes.get(0);
+			loop0:
+			for(int j = 0; j < noderA.size(); j++) {
+				double yDiff =  Math.abs(lnode.getCentroid().y-noderA.get(j).getCentroid().y);
+				if( yDiff <= yTolerance ) {
+					rpos1 = j;
+					found = true;
+					for(int k = j; k < noderA.size(); k++) {
+						yDiff =  Math.abs(lnode.getCentroid().y-noderA.get(k).getCentroid().y);
+						if(yDiff > yTolerance) {
+							rpos2 = k;
+							break loop0;
+						}
+					}
+					rpos2 = noderA.size();
+					break;
+				}
+			}
+			if(!found) {
+				for( octree_t inode : leftNodes) {
+					if(DEBUGTEST2)
+						System.out.println("matchRegionsAssignDepth left node centroid Y="+(yStart-(camheight/2))+","+inode+" no right image nodes in tolerance ***** "+Thread.currentThread().getName()+" ***" );
+					indexUnproc2.add(new IndexDepth(inode.getCentroid(), inode.getSize(), 0));
+				}
+				return;
+			}
+			rightNodes = noderA.subList(rpos1, rpos2);
+		}
+
+		found = false;
 		// get the right nodes, where the octree cell has same basic number points and plane nornal
 		//if( leftNodes.size() == 0) {
 		//	if(DEBUGTEST2)
@@ -796,43 +829,32 @@ public class VideoProcessor extends AbstractNodeMain
 			isize = inode.getIndexes().size();
 			// check all right nodes against the ones on this scan line
 			found = false;
-			synchronized(noderA) {
-				for(int j = 0; j < noderA.size(); j++) {
-					double yDiff =  Math.abs(inode.getCentroid().y-noderA.get(j).getCentroid().y);
-					if( yDiff <= yTolerance ) {
-						if( !found ) { 
-							found = true;
-						}
-						// found in range, acos of dot product
-						double cscore = Math.acos(inode.getNormal2().and(noderA.get(j).getNormal2()));
-						double tcscore = Math.abs(inode.getVariance2()-noderA.get(j).getVariance2());
-						//double dscore = Math.acos(inode.getNormal3().and(noderA.get(j).getNormal3()));
-						//if(DEBUGTEST2) {
-						//	double tcscore = inode.getNormal2().multiplyVectorial(noderA.get(j).getNormal2()).getLength();	
-						//	System.out.println("matchRegionsAssignDepth segment scores for centroid Y="+(yStart-(camheight/2))+" cross score ="+tcscore+" dot score ="+cscore+" part="+(inode.getNormal2().and(noderA.get(j).getNormal2()))+" ***** "+Thread.currentThread().getName()+" ***" );
-						//}
-						if(cscore < aTolerance) {
-							if(cscore < cScore) {
+			for(octree_t jnode: rightNodes) {
+				// found in range, acos of dot product
+				double cscore = Math.acos(inode.getNormal2().and(jnode.getNormal2()));
+				double tcscore = Math.abs(inode.getVariance2()-jnode.getVariance2());
+				if(cscore < aTolerance) {
+						if(cscore < cScore) {
 								cScore = cscore;
 								dScore = tcscore;
-								iScore = noderA.get(j).getIndexes().size();
+								iScore = jnode.getIndexes().size();
 								++yscore; // weedout when less
-								oscore = noderA.get(j);
-							} else {
+								oscore = jnode;
+						} else {
 								if(cscore == cScore) { // equal , match eigenvalue, then number points
 									if( tcscore < dScore) {
 										dScore = tcscore;
-										iScore = noderA.get(j).getIndexes().size();
+										iScore = jnode.getIndexes().size();
 										++tscore; // weedout when less
-										oscore = noderA.get(j);
+										oscore = jnode;
 									} else
 									//if(DEBUGTEST2) {		
 									//	System.out.println("matchRegionsAssignDepth segment scores for centroid Y="+(yStart-(camheight/2))+" normal2 score ="+cscore+" variance2 diff="+tcscore+" point diff="+Math.abs(isize-noderA.get(j).getIndexes().size())+" ***** "+Thread.currentThread().getName()+" ***" );
 									//}
-										if( tcscore == dScore && Math.abs(isize-noderA.get(j).getIndexes().size()) < Math.abs(isize-iScore) ) {
-											iScore = noderA.get(j).getIndexes().size();
+										if( tcscore == dScore && Math.abs(isize-jnode.getIndexes().size()) < Math.abs(isize-iScore) ) {
+											iScore = jnode.getIndexes().size();
 											++zscore; // weedout when equal
-											oscore = noderA.get(j);
+											oscore = jnode;
 										} else
 											++iscore; // points less matching
 									/*
@@ -854,26 +876,11 @@ public class VideoProcessor extends AbstractNodeMain
 									*/
 								} else
 									++iscore; // >, on plane, but no better
-							}	
-						} else
-							++nscore; // off plane, beyond tolerance
+						}	
+				} else
+					++nscore; // off plane, beyond tolerance
 						//++i1; // found or not, bump 'to' range	
-					} else { // y out of tolerance
-						if( !found ) { // y not found, y not <= , keep searching
-							//++i1;
-							continue;
-						} else {
-							break; // y was previously found, y now not <=, y will only increase
-						}
-					}
-				} // right node loop
-				if(!found) {
-					if(DEBUGTEST2)
-							System.out.println("matchRegionsAssignDepth left node centroid Y="+(yStart-(camheight/2))+", no right image nodes in tolerance ***** "+Thread.currentThread().getName()+" ***" );
-					indexUnproc2.add(new IndexDepth(inode.getCentroid(), inode.getSize(), 0));
-					continue; // next left node
-				}
-			} // right node array synch
+			} // right node loop
 			// tScore the number of actual assignments that occured
 			tScore = yscore+zscore;
 			// If we made no matches or we made multiple matches and we tried to match a vertical line
