@@ -117,9 +117,9 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean SAMPLERATE = false; // display thread timing performance data
 	private static final boolean TIMER = true; // display global performance data
 	private static final boolean WRITEFILES = false; // write full set of display files
-	private static final boolean WRITEGRID = true; // write occupancy grid
+	private static final boolean WRITEGRID = false; // write occupancy grid
 	private static final boolean WRITEPLANARS = false; // write planars
-	private static final boolean WRITEPLANES = true; // write final planes approximations
+	private static final boolean WRITEPLANES = false; // write final planes approximations
 	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
 	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
@@ -347,15 +347,16 @@ public class VideoProcessor extends AbstractNodeMain
 					  indexUnproc = Collections.synchronizedList(new ArrayList<envInterface>());
 					  leftYRange = Collections.synchronizedList(new ArrayList<int[]>());
 					  // form list of start/end common Y values from sorted Y centroid list to partition parallel work
-					  double y = nodelA.get(0).getCentroid().y;
+					  // cast to int to compress list, fractional tolerances ignored
+					  int y = (int) nodelA.get(0).getCentroid().y;
 					  int iPosStart = 0;
 					  int iPosEnd = 0;
 					  for(int i = 0 ; i < nodelA.size(); i++) {
-						   if( y != nodelA.get(i).getCentroid().y) {
+						   if( y != (int)nodelA.get(i).getCentroid().y) {
 							   iPosEnd = i;
 							   leftYRange.add(new int[]{iPosStart, iPosEnd});
 							   iPosStart = i;
-							   y = nodelA.get(i).getCentroid().y;
+							   y = (int) nodelA.get(i).getCentroid().y;
 						   }
 					  }
 					  iPosEnd = nodelA.size();
@@ -535,8 +536,8 @@ public class VideoProcessor extends AbstractNodeMain
 									  variance /= (double)indexDepth.size();
 								}
 								sigma = Math.sqrt(variance);
-								System.out.println("Mean="+mean+" variance="+variance+" standard deviation="+sigma);
-			        	     	System.out.println("Uncorrelated regions="+indexUnproc.size()+" correlated="+indexDepth.size()+", "+(((float)indexUnproc.size()/(float)(indexUnproc.size()+indexDepth.size()))*100.0)+"%");
+								System.out.println("Mean depth="+mean+" variance="+variance+" standard deviation="+sigma);
+			        	     	System.out.println("Uncorrelated regions="+indexUnproc.size()+" correlated="+indexDepth.size()+", "+(((float)indexUnproc.size()/(float)(indexUnproc.size()+indexDepth.size()))*100.0)+"% uncorrelated");
 			        	     	// reset level then regenerate tree with maximal coplanar points
 			        	     	synchronized(nodel) {
 			        	     		// set our new maximal level
