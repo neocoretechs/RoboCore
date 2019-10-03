@@ -38,6 +38,7 @@ import org.ros.node.topic.Subscriber;
 import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.machinevision.PolyBezierPathUtil;
 import com.neocoretechs.machinevision.PolyBezierPathUtil.EPointF;
+import com.neocoretechs.machinevision.SobelEdgeDetector;
 import com.neocoretechs.machinevision.hough2d.HoughElem;
 import com.neocoretechs.machinevision.hough2d.HoughTransform;
 import com.neocoretechs.machinevision.hough3d.Vector4d;
@@ -122,13 +123,13 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean TIMER = true; // display global performance data
 	private static final boolean WRITEFILES = false; // write full set of display files
 	private static final boolean WRITEGRID = true; // write occupancy grid
-	private static final boolean WRITEPLANARS = false; // write planars
+	private static final boolean WRITEPLANARS = true; // write planars
 	private static final boolean WRITEPLANES = false; // write final planes approximations
 	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
 	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
-	private static final boolean WRITEEDGES = false; // write left and right edge detect, if ASSIGNPOINTS true left file has 3D
-	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
+	private static final boolean WRITEEDGES = true; // write left and right edge detect, if ASSIGNPOINTS true left file has 3D
+	private static final boolean WRITEJPEGS = true; // write left right raw images from stereo bus
 	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
 	private static final boolean ASSIGNPOINTS = false; // assign depth to points in file vs simply compute planars
 
@@ -155,11 +156,15 @@ public class VideoProcessor extends AbstractNodeMain
     final static double FOV = 1.04719755; // radians FOV
     final static int camWidth = 640; // pixels
     final static int camHeight = 480;
+    final static int leftBound = -207;
+    final static int rightBound = 207;
     final static double fp = B*(camWidth*.5)/Math.tan(FOV *.5 * (Math.PI/2)); //focal length in pixels
     final static double Bf = B*f;// calc the Bf of Bf/d
     final static int maxHorizontalSep = (int) (Bf-1)/4; // max pixel disparity
-    final static int yTolerance = 25; // pixel diff in y of potential candidates
-    final static double aTolerance = .001; // minimum angle dot product of eigenvectors
+    final static int yTolerance = 100; // pixel diff in y of potential candidates
+    final static double aTolerance = .05;//.00000000000000003; // minimum angle dot product of eigenvectors
+    final static double bTolerance = 25;//.0000000000000004; // max difference between eigenvalues
+    final static int cTolerance = 35; // max difference between point count
     final static int imageIntegrate = 750; // millis to accumulate images and integrate edge detects
 
     CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(10);
@@ -191,6 +196,7 @@ public class VideoProcessor extends AbstractNodeMain
 	int threads = 0;
 	double mean, sigma, variance;
 	float[] prevDCT = null;
+	int pairCount;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -436,7 +442,6 @@ public class VideoProcessor extends AbstractNodeMain
 							System.out.println("Process time four="+(System.currentTimeMillis()-etime));
 						latchOut4.await();
 					  }
-					  
 					// global barrier break
 					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+files);}
 					} // while true
@@ -503,9 +508,9 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	latchOut.await();
 			        	     	synchronized(nodel) {
 			        	     		octree_t.buildEnd(nodel);
-			        	     		hough_settings.s_level = 7;
-			        	     		hough_settings.max_distance2plane = 5;
-			        	     		hough_settings.min_isotropy = 0; // allow all sorts of deformation for now
+			        	     		hough_settings.s_level = 6;
+			        	     		hough_settings.max_distance2plane = 1;
+			        	     		hough_settings.min_isotropy = .01;
 			        	     		nodel.subdivide();
 			        	     		//writeFile(nodel,"/roscoeL"+(++frames));
 			        	     		if( WRITEFILES || WRITEPLANARS)
@@ -533,7 +538,8 @@ public class VideoProcessor extends AbstractNodeMain
 								// calc mean
 			        	      	float[] a = null; // DCT elements
 								mean = variance = 0;
-								synchronized(indexDepth) {
+								if( indexDepth.size() > 0) {
+									synchronized(indexDepth) {
 									  for(envInterface ind : indexDepth) {
 										  mean += ind.getDepth();
 									  }
@@ -543,27 +549,28 @@ public class VideoProcessor extends AbstractNodeMain
 									  }
 									  variance /= (double)indexDepth.size();
 									  a = genDCT(indexDepth);
-								}
-								sigma = Math.sqrt(variance); 
-			        	     	if(prevDCT != null) {
-			        	     		double rms = IOUtils.computeRMSE(a, prevDCT, 0, Math.min(a.length,prevDCT.length));
-									meanRMS += rms;
-									meanRMS /= 2.0;
-									varianceRMS += Math.pow((meanRMS - rms),2);
-									varianceRMS /= 2.0;
-									sigmaRMS = Math.sqrt(varianceRMS);
-									System.out.println("DCT RMS Mean="+meanRMS+" variance="+varianceRMS+" standard deviation="+sigmaRMS);
-			        	     		System.out.println("RMS err="+rms+" file index:"+files);
-			        				// if we are more than n standard deviation from the overall mean, do something
-			    					if( rms > (meanRMS+(sigmaRMS*1.3)) ) { //sigmaRMS*2 is 2 standard deviations
+									}
+									sigma = Math.sqrt(variance); 
+									if(prevDCT != null) {
+			        	     		  double rms = IOUtils.computeRMSE(a, prevDCT, 0, Math.min(a.length,prevDCT.length));
+									  meanRMS += rms;
+									  meanRMS /= 2.0;
+									  varianceRMS += Math.pow((meanRMS - rms),2);
+									  varianceRMS /= 2.0;
+									  sigmaRMS = Math.sqrt(varianceRMS);
+									  System.out.println("DCT RMS Mean="+meanRMS+" variance="+varianceRMS+" standard deviation="+sigmaRMS);
+			        	     		  System.out.println("RMS err="+rms+" file index:"+files);
+			        				  // if we are more than n standard deviation from the overall mean, do something
+			    					  if( rms > (meanRMS+(sigmaRMS*1.3)) ) { //sigmaRMS*2 is 2 standard deviations
 			        	     			System.out.println("<<<< IMAGE SHIFT ALERT!!!! >>>> rms="+rms+" err="+(meanRMS+(sigmaRMS*1.3))+" file index:"+files);
 			        	     			if( WRITERMS )
 			        	     				synchronized(nodel) {
 			        	     					writeFile(nodel,"/RMS"+(int)rms+"."+files);
 			        	     				}
-			    					}
-			        	     	}
-			        	    	prevDCT = a;
+			    					  }
+									}
+									prevDCT = a;
+								}
 								System.out.println("Mean depth="+mean+" variance="+variance+" standard deviation="+sigma);
 			        	     	System.out.println("Uncorrelated regions="+indexUnproc.size()+" correlated="+indexDepth.size()+", "+(((float)indexUnproc.size()/(float)(indexUnproc.size()+indexDepth.size()))*100.0)+"% uncorrelated");
 			        	     	// reset level then regenerate tree with maximal coplanar points
@@ -600,7 +607,6 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     				writeFile(zeroEnc, "/lvl5zeroenvL"+files);
 			        	     		System.out.println("Final zero enclosing maximal envelopes="+zeroEnc.size());
 			        	     	}
-			        	     	
 			        	     	// end of parallel processing
 			        	     	synchronized(nodel) {
 			        	     		// at this point processing of image is essentially complete. If ASSIGNPOINTS is true
@@ -716,8 +722,8 @@ public class VideoProcessor extends AbstractNodeMain
 	 * Take the distance between centroids as disparity.
 	 * @param yStart position leftYRange containing from/to positions in left node list for this thread.
 	 * @param leftYRange2 list containing from/to of common Y centroid elements in sorted left node list
-	 * @param camwidth width of image
-	 * @param camheight height of image
+	 * @param width width of image
+	 * @param height height of image
 	 * @param nodelA list of left octree nodes at smallest level, sorted by centroid y
 	 * @param noderA list of right octree nodes at smallest level, sorted by centroid y
 	 * @param indexDepth2 resulting array filled with envInterface instances of matched regions
@@ -725,14 +731,14 @@ public class VideoProcessor extends AbstractNodeMain
 	 */
 	private void matchRegionsAssignDepth(int yStart, 
 										List<int[]> leftYRange2, 
-										int camwidth, int camheight, 
+										int width, int height, 
 										List<octree_t> nodelA, List<octree_t> noderA, 
 										List<envInterface> indexDepth2, List<envInterface> indexUnproc2) {
 		long etime = System.currentTimeMillis();
-		//octree_t tnodel = new octree_t();
-		//tnodel.getCentroid().y = (double)(yStart-(camheight/2));
 		List<octree_t> leftNodes;
 		List<octree_t> rightNodes;
+		int[] imgsrcL = null; // in case we fall back to SAD on multiple right node hits
+		int[] imgsrcR = null;
 		// get all nodes along this Y axis, if any
 		// we are just trying to establish a range to sublist
 		boolean found = false;
@@ -767,7 +773,7 @@ public class VideoProcessor extends AbstractNodeMain
 			if(!found) {
 				for( octree_t inode : leftNodes) {
 					if(DEBUGTEST2)
-						System.out.println("matchRegionsAssignDepth left node centroid Y="+(yStart-(camheight/2))+","+inode+" no right image nodes in tolerance ***** "+Thread.currentThread().getName()+" ***" );
+						System.out.println("matchRegionsAssignDepth left node "+inode+" no right image nodes in tolerance ***** "+Thread.currentThread().getName()+" ***" );
 					indexUnproc2.add(new IndexDepth(inode, 0));
 				}
 				return;
@@ -775,148 +781,133 @@ public class VideoProcessor extends AbstractNodeMain
 			rightNodes = noderA.subList(rpos1, rpos2);
 		}
 		found = false;
-		if(DEBUGTEST2)
-			System.out.println("matchRegionsAssignDepth "+leftNodes.size()+" left nodes with centroid Y="+(yStart-(camheight/2))+" ***** "+Thread.currentThread().getName()+" ***");
-		// cross product of normals zero and same number points for each left node compared to all right nodes
-		//synchronized(noderA) {
-		//	for( int i = 0; i < leftNodes.size(); i++) {
-		//		for(int j = 0; j < noderA.size(); j++) {
-		//			if( leftNodes.get(i).getIndexes().size() == noderA.get(j).getIndexes().size() &&
-		//				leftNodes.get(i).getNormal1().multiplyVectorial(noderA.get(j).getNormal1()).getLength() < .001) {
-		//					rightNodes.add(noderA.get(j));
-		//			}
-		//		}
-		//	}		
-		//}
-		octree_t oscore = null;
-		//double minscore = Double.MAX_VALUE;
+
+		int nscore = 0;
 		for( octree_t inode : leftNodes) {
-			int iscore = 0;
-			int nscore = 0;
-			int yscore = 0;
-			int zscore = 0;
-			int tscore = 0;
-			int isize = 0;
-			double cScore = Double.MAX_VALUE;
-			double dScore = Double.MAX_VALUE;
-			int iScore = Integer.MAX_VALUE;
-			int tScore = 0;
 			synchronized(inode) {
-			isize = inode.getIndexes().size();
-			// check all right nodes against the ones on this scan line
-			found = false;
-			for(octree_t jnode: rightNodes) {
-				// found in range, acos of dot product
-				double cscore = Math.acos(inode.getNormal2().and(jnode.getNormal2()));
-				double tcscore = Math.abs(inode.getVariance2()-jnode.getVariance2());
-				if(cscore < aTolerance) {
-						if(cscore < cScore) {
-								cScore = cscore;
-								dScore = tcscore;
-								iScore = jnode.getIndexes().size();
-								++yscore; // weedout when less
-								oscore = jnode;
-						} else {
-								if(cscore == cScore) { // equal , match eigenvalue, then number points
-									if( tcscore < dScore) {
-										dScore = tcscore;
-										iScore = jnode.getIndexes().size();
-										++tscore; // weedout when less
-										oscore = jnode;
-									} else
-									//if(DEBUGTEST2) {		
-									//	System.out.println("matchRegionsAssignDepth segment scores for centroid Y="+(yStart-(camheight/2))+" normal2 score ="+cscore+" variance2 diff="+tcscore+" point diff="+Math.abs(isize-noderA.get(j).getIndexes().size())+" ***** "+Thread.currentThread().getName()+" ***" );
-									//}
-										if( tcscore == dScore && Math.abs(isize-jnode.getIndexes().size()) < Math.abs(isize-iScore) ) {
-											iScore = jnode.getIndexes().size();
-											++zscore; // weedout when equal
-											oscore = jnode;
-										} else
-											++iscore; // points less matching
-									/*
-									int sum = 0;
-									// all right nodes that qualified
-									int lim = Math.min(inode.getIndexes().size(), noderA.get(j).getIndexes().size());
-									synchronized(inode.getRoot().m_colors) {
-										for(int c = 0; c < lim; c++) {
-											Vector4d lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
-											Vector4d rcolor = noderA.get(j).getRoot().m_colors.get(noderA.get(j).getIndexes().get(c));				
-											sum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
-										}
-									}
-									if( sum < score) {
-										++yscore;
-										oscore = noderA.get(j);
-										score = sum;
-									}
-									*/
-								} else
-									++iscore; // >, on plane, but no better
-						}	
-				} else
-					++nscore; // off plane, beyond tolerance
-						//++i1; // found or not, bump 'to' range	
-			} // right node loop
-			// tScore the number of actual assignments that occured
-			tScore = yscore+zscore;
-			// If we made no matches or we made multiple matches and we tried to match a vertical line
-			// which removes our confidence factor
-			if( tScore == 0 || (tScore > 1 && inode.getNormal2().x == 0 && inode.getNormal2().y == 1)) {
-				if(DEBUGTEST2)
-					System.out.println("matchRegionsAssignDepth rejection left node Y="+(yStart-(camheight/2))+" with "+tScore+" assignments, "+iscore+" failed assigments, "+nscore+" out of tolerance ***** "+Thread.currentThread().getName()+" ***");
-				indexUnproc2.add(new IndexDepth(inode, 0));
-				continue; // next left node
-			}
-			} // inode synch
-	
-			// Option 2 continues..
-			// now calculate the one closest to zero from sum of differences
-			//int drank = Integer.MAX_VALUE;
-			//int rank = 0;
-			// move through array of differences we built in above scan loops
-			//for(int s = 0; s < iscore; s++) {
-			//	if (score[s] < drank) {
-			//		rank = s;
-			//		drank = score[s];
-			//	}
-			//}
-			double xDiff = Math.abs(inode.getCentroid().x-oscore/*[rank]*/.getCentroid().x);
-			double yDiff =  Math.abs(inode.getCentroid().y-oscore/*[rank]*/.getCentroid().y);
-			if(DEBUGTEST2)
-				if(tScore > 1) {
-					System.out.println("matchRegionsAssignDepth WARNING left node Y="+(yStart-(camheight/2))+" got total of "+tScore+" assignments,"+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+tscore+" variance weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
-				} else {
-					System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" got one good score, disparity="+xDiff+", "+iscore+" failed assignments, "+nscore+" out of tolerance, "+yscore+" better angle weedouts, "+tscore+" variance weedouts, "+zscore+" point match weedouts, resulting in node "+oscore+" ***** "+Thread.currentThread().getName()+" *** ");
+				// dont try to match a horizontal or vertical line, no confidence factor
+				if( (inode.getNormal2().x == 0 && inode.getNormal2().y == 1) ||
+					(inode.getNormal2().x == 1 && inode.getNormal2().y == 0)) {
+					if(DEBUGTEST2)
+						System.out.println("matchRegionsAssignDepth rejection left node "+inode+" horizontal or vertical ***** "+Thread.currentThread().getName()+" ***");
+					indexUnproc2.add(new IndexDepth(inode, 0));
+					continue; // next left node
 				}
-			//calc the disparity and insert into collection
-			//we will call disparity the distance to centroid of right
-			double pix = Bf/Math.hypot(xDiff, yDiff);	
-			if( pix >=maxHorizontalSep) {
-				if(DEBUGTEST2)
-					System.out.println("matchRegionsAssignDepth left node at Y="+(yStart-(camheight/2))+" PIX TRUNCATED FROM:"+pix+" ***** "+Thread.currentThread().getName()+" *** ");
-				pix = maxHorizontalSep;
-				//if( pix < maxHorizontalSep) {
-				// set points in octree cell to this disparity
-				//for(int c = 0; c < inode.getIndexes().size(); c++) {
-					//Vector4d tpoint = inode.getRoot().m_points.get(inode.getIndexes().get(c));
-					//tpoint.z = pix;//(Bf/2) - pix ;
-					//tpoint.w = -1; // mark it as having been set
-					//synchronized(indexDepth2) {
-					//		indexDepth2.add(new IndexDepth(inode.getMiddle(), inode.getSize(), pix));
-					//}
-				//}
-				//if(DEBUGTEST2)
-				//	System.out.println("processImageChunkTest2 node left="+inode+" set "+inode.getIndexes().size()+" points to "+pix+" for line "+yStart+" ***** "+Thread.currentThread().getName()+" *** ");
-			}
-			// insert it into the synchronized list of maximal envelopes
-			indexDepth2.add(new IndexDepth(inode, pix));
-			//
-			if(DEBUGTEST2 && ASSIGNPOINTS)
-				System.out.println("matchRegionsAssignDepth left node Y="+(yStart-(camheight/2))+" should set set "+isize+" points to "+pix+" ***** "+Thread.currentThread().getName()+" *** ");
+				int isize = inode.getIndexes().size();
+				// check all right nodes against the ones on this scan line
+				found = false;
+				int right = 0;
+				octree_t oscore = null;
+				long sum;
+				long osum = 0;
+				for(octree_t jnode: rightNodes) {
+					synchronized(jnode) {
+						if( jnode.getVotes() != 0 )
+							continue;
+					}
+					// found in range, acos of dot product
+					double cscore = Math.acos(inode.getNormal2().and2d(jnode.getNormal2()));
+					double tcscore = Math.abs(inode.getVariance2()-jnode.getVariance2());
+					double ecscore = Math.abs(inode.getVariance3()-jnode.getVariance3());
+					int iscore = Math.abs(isize-jnode.getIndexes().size());
+					if(cscore <= aTolerance && tcscore <= bTolerance && ecscore <= bTolerance && iscore <= cTolerance) {
+						if(found) { // multiples
+							// additional code is to prevent unnecesary processing of SAD if we only encounter one good match
+							if(right == 1) { // first time through after finding first multiple
+								imgsrcL = new int[isize*isize];
+								imgsrcR = new int[isize*isize];
+								int xr = (int)inode.getCentroid().x+(width/2);
+								int yr = (int)inode.getCentroid().y+(height/2);
+								if(xr >= width-isize) xr = width-isize;
+								if(yr >= height-isize)yr = height-isize;
+								if(xr < 0) xr = 0;
+								if(yr < 0) yr = 0;
+								synchronized(imageL) {
+									imageL.getRGB(xr, yr, isize, isize, imgsrcL, 0, isize);
+								}
+								for(int k = 0; k < imgsrcL.length; k++)
+									imgsrcL[k] &= 0xFFFFFF;
+								// set up initial score with our first found candidate
+								xr = (int)oscore.getCentroid().x+(width/2);
+								yr = (int)oscore.getCentroid().y+(height/2);
+								if(xr >= width-isize) xr = width-isize;
+								if(yr >= height-isize)yr = height-isize;
+								if(xr < 0) xr = 0;
+								if(yr < 0) yr = 0;
+								synchronized(imageR) {
+									imageR.getRGB(xr, yr, isize, isize, imgsrcR, 0, isize);
+								}
+								osum = 0;
+								for(int k = 0; k < imgsrcL.length; k++)
+									osum += Math.abs((imgsrcR[k] & 0xFFFFFF) - imgsrcL[k]);
+							}
+							// After any first through processing, this continues with additional elements
+							int xr = (int)jnode.getCentroid().x+(width/2);
+							int yr = (int)jnode.getCentroid().y+(height/2);
+							if(xr >= width-isize) xr = width-isize;
+							if(yr >= height-isize)yr = height-isize;
+							if(xr < 0) xr = 0;
+							if(yr < 0) yr = 0;
+							synchronized(imageR) {
+								imageR.getRGB(xr, yr, isize, isize, imgsrcR, 0, isize);
+							}
+							sum = 0;
+							for(int k = 0; k < imgsrcL.length; k++)
+								sum += Math.abs((imgsrcR[k] & 0xFFFFFF) - imgsrcL[k]);
+							if(sum < osum) {
+								oscore = jnode;
+								osum = sum;
+								++right;
+								continue; // next right node
+							}
+						}
+						oscore = jnode;
+						found = true;
+						++right; // continue to try and find multiple nodes
+					} else {
+					    ++nscore; // off plane, beyond tolerance
+						if(DEBUGTEST2)
+							System.out.println("matchRegionsAssignDepth rejection-\r\nleft node :"+inode+"\r\nright node:"+jnode+"\r\nangle dot="+cscore+" var1 diff="+tcscore+" var2 diff="+ecscore+" point diff="+iscore+" right="+right+" wrong="+nscore+" ***** "+Thread.currentThread().getName()+" ***");
+					}
+			    } // right node loop
+				if(!found) {
+					if(DEBUGTEST2)
+						System.out.println("matchRegionsAssignDepth rejection left node"+inode+" no matching right node out of "+nscore+" ***** "+Thread.currentThread().getName()+" ***");
+					indexUnproc2.add(new IndexDepth(inode, 0));
+					continue;
+				}
+				// set right node as matched
+				synchronized(oscore) {
+					oscore.setVotes(1);
+				}
+				if(DEBUGTEST2 && right > 1)
+					System.out.println("Found "+right+" right nodes for left node "+inode+" out of tolerance nodes="+nscore+" ***** "+Thread.currentThread().getName()+" ***");
+				double xDiff = Math.abs(inode.getCentroid().x-oscore.getCentroid().x);
+				double yDiff =  Math.abs(inode.getCentroid().y-oscore.getCentroid().y);
+				//calc the disparity and insert into collection
+				//we will call disparity the distance to centroid of right
+				double pix = Bf/Math.hypot(xDiff, yDiff);	
+				if( pix >=maxHorizontalSep) {
+					if(DEBUGTEST2)
+						System.out.println("matchRegionsAssignDepth left node "+inode+" right node "+oscore+" PIX TRUNCATED FROM:"+pix+" ***** "+Thread.currentThread().getName()+" *** ");
+					pix = maxHorizontalSep;
+				}
+				// insert it into the synchronized list of maximal envelopes
+				if(pairCount < 100) {
+					IndexDepth d1 = new IndexDepth(inode, pix);
+					IndexDepth d2 = new IndexDepth(oscore, pix);
+					writeTestPerp(d1, d2,"match"+(pairCount++));
+					indexDepth2.add(d1);
+				} else
+					indexDepth2.add(new IndexDepth(inode, pix));
+				//
+				if(DEBUGTEST2 && ASSIGNPOINTS)
+					System.out.println("matchRegionsAssignDepth left node "+inode+" right node "+oscore+" should set set "+isize+" points to "+pix+" ***** "+Thread.currentThread().getName()+" *** ");
+			} // inode synch
 		} // left octree nodes
 
 		if( SAMPLERATE )
-			System.out.println("matchRegionAssignDepth left node Y="+(yStart-(camheight/2)) +" ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
+			System.out.println("matchRegionAssignDepth ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
 	/**
 	 * Process the minimal nodes we collected in the last step against the maximal nodes we generated now.
@@ -1158,11 +1149,18 @@ public class VideoProcessor extends AbstractNodeMain
 	 */
 	private static void genNav2(List<envInterface> nodes) {
 		// descending sort mirrors forward direction of robot movement
-		   final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
+		   //final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
+			//	  @Override         
+			//	  public int compare(envInterface jc1, envInterface jc2) {             
+			//		      return ((int)((IndexMax)jc2).node.getMiddle().y < (int)((IndexMax)jc1).node.getMiddle().y ? -1 :                     
+			//		              ((int)((IndexMax)jc2).node.getMiddle().y == (int)((IndexMax)jc1).node.getMiddle().y ? 0 : 1));           
+			//	  }     
+		   //};
+		   final Comparator<double[]> yComp = new Comparator<double[]>() {         
 				  @Override         
-				  public int compare(envInterface jc1, envInterface jc2) {             
-					      return ((int)((IndexMax)jc2).node.getMiddle().y < (int)((IndexMax)jc1).node.getMiddle().y ? -1 :                     
-					              ((int)((IndexMax)jc2).node.getMiddle().y == (int)((IndexMax)jc1).node.getMiddle().y ? 0 : 1));           
+				  public int compare(double[] jc1, double[] jc2) {             
+					      return ((int)jc2[3] < (int)jc1[3] ? -1 :                     
+					              ((int)jc2[3] == (int)jc1[3] ? 0 : 1));           
 				  }     
 		   };
 		   final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
@@ -1171,40 +1169,59 @@ public class VideoProcessor extends AbstractNodeMain
 					      return ((int)((IndexMax)jc2).node.getMiddle().x < (int)((IndexMax)jc1).node.getMiddle().x ? -1 :                     
 					              ((int)((IndexMax)jc2).node.getMiddle().x == (int)((IndexMax)jc1).node.getMiddle().x ? 0 : 1));           
 				  }     
-		   }; 
-		   Collections.sort(nodes, yComp);
+		   };
+		   if(nodes.size() == 0)
+			   return;
 		   DataOutputStream dos = null;
 		   File f = new File(hough_settings.file+"NavLine"+files+hough_settings.extension);
 		   try {
 			   dos = new DataOutputStream(new FileOutputStream(f));
-			   int y = (int)((IndexMax)nodes.get(0)).node.getMiddle().y;
+			   // col and min depth marker
+			   ArrayList<double[]> splinePts = new ArrayList<double[]>();
+			   Collections.sort(nodes, xComp);
+			   int x = (int)((IndexMax)nodes.get(0)).node.getMiddle().x;
 			   int iPosStart = 0;
 			   int iPosEnd = 0;
 			   for(int i = 0 ; i < nodes.size(); i++) {
-				   if( y != (int)((IndexMax)nodes.get(i)).node.getMiddle().y) {
-					   iPosEnd = i;
-					   genRow2(dos, iPosStart, iPosEnd, nodes);
-					   iPosStart = i;
-					   y = (int)((IndexMax)nodes.get(i)).node.getMiddle().y;
-				   }
-			   }
-			   iPosEnd = nodes.size();
-			   genRow2(dos, iPosStart, iPosEnd, nodes);
-			   // col and min depth marker
-			   Collections.sort(nodes, xComp);
-			   int x = (int)((IndexMax)nodes.get(0)).node.getMiddle().x;
-			   iPosStart = 0;
-			   iPosEnd = 0;
-			   for(int i = 0 ; i < nodes.size(); i++) {
 				   if( x != (int)((IndexMax)nodes.get(i)).node.getMiddle().x) {
 					   iPosEnd = i;
-					   genColHist2(dos, iPosStart, iPosEnd, nodes);
+					   genColHist2(dos, iPosStart, iPosEnd, nodes, splinePts);
 					   iPosStart = i;
 					   x = (int)((IndexMax)nodes.get(i)).node.getMiddle().x;
 				   }
 			   }
 			   iPosEnd = nodes.size();
-			   genColHist2(dos, iPosStart, iPosEnd, nodes);
+			   genColHist2(dos, iPosStart, iPosEnd, nodes, splinePts);
+			   if(splinePts.size() == 0)
+				   return;
+			   // rows
+			   //Collections.sort(nodes, yComp);
+			   //int y = (int)((IndexMax)nodes.get(0)).node.getMiddle().y;
+			   //iPosStart = 0;
+			   //iPosEnd = 0;
+			   //for(int i = 0 ; i < nodes.size(); i++) {
+				//   if( y != (int)((IndexMax)nodes.get(i)).node.getMiddle().y) {
+				//	   iPosEnd = i;
+				//	   genRow2(dos, iPosStart, iPosEnd, nodes);
+				//	   iPosStart = i;
+				//	   y = (int)((IndexMax)nodes.get(i)).node.getMiddle().y;
+				//   }
+			   //}
+			   //iPosEnd = nodes.size();
+			   Collections.sort(splinePts, yComp);
+			   int y = (int)splinePts.get(0)[3]; //y
+			   iPosStart = 0;
+			   iPosEnd = 0;
+			   for(int i = 0 ; i < splinePts.size(); i++) {
+				   if( y != (int)splinePts.get(i)[3]) {
+					   iPosEnd = i;
+					   genRow2(dos, iPosStart, iPosEnd, splinePts);
+					   iPosStart = i;
+					   y = (int)splinePts.get(i)[3];
+				   }
+			   }
+			   iPosEnd = splinePts.size();
+			   genRow2(dos, iPosStart, iPosEnd, splinePts);
 		   } catch (FileNotFoundException e) {
 				e.printStackTrace();
 				return;  
@@ -1221,29 +1238,67 @@ public class VideoProcessor extends AbstractNodeMain
 		   
 	}
 
-	public static void genRow2(DataOutputStream dos, int yStart, int yEnd, List<envInterface> nodelA) throws IOException{
+	public static void genRow2(DataOutputStream dos, int yStart, int yEnd, List<double[]> splinePts) throws IOException{
 		//if(DEBUG)
 			//System.out.println("genRow from="+yStart+" to="+yEnd);
-			List<envInterface> subNodes = nodelA.subList(yStart, yEnd);
-			final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
+			List<double[]> subNodes = splinePts.subList(yStart, yEnd);
+			//final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
+			//		  @Override         
+			//		  public int compare(envInterface jc1, envInterface jc2) {             
+			//			      return ((int)((IndexMax)jc2).node.getMiddle().x < (int)((IndexMax)jc1).node.getMiddle().x ? -1 :                     
+			//			              ((int)((IndexMax)jc2).node.getMiddle().x == (int)((IndexMax)jc1).node.getMiddle().x ? 0 : 1));           
+			//		  }     
+			//};
+			final Comparator<double[]> xComp = new Comparator<double[]>() {         
 					  @Override         
-					  public int compare(envInterface jc1, envInterface jc2) {             
-						      return ((int)((IndexMax)jc2).node.getMiddle().x < (int)((IndexMax)jc1).node.getMiddle().x ? -1 :                     
-						              ((int)((IndexMax)jc2).node.getMiddle().x == (int)((IndexMax)jc1).node.getMiddle().x ? 0 : 1));           
+					  public int compare(double[] jc1, double[] jc2) {             
+						      return ((int)jc2[0] < (int)jc1[0] ? -1 :                     
+						              ((int)jc2[0] == (int)jc1[0] ? 0 : 1));           
 					  }     
-			}; 
+			};
 			Collections.sort(subNodes, xComp);
 			// sorted now by x and y
+			double zMin = Double.MAX_VALUE;
+			double[] cnode = null;
 			for(int i = 0; i < subNodes.size(); i++) {
+				//System.out.println("Row "+(int)subNodes.get(i)[0]+" "+(int)subNodes.get(i)[1]+" "+(int)subNodes.get(i)[2]);
 				if( i < subNodes.size()-1) {
-					writer_file.line3D(dos, (int)((IndexMax)subNodes.get(i)).node.getCentroid().x, (int)((IndexMax)subNodes.get(i)).node.getCentroid().y, (int)((IndexMax)subNodes.get(i)).depth*10,
-							(int)((IndexMax)subNodes.get(i+1)).node.getCentroid().x, (int)((IndexMax)subNodes.get(i+1)).node.getCentroid().y, (int)((IndexMax)subNodes.get(i+1)).depth*10,
-							0, 255, 255);
+					//writer_file.line3D(dos, (int)((IndexMax)subNodes.get(i)).node.getCentroid().x, (int)((IndexMax)subNodes.get(i)).node.getCentroid().y, (int)((IndexMax)subNodes.get(i)).depth*10,
+					//		(int)((IndexMax)subNodes.get(i+1)).node.getCentroid().x, (int)((IndexMax)subNodes.get(i+1)).node.getCentroid().y, (int)((IndexMax)subNodes.get(i+1)).depth*10,
+					//		0, 255, 255);
+					writer_file.line3D(dos, (int)subNodes.get(i)[0] , (int)subNodes.get(i)[1], (int)subNodes.get(i)[2], 
+							(int)subNodes.get(i+1)[0], (int)subNodes.get(i+1)[1], (int)subNodes.get(i+1)[2], 0, 255, 255);
+				}
+				if((int)subNodes.get(i)[1] >= 0 && (int)subNodes.get(i)[0] >= leftBound && (int)subNodes.get(i)[0] <= rightBound &&
+						subNodes.get(i)[2] <= zMin) {
+					zMin = subNodes.get(i)[2];
+					cnode = subNodes.get(i);
 				}
 			}
-
+			//System.out.println("-----------");
+			//  min depth
+			if( cnode != null ) {
+			Vector4d cen1 = new Vector4d();
+			Vector4d cen2 = new Vector4d();
+			cen1.x = cnode[0] - (cnode[4]/2);
+			cen1.y = cnode[1] - (cnode[4]/2);
+			cen1.z = zMin;
+			cen2.x = cnode[0] + (cnode[4]/2);
+			cen2.y = cnode[1] + (cnode[4]/2);
+			cen2.z = zMin;
+			//if( DEBUG )
+			//	System.out.println("genColHist env minx,y,z="+cen1+" maxx,y,z="+cen2+" centroid node="+cnode);
+			// xmin, ymin, xmax, ymin
+			writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen1.y, (int)cen1.z, 255, 127, 0);
+			// xmax, ymin, xmax, ymax
+			writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 255, 127, 0);
+			// xmax, ymax, xmin, ymax
+			writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 255, 127, 0);
+			// xmin, ymax, xmin, ymin
+			writer_file.line3D(dos, (int)cen1.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 255, 127, 0);
+			}
 	}
-	public static void genColHist2(DataOutputStream dos, int xStart, int xEnd, List<envInterface> nodelA) throws IOException{
+	public static void genColHist2(DataOutputStream dos, int xStart, int xEnd, List<envInterface> nodelA, List<double[]> splinePts) throws IOException{
 		//if(DEBUG)
 			//System.out.println("genColHist from="+xStart+" to="+xEnd);
 			List<envInterface> subNodes = nodelA.subList(xStart, xEnd);
@@ -1258,7 +1313,7 @@ public class VideoProcessor extends AbstractNodeMain
 			PolyBezierPathUtil pbpu = new  PolyBezierPathUtil();
 			ArrayList<PolyBezierPathUtil.EPointF> epfa = new ArrayList<PolyBezierPathUtil.EPointF>();
 			for(int i = 0; i < subNodes.size(); i++) {
-				PolyBezierPathUtil.EPointF epf = pbpu.new EPointF(((IndexMax)subNodes.get(i)).depth, ((IndexMax)subNodes.get(i)).node.getCentroid().y);
+				PolyBezierPathUtil.EPointF epf = pbpu.new EPointF(((IndexMax)subNodes.get(i)).depth*10, ((IndexMax)subNodes.get(i)).node.getCentroid().y);
 				epfa.add(epf);
 			}
 			if(epfa.size() < 2)
@@ -1272,16 +1327,21 @@ public class VideoProcessor extends AbstractNodeMain
 				dpit.add(coords);
 				pit.next();
 			}
-			System.out.println("dpit="+dpit.size()+" subNodes="+subNodes.size());
 			double zMin = Double.MAX_VALUE;
 			octree_t cnode = null;
 			// sorted now by x and y
 			for(int i = 0; i < subNodes.size(); i++) {
+				double[] splinep = dpit.get(i);
+				splinep[2] = splinep[0]; // rotate X back to Z
+				splinep[0] = ((IndexMax)subNodes.get(i)).node.getCentroid().x;// the x, then y is index 1 as originally
+				splinep[3] = ((IndexMax)subNodes.get(i)).node.getMiddle().y;// we need to sort the rows on this value
+				splinep[4] = ((IndexMax)subNodes.get(i)).node.getSize(); // to generate box
+				splinePts.add(splinep); // collect it in our splined array to make rows later
 				if( i < subNodes.size()-1) {
 					//writer_file.line3D(dos, (int)((IndexMax)subNodes.get(i)).node.getCentroid().x, (int)((IndexMax)subNodes.get(i)).node.getCentroid().y, (int)((IndexMax)subNodes.get(i)).depth*10,
 					//		(int)((IndexMax)subNodes.get(i+1)).node.getCentroid().x, (int)((IndexMax)subNodes.get(i+1)).node.getCentroid().y, (int)((IndexMax)subNodes.get(i+1)).depth*10,
 					//		0, 255, 255);
-					writer_file.line3D(dos, (int)((IndexMax)subNodes.get(i)).node.getCentroid().x , (int)dpit.get(i)[1], (int)dpit.get(i)[0], 
+					writer_file.line3D(dos, (int)splinep[0] , (int)splinep[1], (int)splinep[2], 
 							(int)((IndexMax)subNodes.get(i+1)).node.getCentroid().x, (int)dpit.get(i+1)[1], (int)dpit.get(i+1)[0], 0, 255, 255);
 					//if( DEBUG ) 
 					//	System.out.println("genColHist line3D x="+(int)((IndexMax)subNodes.get(i)).node.getCentroid().x+" y="+(int)((IndexMax)subNodes.get(i)).node.getCentroid().y+" z="+(int)((IndexMax)subNodes.get(i)).depth*10+
@@ -1291,9 +1351,10 @@ public class VideoProcessor extends AbstractNodeMain
 					// this corresponds to the theta angle we get from cartestian_to_spherical, for some reason in this
 					// orientation, vs z axis vertical, the theta value is aligned along our depth, or z axis horizontal. 
 					// So if we use spherical the phi and theta are swapped in this orientation.
-					double thet1 = Math.atan2( (((IndexMax)subNodes.get(i)).node.getCentroid().y-((IndexMax)subNodes.get(i+1)).node.getCentroid().y),
-								((((IndexMax)subNodes.get(i)).depth-((IndexMax)subNodes.get(i+1)).depth)*10) );
-					double degThet = Math.toDegrees(thet1);
+					//double thet1 = Math.atan2( (((IndexMax)subNodes.get(i)).node.getCentroid().y-((IndexMax)subNodes.get(i+1)).node.getCentroid().y),
+					//			((((IndexMax)subNodes.get(i)).depth-((IndexMax)subNodes.get(i+1)).depth)*10) );
+					//double thet1 = Math.atan2( splinep[1]-dpit.get(i+1)[1], ((splinep[2]-dpit.get(i+1)[0])*10) );
+					//double degThet = Math.toDegrees(thet1);
 					//if( degThet < 0.0) {
 					//	    degThet += 360.0;
 					//}
@@ -1302,12 +1363,13 @@ public class VideoProcessor extends AbstractNodeMain
 					//			((((IndexMax)subNodes.get(i)).depth-((IndexMax)subNodes.get(i+1)).depth)*10), 1);
 					//double[] deg1 = octree_t.cartesian_to_spherical(point);
 					//
-					//System.out.println("Column "+(int)((IndexMax)subNodes.get(i)).node.getMiddle().x+" depth diff degrees "+i+"="+degThet+" node="+((IndexMax)subNodes.get(i)).node);
+					//System.out.println("Column "+(int)((IndexMax)subNodes.get(i)).node.getMiddle().x+" depth diff "+i+" degrees ="+degThet+" node="+((IndexMax)subNodes.get(i)).node);
 				}
 				// since we sort descending to compute in the direction of robot motion, we want the highest numbered
 				// row as minimum so we know the top of an obstacle right in front of us. To this end we use <= zMin
 				// so identical depths will percolate to the top
-				if((int)((IndexMax)subNodes.get(i)).node.getCentroid().y >= 0 && ((IndexMax)subNodes.get(i)).depth <= zMin) {
+				if((int)((IndexMax)subNodes.get(i)).node.getCentroid().y >= 0 && (int)splinep[0] >= leftBound && (int)splinep[0] <= rightBound &&
+						((IndexMax)subNodes.get(i)).depth <= zMin) {
 					zMin = ((IndexMax)subNodes.get(i)).depth;
 					cnode = ((IndexMax)subNodes.get(i)).node;
 				}
@@ -1401,8 +1463,7 @@ public class VideoProcessor extends AbstractNodeMain
 						dos.close();
 					}
 				} catch (IOException e) {}		
-		  }
-		   
+		  }   
 	}
 
 	public static void genRow(DataOutputStream dos, int yStart, int yEnd, List<envInterface> nodelA) throws IOException{
@@ -1430,8 +1491,8 @@ public class VideoProcessor extends AbstractNodeMain
 					writer_file.line3D(dos, ix0, iy0, iz0, ix1, iy1, iz1, 0, 255, 255);
 				}
 			}
-
 	}
+	
 	public static void genColHist(DataOutputStream dos, int xStart, int xEnd, List<envInterface> nodelA) throws IOException{
 		//if(DEBUG)
 			//System.out.println("genColHist from="+xStart+" to="+xEnd);
@@ -1654,7 +1715,94 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 		}
 		
+		protected void writeTestPair(envInterface d, envInterface dd, String filename) {
+			DataOutputStream dos = null;
+			File f = new File(outDir+filename+".asc");
+			try {
+				dos = new DataOutputStream(new FileOutputStream(f));
+					writer_file.line3D(dos, (int)d.getEnv()[0]/*xmin*/, (int)d.getEnv()[1]/*ymin*/, 1, 
+							(int)d.getEnv()[2]/*xmax*/, (int)d.getEnv()[1]/*ymin*/, 1, 0, 255, 255);
+					writer_file.line3D(dos, (int)d.getEnv()[2]/*xmax*/, (int)d.getEnv()[1]/*ymin*/, 1, 
+							(int)d.getEnv()[2]/*xmax*/, (int)d.getEnv()[3]/*ymax*/, 1, 0, 255, 255);
+					writer_file.line3D(dos, (int)d.getEnv()[2]/*xmax*/, (int)d.getEnv()[3]/*ymax*/, 1, 
+							(int)d.getEnv()[0]/*xmin*/, (int)d.getEnv()[3]/*ymax*/,1, 0, 255, 255);
+					writer_file.line3D(dos, (int)d.getEnv()[0]/*xmin*/, (int)d.getEnv()[3]/*ymax*/, 1, 
+							(int)d.getEnv()[0]/*xmin*/, (int)d.getEnv()[1]/*ymin*/, 1, 0, 255, 255);
+					//
+					writer_file.line3D(dos, (int)dd.getEnv()[0]/*xmin*/, (int)dd.getEnv()[1]/*ymin*/, 1, 
+							(int)dd.getEnv()[2]/*xmax*/, (int)dd.getEnv()[1]/*ymin*/, 1, 255, 255, 0);
+					writer_file.line3D(dos, (int)dd.getEnv()[2]/*xmax*/, (int)dd.getEnv()[1]/*ymin*/, 1, 
+							(int)dd.getEnv()[2]/*xmax*/, (int)dd.getEnv()[3]/*ymax*/, 1, 255, 255, 0);
+					writer_file.line3D(dos, (int)dd.getEnv()[2]/*xmax*/, (int)dd.getEnv()[3]/*ymax*/, 1, 
+							(int)dd.getEnv()[0]/*xmin*/, (int)dd.getEnv()[3]/*ymax*/,1, 255, 255, 0);
+					writer_file.line3D(dos, (int)dd.getEnv()[0]/*xmin*/, (int)dd.getEnv()[3]/*ymax*/, 1, 
+							(int)dd.getEnv()[0]/*xmin*/, (int)dd.getEnv()[1]/*ymin*/, 1, 255, 255, 0);
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+				return;
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					if( dos != null ) {
+						dos.flush();
+						dos.close();
+					}
+				} catch (IOException e) {
+				}		
+			}
+			
+		}
 		
+		public void writeTestPerp(IndexDepth d1, IndexDepth d2, String filename) {
+			DataOutputStream dos = null;
+			File f = new File(outDir+filename+".asc");
+			try {
+				dos = new DataOutputStream(new FileOutputStream(f));
+				Vector4d cen1 = new Vector4d();
+				Vector4d cen2 = new Vector4d();
+				Vector4d cen3 = new Vector4d();
+				Vector4d cen4 = new Vector4d();
+				writer_file.genPerp(d1.node, cen1, cen2, cen3, cen4);
+				writer_file.line3D(dos, (int)d1.node.getCentroid().x, (int)d1.node.getCentroid().y, (int)d1.node.getCentroid().z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 255, 255, 255);
+				// axis of middle variance, perp to normal
+				writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 255, 0, 0);
+				// long axis
+				// generate point at end of long segment
+				writer_file.line3D(dos, (int)cen3.x, (int)cen3.y, (int)cen3.z, (int)cen4.x, (int)cen4.y, (int)cen4.z, 0, 0, 255);
+				// outside
+				writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen4.x, (int)cen4.y, (int)cen4.z, 0, 255, 0);
+				writer_file.line3D(dos, (int)cen4.x, (int)cen4.y, (int)cen4.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 0, 255, 0);
+				writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen3.x, (int)cen3.y, (int)cen3.z, 0, 255, 0);
+				writer_file.line3D(dos, (int)cen3.x, (int)cen3.y, (int)cen3.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 0, 255, 0);
+				writer_file.genPerp(d2.node, cen1, cen2, cen3, cen4);
+				writer_file.line3D(dos, (int)d2.node.getCentroid().x, (int)d2.node.getCentroid().y, (int)d2.node.getCentroid().z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 255, 255, 255);
+				// axis of middle variance, perp to normal
+				writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 255, 0, 0);
+				// long axis
+				// generate point at end of long segment
+				writer_file.line3D(dos, (int)cen3.x, (int)cen3.y, (int)cen3.z, (int)cen4.x, (int)cen4.y, (int)cen4.z, 0, 0, 255);
+				// outside
+				writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen4.x, (int)cen4.y, (int)cen4.z, 255, 255, 0);
+				writer_file.line3D(dos, (int)cen4.x, (int)cen4.y, (int)cen4.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 255, 255, 0);
+				writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen3.x, (int)cen3.y, (int)cen3.z, 255, 255, 0);
+				writer_file.line3D(dos, (int)cen3.x, (int)cen3.y, (int)cen3.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 255, 255, 0);
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+				return;
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					if( dos != null ) {
+						dos.flush();
+						dos.close();
+					}
+				} catch (IOException e) {
+				}		
+			}
+			
+		}
 	/**
 	 * Transform the coord at x,y by the Matrix3 transform provided, translate and rotate.
 	 * @param x
@@ -2204,8 +2352,11 @@ public class VideoProcessor extends AbstractNodeMain
 			}	
 			private int[] genEdge(BufferedImage img, int[] datap) {
 		   	    CannyEdgeDetector ced = new CannyEdgeDetector();
-			    ced.setLowThreshold(0.1f);
-			    ced.setHighThreshold(0.5f);
+			    ced.setLowThreshold(.1f);
+			    ced.setHighThreshold(.2f);
+			    ced.setGaussianKernelRadius(2);
+			    ced.setGaussianKernelWidth(16);
+				//SobelEdgeDetector ced = new SobelEdgeDetector();
 			    ced.setSourceImage(img);
 			    int[] datax = ced.semiProcess();
 			    if(datap != null) {
