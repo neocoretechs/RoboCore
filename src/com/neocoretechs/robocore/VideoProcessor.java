@@ -122,15 +122,16 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean SAMPLERATE = false; // display thread timing performance data
 	private static final boolean TIMER = true; // display global performance data
 	private static final boolean WRITEFILES = false; // write full set of display files
-	private static final boolean WRITEGRID = true; // write occupancy grid
-	private static final boolean WRITEPLANARS = true; // write planars
+	private static final boolean WRITEGRID = true; // write occupancy grid derived from depth points
+	private static final boolean WRITEPLANARS = false; // write planars from final maximal level
 	private static final boolean WRITEPLANES = false; // write final planes approximations
 	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
 	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
-	private static final boolean WRITEEDGES = true; // write left and right edge detect, if ASSIGNPOINTS true left file has 3D
-	private static final boolean WRITEJPEGS = true; // write left right raw images from stereo bus
+	private static final boolean WRITEEDGES = false; // write left and right edges detected, if ASSIGNPOINTS true left file has 3D
+	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
 	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
+	private static final int WRITEMATCHEDPAIRS = 0; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
 	private static final boolean ASSIGNPOINTS = false; // assign depth to points in file vs simply compute planars
 
     private BufferedImage imageL = null;
@@ -163,9 +164,12 @@ public class VideoProcessor extends AbstractNodeMain
     final static int maxHorizontalSep = (int) (Bf-1)/4; // max pixel disparity
     final static int yTolerance = 100; // pixel diff in y of potential candidates
     final static double aTolerance = .05;//.00000000000000003; // minimum angle dot product of eigenvectors
-    final static double bTolerance = 25;//.0000000000000004; // max difference between eigenvalues
-    final static int cTolerance = 35; // max difference between point count
-    final static int imageIntegrate = 750; // millis to accumulate images and integrate edge detects
+    final static double bTolerance = 5;//.0000000000000004; // max difference between eigenvalues
+    final static double b2Tolerance = 10;
+    final static int cTolerance = 15; // max difference between point count
+    final static int imageIntegrate = 500; // millis to accumulate images and integrate edge detects
+    final static int corrSize = 50;
+    final static int corrHalfSize = 25;
 
     CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(10);
 	
@@ -197,6 +201,7 @@ public class VideoProcessor extends AbstractNodeMain
 	double mean, sigma, variance;
 	float[] prevDCT = null;
 	int pairCount;
+	int metric1 = 0; int metric2 = 0; int metric2b; int metric3 = 0; int metric4 = 0; int metric5 = 0;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -503,6 +508,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        					writeFile("sourceR", imageR, files);
 			        				}
 			        			}
+			        			// metrics
+			        			metric1 = metric2 = metric3 = metric4 = metric5 = 0;
 			        	     	// first step end multi thread barrier synch
 			        			latch.await();
 			        	     	latchOut.await();
@@ -606,6 +613,7 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		if(WRITEFILES || WRITEZEROENC)
 			        	     				writeFile(zeroEnc, "/lvl5zeroenvL"+files);
 			        	     		System.out.println("Final zero enclosing maximal envelopes="+zeroEnc.size());
+			        	     		System.out.println("Metrics="+metric1+", "+metric2+", "+metric3+", "+metric4+" ,"+metric5);
 			        	     	}
 			        	     	// end of parallel processing
 			        	     	synchronized(nodel) {
@@ -737,8 +745,6 @@ public class VideoProcessor extends AbstractNodeMain
 		long etime = System.currentTimeMillis();
 		List<octree_t> leftNodes;
 		List<octree_t> rightNodes;
-		int[] imgsrcL = null; // in case we fall back to SAD on multiple right node hits
-		int[] imgsrcR = null;
 		// get all nodes along this Y axis, if any
 		// we are just trying to establish a range to sublist
 		boolean found = false;
@@ -784,6 +790,7 @@ public class VideoProcessor extends AbstractNodeMain
 
 		int nscore = 0;
 		for( octree_t inode : leftNodes) {
+			long sum = Long.MAX_VALUE;
 			synchronized(inode) {
 				// dont try to match a horizontal or vertical line, no confidence factor
 				if( (inode.getNormal2().x == 0 && inode.getNormal2().y == 1) ||
@@ -798,8 +805,6 @@ public class VideoProcessor extends AbstractNodeMain
 				found = false;
 				int right = 0;
 				octree_t oscore = null;
-				long sum;
-				long osum = 0;
 				for(octree_t jnode: rightNodes) {
 					synchronized(jnode) {
 						if( jnode.getVotes() != 0 )
@@ -810,66 +815,40 @@ public class VideoProcessor extends AbstractNodeMain
 					double tcscore = Math.abs(inode.getVariance2()-jnode.getVariance2());
 					double ecscore = Math.abs(inode.getVariance3()-jnode.getVariance3());
 					int iscore = Math.abs(isize-jnode.getIndexes().size());
-					if(cscore <= aTolerance && tcscore <= bTolerance && ecscore <= bTolerance && iscore <= cTolerance) {
-						if(found) { // multiples
-							// additional code is to prevent unnecesary processing of SAD if we only encounter one good match
-							if(right == 1) { // first time through after finding first multiple
-								imgsrcL = new int[isize*isize];
-								imgsrcR = new int[isize*isize];
-								int xr = (int)inode.getCentroid().x+(width/2);
-								int yr = (int)inode.getCentroid().y+(height/2);
-								if(xr >= width-isize) xr = width-isize;
-								if(yr >= height-isize)yr = height-isize;
-								if(xr < 0) xr = 0;
-								if(yr < 0) yr = 0;
-								synchronized(imageL) {
-									imageL.getRGB(xr, yr, isize, isize, imgsrcL, 0, isize);
-								}
-								for(int k = 0; k < imgsrcL.length; k++)
-									imgsrcL[k] &= 0xFFFFFF;
-								// set up initial score with our first found candidate
-								xr = (int)oscore.getCentroid().x+(width/2);
-								yr = (int)oscore.getCentroid().y+(height/2);
-								if(xr >= width-isize) xr = width-isize;
-								if(yr >= height-isize)yr = height-isize;
-								if(xr < 0) xr = 0;
-								if(yr < 0) yr = 0;
-								synchronized(imageR) {
-									imageR.getRGB(xr, yr, isize, isize, imgsrcR, 0, isize);
-								}
-								osum = 0;
-								for(int k = 0; k < imgsrcL.length; k++)
-									osum += Math.abs((imgsrcR[k] & 0xFFFFFF) - imgsrcL[k]);
-							}
-							// After any first through processing, this continues with additional elements
-							int xr = (int)jnode.getCentroid().x+(width/2);
-							int yr = (int)jnode.getCentroid().y+(height/2);
-							if(xr >= width-isize) xr = width-isize;
-							if(yr >= height-isize)yr = height-isize;
-							if(xr < 0) xr = 0;
-							if(yr < 0) yr = 0;
-							synchronized(imageR) {
-								imageR.getRGB(xr, yr, isize, isize, imgsrcR, 0, isize);
-							}
-							sum = 0;
-							for(int k = 0; k < imgsrcL.length; k++)
-								sum += Math.abs((imgsrcR[k] & 0xFFFFFF) - imgsrcL[k]);
-							if(sum < osum) {
-								oscore = jnode;
-								osum = sum;
-								++right;
-								continue; // next right node
-							}
-						}
-						oscore = jnode;
+					if(cscore <= aTolerance /*&& tcscore <= bTolerance && ecscore <= b2Tolerance && iscore <= cTolerance*/) {
 						found = true;
-						++right; // continue to try and find multiple nodes
+						long osum = 0;
+						int nsize = jnode.getIndexes().size();
+						if(isize < nsize)
+							nsize = isize;
+						for(int c = 0; c < nsize; c++) {
+							Vector4d lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
+							Vector4d rcolor = jnode.getRoot().m_colors.get(jnode.getIndexes().get(c));				
+							osum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
+						}
+						if(osum < sum) {
+							oscore = jnode;
+							sum = osum;
+							++right;
+						}
 					} else {
 					    ++nscore; // off plane, beyond tolerance
-						if(DEBUGTEST2)
+						if(DEBUGTEST2) // this creates a massive amout of output quickly
 							System.out.println("matchRegionsAssignDepth rejection-\r\nleft node :"+inode+"\r\nright node:"+jnode+"\r\nangle dot="+cscore+" var1 diff="+tcscore+" var2 diff="+ecscore+" point diff="+iscore+" right="+right+" wrong="+nscore+" ***** "+Thread.currentThread().getName()+" ***");
+						if(cscore > aTolerance) 
+							++metric1;
+						else
+							if(tcscore > bTolerance)
+								++metric2;
+							else
+								if(ecscore > b2Tolerance)
+									++metric3;
+								else
+									if(iscore > cTolerance)
+										++metric4;
 					}
 			    } // right node loop
+				metric5 += right;
 				if(!found) {
 					if(DEBUGTEST2)
 						System.out.println("matchRegionsAssignDepth rejection left node"+inode+" no matching right node out of "+nscore+" ***** "+Thread.currentThread().getName()+" ***");
@@ -893,7 +872,7 @@ public class VideoProcessor extends AbstractNodeMain
 					pix = maxHorizontalSep;
 				}
 				// insert it into the synchronized list of maximal envelopes
-				if(pairCount < 100) {
+				if( pairCount < WRITEMATCHEDPAIRS) {
 					IndexDepth d1 = new IndexDepth(inode, pix);
 					IndexDepth d2 = new IndexDepth(oscore, pix);
 					writeTestPerp(d1, d2,"match"+(pairCount++));
