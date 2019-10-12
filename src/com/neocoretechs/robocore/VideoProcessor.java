@@ -36,6 +36,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.machinevision.CannyEdgeDetector;
+import com.neocoretechs.machinevision.ParallelCannyEdgeDetector;
 import com.neocoretechs.machinevision.PolyBezierPathUtil;
 import com.neocoretechs.machinevision.PolyBezierPathUtil.EPointF;
 import com.neocoretechs.machinevision.SobelEdgeDetector;
@@ -66,7 +67,10 @@ import com.neocoretechs.robocore.VideoProcessor.envInterface;
  * the octree build to one Y image scan line per thread.
  *
  * 3.) Use PCA on the 2 images to find minimal coplanar regions in both octrees and generate eigenvectors 
- * and eigenvalues of the principal axis of the minimal coplanar regions. this step in a single thread after barrier 
+ * and eigenvalues of the principal axis of the minimal coplanar regions. 
+ * The octree subdivision scheme relies on hough_settings.min_isotropy to set how much variance from PCA eigenvalues
+ * variance2/variance3 allowed when deciding whether to subdivide the octree at each level. 
+ * This step in a single thread after barrier 
  * synchronization of the build step. Multiple threads not necessary as this step is fast.
  *
  * 4.) Process the left image coplanar regions against the right coplanar regions by comparing 
@@ -128,7 +132,7 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
 	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
-	private static final boolean WRITEEDGES = false; // write left and right edges detected, if ASSIGNPOINTS true left file has 3D
+	private static final boolean WRITEEDGES = true; // write left and right edges detected, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
 	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
 	private static final int WRITEMATCHEDPAIRS = 0; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
@@ -152,7 +156,7 @@ public class VideoProcessor extends AbstractNodeMain
 	static int files = 0;
 	// optical parameters
     final static float f = 4.4f; // focal length mm
-    final static float B = 205.0f; // baseline mm
+    final static float B = 100.0f; // baseline mm
     final static float FOVD = 60; // degrees field of view
     final static double FOV = 1.04719755; // radians FOV
     final static int camWidth = 640; // pixels
@@ -163,7 +167,7 @@ public class VideoProcessor extends AbstractNodeMain
     final static double Bf = B*f;// calc the Bf of Bf/d
     final static int maxHorizontalSep = (int) (Bf-1)/4; // max pixel disparity
     final static int yTolerance = 100; // pixel diff in y of potential candidates
-    final static double aTolerance = .05;//.00000000000000003; // minimum angle dot product of eigenvectors
+    final static double aTolerance = .005;//.00000000000000003; // minimum angle dot product of eigenvectors
     final static double bTolerance = 5;//.0000000000000004; // max difference between eigenvalues
     final static double b2Tolerance = 10;
     final static int cTolerance = 15; // max difference between point count
@@ -317,8 +321,9 @@ public class VideoProcessor extends AbstractNodeMain
 					  //
 					  // spin all threads necessary for execution
 					  //
+					  SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREE");
 					  for(int syStart = 0; syStart < execLimit; syStart++) {
-						SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit).spin(new Runnable() {
+						SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit, "BUILDOCTREE").spin(new Runnable() {
 						  @Override
 						  public void run() {
 							// Since we run a continuous loop inside run we have to have a way
@@ -328,9 +333,9 @@ public class VideoProcessor extends AbstractNodeMain
 							// synchronization latches
 								imagesToOctrees(dataL, dataR, imageLx, imageRx, yStart.getAndIncrement(), camWidth, camHeight, nodel, noder/*hlL, hlR*/);
 						  } // run
-					    }); // spin
+					    },"BUILDOCTREE"); // spin
 					  } // for syStart
-					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish();
+					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("BUILDOCTREE");
 					  if( TIMER )
 						  System.out.println("Process time one="+(System.currentTimeMillis()-etime));
 					  latchOut.await();
@@ -517,6 +522,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		octree_t.buildEnd(nodel);
 			        	     		hough_settings.s_level = 6;
 			        	     		hough_settings.max_distance2plane = 1;
+			        	     		// min_isotropy is how much PCA eigenvalue variance2/variance3 tolerance allowed 
+			        	     		// in order to subdivide octree at each level
 			        	     		hough_settings.min_isotropy = .01;
 			        	     		nodel.subdivide();
 			        	     		//writeFile(nodel,"/roscoeL"+(++frames));
@@ -824,7 +831,9 @@ public class VideoProcessor extends AbstractNodeMain
 						for(int c = 0; c < nsize; c++) {
 							Vector4d lcolor = inode.getRoot().m_colors.get(inode.getIndexes().get(c));
 							Vector4d rcolor = jnode.getRoot().m_colors.get(jnode.getIndexes().get(c));				
-							osum += Math.abs( (lcolor.x-rcolor.x) + (lcolor.y-rcolor.y) + (lcolor.z+rcolor.z) );
+							osum += (Math.abs((int)lcolor.x-(int)rcolor.x)<<16 |
+									Math.abs((int)lcolor.y-(int)rcolor.y)<<8 |
+									Math.abs((int)lcolor.z+(int)rcolor.z));
 						}
 						if(osum < sum) {
 							oscore = jnode;
@@ -1308,6 +1317,7 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 			double zMin = Double.MAX_VALUE;
 			octree_t cnode = null;
+			int cpos = -1;
 			// sorted now by x and y
 			for(int i = 0; i < subNodes.size(); i++) {
 				double[] splinep = dpit.get(i);
@@ -1350,30 +1360,35 @@ public class VideoProcessor extends AbstractNodeMain
 				if((int)((IndexMax)subNodes.get(i)).node.getCentroid().y >= 0 && (int)splinep[0] >= leftBound && (int)splinep[0] <= rightBound &&
 						((IndexMax)subNodes.get(i)).depth <= zMin) {
 					zMin = ((IndexMax)subNodes.get(i)).depth;
-					cnode = ((IndexMax)subNodes.get(i)).node;
+					//cnode = ((IndexMax)subNodes.get(i)).node;
+					cpos = i;
 				}
 			}
 			//System.out.println("----------"); //delinate column depth display
 			//  min depth
-			if( cnode != null ) {
-			Vector4d cen1 = new Vector4d();
-			Vector4d cen2 = new Vector4d();
-			cen1.x = cnode.getCentroid().x - (cnode.getSize()/2);
-			cen1.y = cnode.getCentroid().y - (cnode.getSize()/2);
-			cen1.z = zMin*10;//cnode.getCentroid().z - (cnode.getSize()/2);
-			cen2.x = cnode.getCentroid().x + (cnode.getSize()/2);
-			cen2.y = cnode.getCentroid().y + (cnode.getSize()/2);
-			cen2.z = zMin*10;//cnode.getCentroid().z + (cnode.getSize()/2);
-			//if( DEBUG )
-			//	System.out.println("genColHist env minx,y,z="+cen1+" maxx,y,z="+cen2+" centroid node="+cnode);
-			// xmin, ymin, xmax, ymin
-			writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
-			// xmax, ymin, xmax, ymax
-			writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-			// xmax, ymax, xmin, ymax
-			writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-			// xmin, ymax, xmin, ymin
-			writer_file.line3D(dos, (int)cen1.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
+			//if( cnode != null ) {
+			if( cpos != -1 ) { // there may have been 0 elements
+				for(int i = cpos; i > 0; i--) {
+					cnode = ((IndexMax)subNodes.get(i)).node;	
+					Vector4d cen1 = new Vector4d();
+					Vector4d cen2 = new Vector4d();
+					cen1.x = cnode.getCentroid().x - (cnode.getSize()/2);
+					cen1.y = cnode.getCentroid().y - (cnode.getSize()/2);
+					cen1.z = zMin*10;//cnode.getCentroid().z - (cnode.getSize()/2);
+					cen2.x = cnode.getCentroid().x + (cnode.getSize()/2);
+					cen2.y = cnode.getCentroid().y + (cnode.getSize()/2);
+					cen2.z = zMin*10;//cnode.getCentroid().z + (cnode.getSize()/2);
+					//if( DEBUG )
+					//	System.out.println("genColHist env minx,y,z="+cen1+" maxx,y,z="+cen2+" centroid node="+cnode);
+					// xmin, ymin, xmax, ymin
+					writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
+					// xmax, ymin, xmax, ymax
+					writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
+					// xmax, ymax, xmin, ymax
+					writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
+					// xmin, ymax, xmin, ymin
+					writer_file.line3D(dos, (int)cen1.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
+				}
 			}
 	}
 	/**
@@ -2304,7 +2319,7 @@ public class VideoProcessor extends AbstractNodeMain
 						while(true) {
 							try {
 								latchL.await();
-								dataLx = genEdge(imageL1, dataLp);
+								dataLx = genEdge(imageL1, dataLp, "EDGEGENL");
 								if( dataLp == null )
 									dataLp = dataLx;
 								latchOutL.await();
@@ -2320,7 +2335,7 @@ public class VideoProcessor extends AbstractNodeMain
 						while(true) {
 							try {
 								latchR.await();
-								dataRx = genEdge(imageR1, dataRp);
+								dataRx = genEdge(imageR1, dataRp, "EDGEGENR");
 								if( dataRp == null )
 									dataRp = dataRx;
 								latchOutR.await();
@@ -2329,8 +2344,8 @@ public class VideoProcessor extends AbstractNodeMain
 					}
 				});
 			}	
-			private int[] genEdge(BufferedImage img, int[] datap) {
-		   	    CannyEdgeDetector ced = new CannyEdgeDetector();
+			private int[] genEdge(BufferedImage img, int[] datap, String threadGroupName) {
+		   	    ParallelCannyEdgeDetector ced = new ParallelCannyEdgeDetector(threadGroupName);
 			    ced.setLowThreshold(.1f);
 			    ced.setHighThreshold(.2f);
 			    ced.setGaussianKernelRadius(2);
