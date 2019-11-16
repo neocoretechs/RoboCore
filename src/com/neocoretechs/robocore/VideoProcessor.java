@@ -42,7 +42,6 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.machinevision.MeanColorGenerator;
 //import com.neocoretechs.machinevision.ParallelCannyEdgeDetector;
@@ -138,13 +137,13 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean WRITEPLANARS = false; // write left and right minimal planars
 	private static final boolean WRITEPLANES = false; // write final planes approximations
 	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
-	private static final boolean WRITECORR = false; // write correlated minimal planar envelopes
-	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no mimimal planar regions
-	private static final boolean WRITEENCZERO = false; // write mimimal planar regions enclosed by no maximal envelope
+	private static final boolean WRITECORR = true; // write correlated minimal planar envelopes
+	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no minimal planar regions
+	private static final boolean WRITEENCZERO = false; // write minimal planar regions enclosed by no maximal envelope
 	private static final boolean WRITEMODEL = false; // write left and right model, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
 	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
-	private static final int WRITEMATCHEDPAIRS = 10; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
+	private static final int WRITEMATCHEDPAIRS = 0; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
 	private static final boolean ASSIGNPOINTS = false; // assign depth to points in file vs simply compute planars
 	private static final boolean SMOOTHEGRID = false; // Bezier smoothing of occupancy nav grid
 
@@ -383,7 +382,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  indexDepth = Collections.synchronizedList(new ArrayList<envInterface>());
 					  indexUnproc = Collections.synchronizedList(new ArrayList<envInterface>());
 					  leftYRange = Collections.synchronizedList(new ArrayList<int[]>());
-					  final RadixTree<Long, octree_t> txr = new RadixTree<Long, octree_t>();
+					  final RadixTree<Integer, octree_t> txr = new RadixTree<Integer, octree_t>();
 					  //final TreeMap<Long, octree_t> txr = new TreeMap<Long, octree_t>(new TreeComp());
 					  //final SortedMap<Long, octree_t> txr = Collections.synchronizedSortedMap(new TreeMap<Long, octree_t>(new TreeComp()));
 					  genDCT2(tnoder, txr);
@@ -576,6 +575,17 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	latch2.await();
 			        	     	latchOut2.await();
 			        	     	// write unmatched minimal envelopes
+			        	     	int empty = 0;
+			        	     	int wasvotes = 0;
+		        	     		synchronized(indexUnproc) {
+		        	     			for(envInterface e: indexUnproc) {
+		        	     				if(e.getDepth() == 0)
+		        	     					++empty;
+		        	     				else
+		        	     					++wasvotes;
+		        	     			}
+		        	     		}
+		        	     		System.out.println("Run had "+empty+" sets and "+wasvotes+" instances of all elementes voted");
 			        	     	if( WRITEFILES || WRITEUNCORR) {
 			        	     		synchronized(indexUnproc) {
 			        	     			writeFile(indexUnproc, "/lvl7uncorrL"+files);
@@ -784,7 +794,7 @@ public class VideoProcessor extends AbstractNodeMain
 	private void matchRegionsAssignDepth(int yStart, 
 										List<int[]> leftYRange2, 
 										int width, int height, 
-										List<octree_t> txl, RadixTree<Long, octree_t> txr,
+										List<octree_t> txl, RadixTree<Integer, octree_t> txr,
 										List<envInterface> indexDepth2, List<envInterface> indexUnproc2) {
 		long etime = System.currentTimeMillis();
 		octree_t inode;
@@ -804,53 +814,81 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 			boolean found = false;
 			inode = txl.get(i);
+			if( inode.getVariance1() == 0 ) {
+				indexUnproc2.add(new IndexDepth(inode, 0));
+				continue;
+			}
 			double sum = Double.MAX_VALUE;
 			int nscore = 0;
 			short[] vals = genChromoSpatialKeys2(inode);
 			//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
-			SortedMap<Long, octree_t> noderD = txr.subMap(vals[0], vals[1], 0, 0x7FFFFFFF, (short)1); // last arg is tolerance where 1 = .01 rad
-			for(octree_t jnode : noderD.values()) {
-				//
-				Vector4d cross = inode.getNormal1().multiplyVectorial(jnode.getNormal1());
-				double dot = inode.getNormal1().and(jnode.getNormal1()); // dot
-				double crossMag = Math.sqrt(cross.x*cross.x + cross.y*cross.y + cross.z*cross.z);
-				double angle = Math.atan2(crossMag, dot);
-				double vscore1 = Math.abs(inode.getVariance1()-jnode.getVariance1());
-				double vscore2 = Math.abs(inode.getVariance2()-jnode.getVariance2());
-				double vscore3 = Math.abs(inode.getVariance3()-jnode.getVariance3());
-				if(angle > aTolerance /*|| vscore1 > bTolerance || vscore2 > cTolerance || vscore3 > dTolerance*/) {
+			//SortedMap<Integer, octree_t> noderD = txr.subMap(vals[0], vals[1], (short)0xFFFFFFC0, (short)0x3F); // last args is bit mask for search low and high, and and or
+			SortedMap<Integer, octree_t> noderD = txr.subMap(vals[0], vals[1], (short)0xFFFFFF00, (short)0xFF); // last args is bit mask for search low and high, and and or 2 bits at a time for both tolerances
+			if(noderD.size() == 1) {
+				nscore = 1;
+				oscore = noderD.values().iterator().next();
+			} else {
+				for(octree_t jnode : noderD.values()) {
+					//
+					synchronized(jnode) {
+						if( jnode.getVotes() == 1 ) {
+							continue;
+						}
+					}
+					//Vector4d cross = inode.getNormal1().multiplyVectorial(jnode.getNormal1());
+					//double dot = inode.getNormal1().and(jnode.getNormal1()); // dot
+					//double crossMag = Math.sqrt(cross.x*cross.x + cross.y*cross.y + cross.z*cross.z);
+					//double angle = Math.atan2(crossMag, dot);
+					//double vscore1 = Math.abs(inode.getVariance1()-jnode.getVariance1());
+					//double vscore2 = Math.abs(inode.getVariance2()-jnode.getVariance2());
+					//double vscore3 = Math.abs(inode.getVariance3()-jnode.getVariance3());
+					//if(angle > aTolerance /*|| vscore1 > bTolerance || vscore2 > cTolerance || vscore3 > dTolerance*/) {
+					//	continue;
+					//}
+					++nscore;
+					found = true;
+					//System.out.println("ANGLE:="+angle+" "+vscore1+" "+vscore2+" "+vscore3+"\r\n"+inode+"\r\n"+jnode);
+					// we may have to SAD the coplanar attributes
+					//double sadf = genSAD(inode, jnode, Math.min(inode.getIndexes().size(), jnode.getIndexes().size()));
+					double sadf = genDCA(inode, jnode);
+					if( sadf < sum ) {
+						sum = sadf;
+						oscore = jnode;
+					}
+				}
+				// either set was empty or only voted upon nodes were encountered
+				if(!found) {
+					if(DEBUGTEST2)
+						System.out.println("matchRegionsAssignDepth left node "+inode+" no right image nodes in tolerance ***** "+Thread.currentThread().getName()+" ***" );
+					if( noderD.isEmpty())
+						indexUnproc2.add(new IndexDepth(inode, 0));
+					else
+						indexUnproc2.add(new IndexDepth(inode, .1));
 					continue;
 				}
-				++nscore;
-				found = true;
-				//System.out.println("ANGLE:="+angle+" "+vscore1+" "+vscore2+" "+vscore3+"\r\n"+inode+"\r\n"+jnode);
-				// we may have to SAD them
-				// yes, SAD
-				//double sadf = genSAD(inode, jnode, Math.min(inode.getIndexes().size(), jnode.getIndexes().size()));
-				double sadf = genDCA(inode, jnode);
-				if( sadf < sum ) {
-					sum = sadf;
-					oscore = jnode;
+				synchronized(oscore) {
+					if( nscore == 1 && oscore.getVotes() == 1 ) {
+						System.out.println("Only rerieved node has already been matched! "+oscore);
+					} else
+						oscore.setVotes(1);
 				}
 			}
-			if(!found) {
-				if(DEBUGTEST2)
-					System.out.println("matchRegionsAssignDepth left node "+inode+" no right image nodes in tolerance ***** "+Thread.currentThread().getName()+" ***" );
-				indexUnproc2.add(new IndexDepth(inode, 0));
-				continue;
-			}
-			System.out.println("Found in tol="+nscore+" ***** "+Thread.currentThread().getName()+" ***");
 			octree_t jnode = oscore;
 			double xDiff = Math.abs(inode.getCentroid().x-jnode.getCentroid().x);
 			double yDiff =  Math.abs(inode.getCentroid().y-jnode.getCentroid().y);
 			//calc the disparity and insert into collection
 			//we will call disparity the distance to centroid of right
-			double pix = Bf/Math.hypot(xDiff, yDiff);	
-			if( pix >=maxHorizontalSep) {
-				if(DEBUGTEST2)
-					System.out.println("matchRegionsAssignDepth left node "+inode+" right node "+jnode+" PIX TRUNCATED FROM:"+pix+" ***** "+Thread.currentThread().getName()+" *** ");
-				pix = maxHorizontalSep;
-			}
+			double pix = Bf/Math.hypot(xDiff, yDiff);
+			Vector4d cross = inode.getNormal1().multiplyVectorial(jnode.getNormal1());
+			double dot = inode.getNormal1().and(jnode.getNormal1()); // dot
+			double crossMag = Math.sqrt(cross.x*cross.x + cross.y*cross.y + cross.z*cross.z);
+			double angle = Math.atan2(crossMag, dot);
+			System.out.println("Found "+nscore+" Angle="+Math.toDegrees(angle)+" disp="+pix+" ***** "+Thread.currentThread().getName()+" ***");
+			//if( pix >=maxHorizontalSep) {
+			//	if(DEBUGTEST2)
+			//		System.out.println("matchRegionsAssignDepth left node "+inode+" right node "+jnode+" PIX TRUNCATED FROM:"+pix+" ***** "+Thread.currentThread().getName()+" *** ");
+			//	pix = maxHorizontalSep;
+			//}
 			// insert it into the synchronized list of maximal envelopes
 			if( pairCount < WRITEMATCHEDPAIRS) {
 				IndexDepth d1 = new IndexDepth(inode, pix);
@@ -1304,15 +1342,15 @@ public class VideoProcessor extends AbstractNodeMain
 		   }
 		   return coeffs;
 	}
-	private static void genDCT2(List<octree_t> nodes, RadixTree<Long, octree_t> tx) {
+	private static void genDCT2(List<octree_t> nodes, RadixTree<Integer, octree_t> txr) {
 		int dup = 0;
 		int vert = 0;
 		int i = 0;
 		for(octree_t node: nodes) {
 			if(node.getVariance1() != 0) {
 				short[] vals = genChromoSpatialKeys2(node);
-				int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
-				octree_t ot = tx.put(vals[0], vals[1], options, node);
+				//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
+				octree_t ot = txr.put(vals[0], vals[1], node);
 				if( ot != null )
 					++dup;
 				else

@@ -131,7 +131,18 @@ public class RadixTree<T,V> {
 
 	                return kxy;
 	    }
-
+	        public long makeKey(int x, int y) {
+                int xi = (int) ((x + xoffset) * radix);
+                int yi = (int) ((y + yoffset) * radix);
+                long kxy = 0; 
+                for(int i = 31; i > 0; i--) {
+                	kxy <<= 1;
+                	kxy += (xi >> i) & 1;
+                	kxy <<= 1;
+                	kxy += (yi >> i) & 1;
+                }
+                return kxy;
+    }
 	    public V put(short x, short y, V tvalue) {       
 	       int trtn = makeKey(x, y);
 	       return treeMap.put((T)convertInstanceOfObject(trtn), tvalue);
@@ -151,40 +162,31 @@ public class RadixTree<T,V> {
 	    }
 	    /**
 	    * Get range
+	    * ranges use a 0xFFFFFFFF or 0xFFFFFFFE 0xFFFFFFFC for lowMask and 0x1 or 0x3 for hiMask for instance
 	    */
-	    public SortedMap<T,V> subMap(short x, short y, short tolerance) {
+	    public SortedMap<T,V> subMap(short x, short y, int lowMask, int hiMask) {
 	       // flattened bit range, may lose some on bounds
 	       // rtn.radixKey &= 0x7FFFFFFFFFF00000L;
 	       // rtnHigh.radixKey = rtn.radixKey | 0xFFFFFL;
 	       // we make a real range, but it costs a little
-	       int rtn = 0;
-	       if( x >= tolerance )
-	    	   x -= tolerance;
-	       if( y >= tolerance)
-	    	   y -= tolerance;
-	       makeKey((short)x,(short)y);
-	       int rtnHigh = makeKey((short)(x+tolerance),(short)(y+tolerance));
-	       if( rtn < 0 || rtnHigh < 0)
-	    	   System.out.println("KEY OVERFLOW:"+x+" "+y+" tolerance:"+tolerance+" "+rtn+" "+rtnHigh);
+	       int rtn = makeKey(x,y);
+	       int rtnLow = rtn & lowMask;
+	       int rtnHigh = rtn | hiMask;
+	       if( rtnLow < 0 || rtnHigh < 0)
+	    	   System.out.println("KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
-	       return treeMap.subMap((T)convertInstanceOfObject(rtn), (T)convertInstanceOfObject(rtnHigh));
+	       return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 	    }
 	    /**
-	    * Get range with optional extra integer payload
-	    * low range is x - tolerance, y - tolerance << 32 | lowOptions
-	    * high is x + tolerance, y + tolerance << 32 | highOptions
-	    * If you want guaranteed ranges use a 0 for lowOptions and a 0xFFFFFFFF for high
+	    * Get range 
+	    * 0xFFFFFFFFFFFFFFFF  or 0xFFFFFFFFFFFFFFFE or 0xFFFFFFFFFFFFFFFC low 0x01 or 0x03 for high
 	    */
-	    public SortedMap<T,V> subMap(short x, short y, int lowOptions, int highOptions, short tolerance) {
-	       long rtn = 0;
-		   if( x >= tolerance )
-			   x -= tolerance;
-		   if( y >= tolerance)
-			   y -= tolerance;
-	       rtn = (((long)makeKey(x,y)) << 32) | (long)lowOptions;
-	       long rtnHigh = (((long)makeKey((short)(x+tolerance),(short)(y+tolerance))) << 32) | (long)highOptions;
-	       if( rtn < 0 || rtnHigh < 0)
-	    	   System.out.println("KEY OVERFLOW:"+x+" "+y+" tolerance:"+tolerance+" "+rtn+" "+rtnHigh);
+	    public SortedMap<T,V> subMap(int x, int y, long lowMask, long hiMask) {
+	       long rtn = makeKey(x,y);
+	       long rtnLow = rtn & lowMask;
+	       long rtnHigh = rtn | hiMask;
+	       if( rtnLow < 0 || rtnHigh < 0)
+	    	   System.out.println("KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 	       return treeMap.subMap((T)convertInstanceOfObject(rtn), (T)convertInstanceOfObject(rtnHigh));
 	    }
