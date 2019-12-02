@@ -18,10 +18,11 @@ import java.util.TreeMap;
 * @author Groff Copyright (C) NeoCoreTechs 2019
 */
 public class RadixTree<T,V> {
-	        public short radix = 1;
-	        public short xoffset = 0;
-	        public short yoffset = 0;
-	        private TreeMap<T,V> treeMap;
+		public static boolean DEBUG = false;
+	    public short radix = 1;
+	    public short xoffset = 0;
+	    public short yoffset = 0;
+	    private TreeMap<T,V> treeMap;
 	        /**
 	         * Construct new Radix trie
 	         * @param tradix magnitude (power of 10) by which to multiply x and y after adding offset, default 0
@@ -250,10 +251,10 @@ public class RadixTree<T,V> {
 	    public SortedMap<T,V> subMap(short x, short y, int keyBitMagnitude) {
 	        int lowMask = 0;
 	        int hiMask = 0;
-			for(int i = 0; i < keyBitMagnitude * 2; i++) {
+			for(int i = 0; i <= keyBitMagnitude * 2; i++) {
 				hiMask = (hiMask << 1) | 1;
 			}
-			for(int i = 32; i >= keyBitMagnitude * 2; i--) {
+			for(int i = 32; i > keyBitMagnitude * 2; i--) {
 				lowMask = (lowMask >> 1) | 0x80000000;
 			}
 		   int rtn = makeKey(x,y);
@@ -287,10 +288,10 @@ public class RadixTree<T,V> {
 	    public SortedMap<T,V> subMap(int x, int y, int keyBitMagnitude) {
 	        long lowMask = 0;
 			long hiMask = 0;
-			for(int i = 0; i < keyBitMagnitude * 2; i++) {
+			for(int i = 0; i <= keyBitMagnitude * 2; i++) {
 			   hiMask = (hiMask << 1) | 1;
 			}
-			for(int i = 64; i >= keyBitMagnitude * 2; i--) {
+			for(int i = 64; i > keyBitMagnitude * 2; i--) {
 			   lowMask = (lowMask >> 1) | 0x8000000000000000L;
 			}
 		   long rtn = makeKey(x,y);
@@ -330,10 +331,10 @@ public class RadixTree<T,V> {
 	    public SortedMap<T,V> subMap(short x1, short y1, short x2, short y2, int keyBitMagnitude) {
 	        long lowMask = 0;
 		    long hiMask = 0;
-		    for(int i = 0; i < keyBitMagnitude * 4; i++) {
+		    for(int i = 0; i <= keyBitMagnitude * 4; i++) {
 		    	hiMask = (hiMask << 1) | 1;
 		    }
-		    for(int i = 64; i >= keyBitMagnitude * 4; i--) {
+		    for(int i = 64; i > keyBitMagnitude * 4; i--) {
 		    	lowMask = (lowMask >> 1) | 0x8000000000000000L;
 		    }
 		    long rtn = makeKey(x1,y1,x2,y2);
@@ -377,15 +378,19 @@ public class RadixTree<T,V> {
 	       // we make a real range, but it costs a little
 	       BigInteger lowMask = BigInteger.ZERO;
 	       BigInteger hiMask = BigInteger.ZERO;
-	       for(int i = 0; i < keyBitMagnitude * 6; i++) {
+	       for(int i = 0; i <= keyBitMagnitude * 6; i++) {
 	    	  hiMask = hiMask.setBit(i);
 	       }
-	       for(int i = 96; i >= keyBitMagnitude * 6; i--) {
+	       for(int i = 96; i > keyBitMagnitude * 6; i--) {
 	    	  lowMask = lowMask.setBit(i);
 	       }
 	       BigInteger rtn = makeKey(x1,y1,x2,y2,x3,y3);
 	       BigInteger rtnLow = rtn.and(lowMask);
 	       BigInteger rtnHigh = rtn.or(hiMask);
+	       if(DEBUG) {
+	    	   System.out.println("Low mask="+String.format("%096x",lowMask)+" High mask="+String.format("%096x",hiMask)+
+	    			   " low key="+String.format("%096x",rtnLow)+" High key="+String.format("%096x",rtnHigh));
+	       }
 	       if( rtnLow.compareTo(BigInteger.ZERO) < 0 || rtnHigh.compareTo(BigInteger.ZERO) < 0)
 	    	   System.out.println("KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
