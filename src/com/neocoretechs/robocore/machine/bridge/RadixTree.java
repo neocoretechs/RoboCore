@@ -6,15 +6,21 @@ import java.util.TreeMap;
 
 
 /**
-* Radix tree, or trie, a structure to index data in 2,3, or 4 dimensions
-* and letting us retrieve subsets based on varying windows of 2, 3, or 4 dimensions.
+* Radix tree, or trie, a structure to index data in 2,3,4,5, and 6 dimensions.<br/>
+* and letting us retrieve subsets based on varying windows of 2, 3, or 4 5 or 6 dimensions.<br/>
 * We are taking 2 16 bit ints and making a 32 bit linear key,
 * or 2 16 bit ints and a 32 bit payload and making a 64 bit key,
 * OR 2 32 bit ints and making a long key!
 * OR 4 16 bit shorts making a long key of 4 dimensions! (or 3 if you leave one zero).
-* OR 6 16 bit shorts making a BigInteger key of 6 dimensions! (or 5)
-* so the T type is constrained to int or long or BigInteger, because this is a radix tree.
-* We are interchanging bits to do this al la Peano key for the component key values.
+* OR 6 16 bit shorts making a BigInteger key of 6 dimensions! (or 5). <br/>
+* So what goes into the actual backing store TreeMap is an Integer, Long, or BigInteger key of
+* interchanged bits that is a max of 96 bits in the BigInteger case. <br/>
+* So the T type is constrained to int or long or BigInteger, because this is a radix tree.
+* We are interchanging bits to do this al la Peano key for the component key values.<br/>
+* Why? If we encode a 'flatened' or 'expanded' key, one which has the LSB set to all 0 ir 1, then we
+* encode a multidimensional window of sorts into which collections can be aggregated and retrieved.<br/>
+* When encoding points, we can specify the lower and upper bounds of a flattened and expended key set 
+* to retrieve elements of a multidimensional set (see the subMap methods below), very fast.<br/>
 * @author Groff Copyright (C) NeoCoreTechs 2019
 */
 public class RadixTree<T,V> {
@@ -51,7 +57,12 @@ public class RadixTree<T,V> {
 	        public RadixTree() {
 	                treeMap = new TreeMap<T,V>();
 	        }
-	        
+	        /**
+	         * Generate a point key of max 16384 in x and y
+	         * @param x
+	         * @param y
+	         * @return Key with unused sign bit and bit 30
+	         */
 	        public int makeKey(short x, short y) {
 	                short xi = (short) ((x + xoffset) * radix);
 	                short yi = (short) ((y + yoffset) * radix);
@@ -138,6 +149,12 @@ public class RadixTree<T,V> {
 
 	                return kxy;
 	    }
+	    /**
+	     * Generate a point key of max 2,147,483,647 in x and y
+	     * @param x
+	     * @param y
+	     * @return long value with sign and bit 62 unused
+	     */
 	    public long makeKey(int x, int y) {
                 int xi = (int) ((x + xoffset) * radix);
                 int yi = (int) ((y + yoffset) * radix);
@@ -150,6 +167,14 @@ public class RadixTree<T,V> {
                 }
                 return kxy;
         }
+	    /**
+	     * Generate a square key of 16384 in x1, y1, x2, y2
+	     * @param x1
+	     * @param y1
+	     * @param x2
+	     * @param y2
+	     * @return long key with first 4 bits unused
+	     */
 	    public long makeKey(short x1, short y1, short x2, short y2) {
             short xi = (short) ((x1 + xoffset) * radix);
             short yi = (short) ((y1 + yoffset) * radix);
@@ -168,6 +193,16 @@ public class RadixTree<T,V> {
             }
             return kxy;
         }
+	    /**
+	     * Generate a cube key of 16384 in x1, y1, x2, y2, x3, y3
+	     * @param x1
+	     * @param y1
+	     * @param x2
+	     * @param y2
+	     * @param x3
+	     * @param y3
+	     * @return
+	     */
 	    public BigInteger makeKey(short x1, short y1, short x2, short y2, short x3, short y3) {
             short xi = (short) ((x1 + xoffset) * radix);
             short yi = (short) ((y1 + yoffset) * radix);
@@ -192,6 +227,11 @@ public class RadixTree<T,V> {
             }
             return kxy;
         }
+	    // single argument puts applicable when key has already been formed, or deformed and reformed
+		public V put(Integer skey, V value) {
+		       return treeMap.put((T)convertInstanceOfObject(skey), value);
+		}
+		
 	    public V put(short x, short y, V tvalue) {       
 	       int trtn = makeKey(x, y);
 	       return treeMap.put((T)convertInstanceOfObject(trtn), tvalue);
@@ -396,4 +436,5 @@ public class RadixTree<T,V> {
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 	       return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 	    }
+
 }

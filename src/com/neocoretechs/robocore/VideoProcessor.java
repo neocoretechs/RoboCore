@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.imageio.ImageIO;
 
+import org.jtransforms.dct.DoubleDCT_1D;
 import org.jtransforms.dct.FloatDCT_1D;
 import org.jtransforms.utils.IOUtils;
 import org.ros.concurrent.CircularBlockingDeque;
@@ -38,6 +39,10 @@ import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
+
+
+
+
 
 
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
@@ -132,14 +137,12 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean MODELTIMER = false; // display model generation performance data
 	private static final boolean QUEUETIMER = false; // display frames queued per second
 	private static final boolean WRITEFILES = false; // write full set of display files
-	private static final boolean WRITEGRID = true; // write occupancy grid derived from depth points
-	private static final boolean WRITEPLANARS = true; // write left and right minimal planars
+	private static final boolean WRITEGRID = false; // write occupancy grid derived from depth points
+	private static final boolean WRITEPLANARS = false; // write left and right minimal planars, the processed ones in outplanars# with correlated one color, uncorr another, then left and right channel planarsC#L# and planarsC#R# where C# is channel
 	private static final boolean WRITEPLANES = false; // write final planes approximations
-	private static final boolean WRITEUNCORR = false; // write uncorrelated minimal planars
-	private static final boolean WRITECORR = true; // write correlated minimal planar envelopes
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no minimal planar regions
 	private static final boolean WRITEENCZERO = false; // write minimal planar regions enclosed by no maximal envelope
-	private static final boolean WRITEMODEL = true; // write left and right model, if ASSIGNPOINTS true left file has 3D
+	private static final boolean WRITEMODEL = false; // write left and right model, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
 	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
 	private static final int WRITEMATCHEDPAIRS = 100; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
@@ -201,7 +204,8 @@ public class VideoProcessor extends AbstractNodeMain
 	List<envInterface> maxEnv; // maximal regions that enclose one or more minimal regions
 	List<envInterface> zeroEnc; // maximal regions that enclose zero minimal regions
 	ArrayList<List<int[]>> leftYRange = new ArrayList<List<int[]>>(); // from/to position in array for sorted Y centroid processing
-	ArrayList<RadixTree<BigInteger, octree_t>> radixTree = new ArrayList<RadixTree<BigInteger, octree_t>>();
+	ArrayList<RadixTree<Integer, AxisNodes>> radixTree = new ArrayList<RadixTree<Integer, AxisNodes>>();
+	ArrayList<RadixTree<Integer, AxisNodes>> radixTree2 = new ArrayList<RadixTree<Integer, AxisNodes>>();
 
 	//CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
 	//CyclicBarrier latchOut = new CyclicBarrier(camHeight/corrWinSize+1);
@@ -229,6 +233,7 @@ public class VideoProcessor extends AbstractNodeMain
 	public void onStart(final ConnectedNode connectedNode) {
 		//Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		System.out.println("Processing "+camWidth+" by "+camHeight);
+		setUp();
 		// bring up all parallel  processing threads
 		spinUp();
 		// spin the model generator class and threads
@@ -302,10 +307,43 @@ public class VideoProcessor extends AbstractNodeMain
 		
 	} // onstart
 	
-	final static class TreeComp implements Comparator<Long> {
-		  public int compare(Long csk1, Long csk2) {
-			  return csk1.compareTo(csk2);
-		  }
+	public void setUp() {
+     	/**
+ 	     * Relative octree PCA tolerances associated with plane thickness (s_alpha) and plane isotropy (s_beta)<br/>
+ 		 * If thickness is less than max_thickness and isotropy is greater than min_isotropy
+ 		 * then remove outliers, compute least_variance_direction, and set coplanar to true.<br/>
+ 		 * thickness = variance1 / variance2, isotropy  = variance2 / variance3;<br/>
+ 		 * default is 5.
+ 	     */
+ 		hough_settings.max_thickness = 10;
+ 	    /**
+ 	     * s_level determines maximum octree level we check for variance direction and remove outliers.<br/>
+ 	     * Coplanar areas may be formed at higher level if measure for isoptropy passes, but s_level determines smallest cell.<br/>
+ 	     * default is level 7 which produces approximately 10x10 point cells.
+ 	     */
+ 		hough_settings.s_level = 6;
+ 		/**
+ 		 * max_distance2plane is the divisor for size that determines max plane distance for 
+ 		 * octree outlier removal (size_of_octree_cell/max_distance2plane).<br/>
+ 		 * Subtract the centroid from the passed point and take the scalar dot product of that
+ 		 * and the normalized 'normal1' vector. The absolute value of that is the distance to plane.<br/>
+ 		 * If this distance to plane is greater than size_of_octree_cell/max_distance2plane, we will
+ 		 * remove the point from the cell.<br/>
+ 		 * default is 5.
+ 		 */
+ 		hough_settings.max_distance2plane = 1;
+ 	    /**
+ 	     * Relative octree PCA tolerances associated with plane thickness (s_alpha) and plane isotropy (s_beta)<br/>
+ 		 * If thickness is less than max_thickness and isotropy is greater than min_isotropy
+ 		 * then remove outliers, compute least_variance_direction, and set coplanar to true.<br/>
+ 		 * thickness = variance1 / variance2, isotropy  = variance2 / variance3;<br/>
+ 		 * default is 0, which allows any manner of deformed degenerate plane.
+ 	     */
+ 		hough_settings.min_isotropy = .3;
+ 		/**
+ 		 * s_ms determines the minimum number of points per octree node.
+ 		 */
+ 		hough_settings.s_ms = 5;
 	}
 	/**
 	 * Spin all parallel processing threads
@@ -419,6 +457,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  final int[] nSizeT = new int[CHANNELS];
 					  leftYRange.clear();
 					  radixTree.clear();
+					  radixTree2.clear();
 					  //
 					  final List<ArrayList<octree_t>> tnodel = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
 					  final List<ArrayList<octree_t>> tnoder = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
@@ -428,10 +467,55 @@ public class VideoProcessor extends AbstractNodeMain
 						  tnoder.add(noder[channels].get_nodes());
 						  List<int[]> yr = Collections.synchronizedList(new ArrayList<int[]>());
 						  leftYRange.add(yr);
-						  radixTree.add(new RadixTree<BigInteger, octree_t>());
+						  radixTree2.add(new RadixTree<Integer, AxisNodes>());
+						  genRadixTree(tnodel.get(channels), radixTree2.get(channels));
+						  radixTree.add(new RadixTree<Integer, AxisNodes>());
 						  genRadixTree(tnoder.get(channels), radixTree.get(channels));
-						  System.out.println("Node list length channel "+channels+" Left="+tnodel.get(channels).size()+", Right="+tnoder.get(channels).size()+" Radix tree="+radixTree.get(channels).getTreeMap().size());
-						  //
+						  System.out.println("Node list length channel "+channels+" Left="+tnodel.get(channels).size()+", Right="+tnoder.get(channels).size()+" Radix tree left="+radixTree2.get(channels).getTreeMap().size()+" Radix tree right="+radixTree.get(channels).getTreeMap().size());
+						  // 
+						  int[] histol = new int[100];
+						  int[] histor = new int[100];
+						  Object[] enr = radixTree2.get(channels).getTreeMap().entrySet().toArray();
+						  for(int i = 0; i < radixTree2.get(channels).getTreeMap().size(); i++) {
+							  AxisNodes axl = ((Entry<Integer, AxisNodes>)enr[i]).getValue();
+							  if( axl == null )
+								  System.out.println("null channel "+channels+" index "+i);
+							  if(axl.eigens == null ) {
+								  System.out.println("null eigens channel "+channels+" index "+i);
+							  }
+							  if( axl.nodes == null ) {
+								  System.out.println("null nodes channel "+channels+" index "+i);
+							  }
+							  if( axl.dct == null ) {
+								  System.out.println("null dct channel "+channels+" index "+i);
+							  }
+							  //System.out.println("Left axis channel "+channels+" node "+i+" size="+axl.eigens.size()+" "+axl.nodes.size()+" "+axl.dct.length+" "+axl.dct[0]);
+							  ++histol[axl.eigens.size()];
+						  }
+						  enr = radixTree.get(channels).getTreeMap().entrySet().toArray();
+						  for(int i = 0; i < radixTree.get(channels).getTreeMap().size(); i++) {
+							  AxisNodes axl = ((Entry<Integer, AxisNodes>)enr[i]).getValue();
+							  if( axl == null )
+								  System.out.println("null channel "+channels+" index "+i);
+							  if(axl.eigens == null ) {
+								  System.out.println("null eigens channel "+channels+" index "+i);
+							  }
+							  if( axl.nodes == null ) {
+								  System.out.println("null nodes channel "+channels+" index "+i);
+							  }
+							  if( axl.dct == null ) {
+								  System.out.println("null dct channel "+channels+" index "+i);
+							  }
+							  //System.out.println("Right axis channel "+channels+" node "+i+" size="+axl.eigens.size()+" "+axl.nodes.size()+" "+axl.dct.length+" "+axl.dct[0]);
+							  ++histor[axl.eigens.size()];
+						  }
+						  System.out.println("Histogram Number of elements - number nodes having that number of elements");
+						  for(int elems = 0; elems < histol.length; elems++) {
+							  if(histol[elems] > 0)
+								  System.out.println("LEFT "+elems+" - "+histol[elems]);
+							  if(histor[elems] > 0)
+								  System.out.println("RIGHT "+elems+" - "+histor[elems]);
+						  }
 						  int iPosStart = 1;
 						  int iPosEnd = 1;
 						  //for(int i = 0 ; i < nodelA.size(); i++) {
@@ -487,8 +571,8 @@ public class VideoProcessor extends AbstractNodeMain
 								@Override
 								public void run() {
 									// set the left nodes with depth
-									matchRegionsAssignDepth(yStart[0].getAndIncrement(), leftYRange.get(0), 
-											camWidth, camHeight, tnodel.get(0), radixTree.get(0), 
+									matchRegionsMakePlanes/*AssignDepth*/(yStart[0].getAndIncrement(), leftYRange.get(0), 
+											camWidth, camHeight, radixTree2.get(0)/*tnodel.get(0)*/, radixTree.get(0), 
 											indexDepth, indexUnproc);
 								} // run									
 							},"MATCHREGIONA"); // spin
@@ -498,8 +582,8 @@ public class VideoProcessor extends AbstractNodeMain
 									@Override
 									public void run() {
 										// set the left nodes with depth
-										matchRegionsAssignDepth(yStart[1].getAndIncrement(), leftYRange.get(1), 
-												camWidth, camHeight, tnodel.get(1), radixTree.get(1), 
+										matchRegionsMakePlanes/*AssignDepth*/(yStart[1].getAndIncrement(), leftYRange.get(1), 
+												camWidth, camHeight, radixTree2.get(1)/*tnodel.get(1)*/, radixTree.get(1), 
 												indexDepth, indexUnproc);
 									} // run									
 								},"MATCHREGIONB"); // spin
@@ -509,8 +593,8 @@ public class VideoProcessor extends AbstractNodeMain
 									@Override
 									public void run() {
 										// set the left nodes with depth
-										matchRegionsAssignDepth(yStart[2].getAndIncrement(), leftYRange.get(2), 
-												camWidth, camHeight, tnodel.get(2), radixTree.get(2), 
+										matchRegionsMakePlanes/*AssignDepth*/(yStart[2].getAndIncrement(), leftYRange.get(2), 
+												camWidth, camHeight, radixTree2.get(2)/*tnodel.get(2)*/, radixTree.get(2), 
 												indexDepth, indexUnproc);
 									} // run									
 								},"MATCHREGIONC"); // spin
@@ -644,47 +728,16 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	// first step end multi thread barrier synch
 			        			latch.await();
 			        	     	latchOut.await();
+			        	     	
 			        	     	for(int channels = 0; channels < CHANNELS; channels++) {
 			        	     	  synchronized(nodel[channels]) {
 			        	     		octree_t.buildEnd(nodel[channels]);
-				        	     	/**
-			        	     	     * Relative octree PCA tolerances associated with plane thickness (s_alpha) and plane isotropy (s_beta)<br/>
-			        	     		 * If thickness is less than max_thickness and isotropy is greater than min_isotropy
-			        	     		 * then remove outliers, compute least_variance_direction, and set coplanar to true.<br/>
-			        	     		 * thickness = variance1 / variance2, isotropy  = variance2 / variance3;<br/>
-			        	     		 * default is 5.
-			        	     	     */
-			        	     		hough_settings.max_thickness = 10;
-			        	     	    /**
-			        	     	     * s_level determines maximum octree level we check for variance direction and remove outliers.<br/>
-			        	     	     * Coplanar areas may be formed at higher level if measure for isoptropy passes, but s_level determines smallest cell.<br/>
-			        	     	     * default is level 7 which produces approximately 10x10 point cells.
-			        	     	     */
-			        	     		hough_settings.s_level = 6;
-			        	     		/**
-			        	     		 * max_distance2plane is the divisor for size that determines max plane distance for 
-			        	     		 * octree outlier removal (size_of_octree_cell/max_distance2plane).<br/>
-			        	     		 * Subtract the centroid from the passed point and take the scalar dot product of that
-			        	     		 * and the normalized 'normal1' vector. The absolute value of that is the distance to plane.<br/>
-			        	     		 * If this distance to plane is greater than size_of_octree_cell/max_distance2plane, we will
-			        	     		 * remove the point from the cell.<br/>
-			        	     		 * default is 5.
-			        	     		 */
-			        	     		hough_settings.max_distance2plane = 10;
-			        	     	    /**
-			        	     	     * Relative octree PCA tolerances associated with plane thickness (s_alpha) and plane isotropy (s_beta)<br/>
-			        	     		 * If thickness is less than max_thickness and isotropy is greater than min_isotropy
-			        	     		 * then remove outliers, compute least_variance_direction, and set coplanar to true.<br/>
-			        	     		 * thickness = variance1 / variance2, isotropy  = variance2 / variance3;<br/>
-			        	     		 * default is 0, which allows any manner of deformed degenerate plane.
-			        	     	     */
-			        	     		hough_settings.min_isotropy = .3;
-			        	     		/**
-			        	     		 * s_ms determines the minimum number of points per octree node.
-			        	     		 */
-			        	     		hough_settings.s_ms = 10;
 			        	     		nodel[channels].subdivide();
-			        	     		//writeFile(nodel,"/roscoeL"+(++frames));
+			        	     		if( WRITEFILES || WRITEPLANARS) {
+			        	     			System.out.println("Writing planarsC"+channels+"L"+files);
+			        	     			writer_file.writePerp(nodel[channels], "planarsC"+channels+"L"+files);
+			        	     		}
+
 			        	     	  }
 			        	     	}
 			        	     	for(int channels = 0; channels < CHANNELS; channels++) {
@@ -692,11 +745,13 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		octree_t.buildEnd(noder[channels]);
 			        	     		noder[channels].subdivide();
 			        	     		if( WRITEFILES || WRITEPLANARS) {
+			        	     			System.out.println("Writing planarsC"+channels+"R"+files);
 			        	     			writer_file.writePerp(noder[channels], "planarsC"+channels+"R"+files);
 			        	     		}
 			        	     	  }
 			        	     	}
 		        	     		if(WRITEFILES || WRITEMODEL) {
+		        	     			System.out.println("Writing roscoeR"+files);
 		        	     			writeFile(noder,"/roscoeR"+files);
 		        	     		}
 			        	     	// second step end multi thread barrier synch
@@ -714,24 +769,15 @@ public class VideoProcessor extends AbstractNodeMain
 		        	     			}
 		        	     		}
 		        	     		System.out.println("Run had "+empty+" empty sets and "+wasvotes+" instances where all elements voted");
-			        	     	if( WRITEFILES || WRITEUNCORR) {
-			        	     		synchronized(indexUnproc) {
-			        	     			writeFile(indexUnproc, "/lvl7uncorrL"+files);
-			        	     		}
-			        	     	}
-			        	     	if( WRITEFILES || WRITECORR) {
-			        	     		synchronized(indexDepth) {
-			        	     			writeFile(indexDepth, "/lvl7corrL"+files);
-			        	     		}
-			        	     	}
-		        	     		if( WRITEFILES || WRITEPLANARS)
-		        	     			writePerp(indexDepth, indexUnproc, 255,255,0, 0,255,255, "planarsL"+files);
-								// calc mean
-			        	     	
+			        	     	//
 			        	      	float[] a = null; // DCT elements
 								mean = variance = 0;
 								if( indexDepth.size() > 0) {
 									synchronized(indexDepth) {
+				        	     	  if( WRITEFILES || WRITEPLANARS) {
+				        	     		 System.out.println("Writing outplanars"+files);
+				        	     		 writePerp(indexDepth, indexUnproc, 255,255,0, 0,255,255, "outplanars"+files);
+				        	     	  }
 									  for(envInterface ind : indexDepth) {
 										  mean += ind.getDepth();
 									  }
@@ -761,14 +807,14 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     			System.out.println("<<<< IMAGE SHIFT ALERT!!!! >>>> rms="+rms+" err="+(meanRMS+(sigmaRMS*1.3))+" file index:"+files);
 			        	     			if( WRITERMS )
 			        	     				synchronized(nodel) {
+			        	     					System.out.println("Writing RMS"+(int)rms+"."+files);
 			        	     					writeFile(nodel,"/RMS"+(int)rms+"."+files);
 			        	     				}
 			    					  }
 									}
 									prevDCT = a;
 								}
-								System.out.println("Mean depth="+mean+" variance="+variance+" standard deviation="+sigma);		
-			        	     	System.out.println("Uncorrelated regions="+indexUnproc.size()+" correlated="+indexDepth.size()+", "+(((float)indexUnproc.size()/(float)(indexUnproc.size()+indexDepth.size()))*100.0)+"% uncorrelated");
+	
 			        	     	// reset level then regenerate tree with maximal coplanar points
 			        	     	/*
 			        	     	synchronized(nodel) {
@@ -811,8 +857,10 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		// at this point processing of image is essentially complete. If ASSIGNPOINTS is true
 			        	     		// the z coords in the point cloud are populated, otherwise we have a list of maximal
 			        	     		// planar regions with depth.
-			        	     		if(WRITEFILES || WRITEMODEL)
+			        	     		if(WRITEFILES || WRITEMODEL) {
+			        	     			System.out.println("Writing roscoeL"+files);
 			        	     			writeFile(nodel,"/roscoeL"+files);
+			        	     		}
 			        	     		//
 			        	     		// write the remaining unprocessed envelopes from minimal
 			        	     		if(WRITEFILES || WRITEENCZERO || WRITEGRID)
@@ -834,7 +882,11 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		}
 			        	     		*/
 			        	     	}
-	
+			        	     	//
+								System.out.println("Mean depth="+mean+" variance="+variance+" standard deviation="+sigma);
+								int totalNodes = 0;
+								for(int i = 0; i < CHANNELS; i++) totalNodes += nodel[i].get_nodes().size();
+			        	     	System.out.println("Uncorrelated regions="+(totalNodes-indexDepth.size())+" correlated="+indexDepth.size()+", "+(100.0-((float)(totalNodes-indexDepth.size())/(float)totalNodes)*100.0)+"% correlated");
 							} catch (InterruptedException | BrokenBarrierException e) {
 								e.printStackTrace();
 							}
@@ -889,7 +941,7 @@ public class VideoProcessor extends AbstractNodeMain
 			double os = imgsrcL[xsrc]; // from PixelsToModel if no depth in model set to 1
 
 			synchronized(nodel) {
-				octree_t.build(nodel, os, (double)ms, (double)ks, 
+				octree_t.build(nodel, (double)ks, (double)ms, os, 
 					((imgsrcLx[xsrc] & 0x00FF0000) >> 16 ), 
 					((imgsrcLx[xsrc] & 0x0000FF00) >> 8), 
 					((imgsrcLx[xsrc] & 0x000000FF) ));
@@ -904,7 +956,7 @@ public class VideoProcessor extends AbstractNodeMain
 			double os = imgsrcR[xsrc]; // mean color depth or 1
 
 			synchronized(noder) {
-				octree_t.build(noder, os, (double)ms, (double)ks, 
+				octree_t.build(noder, (double)ks, (double)ms, os, 
 					((imgsrcRx[xsrc] & 0x00FF0000) >> 16 ), 
 					((imgsrcRx[xsrc] & 0x0000FF00) >> 8), 
 					((imgsrcRx[xsrc] & 0x000000FF) ));
@@ -963,10 +1015,10 @@ public class VideoProcessor extends AbstractNodeMain
 			int nscore = 0;
 			short[] vals = genChromoSpatialKeys2(inode);
 			// the color values as Z have to overlap, there have to be common colors. So the max Z axis have to overlap
-			//double izMin = Math.floor(inode.getCentroid().z - (inode.getSize()/2));
-			//double izMax = Math.ceil(inode.getCentroid().z + (inode.getSize()/2));
-			double izMin = Math.floor(inode.getCentroid().x - (inode.getSize()/2));
-			double izMax = Math.ceil(inode.getCentroid().x + (inode.getSize()/2));
+			double izMin = Math.floor(inode.getCentroid().z - (inode.getSize()/2));
+			double izMax = Math.ceil(inode.getCentroid().z + (inode.getSize()/2));
+			//double izMin = Math.floor(inode.getCentroid().x - (inode.getSize()/2));
+			//double izMax = Math.ceil(inode.getCentroid().x + (inode.getSize()/2));
 			double jzMin = 0;
 			double jzMax = 0;
 			//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
@@ -985,10 +1037,10 @@ public class VideoProcessor extends AbstractNodeMain
 				nscore = 1;
 				oscore = noderD.values().iterator().next();
 				if(oscore == null){ System.out.println("oscore null"); return;}
-				//jzMin = Math.floor(oscore.getCentroid().z - (oscore.getSize()/2));
-				//jzMax = Math.ceil(oscore.getCentroid().z + (oscore.getSize()/2));
-				jzMin = Math.floor(oscore.getCentroid().x - (oscore.getSize()/2));
-				jzMax = Math.ceil(oscore.getCentroid().x + (oscore.getSize()/2));
+				jzMin = Math.floor(oscore.getCentroid().z - (oscore.getSize()/2));
+				jzMax = Math.ceil(oscore.getCentroid().z + (oscore.getSize()/2));
+				//jzMin = Math.floor(oscore.getCentroid().x - (oscore.getSize()/2));
+				//jzMax = Math.ceil(oscore.getCentroid().x + (oscore.getSize()/2));
 				//if( (jzMin >= izMin && jzMin <= izMax) || (jzMax >= izMin && jzMax <= izMax) ||
 				//	(izMin >= jzMin && izMin <= jzMax) || (izMax >= jzMin && izMax <= jzMax) )
 				if( (jzMin < izMin || jzMin > izMax) && (jzMax < izMin || jzMax > izMax) &&
@@ -1003,10 +1055,10 @@ public class VideoProcessor extends AbstractNodeMain
 							continue;
 						}
 					}
-					//jzMin = Math.floor(jnode.getCentroid().z - (jnode.getSize()/2));
-					//jzMax = Math.ceil(jnode.getCentroid().z + (jnode.getSize()/2));
-					jzMin = Math.floor(jnode.getCentroid().x - (jnode.getSize()/2));
-					jzMax = Math.ceil(jnode.getCentroid().x + (jnode.getSize()/2));
+					jzMin = Math.floor(jnode.getCentroid().z - (jnode.getSize()/2));
+					jzMax = Math.ceil(jnode.getCentroid().z + (jnode.getSize()/2));
+					//jzMin = Math.floor(jnode.getCentroid().x - (jnode.getSize()/2));
+					//jzMax = Math.ceil(jnode.getCentroid().x + (jnode.getSize()/2));
 					//if( (jzMin >= izMin && jzMin <= izMax) || (jzMax >= izMin && jzMax <= izMax) ||
 					//	(izMin >= jzMin && izMin <= jzMax) || (izMax >= jzMin && izMax <= jzMax) )
 					if( (jzMin < izMin || jzMin > izMax) && (jzMax < izMin || jzMax > izMax) &&
@@ -1050,8 +1102,8 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 			}
 			octree_t jnode = oscore;
-			//double xDiff = Math.abs(inode.getCentroid().x-jnode.getCentroid().x);
-			double xDiff = Math.abs(inode.getCentroid().z-jnode.getCentroid().z);
+			double xDiff = Math.abs(inode.getCentroid().x-jnode.getCentroid().x);
+			//double xDiff = Math.abs(inode.getCentroid().z-jnode.getCentroid().z);
 			double yDiff =  Math.abs(inode.getCentroid().y-jnode.getCentroid().y);
 			//calc the disparity and insert into collection
 			//we will call disparity the distance to centroid of right
@@ -1069,7 +1121,7 @@ public class VideoProcessor extends AbstractNodeMain
 				dot = inode.getNormal3().and(jnode.getNormal3()); // dot
 				crossMag = Math.sqrt(cross.x*cross.x + cross.y*cross.y + cross.z*cross.z);
 				double angle3 = Math.atan2(crossMag, dot);
-				System.out.println("Found "+nscore+" Angle1="+Math.toDegrees(angle1)+" Angle2="+Math.toDegrees(angle2)+" Angle3="+angle3+" disp="+pix+" ***** "+Thread.currentThread().getName()+" ***");
+				System.out.println("Found "+nscore+" Angle1="+Math.toDegrees(angle1)+" Angle2="+Math.toDegrees(angle2)+" Angle3="+Math.toDegrees(angle3)+" disp="+pix+" ***** "+Thread.currentThread().getName()+" ***");
 			}
 			//if( pix >=maxHorizontalSep) {
 			//	if(DEBUGTEST2)
@@ -1267,6 +1319,92 @@ public class VideoProcessor extends AbstractNodeMain
 
 		if( SAMPLERATE )
 			System.out.println("matchRegionAssignDepth ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
+	}
+	private void matchRegionsMakePlanes(int yStart, 
+			List<int[]> leftYRange2, 
+			int width, int height, 
+			RadixTree<Integer, AxisNodes> radixTree3, RadixTree<Integer, AxisNodes> radixTree4,
+			List<envInterface> indexDepth2, List<envInterface> indexUnproc2) {
+		long etime = System.currentTimeMillis();
+		octree_t inode = null, jnode = null;
+		double pix = 0;
+		int[] irange = leftYRange2.get(yStart);
+		Object[] enl = radixTree3.getTreeMap().entrySet().toArray();
+		Object[] enr = radixTree4.getTreeMap().entrySet().toArray();
+
+		for(int i = irange[0]; i < irange[1]; i++) {
+			if(i >= radixTree3.getTreeMap().size()) {
+				return;
+			}
+			boolean found = false;
+			int nscore = 0;
+			double sum = Double.MAX_VALUE;
+			AxisNodes oscore = null;
+			AxisNodes anl = ((Entry<Integer, AxisNodes>)enl[i]).getValue();
+			// compute DCT, get lowest, then iterate nodes and set vote
+			for(int k = 0; k < enr.length; k++) {
+			//if( inode.getVariance1() == 0 && inode.getVariance2() == 0 && inode.getVariance3() == 0) {
+			//	indexUnproc2.add(new IndexDepth(inode, 0));
+			//	continue;
+			//}
+			//short[] vals = genChromoSpatialKeys2(inode);
+			// the color values as Z have to overlap, there have to be common colors. So the max Z axis have to overlap
+			//double izMin = Math.floor(inode.getCentroid().z - (inode.getSize()/2));
+			//double izMax = Math.ceil(inode.getCentroid().z + (inode.getSize()/2));
+			//double izMin = Math.floor(inode.getCentroid().x - (inode.getSize()/2));
+			//double izMax = Math.ceil(inode.getCentroid().x + (inode.getSize()/2));
+			//double jzMin = 0;
+			//double jzMax = 0;
+			//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
+			//SortedMap<Integer, octree_t> noderD = radixTree.subMap(vals[0], vals[1], (short)0xFFFFFFC0, (short)0x3F); // last args is bit mask for search low and high, and and or
+			// FFFFFFFFFFFFFFF000000000
+			// 000000000000000FFFFFFFFF
+			//SortedMap<BigInteger, octree_t> noderD = radixTree3.subMap(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], 10);
+			// last args is bit mask for search low and high, 'and' and 'or' 6 bits at a time for both tolerances
+			// so magnitude 6 is 6 * 6 bits or 36 bits, equivaluent to FFFFFFFFF
+			//if( noderD.isEmpty()) {
+			//	indexUnproc2.add(new IndexDepth(inode, 0));
+			//	continue;
+			//}
+				AxisNodes anr = ((Entry<Integer,AxisNodes>)enr[k]).getValue();
+				synchronized(anr) {
+					if(anr.processed)
+						continue;
+				}
+				double rms = IOUtils.computeRMSE(anl.dct, anr.dct, Math.min(anl.dct.length, anr.dct.length));
+				if( rms < sum ) {
+					sum = rms;
+					oscore = anr;
+					++nscore;
+				}
+			}
+			// finished loop examining all right nodes
+			if( nscore == 0 )
+				continue;
+			synchronized(oscore) {
+				oscore.processed = true;
+			}
+			inode = anl.nodes.get(0);
+			jnode = oscore.nodes.get(0);
+			double xDiff = Math.abs(inode.getCentroid().x-jnode.getCentroid().x);
+			double yDiff =  Math.abs(inode.getCentroid().y-jnode.getCentroid().y);
+			//calc the disparity and insert into collection
+			//we will call disparity the distance to centroid of right
+			pix = Bf/Math.hypot(xDiff, yDiff);
+			IndexDepth d1 = new IndexDepth(inode, pix);
+			indexDepth2.add(d1);
+			if( pairCount < WRITEMATCHEDPAIRS) {
+				IndexDepth d2 = new IndexDepth(jnode, pix);
+				writeTestPerp(d1, d2,"/matched"+(pairCount++));
+			}
+			//System.out.println("matchRegions depth="+pix+" candidates="+nscore+" Left node:"+inode+"\r\nRight node:"+jnode+" ***"+Thread.currentThread().getName()+"***");
+		}
+		// We have a set of left nodes with a common Y value, now extract all right nodes with a Y value in tolerance of
+		// our left node set upon which this thread is operating. 
+		// Other similar left node sets exist upon which other threads are operating.
+
+		if( SAMPLERATE )
+			System.out.println("matchRegionMakePlanes ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
 	/**
 	 * Process the minimal nodes we collected in the last step against the maximal nodes we generated now.
@@ -1573,29 +1711,40 @@ public class VideoProcessor extends AbstractNodeMain
 	}
 	/**
 	 * Generate the discrete cosine transform for the set specified.
-	 * @param radixTree2
+	 * @param radixTree3
 	 * @param size
 	 * @return the DCT values array
 	 */
-	private static float[] genDCT1(ArrayList<RadixTree<BigInteger, octree_t>> radixTree2, int size) {
-		float[] coeffs = genCoeffs1(radixTree2, size);
+	private static float[] genDCT1(ArrayList<RadixTree<Integer, AxisNodes>> radixTree3, int size) {
+		float[] coeffs = genCoeffs1(radixTree3, size);
 		FloatDCT_1D fdct1d = new FloatDCT_1D(size);
 		fdct1d.forward(coeffs, false);
 		return coeffs;
 	}
-	private static float[] genCoeffs1(ArrayList<RadixTree<BigInteger, octree_t>> radixTree2, int size) {
-		   float[] coeffs = new float[size];
-		   for(int i = 0; i < radixTree2.size(); i++) {
-			   TreeMap<BigInteger, octree_t> txr = radixTree2.get(i).getTreeMap();
-			   Set<BigInteger> si = txr.keySet();
-			   Iterator<BigInteger> it = si.iterator();
-			   int isize = 0;
-			   for(int j = 0; j < si.size(); j++) {
-				   // TODO double?
-				   coeffs[isize++] = (float)it.next().floatValue();
-			   }
-		   }
-		   return coeffs;
+	private static float[] genCoeffs1(ArrayList<RadixTree<Integer, AxisNodes>> radixTree3, int size) {
+		ArrayList<Double> tcoeffs = new ArrayList<Double>();
+		for(int i = 0 ; i < CHANNELS; i++) {
+			TreeMap<Integer, AxisNodes> txr = radixTree3.get(i).getTreeMap();
+			Collection<AxisNodes> si = txr.values();
+			Iterator<AxisNodes> it = si.iterator();
+			while(it.hasNext()) {
+				// TODO double?
+				AxisNodes an = it.next();
+				for(Double f: an.eigens) {
+					tcoeffs.add(f);
+				}
+			}
+		}
+		float[] coeffs = new float[tcoeffs.size()];
+		int j = 0;
+		for(Double o : tcoeffs)
+			coeffs[j++] = o.floatValue();
+		return coeffs;
+	}
+	private static short[] genSpatialKey(octree_t node) {
+		short x = (short)Math.floor(node.getMiddle().x);
+		short y = (short)Math.floor(node.getMiddle().y);
+		return new short[]{x,y};
 	}
 	/**
 	 * Generate the Radix tree for the set of nodes specified using the chromospatial keys.
@@ -1605,24 +1754,48 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param nodes the octree node set
 	 * @param radixTree the Radix tree with chromospatial key hash as key, and octree node as value.
 	 */
-	private static void genRadixTree(List<octree_t> nodes, RadixTree<BigInteger, octree_t> radixTree2) {
-		int dup = 0;
+	private static void genRadixTree(List<octree_t> nodes, RadixTree<Integer, AxisNodes> radixTree2) {
 		int vert = 0;
 		int i = 0;
+		AxisNodes an = null;
 		for(octree_t node: nodes) {
 			if(node.getVariance1() != 0) {
 				short[] vals = genChromoSpatialKeys2(node);
 				//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
-				octree_t ot = radixTree2.put(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], node);
-				if( ot != null )
-					++dup;
-				else
+				//octree_t ot = radixTree2.put(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], node);
+				BigInteger bi = radixTree2.makeKey(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
+				vals = genSpatialKey(node);
+				Integer skey = radixTree2.makeKey(vals[0], vals[1]);
+				skey &= 0xFFFFFFFC; // expands key by each dimension
+				an = radixTree2.getTreeMap().get(skey);
+				if(an == null) {
+					an = new AxisNodes();
+					AxisNodes ot = radixTree2.put(skey, an);
+					//if( ot != null )
+						//System.out.println("NODE INCONSISTENCY:"+node+" "+vals[0]+","+vals[1]);
 					++i;
+				}
+				an.nodes.add(node);
+				an.eigens.add(bi.doubleValue());
 			} else
 				 ++vert;
 		}
-		System.out.println("Built "+i+" element radix tree from "+nodes.size()+" nodes with "+vert+" vertical and "+dup+" duplicated");
+		System.out.println("Built "+i+" element radix tree from "+nodes.size()+" nodes with "+vert+" vertical");
+		TreeMap<Integer, AxisNodes> txr = radixTree2.getTreeMap();
+		Collection<AxisNodes> si = txr.values();
+		Iterator<AxisNodes> it = si.iterator();
+		while(it.hasNext()) {
+			an = it.next();
+			an.dct = new double[an.eigens.size()];
+			int j = 0;
+			for(Double f: an.eigens) {
+				an.dct[j++] = f.doubleValue();
+			}
+		}
+		DoubleDCT_1D fdct1D = new DoubleDCT_1D(an.dct.length);
+		fdct1D.forward(an.dct, false);
 	}
+
 	
 	/**
 	 * Generate 2 longs that have expanded chromospatial keys, one for the coplanar area
@@ -2492,8 +2665,9 @@ public class VideoProcessor extends AbstractNodeMain
 			Vector4d cen2 = new Vector4d();
 			Vector4d cen3 = new Vector4d();
 			Vector4d cen4 = new Vector4d();
-			if( iproc == null || iproc.isEmpty() || indexUnproc2 == null || indexUnproc2.isEmpty())
+			if( iproc == null || iproc.isEmpty() ){ 
 				return;
+			}
 			for(envInterface c : iproc )  {
 				octree_t cnode = ((AbstractDepth)c).node;
 				// spherical of centroid
@@ -2509,6 +2683,9 @@ public class VideoProcessor extends AbstractNodeMain
 				writer_file.line3D(dos, (int)cen4.x, (int)cen4.y, (int)cen4.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, r, g, b);
 				writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen3.x, (int)cen3.y, (int)cen3.z, r, g, b);
 				writer_file.line3D(dos, (int)cen3.x, (int)cen3.y, (int)cen3.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, r, g, b);
+			}
+			if(indexUnproc2 == null || indexUnproc2.isEmpty()) {
+				return;
 			}
 			for(envInterface c : indexUnproc2 )  {
 				octree_t cnode = ((AbstractDepth)c).node;
@@ -2854,6 +3031,16 @@ public class VideoProcessor extends AbstractNodeMain
 			return new Vector4d[]{cen0,cen1,cen2,cen3,cen4};
 		}
 		/**
+		 * 
+		 *
+		 */
+		static class AxisNodes {
+			public boolean processed = false;
+			public double[] dct;
+			public ArrayList<Double> eigens = new ArrayList<Double>();
+			public ArrayList<octree_t> nodes = new ArrayList<octree_t>();
+		}
+		/**
 		 * Abstract away operations on an envelope that includes a depth. A plane if you will.
 		 * A 2D plane set in 3D.
 		 *
@@ -2869,7 +3056,7 @@ public class VideoProcessor extends AbstractNodeMain
 		
 		static abstract class AbstractDepth implements envInterface {
 			public octree_t node;
-			public double xmin, ymin, xmax, ymax;
+			public double xmin, ymin, xmax, ymax, zmin, zmax;
 			public double depth;
 			/**
 			 * does the passed point lie within this envelope edges included?
@@ -2879,7 +3066,9 @@ public class VideoProcessor extends AbstractNodeMain
 			 */
 			@Override
 			public boolean encloses(Vector4d point) {
-				return (xmin <= point.x && xmax >= point.x && ymin <= point.y && ymax >= point.y);
+				return (xmin <= point.x && xmax >= point.x && 
+						ymin <= point.y && ymax >= point.y &&
+						zmin <= point.z && zmax >= point.z);
 			}
 			/**
 			 * does the passed square lie within this one, even partially?
@@ -2899,17 +3088,21 @@ public class VideoProcessor extends AbstractNodeMain
 						(xmax >= env.getEnv()[0] && xmax <= env.getEnv()[2] &&
 						 ymax >= env.getEnv()[1] && ymax <= env.getEnv()[3]) ||
 						(xmin >= env.getEnv()[0] && xmin <= env.getEnv()[2] &&
-						 ymax >= env.getEnv()[1] && ymax <= env.getEnv()[3]) );
+						 ymax >= env.getEnv()[1] && ymax <= env.getEnv()[3]) ||
+						(zmin >= env.getEnv()[4] && zmin <= env.getEnv()[5] &&
+						 zmax >= env.getEnv()[4] && zmax <= env.getEnv()[5]));
+							 
 			}
 			public abstract boolean enclosedBy(envInterface e);
 			@Override
 			public boolean equals(Object tind) {
 				return ( xmin == ((envInterface)tind).getEnv()[0] && xmax == ((envInterface)tind).getEnv()[2] &&
-						 ymin == ((envInterface)tind).getEnv()[1] && ymax == ((envInterface)tind).getEnv()[3]);
+						 ymin == ((envInterface)tind).getEnv()[1] && ymax == ((envInterface)tind).getEnv()[3] &&
+						 zmin == ((envInterface)tind).getEnv()[4] && zmax == ((envInterface)tind).getEnv()[5]);
 			}
 			@Override
 			public double[] getEnv() {
-				return new double[]{xmin,ymin,xmax,ymax};
+				return new double[]{xmin,ymin,xmax,ymax,zmin,zmax};
 			}
 			@Override
 			public double getDepth() {
@@ -2938,6 +3131,8 @@ public class VideoProcessor extends AbstractNodeMain
 				xmax = middle.x+(node.getSize()/2);
 				ymin = middle.y-(node.getSize()/2);
 				ymax = middle.y+(node.getSize()/2);
+				zmin = middle.z-(node.getSize()/2);
+				zmax = middle.z+(node.getSize()/2);
 				this.depth = depth;
 			}
 			/**
@@ -2951,7 +3146,11 @@ public class VideoProcessor extends AbstractNodeMain
 				double tymin = tmiddle.y-(tm_size/2);
 				double txmax = tmiddle.x+(tm_size/2);
 				double tymax = tmiddle.y+(tm_size/2);
-				return (xmin <= txmin && xmax >= txmax && ymin <= tymin && ymax >= tymax);
+				double tzmin = tmiddle.z-(tm_size/2);
+				double tzmax = tmiddle.z+(tm_size/2);
+				return (xmin <= txmin && xmax >= txmax && 
+						ymin <= tymin && ymax >= tymax &&
+						zmin <= tzmin && zmax >= tzmax );
 			}
 			/**
 			 * does 'this' lie within the passed square?
@@ -2964,7 +3163,11 @@ public class VideoProcessor extends AbstractNodeMain
 				double tymin = tmiddle.y-(tm_size/2);
 				double txmax = tmiddle.x+(tm_size/2);
 				double tymax = tmiddle.y+(tm_size/2);
-				return (txmin <= middle.x && txmax >= middle.x && tymin <= middle.y && tymax >= middle.y);
+				double tzmin = tmiddle.z-(tm_size/2);
+				double tzmax = tmiddle.z+(tm_size/2);
+				return (txmin <= middle.x && txmax >= middle.x && 
+						tymin <= middle.y && tymax >= middle.y &&
+						tzmin <= middle.z && tzmax >= middle.z);
 			}
 			/**
 			 * 
@@ -2975,11 +3178,12 @@ public class VideoProcessor extends AbstractNodeMain
 			public boolean enclosedBy(envInterface tenv) {
 				//System.out.println("IndexDepth enclosedBy txmin="+txmin+" middle.x="+middle.x+" txmax="+txmax+" tymin="+tymin+" middle.y="+middle.y+" tymax="+tymax);
 				return (tenv.getEnv()[0]/*txmin*/ <= middle.x && tenv.getEnv()[2]/*txmax*/ >= middle.x && 
-						tenv.getEnv()[1]/*tymin*/ <= middle.y && tenv.getEnv()[3]/*tymax*/ >= middle.y);
+						tenv.getEnv()[1]/*tymin*/ <= middle.y && tenv.getEnv()[3]/*tymax*/ >= middle.y &&
+						tenv.getEnv()[4] <= middle.z && tenv.getEnv()[5] >= middle.z);
 			}
 			@Override
 			public String toString() {
-				return "IndexDepth xmin="+xmin+" ymin="+ymin+" xmax="+xmax+" ymax="+ymax+" depth="+depth+" middle="+middle;
+				return "IndexDepth xmin="+xmin+" ymin="+ymin+" xmax="+xmax+" ymax="+ymax+" zmin="+zmin+" zmax="+zmax+" depth="+depth+" middle="+middle;
 			}
 		}
 		/**
