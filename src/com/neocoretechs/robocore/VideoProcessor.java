@@ -20,6 +20,7 @@ import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedMap;
@@ -33,16 +34,11 @@ import javax.imageio.ImageIO;
 import org.jtransforms.dct.DoubleDCT_1D;
 import org.jtransforms.dct.FloatDCT_1D;
 import org.jtransforms.utils.IOUtils;
-import org.ros.concurrent.CircularBlockingDeque;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
-
-
-
-
 
 
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
@@ -55,7 +51,7 @@ import com.neocoretechs.machinevision.hough3d.hough_settings;
 import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
 import com.neocoretechs.robocore.machine.bridge.RadixTree;
-
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.
  * We break the image into  bands and assign each band to a processing thread. 
@@ -130,7 +126,7 @@ public class VideoProcessor extends AbstractNodeMain
 {
 	private static final boolean DEBUG = true;
 	private static final boolean DEBUGTEST3 = false;
-	private static final boolean DEBUGTEST2 = true;
+	private static final boolean DEBUGTEST2 = false;
 	private static final boolean DEBUGTEST4 = false;
 	private static final boolean SAMPLERATE = false; // display thread timing performance data
 	private static final boolean TIMER = true; // display global performance data
@@ -142,7 +138,7 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean WRITEPLANES = false; // write final planes approximations
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no minimal planar regions
 	private static final boolean WRITEENCZERO = false; // write minimal planar regions enclosed by no maximal envelope
-	private static final boolean WRITEMODEL = false; // write left and right model, if ASSIGNPOINTS true left file has 3D
+	private static final boolean WRITEMODEL = true; // write left and right model, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
 	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
 	private static final int WRITEMATCHEDPAIRS = 100; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
@@ -153,10 +149,10 @@ public class VideoProcessor extends AbstractNodeMain
     private BufferedImage imageR = null;
     private BufferedImage imageLx = null;
     private BufferedImage imageRx = null;
-	private int[][] dataL = null; // left array return from model generation with Z magnitudes
-	private int[][] dataR = null; // right model array with magnitudes
-	private int[][] dataLp = null; // prev left array return from model gen with magnitudes
-	private int[][] dataRp = null; // prev right canny array with magnitudes
+	private int[] dataL = null; // left array return from model generation with Z magnitudes
+	private int[] dataR = null; // right model array with magnitudes
+	private int[] dataLp = null; // prev left array return from model gen with magnitudes
+	private int[] dataRp = null; // prev right canny array with magnitudes
 
 	int outWidth = 640;
 	int outHeight = 480;
@@ -167,7 +163,7 @@ public class VideoProcessor extends AbstractNodeMain
 	int channelsx = 0;
 	static int files = 0;
 	// Number of data channels and octrees we are processing
-	final static int CHANNELS = 3;
+	final static int CHANNELS = 1;
 	// optical parameters
     final static float f = 4.4f; // focal length mm
     final static float B = 100.0f; // baseline mm
@@ -205,7 +201,7 @@ public class VideoProcessor extends AbstractNodeMain
 	List<envInterface> zeroEnc; // maximal regions that enclose zero minimal regions
 	ArrayList<List<int[]>> leftYRange = new ArrayList<List<int[]>>(); // from/to position in array for sorted Y centroid processing
 	ArrayList<RadixTree<Integer, AxisNodes>> radixTree = new ArrayList<RadixTree<Integer, AxisNodes>>();
-	ArrayList<RadixTree<Integer, AxisNodes>> radixTree2 = new ArrayList<RadixTree<Integer, AxisNodes>>();
+
 
 	//CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
 	//CyclicBarrier latchOut = new CyclicBarrier(camHeight/corrWinSize+1);
@@ -380,9 +376,11 @@ public class VideoProcessor extends AbstractNodeMain
 					  for(int channels = 0; channels < CHANNELS; channels++) {
 						  yStart[channels].set(0);
 					  }
-					 SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEA"); 
+					 SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEA");
+					 /*
 					 SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEB");
 					 SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEC");
+					 */
 					    for(int syStart = 0; syStart < execLimit; syStart++) {
 						  SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit, "BUILDOCTREEA").spin(new Runnable() {
 						    @Override
@@ -392,12 +390,13 @@ public class VideoProcessor extends AbstractNodeMain
 							// await completion of all processing threads and signal a reset to
 							// resume processing at the start of another new image, hence the two barrier
 							// synchronization latches
-								imagesToOctrees(dataL[0], dataR[0], imageLx, imageRx, 
+								imagesToOctrees(dataL, dataR, imageLx, imageRx, 
 										yStart[0].getAndIncrement(), camWidth, camHeight, 
 										nodel[0], noder[0]);
 						    } // run
 					      },"BUILDOCTREEA"); // spin
 					    }
+					    /*
 					    for(int syStart = 0; syStart < execLimit; syStart++) {
 							  SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit, "BUILDOCTREEB").spin(new Runnable() {
 							    @Override
@@ -428,9 +427,12 @@ public class VideoProcessor extends AbstractNodeMain
 							    } // run
 						      },"BUILDOCTREEC"); // spin
 						 }
+						 */
 					 SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("BUILDOCTREEA");
+					 /*
 					 SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("BUILDOCTREEB");
 					 SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("BUILDOCTREEC");
+					 */
 					  if( TIMER )
 						  System.out.println("Process time one="+(System.currentTimeMillis()-etime));
 					  latchOut.await();
@@ -457,7 +459,6 @@ public class VideoProcessor extends AbstractNodeMain
 					  final int[] nSizeT = new int[CHANNELS];
 					  leftYRange.clear();
 					  radixTree.clear();
-					  radixTree2.clear();
 					  //
 					  final List<ArrayList<octree_t>> tnodel = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
 					  final List<ArrayList<octree_t>> tnoder = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
@@ -467,16 +468,16 @@ public class VideoProcessor extends AbstractNodeMain
 						  tnoder.add(noder[channels].get_nodes());
 						  List<int[]> yr = Collections.synchronizedList(new ArrayList<int[]>());
 						  leftYRange.add(yr);
-						  radixTree2.add(new RadixTree<Integer, AxisNodes>());
-						  genRadixTree(tnodel.get(channels), radixTree2.get(channels));
-						  radixTree.add(new RadixTree<Integer, AxisNodes>());
+						  // Right nodes
+						  radixTree.add(new RadixTree<Integer, AxisNodes>(((short)0), ((short)(camHeight/2))));
 						  genRadixTree(tnoder.get(channels), radixTree.get(channels));
-						  System.out.println("Node list length channel "+channels+" Left="+tnodel.get(channels).size()+", Right="+tnoder.get(channels).size()+" Radix tree left="+radixTree2.get(channels).getTreeMap().size()+" Radix tree right="+radixTree.get(channels).getTreeMap().size());
-						  // 
+						  System.out.println("Node list length channel "+channels+" Left="+tnodel.get(channels).size()+", Right="+tnoder.get(channels).size()+" Radix tree right="+radixTree.get(channels).getTreeMap().size());
+						  // Histograms
+						  /*
 						  int[] histol = new int[100];
 						  int[] histor = new int[100];
-						  Object[] enr = radixTree2.get(channels).getTreeMap().entrySet().toArray();
-						  for(int i = 0; i < radixTree2.get(channels).getTreeMap().size(); i++) {
+						  Object[] enr = leftNodes.get(channels).getTreeMap().entrySet().toArray();
+						  for(int i = 0; i < leftNodes.get(channels).getTreeMap().size(); i++) {
 							  AxisNodes axl = ((Entry<Integer, AxisNodes>)enr[i]).getValue();
 							  if( axl == null )
 								  System.out.println("null channel "+channels+" index "+i);
@@ -516,6 +517,7 @@ public class VideoProcessor extends AbstractNodeMain
 							  if(histor[elems] > 0)
 								  System.out.println("RIGHT "+elems+" - "+histor[elems]);
 						  }
+						  */
 						  int iPosStart = 1;
 						  int iPosEnd = 1;
 						  //for(int i = 0 ; i < nodelA.size(); i++) {
@@ -528,9 +530,9 @@ public class VideoProcessor extends AbstractNodeMain
 						   //}
 						  //}
 						  //iPosEnd = nodelA.size();
-						  int incr = tnodel.get(channels).size()/16;
+						  int incr = tnodel.get(channels).size()/64;
 						  for(int i = 0; i < incr; i++){
-							  iPosEnd +=16;
+							  iPosEnd +=64;
 							  yr.add(new int[]{iPosStart, iPosEnd-1});
 							  iPosStart = iPosEnd;
 						  }
@@ -564,26 +566,29 @@ public class VideoProcessor extends AbstractNodeMain
 						//  System.out.println(leftYRange.get(i)[0]+" "+leftYRange.get(i)[1]);
 					  //}
 						SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[0], nSize[0], "MATCHREGIONA");
+						/*
 						SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[1], nSize[1], "MATCHREGIONB");
 						SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[2], nSize[2], "MATCHREGIONC");
+						*/
 					    for(int syStart = 0; syStart < nSize[0]; syStart++) {
 							SynchronizedFixedThreadPoolManager.getInstance(nSizeT[0], nSize[0], "MATCHREGIONA").spin(new Runnable() {
 								@Override
 								public void run() {
 									// set the left nodes with depth
-									matchRegionsMakePlanes/*AssignDepth*/(yStart[0].getAndIncrement(), leftYRange.get(0), 
-											camWidth, camHeight, radixTree2.get(0)/*tnodel.get(0)*/, radixTree.get(0), 
+									matchRegions/*AssignDepth*/(yStart[0].getAndIncrement(), leftYRange.get(0), 
+											camWidth, camHeight, tnodel.get(0), radixTree.get(0), 
 											indexDepth, indexUnproc);
 								} // run									
 							},"MATCHREGIONA"); // spin
 					    } // for syStart
+					    /*
 					    for(int syStart = 0; syStart < nSize[1]; syStart++) {
 								SynchronizedFixedThreadPoolManager.getInstance(nSizeT[1], nSize[1], "MATCHREGIONB").spin(new Runnable() {
 									@Override
 									public void run() {
 										// set the left nodes with depth
-										matchRegionsMakePlanes/*AssignDepth*/(yStart[1].getAndIncrement(), leftYRange.get(1), 
-												camWidth, camHeight, radixTree2.get(1)/*tnodel.get(1)*/, radixTree.get(1), 
+										matchRegionsMakePlanes(yStart[1].getAndIncrement(), leftYRange.get(1), 
+												camWidth, camHeight, leftNodes.get(1), radixTree.get(1), 
 												indexDepth, indexUnproc);
 									} // run									
 								},"MATCHREGIONB"); // spin
@@ -593,16 +598,19 @@ public class VideoProcessor extends AbstractNodeMain
 									@Override
 									public void run() {
 										// set the left nodes with depth
-										matchRegionsMakePlanes/*AssignDepth*/(yStart[2].getAndIncrement(), leftYRange.get(2), 
-												camWidth, camHeight, radixTree2.get(2)/*tnodel.get(2)*/, radixTree.get(2), 
+										matchRegionsMakePlanes(yStart[2].getAndIncrement(), leftYRange.get(2), 
+												camWidth, camHeight, leftNodes.get(2), radixTree.get(2), 
 												indexDepth, indexUnproc);
 									} // run									
 								},"MATCHREGIONC"); // spin
 						    } // for syStart
-					  //				
+					  //	
+					    */
 					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("MATCHREGIONA");
+					  /*
 					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("MATCHREGIONB");
 					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("MATCHREGIONC");
+					  */
 					  if( TIMER )
 							System.out.println("Process time two="+(System.currentTimeMillis()-etime));
 					  latchOut2.await();
@@ -694,8 +702,8 @@ public class VideoProcessor extends AbstractNodeMain
 			        			Object[] o = queueI.takeFirst();
 								imageLx = (BufferedImage) o[0];
 				        		imageRx = (BufferedImage) o[1];
-				        		dataL = (int[][]) o[2];
-				        		dataR = (int[][]) o[3];
+				        		dataL = (int[]) o[2];
+				        		dataR = (int[]) o[3];
 			        			//latchOut4.reset();
 			        			//latch4.reset();
 			        			//latchOut3.reset();
@@ -786,11 +794,8 @@ public class VideoProcessor extends AbstractNodeMain
 										  variance += Math.pow((mean - ind.getDepth()),2);
 									  }
 									  variance /= (double)indexDepth.size();
-									  int isize = 0;
-									  for(int channels = 0; channels < CHANNELS; channels++){
-									   isize += radixTree.get(channels).getTreeMap().size();
-									  }
-									  a = genDCT1(radixTree, isize);
+									  int isize = indexDepth.size();
+									  a = genDCT1(indexDepth, isize);
 									}
 									sigma = Math.sqrt(variance); 
 									if(prevDCT != null) {
@@ -979,7 +984,7 @@ public class VideoProcessor extends AbstractNodeMain
 	 * @param width
 	 * @param height
 	 * @param txl List of octree nodes in left image model
-	 * @param radixTree2 right image nodes arranged in 6D radix tree based on theta/phi of 3 eigencvectors
+	 * @param leftNodes right image nodes arranged in 6D radix tree based on theta/phi of 3 eigencvectors
 	 * @param indexDepth2 resultant processed left nodes with depth
 	 * @param indexUnproc2 resultant unprocessed left nodes
 	 */
@@ -1013,7 +1018,6 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 			double sum = Double.MAX_VALUE;
 			int nscore = 0;
-			short[] vals = genChromoSpatialKeys2(inode);
 			// the color values as Z have to overlap, there have to be common colors. So the max Z axis have to overlap
 			double izMin = Math.floor(inode.getCentroid().z - (inode.getSize()/2));
 			double izMax = Math.ceil(inode.getCentroid().z + (inode.getSize()/2));
@@ -1025,7 +1029,7 @@ public class VideoProcessor extends AbstractNodeMain
 			//SortedMap<Integer, octree_t> noderD = radixTree.subMap(vals[0], vals[1], (short)0xFFFFFFC0, (short)0x3F); // last args is bit mask for search low and high, and and or
 			// FFFFFFFFFFFFFFF000000000
 			// 000000000000000FFFFFFFFF
-			SortedMap<BigInteger, octree_t> noderD = radixTree2.subMap(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], 8);
+			SortedMap<BigInteger, octree_t> noderD = null;//radixTree2.subMap(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], 8);
 			// last args is bit mask for search low and high, 'and' and 'or' 6 bits at a time for both tolerances
 			// so magnitude 6 is 6 * 6 bits or 36 bits, equivaluent to FFFFFFFFF
 			if(noderD == null){ System.out.println("noderD null"); return;}
@@ -1320,89 +1324,104 @@ public class VideoProcessor extends AbstractNodeMain
 		if( SAMPLERATE )
 			System.out.println("matchRegionAssignDepth ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
-	private void matchRegionsMakePlanes(int yStart, 
-			List<int[]> leftYRange2, 
+	/**
+	 * 
+	 * @param yStart
+	 * @param leftYRange2
+	 * @param width
+	 * @param height
+	 * @param leftNodes
+	 * @param radixTree4
+	 * @param indexDepth2
+	 * @param indexUnproc2
+	 */
+	private void matchRegions(int yStart, List<int[]> leftYRange2, 
 			int width, int height, 
-			RadixTree<Integer, AxisNodes> radixTree3, RadixTree<Integer, AxisNodes> radixTree4,
+			ArrayList<octree_t> leftNodes, RadixTree<Integer, AxisNodes> radixTree4,
 			List<envInterface> indexDepth2, List<envInterface> indexUnproc2) {
 		long etime = System.currentTimeMillis();
-		octree_t inode = null, jnode = null;
 		double pix = 0;
 		int[] irange = leftYRange2.get(yStart);
-		Object[] enl = radixTree3.getTreeMap().entrySet().toArray();
-		Object[] enr = radixTree4.getTreeMap().entrySet().toArray();
-
+		//Object[] enr = radixTree4.getTreeMap().entrySet().toArray();
+		if(DEBUGTEST2)
+			System.out.println("matchRegion from "+irange[0]+","+irange[1]+" ***** "+Thread.currentThread().getName());
 		for(int i = irange[0]; i < irange[1]; i++) {
-			if(i >= radixTree3.getTreeMap().size()) {
+			if(i >= leftNodes.size()) {
 				return;
 			}
-			boolean found = false;
-			int nscore = 0;
+			octree_t inode = leftNodes.get(i);
+			//etime = System.currentTimeMillis();
+			Map<Integer, AxisNodes> noderD = radixTree4.subMap((short)inode.getCentroid().z, (short)inode.getCentroid().y, 5); // last args is bit mask for search low and high, and and or
+			//System.out.println("matchRegion radix tree set "+noderD.size()+" "+(System.currentTimeMillis()-etime)+" ***** "+Thread.currentThread().getName());
+			if( noderD.isEmpty()) {
+				indexUnproc2.add(new IndexDepth(inode, 0));
+				continue;
+			}
 			double sum = Double.MAX_VALUE;
-			AxisNodes oscore = null;
-			AxisNodes anl = ((Entry<Integer, AxisNodes>)enl[i]).getValue();
-			// compute DCT, get lowest, then iterate nodes and set vote
-			for(int k = 0; k < enr.length; k++) {
-			//if( inode.getVariance1() == 0 && inode.getVariance2() == 0 && inode.getVariance3() == 0) {
-			//	indexUnproc2.add(new IndexDepth(inode, 0));
-			//	continue;
-			//}
-			//short[] vals = genChromoSpatialKeys2(inode);
-			// the color values as Z have to overlap, there have to be common colors. So the max Z axis have to overlap
-			//double izMin = Math.floor(inode.getCentroid().z - (inode.getSize()/2));
-			//double izMax = Math.ceil(inode.getCentroid().z + (inode.getSize()/2));
-			//double izMin = Math.floor(inode.getCentroid().x - (inode.getSize()/2));
-			//double izMax = Math.ceil(inode.getCentroid().x + (inode.getSize()/2));
-			//double jzMin = 0;
-			//double jzMax = 0;
-			//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
-			//SortedMap<Integer, octree_t> noderD = radixTree.subMap(vals[0], vals[1], (short)0xFFFFFFC0, (short)0x3F); // last args is bit mask for search low and high, and and or
-			// FFFFFFFFFFFFFFF000000000
-			// 000000000000000FFFFFFFFF
-			//SortedMap<BigInteger, octree_t> noderD = radixTree3.subMap(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], 10);
-			// last args is bit mask for search low and high, 'and' and 'or' 6 bits at a time for both tolerances
-			// so magnitude 6 is 6 * 6 bits or 36 bits, equivaluent to FFFFFFFFF
-			//if( noderD.isEmpty()) {
-			//	indexUnproc2.add(new IndexDepth(inode, 0));
-			//	continue;
-			//}
-				AxisNodes anr = ((Entry<Integer,AxisNodes>)enr[k]).getValue();
-				synchronized(anr) {
-					if(anr.processed)
-						continue;
-				}
-				double rms = IOUtils.computeRMSE(anl.dct, anr.dct, Math.min(anl.dct.length, anr.dct.length));
-				if( rms < sum ) {
-					sum = rms;
-					oscore = anr;
-					++nscore;
+			octree_t oscore = null;
+			int nscore = 0;
+			// All the right nodes of all X in the spatial window of color diffence Z as X, and Y
+			for(AxisNodes anr :noderD.values()) {
+					//AxisNodes anr = ((Entry<Integer, AxisNodes>)enr[k]).getValue();
+					//if( inode.getVariance1() == 0 && inode.getVariance2() == 0 && inode.getVariance3() == 0) {
+					//	indexUnproc2.add(new IndexDepth(inode, 0));
+					//	continue;
+					//}
+					//short[] vals = genChromoSpatialKeys2(inode);
+					// the color values as Z have to overlap, there have to be common colors. So the max Z axis have to overlap
+					//double izMin = Math.floor(inode.getCentroid().z - (inode.getSize()/2));
+					//double izMax = Math.ceil(inode.getCentroid().z + (inode.getSize()/2));
+					//double izMin = Math.floor(inode.getCentroid().x - (inode.getSize()/2));
+					//double izMax = Math.ceil(inode.getCentroid().x + (inode.getSize()/2));
+					//double jzMin = 0;
+					//double jzMax = 0;
+					//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
+					//SortedMap<Integer, octree_t> noderD = radixTree.subMap(vals[0], vals[1], (short)0xFFFFFFC0, (short)0x3F); // last args is bit mask for search low and high, and and or
+					// FFFFFFFFFFFFFFF000000000
+					// 000000000000000FFFFFFFFF
+					//SortedMap<BigInteger, octree_t> noderD = radixTree3.subMap(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], 10);
+					// last args is bit mask for search low and high, 'and' and 'or' 6 bits at a time for both tolerances
+					// so magnitude 6 is 6 * 6 bits or 36 bits, equivaluent to FFFFFFFFF
+					// All the right nodes of THIS individual X from spatial window Z,Y
+				for(octree_t jnode : anr.nodes ) {
+					synchronized(jnode) {
+						if(jnode.getVotes() > 0)
+							continue;
+					}
+					//double rms = IOUtils.computeRMSE(anl.dct, anr.dct, Math.min(anl.dct.length, anr.dct.length));
+					// Z nodes represent color difference, we search for minimum color difference
+					// and minimum y displacement
+					double rms = Math.abs(inode.getCentroid().z - jnode.getCentroid().z) + Math.abs(inode.getCentroid().y - jnode.getCentroid().y);
+					if( rms < sum ) {
+						sum = rms;
+						oscore = jnode;
+						++nscore;
+					}
 				}
 			}
 			// finished loop examining all right nodes
-			if( nscore == 0 )
+			if( nscore == 0 ) {
+				// All elements have already voted., flag with non zero depth
+				indexUnproc2.add(new IndexDepth(inode, .1));
 				continue;
-			synchronized(oscore) {
-				oscore.processed = true;
 			}
-			inode = anl.nodes.get(0);
-			jnode = oscore.nodes.get(0);
-			double xDiff = Math.abs(inode.getCentroid().x-jnode.getCentroid().x);
-			double yDiff =  Math.abs(inode.getCentroid().y-jnode.getCentroid().y);
+			synchronized(oscore) {
+				oscore.setVotes(1);
+			}
+			double xDiff = Math.abs(inode.getCentroid().x-oscore.getCentroid().x);
+			double yDiff =  Math.abs(inode.getCentroid().y-oscore.getCentroid().y);
 			//calc the disparity and insert into collection
 			//we will call disparity the distance to centroid of right
 			pix = Bf/Math.hypot(xDiff, yDiff);
 			IndexDepth d1 = new IndexDepth(inode, pix);
 			indexDepth2.add(d1);
 			if( pairCount < WRITEMATCHEDPAIRS) {
-				IndexDepth d2 = new IndexDepth(jnode, pix);
+				IndexDepth d2 = new IndexDepth(oscore, pix);
 				writeTestPerp(d1, d2,"/matched"+(pairCount++));
 			}
 			//System.out.println("matchRegions depth="+pix+" candidates="+nscore+" Left node:"+inode+"\r\nRight node:"+jnode+" ***"+Thread.currentThread().getName()+"***");
-		}
-		// We have a set of left nodes with a common Y value, now extract all right nodes with a Y value in tolerance of
-		// our left node set upon which this thread is operating. 
-		// Other similar left node sets exist upon which other threads are operating.
-
+		}// left range
+		
 		if( SAMPLERATE )
 			System.out.println("matchRegionMakePlanes ***** "+Thread.currentThread().getName()+" *** "+(System.currentTimeMillis()-etime)+" ms.***");
 	}
@@ -1711,39 +1730,26 @@ public class VideoProcessor extends AbstractNodeMain
 	}
 	/**
 	 * Generate the discrete cosine transform for the set specified.
-	 * @param radixTree3
+	 * @param indexDepth2
 	 * @param size
 	 * @return the DCT values array
 	 */
-	private static float[] genDCT1(ArrayList<RadixTree<Integer, AxisNodes>> radixTree3, int size) {
-		float[] coeffs = genCoeffs1(radixTree3, size);
+	private static float[] genDCT1(List<envInterface> indexDepth2, int size) {
+		float[] coeffs = genCoeffs1(indexDepth2, size);
 		FloatDCT_1D fdct1d = new FloatDCT_1D(size);
 		fdct1d.forward(coeffs, false);
 		return coeffs;
 	}
-	private static float[] genCoeffs1(ArrayList<RadixTree<Integer, AxisNodes>> radixTree3, int size) {
-		ArrayList<Double> tcoeffs = new ArrayList<Double>();
-		for(int i = 0 ; i < CHANNELS; i++) {
-			TreeMap<Integer, AxisNodes> txr = radixTree3.get(i).getTreeMap();
-			Collection<AxisNodes> si = txr.values();
-			Iterator<AxisNodes> it = si.iterator();
-			while(it.hasNext()) {
-				// TODO double?
-				AxisNodes an = it.next();
-				for(Double f: an.eigens) {
-					tcoeffs.add(f);
-				}
-			}
-		}
-		float[] coeffs = new float[tcoeffs.size()];
+	private static float[] genCoeffs1(List<envInterface> indexDepth2, int size) {
+		float[] coeffs = new float[indexDepth2.size()];
 		int j = 0;
-		for(Double o : tcoeffs)
-			coeffs[j++] = o.floatValue();
+		for(envInterface o : indexDepth2)
+			coeffs[j++] = genChromoSpatialKeys2(((AbstractDepth)o).node);
 		return coeffs;
 	}
 	private static short[] genSpatialKey(octree_t node) {
-		short x = (short)Math.floor(node.getMiddle().x);
-		short y = (short)Math.floor(node.getMiddle().y);
+		short x = (short)(node.getCentroid().z);
+		short y = (short)(node.getCentroid().y);
 		return new short[]{x,y};
 	}
 	/**
@@ -1760,28 +1766,26 @@ public class VideoProcessor extends AbstractNodeMain
 		AxisNodes an = null;
 		for(octree_t node: nodes) {
 			if(node.getVariance1() != 0) {
-				short[] vals = genChromoSpatialKeys2(node);
-				//int options = (vals[2] << 20) |(vals[3] << 10) | vals[4];
-				//octree_t ot = radixTree2.put(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5], node);
-				BigInteger bi = radixTree2.makeKey(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
-				vals = genSpatialKey(node);
+				short[] vals = genSpatialKey(node);
 				Integer skey = radixTree2.makeKey(vals[0], vals[1]);
-				skey &= 0xFFFFFFFC; // expands key by each dimension
+				//skey &= 0xFFFFFFFC; // expands key by each dimension
 				an = radixTree2.getTreeMap().get(skey);
 				if(an == null) {
 					an = new AxisNodes();
 					AxisNodes ot = radixTree2.put(skey, an);
-					//if( ot != null )
-						//System.out.println("NODE INCONSISTENCY:"+node+" "+vals[0]+","+vals[1]);
-					++i;
+					if( ot != null )
+						System.out.println("Spatial Key NODE INCONSISTENCY:"+node+" "+vals[0]+","+vals[1]);
+					else
+						++i;
 				}
 				an.nodes.add(node);
-				an.eigens.add(bi.doubleValue());
+				//an.eigens.add(bi.doubleValue());
 			} else
 				 ++vert;
 		}
 		System.out.println("Built "+i+" element radix tree from "+nodes.size()+" nodes with "+vert+" vertical");
-		TreeMap<Integer, AxisNodes> txr = radixTree2.getTreeMap();
+		/*
+		TreeMap<Integer, AxisNodes> txr = leftNodes.getTreeMap();
 		Collection<AxisNodes> si = txr.values();
 		Iterator<AxisNodes> it = si.iterator();
 		while(it.hasNext()) {
@@ -1794,51 +1798,15 @@ public class VideoProcessor extends AbstractNodeMain
 		}
 		DoubleDCT_1D fdct1D = new DoubleDCT_1D(an.dct.length);
 		fdct1D.forward(an.dct, false);
+		*/
 	}
-
 	
-	/**
-	 * Generate 2 longs that have expanded chromospatial keys, one for the coplanar area
-	 * The other for the vector from the image center at 0,0 to the centroid in spherical coords
-	 * The magnitudes are 10x the degrees are 100x
-	 * val[0] center to planar, val[1] centroid to normal
-	 * @param node
-	 * @return the 2 long values for 0,0 to centroid, then coplanar area
-	 */
-	private static long[] genChromoSpatialKeys(octree_t node) {
-		   double[] sph1 = octree_t.cartesian_to_spherical(node.getCentroid()); //1=theta,2=phi,3=rho
-		   double degTheta = Math.toDegrees(sph1[0]);
-		   if( degTheta < 0.0) {
-			    degTheta += 360.0;
-		   }
-		   double degPhi = Math.toDegrees(sph1[1]);
-		   if( degPhi < 0.0) {
-			    degPhi += 360.0;
-		   }
-		   // deg*100 = 0-36099 = 1000110100000011b
-		   long val1 = (((long)(degTheta*100.0d) & 0xFFFF) << 48) | (((long)(degPhi*100.0d) & 0xFFFF) << 32) | ((long)(sph1[2]*100.0d) );
-		   // axis of middle variance, perp to normal
-		   double[] sph2 = octree_t.cartesian_to_spherical(node.getNormal1());
-		   double degTheta2 = Math.toDegrees(sph2[0]);
-		   if( degTheta2 < 0.0) {
-			    degTheta2 += 360.0;
-		   }
-		   double degPhi2 = Math.toDegrees(sph2[1]);
-		   if( degPhi2 < 0.0) {
-			    degPhi2 += 360.0;
-		   }
-		   // 0x3FF 10 bits 1023 or 102.3 max variance
-		   long val2 = (((long)(degTheta2*100.0d) & 0xFFFF) << 48) | (((long)(degPhi2*100.0d) & 0xFFFF) << 32) | 
-				   (((long)(node.getVariance1()*10.0d) & 0x3FF) << 20) | (((long)(node.getVariance2()*10.0d) & 0x3FF) << 10) | (((long)(node.getVariance3()*10.0d) & 0x3FF)); 
-
-		   return new long[]{val1, val2};
-	}
 	/**
 	 * Generate the chromospatial keys for the node at degreesx10 and magnitudex10
 	 * @param node
 	 * @return 7 shorts of node value normal1: theta1, phi1, theta2, phi2, variance1, variance2, variance3
 	 */
-	private static short[] genChromoSpatialKeys2(octree_t node) {
+	private static float genChromoSpatialKeys2(octree_t node) {
 		   double[] sph1 = octree_t.cartesian_to_spherical(node.getNormal1()); //1=theta,2=phi,3=rho
 		   double degTheta = Math.toDegrees(sph1[0]);
 		   if( degTheta < 0.0) {
@@ -1879,13 +1847,29 @@ public class VideoProcessor extends AbstractNodeMain
 		   short val2c = (short)(((int)(degPhi*10.0d)) & 0x7FFF);
 		   if( val1 < 0 || val2 < 0 || val1b < 0 || val2b < 0 || val1c < 0 || val2c < 0)
 			   System.out.println("OVERFLOW CHROMOSPATIAL KEY VALUE!! "+val1+" "+val2+" "+val1b+" "+val2b+" "+val1c+" "+val2c);
-		   short val3 = (short)(((int)(node.getVariance1()*10.0d)) & 0x3FF);
-		   short val4 = (short)(((int)(node.getVariance2()*10.0d)) & 0x3FF);
-		   short val5 = (short)(((int)(node.getVariance3()*10.0d)) & 0x3FF);
+		   //short val3 = (short)(((int)(node.getVariance1()*10.0d)) & 0x3FF);
+		   //short val4 = (short)(((int)(node.getVariance2()*10.0d)) & 0x3FF);
+		   //short val5 = (short)(((int)(node.getVariance3()*10.0d)) & 0x3FF);
 		   // 0x3FF 10 bits 1023 or 102.3 max variance
-		   //long val2 = (((long)(degTheta2*100.0d) & 0xFFFF) << 48) | (((long)(degPhi2*100.0d) & 0xFFFF) << 32) | 
-			//	   (((long)(node.getVariance1()*10.0d) & 0x3FF) << 20) | (((long)(node.getVariance2()*10.0d) & 0x3FF) << 10) | (((long)(node.getVariance3()*10.0d) & 0x3FF)); 
-		   return new short[]{val1, val2, val1b, val2b, val1c, val2c, val3, val4, val5};
+		   //long val = (((long)(degTheta*100.0d) & 0xFFFF) << 48) | (((long)(degPhi*100.0d) & 0xFFFF) << 32) | 
+		   //	   (((long)(node.getVariance1()*10.0d) & 0x3FF) << 20) | (((long)(node.getVariance2()*10.0d) & 0x3FF) << 10) | (((long)(node.getVariance3()*10.0d) & 0x3FF)); 
+		   //return new short[]{val1, val2, val1b, val2b, val1c, val2c, val3, val4, val5};
+           BigInteger kxy = BigInteger.ZERO; 
+           for(int i = 15; i >= 0; i--) {
+           	kxy = kxy.shiftLeft(1);
+           	kxy = kxy.add(BigInteger.valueOf((val1 >> i) & 1));
+           	kxy = kxy.shiftLeft(1);
+           	kxy = kxy.add(BigInteger.valueOf((val2 >> i) & 1));
+           	kxy = kxy.shiftLeft(1);
+            kxy = kxy.add(BigInteger.valueOf((val1b >> i) & 1));
+            kxy = kxy.shiftLeft(1);
+           	kxy = kxy.add(BigInteger.valueOf((val2b >> i) & 1));
+           	kxy = kxy.shiftLeft(1);
+            kxy = kxy.add(BigInteger.valueOf((val1c >> i) & 1));
+            kxy = kxy.shiftLeft(1);
+           	kxy = kxy.add(BigInteger.valueOf((val2c >> i) & 1));
+           }
+           return kxy.floatValue();
 	}
 	/**
 	 * Generate ersatz key range.
@@ -3035,10 +3019,10 @@ public class VideoProcessor extends AbstractNodeMain
 		 *
 		 */
 		static class AxisNodes {
-			public boolean processed = false;
-			public double[] dct;
-			public ArrayList<Double> eigens = new ArrayList<Double>();
 			public ArrayList<octree_t> nodes = new ArrayList<octree_t>();
+			/*public double[] dct;
+			public ArrayList<Double> eigens = new ArrayList<Double>();
+			public ArrayList<octree_t> nodes = new ArrayList<octree_t>();*/
 		}
 		/**
 		 * Abstract away operations on an envelope that includes a depth. A plane if you will.
@@ -3246,8 +3230,8 @@ public class VideoProcessor extends AbstractNodeMain
 		 */
 		final class PixelsToModel {
 			private static final boolean DEBUG = true;
-			private int[][] dataLx; // left array return from model generation (i.e. canny with magnitudes or mean color generator with means)
-			private int[][] dataRx; // right model array with magnitudes
+			private int[] dataLx; // left array return from model generation (i.e. canny with magnitudes or mean color generator with means)
+			private int[] dataRx; // right model array with magnitudes
 			BufferedImage imageL1 = null;
 			BufferedImage imageR1 = null;
 			CyclicBarrier latchL = new CyclicBarrier(2);
@@ -3314,7 +3298,7 @@ public class VideoProcessor extends AbstractNodeMain
 			 * @param threadGroupName The group name since we are using multiple instances of model generator
 			 * @return
 			 */
-			private int[][] genModel(BufferedImage img, int[][] datap, String threadGroupName) {
+			private int[] genModel(BufferedImage img, int[] datap, String threadGroupName) {
 		   	    //ParallelCannyEdgeDetector ced = new ParallelCannyEdgeDetector(threadGroupName);
 			    //ced.setLowThreshold(.1f);
 			    //ced.setHighThreshold(.2f);
@@ -3323,15 +3307,15 @@ public class VideoProcessor extends AbstractNodeMain
 				//---SobelEdgeDetector ced = new SobelEdgeDetector();
 			    //ced.setSourceImage(img);
 			    //int[] datax = ced.semiProcess();
-				MeanColorGenerator mcg = new MeanColorGenerator(img, camWidth, camHeight, true);
+				MeanColorGenerator mcg = new MeanColorGenerator(img, camWidth, camHeight, false);
 				//System.out.println("Mean color value ="+mcg.meanValue());
-				int[][] datax = mcg.getData3();//mcg.mean();
+				int[] datax = mcg.getData();//mcg.mean();
 				if( VideoProcessor.imageIntegrate > 0 ) {
 					if(datap != null) {
 						for(int i = 0; i < datap.length; i++) {
-							for(int j = 0; j < datap[i].length; j++) {
-			    			 datap[i][j] = datap[i][j] | datax[i][j];
-							}
+							//for(int j = 0; j < datap[i].length; j++) {
+			    			 datap[i] = datap[i] | datax[i];
+							//}
 						}
 					}
 				}

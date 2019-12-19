@@ -43,7 +43,13 @@ public class CircularBlockingDeque<T> implements Iterable<T> {
     start = 0;
     length = 0;
   }
-
+  /**
+   * Sets start and length to 0
+   */
+  public void clear() {
+	  start = 0;
+	  length = 0;
+  }
   /**
    * Adds the specified entry to the tail of the queue, overwriting older
    * entries if necessary.

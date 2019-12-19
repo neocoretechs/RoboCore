@@ -21,6 +21,8 @@ import java.util.TreeMap;
 * encode a multidimensional window of sorts into which collections can be aggregated and retrieved.<br/>
 * When encoding points, we can specify the lower and upper bounds of a flattened and expended key set 
 * to retrieve elements of a multidimensional set (see the subMap methods below), very fast.<br/>
+* Noting the offsets in the constructors, for things to work properly in general we need to keep the keys
+* in the positive cartesian coordinate space, since we are flattening bits and such.  
 * @author Groff Copyright (C) NeoCoreTechs 2019
 */
 public class RadixTree<T,V> {
@@ -67,86 +69,12 @@ public class RadixTree<T,V> {
 	                short xi = (short) ((x + xoffset) * radix);
 	                short yi = (short) ((y + yoffset) * radix);
 	                int kxy = 0; 
-
-	                kxy += (xi >> 15) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 15) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 14) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 14) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 13) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 13) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 12) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 12) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 11) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 11) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 10) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 10) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 9) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 9) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 8) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 8) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 7) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 7) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 6) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 6) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 5) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 5) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 4) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 4) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 3) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 3) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 2) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 2) & 1;
-
-	                kxy <<= 1;
-	                kxy += (xi >> 1) & 1;
-	                kxy <<= 1;
-	                kxy += (yi >> 1) & 1;
-
-	                kxy <<= 1;
-	                kxy += xi & 1;
-	                kxy <<= 1;
-	                kxy += yi & 1;
-
+	                for(int i = 15; i > 0; i--) {
+	                	kxy <<= 1;
+	                	kxy += (xi >> i) & 1;
+	                	kxy <<= 1;
+	                	kxy += (yi >> i) & 1;
+	                }
 	                return kxy;
 	    }
 	    /**
@@ -159,7 +87,7 @@ public class RadixTree<T,V> {
                 int xi = (int) ((x + xoffset) * radix);
                 int yi = (int) ((y + yoffset) * radix);
                 long kxy = 0; 
-                for(int i = 31; i >= 0; i--) {
+                for(int i = 31; i > 0; i--) {
                 	kxy <<= 1;
                 	kxy += (xi >> i) & 1;
                 	kxy <<= 1;
@@ -181,7 +109,7 @@ public class RadixTree<T,V> {
             short xj = (short) ((x2 + xoffset) * radix);
             short yj = (short) ((y2 + yoffset) * radix);
             long kxy = 0; 
-            for(int i = 15; i >= 0; i--) {
+            for(int i = 15; i > 0; i--) {
             	kxy <<= 1;
             	kxy += (xi >> i) & 1;
             	kxy <<= 1;
@@ -231,7 +159,14 @@ public class RadixTree<T,V> {
 		public V put(Integer skey, V value) {
 		       return treeMap.put((T)convertInstanceOfObject(skey), value);
 		}
+		public V put(Long skey, V value) {
+		       return treeMap.put((T)convertInstanceOfObject(skey), value);
+		}
+		public V put(BigInteger skey, V value) {
+		       return treeMap.put((T)convertInstanceOfObject(skey), value);
+		}
 		
+		// Multiple args make key then insert
 	    public V put(short x, short y, V tvalue) {       
 	       int trtn = makeKey(x, y);
 	       return treeMap.put((T)convertInstanceOfObject(trtn), tvalue);
@@ -277,7 +212,7 @@ public class RadixTree<T,V> {
 	       int rtnLow = rtn & lowMask;
 	       int rtnHigh = rtn | hiMask;
 	       if( rtnLow < 0 || rtnHigh < 0)
-	    	   System.out.println("KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+	    	   System.out.println("RadixTree SubMap KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 	       return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 	    }
@@ -295,13 +230,13 @@ public class RadixTree<T,V> {
 				hiMask = (hiMask << 1) | 1;
 			}
 			for(int i = 32; i > keyBitMagnitude * 2; i--) {
-				lowMask = (lowMask >> 1) | 0x80000000;
+				lowMask = (lowMask >>> 1) | 0x40000000;
 			}
 		   int rtn = makeKey(x,y);
 		   int rtnLow = rtn & lowMask;
 		   int rtnHigh = rtn | hiMask;
 		   if( rtnLow < 0 || rtnHigh < 0)
-		    System.out.println("KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+		    System.out.println("RadixTree SubMap KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //		       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 		   return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 		}
@@ -314,7 +249,7 @@ public class RadixTree<T,V> {
 	       long rtnLow = rtn & lowMask;
 	       long rtnHigh = rtn | hiMask;
 	       if( rtnLow < 0 || rtnHigh < 0)
-	    	   System.out.println("KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+	    	   System.out.println("RadixTree SubMap KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 	       return treeMap.subMap((T)convertInstanceOfObject(rtn), (T)convertInstanceOfObject(rtnHigh));
 	    }
@@ -332,13 +267,13 @@ public class RadixTree<T,V> {
 			   hiMask = (hiMask << 1) | 1;
 			}
 			for(int i = 64; i > keyBitMagnitude * 2; i--) {
-			   lowMask = (lowMask >> 1) | 0x8000000000000000L;
+			   lowMask = (lowMask >>> 1) | 0x4000000000000000L;
 			}
 		   long rtn = makeKey(x,y);
 		   long rtnLow = rtn & lowMask;
 		   long rtnHigh = rtn | hiMask;
 		   if( rtnLow < 0 || rtnHigh < 0)
-		     System.out.println("KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+		     System.out.println("RadixTree SubMap KEY OVERFLOW:"+x+" "+y+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //		       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 		   return treeMap.subMap((T)convertInstanceOfObject(rtn), (T)convertInstanceOfObject(rtnHigh));
 		}
@@ -355,7 +290,7 @@ public class RadixTree<T,V> {
 	       long rtnLow = rtn & lowMask;
 	       long rtnHigh = rtn | hiMask;
 	       if( rtnLow < 0 || rtnHigh < 0)
-	    	   System.out.println("KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+	    	   System.out.println("RadixTree SubMap KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 	       return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 	    }
@@ -375,13 +310,13 @@ public class RadixTree<T,V> {
 		    	hiMask = (hiMask << 1) | 1;
 		    }
 		    for(int i = 64; i > keyBitMagnitude * 4; i--) {
-		    	lowMask = (lowMask >> 1) | 0x8000000000000000L;
+		    	lowMask = (lowMask >>> 1) | 0x4000000000000000L;
 		    }
 		    long rtn = makeKey(x1,y1,x2,y2);
 		    long rtnLow = rtn & lowMask;
 		    long rtnHigh = rtn | hiMask;
 		    if( rtnLow < 0 || rtnHigh < 0)
-		     System.out.println("KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+		     System.out.println("RadixTree SubMap KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //		     System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 		    return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 		 }
@@ -398,7 +333,7 @@ public class RadixTree<T,V> {
 	       BigInteger rtnLow = rtn.and(lowMask);
 	       BigInteger rtnHigh = rtn.or(hiMask);
 	       if( rtnLow.compareTo(BigInteger.ZERO) < 0 || rtnHigh.compareTo(BigInteger.ZERO) < 0)
-	    	   System.out.println("KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+	    	   System.out.println("RadixTree SubMap KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 	       return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 	    }
@@ -432,7 +367,7 @@ public class RadixTree<T,V> {
 	    			   " low key="+String.format("%096x",rtnLow)+" High key="+String.format("%096x",rtnHigh));
 	       }
 	       if( rtnLow.compareTo(BigInteger.ZERO) < 0 || rtnHigh.compareTo(BigInteger.ZERO) < 0)
-	    	   System.out.println("KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
+	    	   System.out.println("RadixTree SubMap KEY OVERFLOW:"+x1+" "+y1+" "+x2+" "+y2+" mask:"+lowMask+" "+hiMask+" low key="+rtnLow+" hi key="+rtnHigh);
 //	       System.out.println(rtn.radixKey+" "+rtnHigh.radixKey);
 	       return treeMap.subMap((T)convertInstanceOfObject(rtnLow), (T)convertInstanceOfObject(rtnHigh));
 	    }
