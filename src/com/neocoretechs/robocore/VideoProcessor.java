@@ -135,13 +135,13 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean WRITEFILES = false; // write full set of display files
 	private static final boolean WRITEGRID = false; // write occupancy grid derived from depth points
 	private static final boolean WRITEPLANARS = false; // write left and right minimal planars, the processed ones in outplanars# with correlated one color, uncorr another, then left and right channel planarsC#L# and planarsC#R# where C# is channel
-	private static final boolean WRITEPLANES = false; // write final planes approximations
+	private static final boolean WRITEPLANES = true; // write final planes approximations
 	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no minimal planar regions
 	private static final boolean WRITEENCZERO = false; // write minimal planar regions enclosed by no maximal envelope
-	private static final boolean WRITEMODEL = true; // write left and right model, if ASSIGNPOINTS true left file has 3D
+	private static final boolean WRITEMODEL = false; // write left and right model, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
 	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
-	private static final int WRITEMATCHEDPAIRS = 100; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
+	private static final int WRITEMATCHEDPAIRS = 0; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
 	private static final boolean ASSIGNPOINTS = false; // assign depth to points in file vs simply compute planars
 	private static final boolean SMOOTHEGRID = false; // Bezier smoothing of occupancy nav grid
 
@@ -768,15 +768,22 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	// write unmatched minimal envelopes
 			        	     	int empty = 0;
 			        	     	int wasvotes = 0;
+			        	     	int degen = 0;
 		        	     		synchronized(indexUnproc) {
 		        	     			for(envInterface e: indexUnproc) {
-		        	     				if(e.getDepth() == 0)
-		        	     					++empty;
+		        	     				if( e.getDepth() == 0 )
+		        	     						++empty;
 		        	     				else
-		        	     					++wasvotes;
+		        	     					if( e.getDepth() == .1)
+		        	     						++wasvotes;
+		        	     					else
+		        	     						if( e.getDepth() == .2)
+		        	     							++degen;
+		        	     						else
+		        	     							System.out.println("UNKNOWN CASE IN UNPROCESSED NODE LIST:"+e.getDepth());
 		        	     			}
 		        	     		}
-		        	     		System.out.println("Run had "+empty+" empty sets and "+wasvotes+" instances where all elements voted");
+		        	     		System.out.println("Run had "+empty+" empty sets and "+wasvotes+" instances where all elements voted and "+degen+" degenerates.");
 			        	     	//
 			        	      	float[] a = null; // DCT elements
 								mean = variance = 0;
@@ -785,6 +792,10 @@ public class VideoProcessor extends AbstractNodeMain
 				        	     	  if( WRITEFILES || WRITEPLANARS) {
 				        	     		 System.out.println("Writing outplanars"+files);
 				        	     		 writePerp(indexDepth, indexUnproc, 255,255,0, 0,255,255, "outplanars"+files);
+				        	     	  }
+				        	     	  if( WRITEFILES || WRITEPLANES) {
+					        	     		 System.out.println("Writing planes"+files);
+					        	     		 writeFile(indexDepth, "/planes"+files);
 				        	     	  }
 									  for(envInterface ind : indexDepth) {
 										  mean += ind.getDepth();
@@ -1409,10 +1420,14 @@ public class VideoProcessor extends AbstractNodeMain
 				oscore.setVotes(1);
 			}
 			double xDiff = Math.abs(inode.getCentroid().x-oscore.getCentroid().x);
-			double yDiff =  Math.abs(inode.getCentroid().y-oscore.getCentroid().y);
+			//double yDiff =  Math.abs(inode.getCentroid().y-oscore.getCentroid().y);
+			if( xDiff == 0 /*&& yDiff == 0*/ ) {
+				System.out.println("both sides zero..");
+				continue;
+			}
 			//calc the disparity and insert into collection
 			//we will call disparity the distance to centroid of right
-			pix = Bf/Math.hypot(xDiff, yDiff);
+			pix = Bf/xDiff;///Math.hypot(xDiff, yDiff);
 			IndexDepth d1 = new IndexDepth(inode, pix);
 			indexDepth2.add(d1);
 			if( pairCount < WRITEMATCHEDPAIRS) {
@@ -2526,14 +2541,42 @@ public class VideoProcessor extends AbstractNodeMain
 			try {
 				dos = new DataOutputStream(new FileOutputStream(f));
 				for(envInterface id : d) {
-					writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 
-							(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
-					writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 
-							(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
-					writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 
-							(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
-					writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 
-							(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
+					if( ((AbstractDepth)id).node.getRoot().m_points == null ) {
+						System.out.println("node points null in writeFile");
+						continue;
+					}
+					if( ((AbstractDepth)id).node.getRoot().m_colors == null ) {
+						System.out.println("node colors null in writeFile");
+						continue;
+					}
+					for(int i = 0; i < ((AbstractDepth)id).node.getIndexes().size(); i++) {
+						int j = ((AbstractDepth)id).node.getIndexes().get(i);
+						Vector4d pnode = ((AbstractDepth)id).node.getRoot().m_points.get(j);
+						Vector4d pcolor = ((AbstractDepth)id).node.getRoot().m_colors.get(j);
+						dos.writeBytes(String.valueOf(pnode.x)); // X
+							dos.writeByte(' ');
+							dos.writeBytes(String.valueOf(pnode.y));// Y
+							dos.writeByte(' ');
+							dos.writeBytes(String.valueOf(((AbstractDepth)id).depth*2)); // Z
+							dos.writeByte(' ');
+							dos.writeBytes(String.valueOf((int)pcolor.x)); // R
+							dos.writeByte(' ');
+							dos.writeBytes(String.valueOf((int)pcolor.y)); // G
+							dos.writeByte(' ');
+							dos.writeBytes(String.valueOf((int)pcolor.z)); // B
+							dos.writeByte('\r');
+							dos.writeByte('\n');
+					}
+					
+					//writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 
+					//		(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
+					//writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 
+					//		(int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
+					//writer_file.line3D(dos, (int)id.getEnv()[2]/*xmax*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 
+					//		(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
+					//writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 
+					//		(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
+					
 				}
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
