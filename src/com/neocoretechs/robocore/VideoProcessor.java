@@ -13,16 +13,11 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Enumeration;
-import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.BrokenBarrierException;
@@ -34,12 +29,16 @@ import javax.imageio.ImageIO;
 import org.jtransforms.dct.DoubleDCT_1D;
 import org.jtransforms.dct.FloatDCT_1D;
 import org.jtransforms.utils.IOUtils;
+import org.ros.concurrent.CancellableLoop;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
+import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
+
+import sensor_msgs.PointCloud;
 
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.machinevision.MeanColorGenerator;
@@ -54,70 +53,60 @@ import com.neocoretechs.robocore.machine.bridge.RadixTree;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.
- * We break the image into  bands and assign each band to a processing thread. 
+ * We break the image into bands and assign each band to a processing thread. 
  * We have an option to write files that can be read by CloudCompare for testing.
  *  __mode:= option on commandline determines how we process, such as 'edge','display', 'display3D',etc.
  *  
- * The new algorithm for stereo ChromoSpatial Coplanar Region (CHROMOSCARM) Matching. This fast algorithm for
+ * The new algorithm for Fast Average Sum of Absolute Differences (FASAD) Matching. This fast algorithm for
  * assigning depth to stereo point clouds works well on low
- * resolution images, requires no calibration of cameras, and is immune to misalignment of the cameras. 
+ * resolution images, requires no calibration of cameras, and is immune to misalignment of the cameras. Instead of brute
+ * force region matching, a chromospatial model using averaging and dimensionality reduction allows us to work with
+ * groups of points instead of individual pixels. No boundary condition problems.
  * 
  * New algorithm for stereo matching:
  * (The terms region, node, and octree node and octree cell are synonymous)
  * The steps are:
  * 1.) Create the ChromoSpatial model from a pseudo 3D representation of image X,Y,Z coords with the Z axis as 
- * the color value, sans alpha, converted to greyscale and subtracted from the mean greyscale value. 
+ * the color value, sans alpha, converted to grayscale. 
  *
- * 2.) Generate 2 octrees of model converted images at the minimal node level, now 7. this step in parallel by assigning
- * the octree build to one Y image scan line per thread.
+ * 2.) Generate 2 octrees of model converted images at the minimal node level, now 6. Execute this step in parallel by assigning
+ * the octree build to one entry of Y image scan line range per thread.
+ * This subdivide step is in a single thread after barrier synchronization of the build step.
  *
- * 3.) Use PCA on the 2 images to find minimal coplanar regions in both octrees and generate eigenvectors 
- * and eigenvalues of the principal axis of the minimal coplanar regions. 
- * The octree subdivision scheme relies on hough_settings.min_isotropy to set how much variance from PCA eigenvalues
- * variance2/variance3 allowed when deciding whether to subdivide the octree at each level. 
- * This step in a single thread after barrier 
- * synchronization of the build step. Multiple threads not necessary as this step is fast.
+ * 3.) Each node centroid represents the average color in Z of the points in the octree node cell, and 
+ * spatial position of that cell in Y, and we are solving for X.
+ * Create a radix tree of collections of related X centroids per Z,Y node coordinates. The key is bit interchanged Z,Y and
+ * the value in the treemap is the ArrayList of X nodes at that Z,Y.
  *
- * 4.) Process the left image coplanar regions against the right coplanar regions by comparing 
- * the cosine of dot products of the eigenvectors second axis and the magnitude of the eigenvalue
- * for all minimal right regions in the yTolerance of the left Y scan line assigned to the thread calling the method. 
- * Match the regions at minimal level from left to right image. Weed out the ones beyond yTolerance
- * and match the arccosine of vector dot product of the secondary eigenvector if the difference between the left
- * node eigenvectors and right is below tolerance. From the candidates below tolerance, select the one
- * that has the minimum difference in eigenvector dot. Where they are the same compare eigenvalue and take the
- * least difference. Finally, all things being equal count the points in the region and find closest. In the case of vertical
- * lines with multiple matches, reject the match, if one match to a vertical line, then use that.
- * The minimum points per octree cell can be changed in hough_settings but typically minimum 5 points. 
- * The coplanar region found by PCA may contain more however.
+ * 4.) Process the left image coplanar regions against the right coplanar regions by comparing the expanded Z,Y window 
+ * of the left node centroid to the retrieved nodes from the radixtree of right nodes. If the retrieved set is empty (no
+ * right nodes in the expanded left node window),or all elements of the set have already been processed, put the left node
+ * in an 'unprocessed list'.
+ * 
  * This is analogous to the standard stereo block matching (SBM) done by brute force sum of absolute differences (SAD) of the RGB
  * values of left and right windows of pixels, but instead using a more evolved approach of comparing the essence 
- * of the orientation of small regions of marker points in each image, more akin to the way organisms seem to do it.
+ * of the contrast of small regions of points in each image.
  *
  * 5.) Assign a disparity to the minimal octree region based on differences in epipolar distance values of the 2 octree 
  * centroids of the points in the coplanar minimal regions from step 4. The regions are small enough that 
- * centroid value is accurate enough to give reasonable disparity, identical to standard black matching
- *
- * 6.) Reset left image octree and regenerate coplanar regions via PCA at a higher octree level, using level 5. The concept
- * is that regions that were coplanar on a smaller level and are coplanar at a higher level still, form one region of interest.
- *
- * 7.) Find the minimal regions (that were assigned a depth) enclosed by the newly generated larger coplanar regions.
- *
- * 8.) For all points in the larger regions, determine which enclosed minimal region they fall into. If within the 
- * smaller region, assign the point the depth we found and assigned to that minimal region earlier in step 5.
- *
- * 9.) For points in the larger region that do not fall into a smaller enclosed region, find the closest edge of 
- * a smaller enclosed region they are near and assign the depth of that region to the point.
- *
- * 10.) After processing a larger region, remove the smaller regions it encloses from consideration.
- *
- * 11.) Regenerate coplanar regions via PCA  at a higher octree level, using level 5, if there are unprocessed smaller
- *  regions (regions that were not enclosed by a larger one) .
- *
- * 12.) For all minimal regions not previously processed, perform steps 7,8,9,10 although it seems that in 
- * practice all regions are processed without having to use the larger octree nodes at level 4.
+ * centroid value is accurate enough to give reasonable disparity, comparable to standard block matching.
  * 
- * Once completed, a set of coplanar octree regions that can be used to navigate or for further processing into larger coplanar
- * areas is available.
+ * 6.) Postprocess disparity nodes by throwing out points more than 2 sigma from mean depth. Perform the DCT on the
+ * polar left node bit interchanged theta,phi keys and if the RMS error of the 2 DCT vectors is more than 1.3 sigma or so
+ * declare that the image has changed and transmit the new point cloud.
+ * 
+ * Multiple 'channels' can be processed simultaneously. A channel is basically another instance of the complete model.
+ * For instance if you have the 3 color bands broken out into separate octrees, 3 channels would be used, one for each color
+ * band, R, G, B.
+ * 
+ * A lot of the old code revolves around the use of PCA on the octree nodes to find minimal coplanar regions 
+ * in both left and right image octrees and generate eigenvectors  and eigenvalues of the principal axis of 
+ * the minimal coplanar regions.
+ * The octree subdivision scheme relies on hough_settings.min_isotropy to set how much variance is allowed during 
+ * PCA of the octree node fields variance2/variance3 when deciding whether to subdivide the octree at each level. 
+ * The eigenvalue magnitude of the eigenvectors can be used to form values on which to perform a DCT on the bit interchanged
+ * key of the theta, phi of the 3 PCA principal axis (as 16 bit degrees*10 values) as reflected in some of the other old code.
+ *
  *
  * @author jg (C) NeoCoreTechs 2018,2019
  *
@@ -135,12 +124,11 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean WRITEFILES = false; // write full set of display files
 	private static final boolean WRITEGRID = false; // write occupancy grid derived from depth points
 	private static final boolean WRITEPLANARS = false; // write left and right minimal planars, the processed ones in outplanars# with correlated one color, uncorr another, then left and right channel planarsC#L# and planarsC#R# where C# is channel
-	private static final boolean WRITEPLANES = true; // write final planes approximations
-	private static final boolean WRITEZEROENC = false; // write maximal envelopes enclosing no minimal planar regions
-	private static final boolean WRITEENCZERO = false; // write minimal planar regions enclosed by no maximal envelope
+	private static final boolean WRITEPLANES = false; // write final planes approximations
+	private static final boolean WRITEUNPROCESSED = false; // write unprocessed nodes
 	private static final boolean WRITEMODEL = false; // write left and right model, if ASSIGNPOINTS true left file has 3D
 	private static final boolean WRITEJPEGS = false; // write left right raw images from stereo bus
-	private static final boolean WRITERMS = true; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
+	private static final boolean WRITERMS = false; // write an edge file with name RMSxxx (where xxx is rms value) when RMS value changes
 	private static final int WRITEMATCHEDPAIRS = 0; // if > 0, the number of individual matched pair files to write from the first number matched to check matching
 	private static final boolean ASSIGNPOINTS = false; // assign depth to points in file vs simply compute planars
 	private static final boolean SMOOTHEGRID = false; // Bezier smoothing of occupancy nav grid
@@ -188,6 +176,7 @@ public class VideoProcessor extends AbstractNodeMain
     final static double DCTRMSSigma = 1.35; // number of standard deviations from DCT RMS mean before we decide its a new image
 
     CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(10);
+	CircularBlockingDeque<sensor_msgs.PointCloud> queueO = new CircularBlockingDeque<sensor_msgs.PointCloud>(16);
 	
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
@@ -216,9 +205,10 @@ public class VideoProcessor extends AbstractNodeMain
 	//int yStart;
 	int threads = 0;
 	double mean, sigma, variance;
-	float[] prevDCT = null;
+	int degen;
+	//float[] prevDCT = null;
 	int pairCount;
-	int metric1 = 0; int metric2 = 0; int metric2b; int metric3 = 0; int metric4 = 0; int metric5 = 0;
+	//int metric1 = 0; int metric2 = 0; int metric2b; int metric3 = 0; int metric4 = 0; int metric5 = 0;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -231,7 +221,7 @@ public class VideoProcessor extends AbstractNodeMain
 		System.out.println("Processing "+camWidth+" by "+camHeight);
 		setUp();
 		// bring up all parallel  processing threads
-		spinUp();
+		spinUp(connectedNode);
 		// spin the model generator class and threads
 		final PixelsToModel modelGen = new PixelsToModel();
 		modelGen.spinGen();
@@ -299,10 +289,36 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
-	  });
+	  }); // StereoImage message listener
 		
+		/**
+		 * Publishing loop. Wait for point cloud to appear in queueO, then publish it to the bus.
+		 */
+		final Publisher<sensor_msgs.PointCloud> pubcloud =
+				connectedNode.newPublisher("/stereo_msgs/PointCloud", sensor_msgs.PointCloud._TYPE);
+
+		connectedNode.executeCancellableLoop(new CancellableLoop() {
+			private int sequenceNumber;
+			@Override
+			protected void setup() {
+				sequenceNumber = 0;
+			}
+			@Override
+			protected void loop() throws InterruptedException {
+				if( !queueO.isEmpty() ) {
+					sensor_msgs.PointCloud pubc = queueO.takeFirst();
+					++sequenceNumber;
+					if( DEBUG) System.out.println("Published:"+sequenceNumber+" with "+pubc.getChannels().size()+" points.");
+					pubcloud.publish(pubc);
+				}	
+				Thread.sleep(1);
+			}
+		});  
 	} // onstart
 	
+	/**
+	 * Perform the setup tasks to begin processing
+	 */
 	public void setUp() {
      	/**
  	     * Relative octree PCA tolerances associated with plane thickness (s_alpha) and plane isotropy (s_beta)<br/>
@@ -343,8 +359,9 @@ public class VideoProcessor extends AbstractNodeMain
 	}
 	/**
 	 * Spin all parallel processing threads
+	 * @param  
 	 */
-	public void spinUp() {
+	public void spinUp(final ConnectedNode connectedNode) {
 		/*
 		 * Main worker thread for image data. 
 		 * Wait at synch barrier for completion of all processing threads, then display disparity 
@@ -681,9 +698,9 @@ public class VideoProcessor extends AbstractNodeMain
 		 */
 		ThreadPoolManager.getInstance().spin(new Runnable() {			
 				public void run() {
-					double meanRMS = 0;
-					double varianceRMS = 0;
-					double sigmaRMS = 0;
+					//double meanRMS = 0;
+					//double varianceRMS = 0;
+					//double sigmaRMS = 0;
 					System.out.println("Image queue..");
 					/**
 					 * Main processing loop, extract images from queue, notify worker threads, then display disparity
@@ -732,30 +749,34 @@ public class VideoProcessor extends AbstractNodeMain
 			        				}
 			        			}
 			        			// metrics
-			        			metric1 = metric2 = metric3 = metric4 = metric5 = 0;
+			        			//metric1 = metric2 = metric3 = metric4 = metric5 = 0;
 			        	     	// first step end multi thread barrier synch
 			        			latch.await();
-			        	     	latchOut.await();
-			        	     	
+			        	     	latchOut.await();   	     	
 			        	     	for(int channels = 0; channels < CHANNELS; channels++) {
 			        	     	  synchronized(nodel[channels]) {
 			        	     		octree_t.buildEnd(nodel[channels]);
-			        	     		nodel[channels].subdivide();
+			        	     		//nodel[channels].subdivide();
+			        	     		nodel[channels].subdivideFast(); // no PCA
+			        	     		/* need PCA
 			        	     		if( WRITEFILES || WRITEPLANARS) {
 			        	     			System.out.println("Writing planarsC"+channels+"L"+files);
 			        	     			writer_file.writePerp(nodel[channels], "planarsC"+channels+"L"+files);
 			        	     		}
-
+			        	     		*/
 			        	     	  }
 			        	     	}
 			        	     	for(int channels = 0; channels < CHANNELS; channels++) {
 			        	     	  synchronized(noder[channels]) {
 			        	     		octree_t.buildEnd(noder[channels]);
-			        	     		noder[channels].subdivide();
+			        	     		//noder[channels].subdivide();
+			        	     		noder[channels].subdivideFast(); // no PCA
+			        	     		/* need PCA
 			        	     		if( WRITEFILES || WRITEPLANARS) {
 			        	     			System.out.println("Writing planarsC"+channels+"R"+files);
 			        	     			writer_file.writePerp(noder[channels], "planarsC"+channels+"R"+files);
 			        	     		}
+			        	     		*/
 			        	     	  }
 			        	     	}
 		        	     		if(WRITEFILES || WRITEMODEL) {
@@ -765,38 +786,13 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	// second step end multi thread barrier synch
 			        	     	latch2.await();
 			        	     	latchOut2.await();
-			        	     	// write unmatched minimal envelopes
-			        	     	int empty = 0;
-			        	     	int wasvotes = 0;
-			        	     	int degen = 0;
-		        	     		synchronized(indexUnproc) {
-		        	     			for(envInterface e: indexUnproc) {
-		        	     				if( e.getDepth() == 0 )
-		        	     						++empty;
-		        	     				else
-		        	     					if( e.getDepth() == .1)
-		        	     						++wasvotes;
-		        	     					else
-		        	     						if( e.getDepth() == .2)
-		        	     							++degen;
-		        	     						else
-		        	     							System.out.println("UNKNOWN CASE IN UNPROCESSED NODE LIST:"+e.getDepth());
-		        	     			}
-		        	     		}
-		        	     		System.out.println("Run had "+empty+" empty sets and "+wasvotes+" instances where all elements voted and "+degen+" degenerates.");
+
 			        	     	//
-			        	      	float[] a = null; // DCT elements
+			        	      	//float[] a = null; // PCA only DCT elements
 								mean = variance = 0;
+								degen = 0;
 								if( indexDepth.size() > 0) {
 									synchronized(indexDepth) {
-				        	     	  if( WRITEFILES || WRITEPLANARS) {
-				        	     		 System.out.println("Writing outplanars"+files);
-				        	     		 writePerp(indexDepth, indexUnproc, 255,255,0, 0,255,255, "outplanars"+files);
-				        	     	  }
-				        	     	  if( WRITEFILES || WRITEPLANES) {
-					        	     		 System.out.println("Writing planes"+files);
-					        	     		 writeFile(indexDepth, "/planes"+files);
-				        	     	  }
 									  for(envInterface ind : indexDepth) {
 										  mean += ind.getDepth();
 									  }
@@ -805,11 +801,71 @@ public class VideoProcessor extends AbstractNodeMain
 										  variance += Math.pow((mean - ind.getDepth()),2);
 									  }
 									  variance /= (double)indexDepth.size();
+									  sigma = Math.sqrt(variance);
+									  double maxDepth =  mean+(sigma*2);
+									  Iterator<envInterface> ind = indexDepth.iterator();
+									  while(ind.hasNext()) {
+										envInterface ei = ind.next();
+										if( ei.getDepth() > maxDepth ) {
+											ei.setDepth(.2); //degenerate
+											indexUnproc.add(ei);
+											ind.remove();
+											++degen;
+										}
+									  }
+									  mean = 0;
+									  for(envInterface inda : indexDepth) {
+										  mean += inda.getDepth();
+									  }
+									  mean /= (double)indexDepth.size();
+									  System.out.println("Mean depth = "+mean+" with "+degen+" beyond "+maxDepth+" removed as degenerate.");
+									  // write unmatched minimal envelopes
+									  /*
+									  int empty = 0;
+									  int wasvotes = 0;
+									  synchronized(indexUnproc) {
+				        	     		for(envInterface e: indexUnproc) {
+				        	     			if( e.getDepth() == 0 )
+				        	     					++empty;
+				        	     			else
+				        	     				if( e.getDepth() == .1)
+				        	     					++wasvotes;
+				        	     				else
+				        	     					if( e.getDepth() == .2)
+				        	     						++degen;
+				        	     					else
+				        	     						System.out.println("UNKNOWN CASE IN UNPROCESSED NODE LIST:"+e.getDepth());
+				        	     		}
+				        	     		if( WRITEFILES || WRITEUNPROCESSED) {
+					        	     		 System.out.println("Writing emptyset"+files);
+					        	     		 writeFile(indexUnproc, "/emptyset"+files, 0);
+					        	     		 System.out.println("Writing hadvoted"+files);
+					        	     		 writeFile(indexUnproc, "/hadvoted"+files, .1);
+					        	     		 System.out.println("Writing degenerate"+files);
+					        	     		 writeFile(indexUnproc, "/degenerate"+files, .2); 	     			
+				        	     		}     	     		
+									  }
+									  System.out.println("Run had "+empty+" empty sets and "+wasvotes+
+											  " instances where all elements voted and "+degen+" degenerates thrown out post.");
+				        	     	  if( WRITEFILES || WRITEPLANES) {
+					        	     		 System.out.println("Writing planes"+files);
+					        	     		 writeFile(indexDepth, "/planes"+files, -1); // write all processed
+				        	     	  }
+				        	     	  // PCA only
+				        	     	  if( WRITEFILES || WRITEPLANARS) {
+				        	     		 System.out.println("Writing outplanars"+files);
+				        	     		 writePerp(indexDepth, indexUnproc, 255,255,0, 0,255,255, "outplanars"+files);
+				        	     	  }
 									  int isize = indexDepth.size();
 									  a = genDCT1(indexDepth, isize);
-									}
-									sigma = Math.sqrt(variance); 
-									if(prevDCT != null) {
+									  */
+									  sensor_msgs.PointCloud pointCloud  = 
+												connectedNode.getTopicMessageFactory().newFromType(sensor_msgs.PointCloud._TYPE);
+									  genCloud(indexDepth, pointCloud);
+									  queueO.addLast(pointCloud);
+									} // locking indexDepth processed nodes
+
+									/*if(prevDCT != null) {
 									  double rms = IOUtils.computeRMSE(a, prevDCT, Math.min(a.length, prevDCT.length));
 									  meanRMS += rms;
 									  meanRMS /= 2.0;
@@ -819,8 +875,22 @@ public class VideoProcessor extends AbstractNodeMain
 									  System.out.println("DCT RMS Mean="+meanRMS+" variance="+varianceRMS+" standard deviation="+sigmaRMS);
 			        	     		  System.out.println("RMS err="+rms+" file index:"+files);
 			        				  // if we are more than n standard deviation from the overall mean, do something
+			        	     		  int totRMS = 0;
 			    					  if( rms > (meanRMS+(sigmaRMS*DCTRMSSigma)) ) { //sigmaRMS*2 is 2 standard deviations
 			        	     			System.out.println("<<<< IMAGE SHIFT ALERT!!!! >>>> rms="+rms+" err="+(meanRMS+(sigmaRMS*1.3))+" file index:"+files);
+			        	     			
+			        	     			//for(int irms = 0; irms < Math.min(a.length, prevDCT.length); irms++ ) {
+			        	     			//	if(a[irms] != prevDCT[irms])
+			        	     			//		++totRMS;
+			        	     			//		//System.out.println("RMS a("+irms+")="+a[irms]+" pre("+irms+")="+prevDCT[irms]);
+			        	     			//}
+			        	     			System.out.println(totRMS+" DCT elements differ");
+			        	     			
+										sensor_msgs.PointCloud pointCloud  = 
+												connectedNode.getTopicMessageFactory().newFromType(sensor_msgs.PointCloud._TYPE);
+			        	     			genCloud(indexDepth, pointCloud);
+			        	     			queueO.addLast(pointCloud);
+			        	     			
 			        	     			if( WRITERMS )
 			        	     				synchronized(nodel) {
 			        	     					System.out.println("Writing RMS"+(int)rms+"."+files);
@@ -829,7 +899,8 @@ public class VideoProcessor extends AbstractNodeMain
 			    					  }
 									}
 									prevDCT = a;
-								}
+									*/
+								} // indexDepth > 0
 	
 			        	     	// reset level then regenerate tree with maximal coplanar points
 			        	     	/*
@@ -869,24 +940,23 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	}
 			        	     	// end of parallel processing
 			        	     	 */
-			        	     	synchronized(nodel) {
-			        	     		// at this point processing of image is essentially complete. If ASSIGNPOINTS is true
-			        	     		// the z coords in the point cloud are populated, otherwise we have a list of maximal
-			        	     		// planar regions with depth.
-			        	     		if(WRITEFILES || WRITEMODEL) {
-			        	     			System.out.println("Writing roscoeL"+files);
+	
+			        	     	// at this point processing of image is essentially complete. If ASSIGNPOINTS is true
+			        	     	// the z coords in the point cloud are populated, otherwise we have a list of maximal
+			        	     	// planar regions with depth.
+								/* only with PCA
+			        	     	if(WRITEFILES || WRITEMODEL) {
+			        	     		System.out.println("Writing roscoeL"+files);
+					        	     synchronized(nodel) {
 			        	     			writeFile(nodel,"/roscoeL"+files);
-			        	     		}
-			        	     		//
-			        	     		// write the remaining unprocessed envelopes from minimal
-			        	     		if(WRITEFILES || WRITEENCZERO || WRITEGRID)
-			        	     			if(!indexDepth.isEmpty()) {
-			        	     				synchronized(indexDepth) {
-			        	     					if(WRITEFILES || WRITEENCZERO)
-			        	     						writeFile(indexDepth,"/lvl7unencL"+files);
-			        	     					if(WRITEFILES || WRITEGRID)
-					        	     				genNav2(indexDepth);
-			        	     				}
+					        	     }
+			        	     	}
+			        	     	*/
+			        	     	//
+			        	     	if(WRITEFILES || WRITEGRID)
+			        	     		if(!indexDepth.isEmpty()) 
+			        	     			synchronized(indexDepth) {
+					        	     			genNav2(indexDepth);
 			        	     			}
 			        	     		/*
 			        	     		synchronized(maxEnv) {
@@ -897,9 +967,7 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     			//a = genDCT(maxEnv);
 			        	     		}
 			        	     		*/
-			        	     	}
 			        	     	//
-								System.out.println("Mean depth="+mean+" variance="+variance+" standard deviation="+sigma);
 								int totalNodes = 0;
 								for(int i = 0; i < CHANNELS; i++) totalNodes += nodel[i].get_nodes().size();
 			        	     	System.out.println("Uncorrelated regions="+(totalNodes-indexDepth.size())+" correlated="+indexDepth.size()+", "+(100.0-((float)(totalNodes-indexDepth.size())/(float)totalNodes)*100.0)+"% correlated");
@@ -1420,9 +1488,7 @@ public class VideoProcessor extends AbstractNodeMain
 				oscore.setVotes(1);
 			}
 			double xDiff = Math.abs(inode.getCentroid().x-oscore.getCentroid().x);
-			//double yDiff =  Math.abs(inode.getCentroid().y-oscore.getCentroid().y);
-			if( xDiff == 0 /*&& yDiff == 0*/ ) {
-				System.out.println("both sides zero..");
+			if( xDiff < 1 ) { // epipolar constraint says they both have to be at least 1 pixel apart in X
 				continue;
 			}
 			//calc the disparity and insert into collection
@@ -1780,7 +1846,7 @@ public class VideoProcessor extends AbstractNodeMain
 		int i = 0;
 		AxisNodes an = null;
 		for(octree_t node: nodes) {
-			if(node.getVariance1() != 0) {
+			//if(node.getVariance1() != 0) { // PCA
 				short[] vals = genSpatialKey(node);
 				Integer skey = radixTree2.makeKey(vals[0], vals[1]);
 				//skey &= 0xFFFFFFFC; // expands key by each dimension
@@ -1795,8 +1861,8 @@ public class VideoProcessor extends AbstractNodeMain
 				}
 				an.nodes.add(node);
 				//an.eigens.add(bi.doubleValue());
-			} else
-				 ++vert;
+			//} else
+				 //++vert;
 		}
 		System.out.println("Built "+i+" element radix tree from "+nodes.size()+" nodes with "+vert+" vertical");
 		/*
@@ -1954,6 +2020,41 @@ public class VideoProcessor extends AbstractNodeMain
 				   ((var1H & 0x3FF) << 20) | ((var2H & 0x3FF) << 10) | ((var3H & 0x3FF)); 
 		//System.out.println("keylow="+val1+" keyhigh="+val2);
 		return new long[]{val1, val2};
+	}
+	
+	protected void genCloud(List<envInterface> d, PointCloud pointCloud2) {
+		ArrayList<geometry_msgs.Point32> pnodes = new ArrayList<geometry_msgs.Point32>();
+		pointCloud2.setPoints(pnodes);
+		sensor_msgs.ChannelFloat32 rgb = new sensor_msgs.ChannelFloat32();
+		rgb.setName("RGB");
+		List<sensor_msgs.ChannelFloat32> rgbs = new ArrayList<sensor_msgs.ChannelFloat32>();
+		rgbs.add(rgb);
+		pointCloud2.setChannels(rgbs);
+		ArrayList<Float> acolors = new ArrayList<Float>();
+		for(envInterface id : d) {
+			if( ((AbstractDepth)id).node.getRoot().m_points == null ) {
+				System.out.println("node points null in writeFile");
+				continue;
+			}
+			if( ((AbstractDepth)id).node.getRoot().m_colors == null ) {
+				System.out.println("node colors null in writeFile");
+				continue;
+			}
+			for(int i = 0; i < ((AbstractDepth)id).node.getIndexes().size(); i++) {
+				geometry_msgs.Point32 ppoint = new geometry_msgs.Point32();
+				int j = ((AbstractDepth)id).node.getIndexes().get(i);
+				Vector4d pnode = ((AbstractDepth)id).node.getRoot().m_points.get(j);
+				ppoint.setX((float) pnode.x); // X
+				ppoint.setY((float) pnode.y);// Y
+				ppoint.setZ((float) ((AbstractDepth)id).depth); // Z
+				pnodes.add(ppoint);
+				Vector4d pcolor = ((AbstractDepth)id).node.getRoot().m_colors.get(i);
+				acolors.add((float)((((int)pcolor.x)<<16) | (((int)pcolor.y)<<8) | (int)pcolor.z ));
+			}
+		}
+		float[] colors = new float[acolors.size()];
+		for(int s = 0; s < acolors.size(); s++) colors[s] = acolors.get(s);
+		rgb.setValues(colors);
 	}
 	/**
 	 * Gen the RMS error for the 2 DCT arrays of left and right chromospatial sets
@@ -2535,12 +2636,19 @@ public class VideoProcessor extends AbstractNodeMain
 			}
 			
 		}
-		protected void writeFile(List<envInterface> d, String filename) {
+		/**
+		 * Write the pixels from source image at depth * 2
+		 * @param d List of envInterface post-processed nodes data
+		 * @param filename file to write to
+		 * @param compVal if >= 0 the value to compare to depth to write conditionally
+		 */
+		protected void writeFile(List<envInterface> d, String filename, double compVal) {
 			DataOutputStream dos = null;
 			File f = new File(outDir+filename+".asc");
 			try {
 				dos = new DataOutputStream(new FileOutputStream(f));
 				for(envInterface id : d) {
+					if(compVal < 0 || compVal == ((AbstractDepth)id).depth) {
 					if( ((AbstractDepth)id).node.getRoot().m_points == null ) {
 						System.out.println("node points null in writeFile");
 						continue;
@@ -2576,6 +2684,7 @@ public class VideoProcessor extends AbstractNodeMain
 					//		(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
 					//writer_file.line3D(dos, (int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[3]/*ymax*/, (int)(id.getDepth()*10.0d), 
 					//		(int)id.getEnv()[0]/*xmin*/, (int)id.getEnv()[1]/*ymin*/, (int)(id.getDepth()*10.0d), 0, 255, 255);
+					}
 					
 				}
 			} catch (FileNotFoundException e) {
@@ -3366,32 +3475,6 @@ public class VideoProcessor extends AbstractNodeMain
 				// get image mean
 			    return datax;
 			}
-		}
-		
-		public static void main(String[] args) throws Exception {
-			VideoProcessor vp = new VideoProcessor();
-			vp.spinUp();
-			BufferedImage imageL1 = ImageIO.read(new File(vp.outDir+"/"+args[0]));
-			BufferedImage imageR1 = ImageIO.read(new File(vp.outDir+"/"+args[1]));
-			/*
-    	    CannyEdgeDetector ced = new CannyEdgeDetector();
-    	    ced.setLowThreshold(0.1f);//0.5f
-    	    ced.setHighThreshold(0.5f);//1f
-    	    ced.setSourceImage(imageL1);
-    	    int[] dataLx = ced.semiProcess();
-    	    //
-    	    ced = new CannyEdgeDetector();
-    	    ced.setLowThreshold(0.1f);
-    	    ced.setHighThreshold(0.5f);
-    	    ced.setSourceImage(imageR1);
-    	    int[] dataRx = ced.semiProcess();
-    	    */
-			MeanColorGenerator mcg = new MeanColorGenerator(imageL1, camWidth, camHeight);
-			int[][] dataLx = mcg.getData3();
-			mcg = new MeanColorGenerator(imageR1, camWidth, camHeight);
-			int[][] dataRx = mcg.getData3();
-			//
-			vp.queueI.addLast(new Object[]{imageL1, imageR1, dataLx, dataRx});			
 		}
 
 }
