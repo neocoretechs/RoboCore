@@ -183,13 +183,12 @@ public class VideoProcessor extends AbstractNodeMain
 	octree_t[] nodel = new octree_t[CHANNELS];
 	octree_t[] noder = new octree_t[CHANNELS];
 	//List<envInterface> indexDepth; // correlated and matched minimal regions
-	float[] depth = new float[camWidth*camHeight];
+	float[] depth;// = new float[camWidth*camHeight];
 	List<envInterface> indexUnproc; // uncorrelated minimal regions
 	List<envInterface> maxEnv; // maximal regions that enclose one or more minimal regions
 	List<envInterface> zeroEnc; // maximal regions that enclose zero minimal regions
-	ArrayList<List<int[]>> leftYRange = new ArrayList<List<int[]>>(); // from/to position in array for sorted Y centroid processing
-	ArrayList<RadixTree<Integer, AxisNodes>> radixTree = new ArrayList<RadixTree<Integer, AxisNodes>>();
-
+	//ArrayList<List<int[]>> leftYRange;// = new ArrayList<List<int[]>>(); // from/to position in array for sorted Y centroid processing
+	//ArrayList<RadixTree<Integer, AxisNodes>> radixTree;// = new ArrayList<RadixTree<Integer, AxisNodes>>();
 
 	//CyclicBarrier latch = new CyclicBarrier(camHeight/corrWinSize+1);
 	//CyclicBarrier latchOut = new CyclicBarrier(camHeight/corrWinSize+1);
@@ -416,8 +415,10 @@ public class VideoProcessor extends AbstractNodeMain
 					  etime = System.currentTimeMillis();
 					  final int[] nSize = new int[CHANNELS];
 					  final int[] nSizeT = new int[CHANNELS];
-					  leftYRange.clear();
-					  radixTree.clear();
+					  //leftYRange.clear();
+					  //radixTree.clear();
+					  final ArrayList<List<int[]>> leftYRange = new ArrayList<List<int[]>>(); // from/to position in array for sorted Y centroid processing
+					  final ArrayList<RadixTree<Integer, AxisNodes>> radixTree = new ArrayList<RadixTree<Integer, AxisNodes>>();
 					  //
 					  final List<ArrayList<octree_t>> tnodel = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
 					  final List<ArrayList<octree_t>> tnoder = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
