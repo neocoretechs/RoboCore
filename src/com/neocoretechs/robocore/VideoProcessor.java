@@ -38,8 +38,6 @@ import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
 
-import sensor_msgs.PointCloud;
-
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.machinevision.MeanColorGenerator;
 import com.neocoretechs.machinevision.MedianCutQuantizer;
@@ -120,7 +118,7 @@ public class VideoProcessor extends AbstractNodeMain
 	private static final boolean SAMPLERATE = false; // display thread timing performance data
 	private static final boolean TIMER = true; // display global performance data
 	private static final boolean MODELTIMER = false; // display model generation performance data
-	private static final boolean QUEUETIMER = false; // display frames queued per second
+	private static final boolean QUEUETIMER = true; // display frames queued per second
 	private static final boolean WRITEFILES = false; // write full set of display files
 	private static final boolean WRITEGRID = false; // write occupancy grid derived from depth points
 	private static final boolean WRITEPLANARS = false; // write left and right minimal planars, the processed ones in outplanars# with correlated one color, uncorr another, then left and right channel planarsC#L# and planarsC#R# where C# is channel
@@ -175,8 +173,8 @@ public class VideoProcessor extends AbstractNodeMain
     final static int corrHalfSize = 25;
     final static double DCTRMSSigma = 1.35; // number of standard deviations from DCT RMS mean before we decide its a new image
 
-    CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(10);
-	CircularBlockingDeque<sensor_msgs.PointCloud> queueO = new CircularBlockingDeque<sensor_msgs.PointCloud>(16);
+    CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(5);
+	CircularBlockingDeque<stereo_msgs.DisparityImage2> queueO = new CircularBlockingDeque<stereo_msgs.DisparityImage2>(5);
 	
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
@@ -184,7 +182,8 @@ public class VideoProcessor extends AbstractNodeMain
 	BufferedImage bimage = null;
 	octree_t[] nodel = new octree_t[CHANNELS];
 	octree_t[] noder = new octree_t[CHANNELS];
-	List<envInterface> indexDepth; // correlated and matched minimal regions
+	//List<envInterface> indexDepth; // correlated and matched minimal regions
+	float[] depth = new float[camWidth*camHeight];
 	List<envInterface> indexUnproc; // uncorrelated minimal regions
 	List<envInterface> maxEnv; // maximal regions that enclose one or more minimal regions
 	List<envInterface> zeroEnc; // maximal regions that enclose zero minimal regions
@@ -272,12 +271,12 @@ public class VideoProcessor extends AbstractNodeMain
 						System.out.println("Model generator time="+(System.currentTimeMillis()-edgeTime)+" ms.");
 	        	    // We have a set amount of time to resolve our view then send it down the line
 					if( slew >= imageIntegrate ) {
-						queueI.addLast(new Object[]{imageL1,imageR1,dataLp,dataRp});
+						queueI.addLast(new Object[]{imageL1,imageR1,dataLp,dataRp,bufferL});
 						dataLp = null;
 						dataRp = null;
 						time1 = System.currentTimeMillis();
 						if(QUEUETIMER)
-							System.out.println("Queued framesets:"+(sequenceNumber-lastSequenceNumber)+" file index:"+files);
+							System.out.println("Queued framesets:"+(sequenceNumber-lastSequenceNumber)+" INPUT queue size:"+queueI.length()+" OUTPUT queue size:"+queueO.length()+" file index:"+files);
 						lastSequenceNumber = sequenceNumber;
 					}
 				//if( DEBUG ) {
@@ -294,8 +293,8 @@ public class VideoProcessor extends AbstractNodeMain
 		/**
 		 * Publishing loop. Wait for point cloud to appear in queueO, then publish it to the bus.
 		 */
-		final Publisher<sensor_msgs.PointCloud> pubcloud =
-				connectedNode.newPublisher("/stereo_msgs/PointCloud", sensor_msgs.PointCloud._TYPE);
+		final Publisher<stereo_msgs.DisparityImage2> pubcloud =
+				connectedNode.newPublisher("/stereo_msgs/PointCloud", stereo_msgs.DisparityImage2._TYPE);
 
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
 			private int sequenceNumber;
@@ -306,12 +305,12 @@ public class VideoProcessor extends AbstractNodeMain
 			@Override
 			protected void loop() throws InterruptedException {
 				if( !queueO.isEmpty() ) {
-					sensor_msgs.PointCloud pubc = queueO.takeFirst();
+					stereo_msgs.DisparityImage2 pubc = queueO.takeFirst();
 					++sequenceNumber;
-					if( DEBUG) System.out.println("Published:"+sequenceNumber+" with "+pubc.getChannels().size()+" points.");
+					if( DEBUG) System.out.println("Published:"+sequenceNumber+" INPUT queue size:"+queueI.length()+" OUTPUT queue size:"+queueO.length()+" file index:"+files);
 					pubcloud.publish(pubc);
 				}	
-				Thread.sleep(1);
+				//Thread.sleep(1);
 			}
 		});  
 	} // onstart
@@ -393,83 +392,26 @@ public class VideoProcessor extends AbstractNodeMain
 					  for(int channels = 0; channels < CHANNELS; channels++) {
 						  yStart[channels].set(0);
 					  }
-					 SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEA");
-					 /*
-					 SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEB");
-					 SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEC");
-					 */
-					    for(int syStart = 0; syStart < execLimit; syStart++) {
-						  SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit, "BUILDOCTREEA").spin(new Runnable() {
-						    @Override
-						    public void run() {
-							// Since we run a continuous loop inside run we have to have a way
-							// to synchronize everything at the beginning of a new image, then
-							// await completion of all processing threads and signal a reset to
-							// resume processing at the start of another new image, hence the two barrier
-							// synchronization latches
-								imagesToOctrees(dataL, dataR, imageLx, imageRx, 
+					  SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEA");
+					  for(int syStart = 0; syStart < execLimit; syStart++) {
+					    	SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+					    		@Override
+					    		public void run() {
+					    			// Since we run a continuous loop inside run we have to have a way
+					    			// to synchronize everything at the beginning of a new image, then
+					    			// await completion of all processing threads and signal a reset to
+					    			// resume processing at the start of another new image, hence the two barrier
+					    			// synchronization latches
+					    			imagesToOctrees(dataL, dataR, imageLx, imageRx, 
 										yStart[0].getAndIncrement(), camWidth, camHeight, 
 										nodel[0], noder[0]);
-						    } // run
-					      },"BUILDOCTREEA"); // spin
-					    }
-					    /*
-					    for(int syStart = 0; syStart < execLimit; syStart++) {
-							  SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit, "BUILDOCTREEB").spin(new Runnable() {
-							    @Override
-							    public void run() {
-								// Since we run a continuous loop inside run we have to have a way
-								// to synchronize everything at the beginning of a new image, then
-								// await completion of all processing threads and signal a reset to
-								// resume processing at the start of another new image, hence the two barrier
-								// synchronization latches
-									imagesToOctrees(dataL[1], dataR[1], imageLx, imageRx, 
-											yStart[1].getAndIncrement(), camWidth, camHeight, 
-											nodel[1], noder[1]);
-							    } // run
-						      },"BUILDOCTREEB"); // spin
-						 }
-					    for(int syStart = 0; syStart < execLimit; syStart++) {
-							  SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit, "BUILDOCTREEC").spin(new Runnable() {
-							    @Override
-							    public void run() {
-								// Since we run a continuous loop inside run we have to have a way
-								// to synchronize everything at the beginning of a new image, then
-								// await completion of all processing threads and signal a reset to
-								// resume processing at the start of another new image, hence the two barrier
-								// synchronization latches
-									imagesToOctrees(dataL[2], dataR[2], imageLx, imageRx, 
-											yStart[2].getAndIncrement(), camWidth, camHeight, 
-											nodel[2], noder[2]);
-							    } // run
-						      },"BUILDOCTREEC"); // spin
-						 }
-						 */
-					 SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("BUILDOCTREEA");
-					 /*
-					 SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("BUILDOCTREEB");
-					 SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("BUILDOCTREEC");
-					 */
+					    		} // run
+					    	},"BUILDOCTREEA"); // spin
+					  }
+					  SynchronizedFixedThreadPoolManager.waitForGroupToFinish("BUILDOCTREEA");
 					  if( TIMER )
 						  System.out.println("Process time one="+(System.currentTimeMillis()-etime));
 					  latchOut.await();
-					  //
-					  // next parallel processing step, if any
-					  //
-					  //final Comparator<octree_t> yComp = new Comparator<octree_t>() {  // descending centroid   
-					  	// @Override         
-						// public int compare(octree_t jc1, octree_t jc2) {             
-						//	      return (jc2.getCentroid().y < jc1.getCentroid().y ? -1 :                     
-						//	              (jc2.getCentroid().y == jc1.getCentroid().y ? 0 : 1));           
-						// }     
-					  //};
-					  //final Comparator<octree_t> yComp = new Comparator<octree_t>() {  // ascending middle      
-						//  @Override         
-						//  public int compare(octree_t jc1, octree_t jc2) {             
-						//	      return (jc1.getMiddle().y < jc2.getMiddle().y ? -1 :                     
-						//	              (jc1.getMiddle().y == jc2.getMiddle().y ? 0 : 1));           
-						//  }     
-					  //};
 					  latch2.await();
 					  etime = System.currentTimeMillis();
 					  final int[] nSize = new int[CHANNELS];
@@ -479,6 +421,8 @@ public class VideoProcessor extends AbstractNodeMain
 					  //
 					  final List<ArrayList<octree_t>> tnodel = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
 					  final List<ArrayList<octree_t>> tnoder = Collections.synchronizedList(new ArrayList<ArrayList<octree_t>>());
+					  //Arrays.fill(depth, 0);
+					  depth = new float[camWidth*camHeight];
 					  // build the work partition array
 					  for(int channels = 0; channels < CHANNELS; channels++){
 						  tnodel.add(nodel[channels].get_nodes());
@@ -489,64 +433,8 @@ public class VideoProcessor extends AbstractNodeMain
 						  radixTree.add(new RadixTree<Integer, AxisNodes>(((short)0), ((short)(camHeight/2))));
 						  genRadixTree(tnoder.get(channels), radixTree.get(channels));
 						  System.out.println("Node list length channel "+channels+" Left="+tnodel.get(channels).size()+", Right="+tnoder.get(channels).size()+" Radix tree right="+radixTree.get(channels).getTreeMap().size());
-						  // Histograms
-						  /*
-						  int[] histol = new int[100];
-						  int[] histor = new int[100];
-						  Object[] enr = leftNodes.get(channels).getTreeMap().entrySet().toArray();
-						  for(int i = 0; i < leftNodes.get(channels).getTreeMap().size(); i++) {
-							  AxisNodes axl = ((Entry<Integer, AxisNodes>)enr[i]).getValue();
-							  if( axl == null )
-								  System.out.println("null channel "+channels+" index "+i);
-							  if(axl.eigens == null ) {
-								  System.out.println("null eigens channel "+channels+" index "+i);
-							  }
-							  if( axl.nodes == null ) {
-								  System.out.println("null nodes channel "+channels+" index "+i);
-							  }
-							  if( axl.dct == null ) {
-								  System.out.println("null dct channel "+channels+" index "+i);
-							  }
-							  //System.out.println("Left axis channel "+channels+" node "+i+" size="+axl.eigens.size()+" "+axl.nodes.size()+" "+axl.dct.length+" "+axl.dct[0]);
-							  ++histol[axl.eigens.size()];
-						  }
-						  enr = radixTree.get(channels).getTreeMap().entrySet().toArray();
-						  for(int i = 0; i < radixTree.get(channels).getTreeMap().size(); i++) {
-							  AxisNodes axl = ((Entry<Integer, AxisNodes>)enr[i]).getValue();
-							  if( axl == null )
-								  System.out.println("null channel "+channels+" index "+i);
-							  if(axl.eigens == null ) {
-								  System.out.println("null eigens channel "+channels+" index "+i);
-							  }
-							  if( axl.nodes == null ) {
-								  System.out.println("null nodes channel "+channels+" index "+i);
-							  }
-							  if( axl.dct == null ) {
-								  System.out.println("null dct channel "+channels+" index "+i);
-							  }
-							  //System.out.println("Right axis channel "+channels+" node "+i+" size="+axl.eigens.size()+" "+axl.nodes.size()+" "+axl.dct.length+" "+axl.dct[0]);
-							  ++histor[axl.eigens.size()];
-						  }
-						  System.out.println("Histogram Number of elements - number nodes having that number of elements");
-						  for(int elems = 0; elems < histol.length; elems++) {
-							  if(histol[elems] > 0)
-								  System.out.println("LEFT "+elems+" - "+histol[elems]);
-							  if(histor[elems] > 0)
-								  System.out.println("RIGHT "+elems+" - "+histor[elems]);
-						  }
-						  */
 						  int iPosStart = 1;
 						  int iPosEnd = 1;
-						  //for(int i = 0 ; i < nodelA.size(); i++) {
-						  //System.out.println("centroid="+(int)nodelA.get(i).getCentroid().y);
-						   //if( y != (int)nodelA.get(i).getMiddle().y) {
-							//   iPosEnd = i;
-							//   leftYRange.add(new int[]{iPosStart, iPosEnd});
-							//   iPosStart = i;
-							//   y = (int) nodelA.get(i).getMiddle().y;
-						   //}
-						  //}
-						  //iPosEnd = nodelA.size();
 						  int incr = tnodel.get(channels).size()/64;
 						  for(int i = 0; i < incr; i++){
 							  iPosEnd +=64;
@@ -562,129 +450,24 @@ public class VideoProcessor extends AbstractNodeMain
 						nSize[channels] = leftYRange.get(channels).size();
 						nSizeT[channels] = Math.min(leftYRange.get(channels).size(), 16);
 					  }
-					  //Collections.sort(tnodel, yComp);
-					  //Collections.sort(tnoder, yComp);
-					  //final List<octree_t> nodelA = Collections.synchronizedList(tnodel);
-					  //final List<octree_t> noderA = Collections.synchronizedList(tnoder);
-					  indexDepth = Collections.synchronizedList(new ArrayList<envInterface>());
+					  //indexDepth = Collections.synchronizedList(new ArrayList<envInterface>());
 					  indexUnproc = Collections.synchronizedList(new ArrayList<envInterface>());
-
-					  //final TreeMap<Long, octree_t> radixTree = new TreeMap<Long, octree_t>(new TreeComp());
-					  //final SortedMap<Long, octree_t> radixTree = Collections.synchronizedSortedMap(new TreeMap<Long, octree_t>(new TreeComp()));
-					  //System.out.println("LEFT ChromoSpatial key table size = "+txl.size()+" with "+vertl+" vertical");
-					  //System.out.println("RIGHT ChromoSpatial key table size = "+radixTree.size()+" with "+vertr+" vertical");
-					  //float[] tx = genDCT3(radixTree.keys(), nodelA.size());
-					  // cast to int to compress list, fractional tolerances ignored
-					  //int y = (int) nodelA.get(0).getMiddle().y;
-					  //
-
-					  //System.out.println("NSize="+nSize+" NSizeT="+nSizeT);
-					  //for(int i = 0; i < leftYRange.size(); i++) {
-						//  System.out.println(leftYRange.get(i)[0]+" "+leftYRange.get(i)[1]);
-					  //}
-						SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[0], nSize[0], "MATCHREGIONA");
-						/*
-						SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[1], nSize[1], "MATCHREGIONB");
-						SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[2], nSize[2], "MATCHREGIONC");
-						*/
-					    for(int syStart = 0; syStart < nSize[0]; syStart++) {
-							SynchronizedFixedThreadPoolManager.getInstance(nSizeT[0], nSize[0], "MATCHREGIONA").spin(new Runnable() {
+					  SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[0], nSize[0], "MATCHREGIONA");
+					  for(int syStart = 0; syStart < nSize[0]; syStart++) {
+							SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 								@Override
 								public void run() {
 									// set the left nodes with depth
-									matchRegions/*AssignDepth*/(yStart[0].getAndIncrement(), leftYRange.get(0), 
+									matchRegions(yStart[0].getAndIncrement(), leftYRange.get(0), 
 											camWidth, camHeight, tnodel.get(0), radixTree.get(0), 
-											indexDepth, indexUnproc);
+											depth, indexUnproc);
 								} // run									
 							},"MATCHREGIONA"); // spin
 					    } // for syStart
-					    /*
-					    for(int syStart = 0; syStart < nSize[1]; syStart++) {
-								SynchronizedFixedThreadPoolManager.getInstance(nSizeT[1], nSize[1], "MATCHREGIONB").spin(new Runnable() {
-									@Override
-									public void run() {
-										// set the left nodes with depth
-										matchRegionsMakePlanes(yStart[1].getAndIncrement(), leftYRange.get(1), 
-												camWidth, camHeight, leftNodes.get(1), radixTree.get(1), 
-												indexDepth, indexUnproc);
-									} // run									
-								},"MATCHREGIONB"); // spin
-						} // for syStart
-					    for(int syStart = 0; syStart < nSize[2]; syStart++) {
-								SynchronizedFixedThreadPoolManager.getInstance(nSizeT[2], nSize[2], "MATCHREGIONC").spin(new Runnable() {
-									@Override
-									public void run() {
-										// set the left nodes with depth
-										matchRegionsMakePlanes(yStart[2].getAndIncrement(), leftYRange.get(2), 
-												camWidth, camHeight, leftNodes.get(2), radixTree.get(2), 
-												indexDepth, indexUnproc);
-									} // run									
-								},"MATCHREGIONC"); // spin
-						    } // for syStart
-					  //	
-					    */
-					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("MATCHREGIONA");
-					  /*
-					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("MATCHREGIONB");
-					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("MATCHREGIONC");
-					  */
+					  SynchronizedFixedThreadPoolManager.waitForGroupToFinish("MATCHREGIONA");
 					  if( TIMER )
 							System.out.println("Process time two="+(System.currentTimeMillis()-etime));
 					  latchOut2.await();
-					  //
-					  // next parallel processing step, if any
-					  //
-					  /*
-					  latch3.await();
-					  etime = System.currentTimeMillis();
-					  yStart.set(0);
-					  maxEnv = Collections.synchronizedList(new ArrayList<envInterface>());
-					  zeroEnc = Collections.synchronizedList(new ArrayList<envInterface>());
-					  // Octree reset to higher level, re-get nodes
-					  final List<octree_t> nodelB = Collections.synchronizedList(nodel.get_nodes());
-					  final int nSizeu = nodelB.size();
-					  final int nSizeU = Math.min(nodelB.size(), 32);
-					  // gen 1 thread for each array element up to limit
-					  SynchronizedFixedThreadPoolManager.getInstance().init(nSizeU, nSizeu, "SETPOINT");
-					  for(int syStart = 0; syStart < nSizeu; syStart++) {
-						SynchronizedFixedThreadPoolManager.getInstance(nSizeU, nSizeu, "SETPOINT").spin(new Runnable() {
-							@Override
-							public void run() {
-								// set the left nodes with depth
-								findEnclosedRegionsSetPointDepth(yStart.getAndIncrement(), nodelB, indexDepth, maxEnv, zeroEnc);
-							} // run									
-						},"SETPOINT"); // spin
-					  } // for syStart
-					  SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("SETPOINT");
-					  if( TIMER )
-							System.out.println("Process time three="+(System.currentTimeMillis()-etime));
-					  latchOut3.await();
-					  //
-					  // next parallel processing step, if any
-					  //
-					  if( !zeroEnc.isEmpty() ) {
-						latch4.await();
-						etime = System.currentTimeMillis();
-						yStart.set(0);
-						final int nSizex = zeroEnc.size();
-						final int nSizeX = Math.min(zeroEnc.size(), 32);
-						// gen 1 thread for each array element
-						SynchronizedFixedThreadPoolManager.getInstance().init(nSizeX, nSizex, "ZEROPOINT");
-						for(int syStart = 0; syStart < nSizex; syStart++) {
-								SynchronizedFixedThreadPoolManager.getInstance(nSizeX, nSizex, "ZEROPOINT").spin(new Runnable() {
-									@Override
-									public void run() {
-										// set the left nodes with depth
-										findZeroEnclosedSetPointDepth(yStart.getAndIncrement(), maxEnv, zeroEnc);
-									} // run									
-								},"ZEROPOINT"); // spin
-						} // for syStart
-						SynchronizedFixedThreadPoolManager.getInstance().waitForGroupToFinish("ZEROPOINT");
-						if( TIMER )
-							System.out.println("Process time four="+(System.currentTimeMillis()-etime));
-						latchOut4.await();
-					  }
-					  */
 					// global barrier break
 					} catch (BrokenBarrierException | InterruptedException e) { System.out.println("<<BARRIER BREAK>> "+files);}
 					} // while true
@@ -721,6 +504,7 @@ public class VideoProcessor extends AbstractNodeMain
 				        		imageRx = (BufferedImage) o[1];
 				        		dataL = (int[]) o[2];
 				        		dataR = (int[]) o[3];
+				        		final byte[] imageBytes = (byte[])o[4];
 			        			//latchOut4.reset();
 			        			//latch4.reset();
 			        			//latchOut3.reset();
@@ -791,33 +575,60 @@ public class VideoProcessor extends AbstractNodeMain
 			        	      	//float[] a = null; // PCA only DCT elements
 								mean = variance = 0;
 								degen = 0;
-								if( indexDepth.size() > 0) {
-									synchronized(indexDepth) {
-									  for(envInterface ind : indexDepth) {
-										  mean += ind.getDepth();
-									  }
-									  mean /= (double)indexDepth.size();
-									  for(envInterface ind : indexDepth) {
-										  variance += Math.pow((mean - ind.getDepth()),2);
-									  }
-									  variance /= (double)indexDepth.size();
-									  sigma = Math.sqrt(variance);
-									  double maxDepth =  mean+(sigma*2);
-									  Iterator<envInterface> ind = indexDepth.iterator();
-									  while(ind.hasNext()) {
-										envInterface ei = ind.next();
-										if( ei.getDepth() > maxDepth ) {
-											ei.setDepth(.2); //degenerate
-											indexUnproc.add(ei);
-											ind.remove();
-											++degen;
-										}
-									  }
-									  mean = 0;
-									  for(envInterface inda : indexDepth) {
-										  mean += inda.getDepth();
-									  }
-									  mean /= (double)indexDepth.size();
+								//if( indexDepth.size() > 0) {
+									//synchronized(indexDepth) {
+									  //for(envInterface ind : indexDepth) {
+										//  mean += ind.getDepth();
+									  //}
+								int errCount = 0;
+								for(int i = 0; i < camWidth*camHeight; i++) {
+									if( depth[i] == 0 )
+										++errCount;
+									else
+										mean += depth[i];
+								}
+									  //mean /= (double)indexDepth.size();
+								int goodDepth = (camWidth*camHeight) - errCount;
+								mean /= (double)goodDepth;
+								for(int i = 0; i < camWidth*camHeight; i++)
+									if( depth[i] > 0 )
+										variance += Math.pow((mean - depth[i]),2);
+									  //for(envInterface ind : indexDepth) {
+									//	  variance += Math.pow((mean - ind.getDepth()),2);
+									  //}
+									  //variance /= (double)indexDepth.size();
+								variance /= (double)goodDepth;
+								sigma = Math.sqrt(variance);
+								double maxDepth =  mean+(sigma*2);
+								for(int i = 0; i < camWidth*camHeight; i++) {
+									if( depth[i] > maxDepth) {
+										depth[i] = 0;
+										++degen;
+									}
+								}
+									  //Iterator<envInterface> ind = indexDepth.iterator();
+									 // while(ind.hasNext()) {
+										//envInterface ei = ind.next();
+										//if( ei.getDepth() > maxDepth ) {
+											//ei.setDepth(.2); //degenerate
+											//indexUnproc.add(ei);
+											//ind.remove();
+											//++degen;
+										//}
+									  //}
+								mean = 0;
+								errCount = 0;
+								for(int i = 0; i < camWidth*camHeight; i++)
+									if( depth[i] > 0)
+										mean += depth[i];
+									else
+										++errCount;
+								goodDepth = (camWidth*camHeight) - errCount;
+								mean /= goodDepth;
+									  //for(envInterface inda : indexDepth) {
+										//  mean += inda.getDepth();
+									  //}
+									  //mean /= (double)indexDepth.size();
 									  System.out.println("Mean depth = "+mean+" with "+degen+" beyond "+maxDepth+" removed as degenerate.");
 									  // write unmatched minimal envelopes
 									  /*
@@ -859,11 +670,31 @@ public class VideoProcessor extends AbstractNodeMain
 									  int isize = indexDepth.size();
 									  a = genDCT1(indexDepth, isize);
 									  */
-									  sensor_msgs.PointCloud pointCloud  = 
-												connectedNode.getTopicMessageFactory().newFromType(sensor_msgs.PointCloud._TYPE);
-									  genCloud(indexDepth, pointCloud);
+									  //sensor_msgs.PointCloud pointCloud  = 
+										//		connectedNode.getTopicMessageFactory().newFromType(sensor_msgs.PointCloud._TYPE);
+									  std_msgs.Header imghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
+									  imghead.setSeq(sequenceNumber);
+									  org.ros.message.Time tst = connectedNode.getCurrentTime();
+									  imghead.setStamp(tst);
+									  imghead.setFrameId(tst.toString());
+									  stereo_msgs.DisparityImage2 pointCloud  = 
+												connectedNode.getTopicMessageFactory().newFromType(stereo_msgs.DisparityImage2._TYPE);
+									  sensor_msgs.Image dimage = 
+											  connectedNode.getTopicMessageFactory().newFromType(sensor_msgs.Image._TYPE);
+									  dimage.setEncoding("JPG"/*"8UC3"*/);
+									  dimage.setWidth(camWidth);
+									  dimage.setHeight(camHeight);
+									  dimage.setStep(camWidth);
+									  dimage.setIsBigendian((byte)0);
+									  dimage.setHeader(imghead);
+									  dimage.setData(ByteBuffer.wrap(imageBytes));
+									  pointCloud.setImage(dimage);
+									  pointCloud.setD(depth);
+									  pointCloud.setMaxDisparity((float) maxDepth);
+									  pointCloud.setMinDisparity((float) (Bf/camWidth));
+									  //genCloud(indexDepth, pointCloud);
 									  queueO.addLast(pointCloud);
-									} // locking indexDepth processed nodes
+									//} // locking indexDepth processed nodes
 
 									/*if(prevDCT != null) {
 									  double rms = IOUtils.computeRMSE(a, prevDCT, Math.min(a.length, prevDCT.length));
@@ -900,7 +731,7 @@ public class VideoProcessor extends AbstractNodeMain
 									}
 									prevDCT = a;
 									*/
-								} // indexDepth > 0
+								//} // indexDepth > 0
 	
 			        	     	// reset level then regenerate tree with maximal coplanar points
 			        	     	/*
@@ -953,11 +784,11 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     	}
 			        	     	*/
 			        	     	//
-			        	     	if(WRITEFILES || WRITEGRID)
-			        	     		if(!indexDepth.isEmpty()) 
-			        	     			synchronized(indexDepth) {
-					        	     			genNav2(indexDepth);
-			        	     			}
+			        	     	//if(WRITEFILES || WRITEGRID)
+			        	     	//	if(!indexDepth.isEmpty()) 
+			        	     	//		synchronized(indexDepth) {
+					        	//     			genNav2(indexDepth);
+			        	     	//		}
 			        	     		/*
 			        	     		synchronized(maxEnv) {
 			        	     			if(WRITEFILES || WRITEPLANES)
@@ -968,9 +799,10 @@ public class VideoProcessor extends AbstractNodeMain
 			        	     		}
 			        	     		*/
 			        	     	//
-								int totalNodes = 0;
-								for(int i = 0; i < CHANNELS; i++) totalNodes += nodel[i].get_nodes().size();
-			        	     	System.out.println("Uncorrelated regions="+(totalNodes-indexDepth.size())+" correlated="+indexDepth.size()+", "+(100.0-((float)(totalNodes-indexDepth.size())/(float)totalNodes)*100.0)+"% correlated");
+								int totalNodes = camWidth*camHeight;;
+								//for(int i = 0; i < CHANNELS; i++) totalNodes += nodel[i].get_nodes().size();
+			        	     	//System.out.println("Uncorrelated regions="+(totalNodes-indexDepth.size())+" correlated="+indexDepth.size()+", "+(100.0-((float)(totalNodes-indexDepth.size())/(float)totalNodes)*100.0)+"% correlated");
+								System.out.println("Uncorrelated points="+(totalNodes-goodDepth)+" correlated="+goodDepth+", "+(100.0-((float)(totalNodes-goodDepth)/(float)totalNodes)*100.0)+"% correlated");
 							} catch (InterruptedException | BrokenBarrierException e) {
 								e.printStackTrace();
 							}
@@ -1417,7 +1249,7 @@ public class VideoProcessor extends AbstractNodeMain
 	private void matchRegions(int yStart, List<int[]> leftYRange2, 
 			int width, int height, 
 			ArrayList<octree_t> leftNodes, RadixTree<Integer, AxisNodes> radixTree4,
-			List<envInterface> indexDepth2, List<envInterface> indexUnproc2) {
+			/*List<envInterface> indexDepth2*/float[] depth, List<envInterface> indexUnproc2) {
 		long etime = System.currentTimeMillis();
 		double pix = 0;
 		int[] irange = leftYRange2.get(yStart);
@@ -1494,12 +1326,19 @@ public class VideoProcessor extends AbstractNodeMain
 			//calc the disparity and insert into collection
 			//we will call disparity the distance to centroid of right
 			pix = Bf/xDiff;///Math.hypot(xDiff, yDiff);
-			IndexDepth d1 = new IndexDepth(inode, pix);
-			indexDepth2.add(d1);
-			if( pairCount < WRITEMATCHEDPAIRS) {
-				IndexDepth d2 = new IndexDepth(oscore, pix);
-				writeTestPerp(d1, d2,"/matched"+(pairCount++));
-			}
+					// for each point in this maximal node
+					for(int c = 0; c < inode.getIndexes().size(); c++) {
+						//double cdist = Double.MAX_VALUE;
+						Vector4d tpoint = inode.getRoot().m_points.get(inode.getIndexes().get(c));
+						int index = (((int)tpoint.y+(height/2))* width) + ((int)tpoint.x + (width/2));
+						depth[index] = (float) pix;
+					}
+			//IndexDepth d1 = new IndexDepth(inode, pix);			
+			//indexDepth2.add(d1);
+			//if( pairCount < WRITEMATCHEDPAIRS) {
+				//IndexDepth d2 = new IndexDepth(oscore, pix);
+				//writeTestPerp(d1, d2,"/matched"+(pairCount++));
+			//}
 			//System.out.println("matchRegions depth="+pix+" candidates="+nscore+" Left node:"+inode+"\r\nRight node:"+jnode+" ***"+Thread.currentThread().getName()+"***");
 		}// left range
 		
@@ -2022,7 +1861,7 @@ public class VideoProcessor extends AbstractNodeMain
 		return new long[]{val1, val2};
 	}
 	
-	protected void genCloud(List<envInterface> d, PointCloud pointCloud2) {
+	protected void genCloud(List<envInterface> d, sensor_msgs.PointCloud pointCloud2) {
 		ArrayList<geometry_msgs.Point32> pnodes = new ArrayList<geometry_msgs.Point32>();
 		pointCloud2.setPoints(pnodes);
 		sensor_msgs.ChannelFloat32 rgb = new sensor_msgs.ChannelFloat32();
@@ -2102,449 +1941,7 @@ public class VideoProcessor extends AbstractNodeMain
 		}
 		return osum;
 	}
-	/**
-	 * Generate the occupancy grid with minimum depth indicators into file seq
-	 * from list of IndexMax elements
-	 * @param nodes
-	 */
-	private static void genNav2(List<envInterface> nodes) {
-		// descending sort mirrors forward direction of robot movement
-		   //final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
-			//	  @Override         
-			//	  public int compare(envInterface jc1, envInterface jc2) {             
-			//		      return ((int)((IndexMax)jc2).node.getMiddle().y < (int)((IndexMax)jc1).node.getMiddle().y ? -1 :                     
-			//		              ((int)((IndexMax)jc2).node.getMiddle().y == (int)((IndexMax)jc1).node.getMiddle().y ? 0 : 1));           
-			//	  }     
-		   //};
-		   final Comparator<double[]> yComp = new Comparator<double[]>() {         
-				  @Override         
-				  public int compare(double[] jc1, double[] jc2) {             
-					      return ((int)jc2[3] < (int)jc1[3] ? -1 :                     
-					              ((int)jc2[3] == (int)jc1[3] ? 0 : 1));           
-				  }     
-		   };
-		   final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
-				  @Override         
-				  public int compare(envInterface jc1, envInterface jc2) {             
-					      return ((int)((AbstractDepth)jc2).node.getMiddle().x < (int)((AbstractDepth)jc1).node.getMiddle().x ? -1 :                     
-					              ((int)((AbstractDepth)jc2).node.getMiddle().x == (int)((AbstractDepth)jc1).node.getMiddle().x ? 0 : 1));           
-				  }     
-		   };
-		   if(nodes.size() == 0)
-			   return;
-		   DataOutputStream dos = null;
-		   File f = new File(hough_settings.file+"NavLine"+files+hough_settings.extension);
-		   try {
-			   dos = new DataOutputStream(new FileOutputStream(f));
-			   // col and min depth marker
-			   ArrayList<double[]> splinePts = new ArrayList<double[]>();
-			   Collections.sort(nodes, xComp);
-			   int x = (int)((AbstractDepth)nodes.get(0)).node.getMiddle().x;
-			   int iPosStart = 0;
-			   int iPosEnd = 0;
-			   for(int i = 0 ; i < nodes.size(); i++) {
-				   if( x != (int)((AbstractDepth)nodes.get(i)).node.getMiddle().x) {
-					   iPosEnd = i;
-					   genColHist2(dos, iPosStart, iPosEnd, nodes, splinePts);
-					   iPosStart = i;
-					   x = (int)((AbstractDepth)nodes.get(i)).node.getMiddle().x;
-				   }
-			   }
-			   iPosEnd = nodes.size();
-			   genColHist2(dos, iPosStart, iPosEnd, nodes, splinePts);
-			   //if(splinePts.size() == 0)
-				//   return;
-			   // rows
-			   //Collections.sort(nodes, yComp);
-			   //int y = (int)((AbstractDepth)nodes.get(0)).node.getMiddle().y;
-			   //iPosStart = 0;
-			   //iPosEnd = 0;
-			   //for(int i = 0 ; i < nodes.size(); i++) {
-				//   if( y != (int)((AbstractDepth)nodes.get(i)).node.getMiddle().y) {
-				//	   iPosEnd = i;
-				//	   genRow2(dos, iPosStart, iPosEnd, nodes);
-				//	   iPosStart = i;
-				//	   y = (int)((AbstractDepth)nodes.get(i)).node.getMiddle().y;
-				//   }
-			   //}
-			   //iPosEnd = nodes.size();
-			   /*
-			   Collections.sort(splinePts, yComp);
-			   int y = (int)splinePts.get(0)[3]; //y
-			   iPosStart = 0;
-			   iPosEnd = 0;
-			   for(int i = 0 ; i < splinePts.size(); i++) {
-				   if( y != (int)splinePts.get(i)[3]) {
-					   iPosEnd = i;
-					   genRow2(dos, iPosStart, iPosEnd, splinePts);
-					   iPosStart = i;
-					   y = (int)splinePts.get(i)[3];
-				   }
-			   }
-			   iPosEnd = splinePts.size();
-			   genRow2(dos, iPosStart, iPosEnd, splinePts);
-			   */
-		   } catch (FileNotFoundException e) {
-				e.printStackTrace();
-				return;  
-		  } catch (IOException e) {
-			e.printStackTrace();
-		  } finally {
-				try {
-					if( dos != null ) {
-						dos.flush();
-						dos.close();
-					}
-				} catch (IOException e) {}		
-		  }
-		   
-	}
-
-	public static void genRow2(DataOutputStream dos, int yStart, int yEnd, List<double[]> splinePts) throws IOException{
-		//if(DEBUG)
-			//System.out.println("genRow from="+yStart+" to="+yEnd);
-			List<double[]> subNodes = splinePts.subList(yStart, yEnd);
-			//final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
-			//		  @Override         
-			//		  public int compare(envInterface jc1, envInterface jc2) {             
-			//			      return ((int)((AbstractDepth)jc2).node.getMiddle().x < (int)((AbstractDepth)jc1).node.getMiddle().x ? -1 :                     
-			//			              ((int)((AbstractDepth)jc2).node.getMiddle().x == (int)((AbstractDepth)jc1).node.getMiddle().x ? 0 : 1));           
-			//		  }     
-			//};
-			final Comparator<double[]> xComp = new Comparator<double[]>() {         
-					  @Override         
-					  public int compare(double[] jc1, double[] jc2) {             
-						      return ((int)jc2[0] < (int)jc1[0] ? -1 :                     
-						              ((int)jc2[0] == (int)jc1[0] ? 0 : 1));           
-					  }     
-			};
-			Collections.sort(subNodes, xComp);
-			// sorted now by x and y
-			double zMin = Double.MAX_VALUE;
-			double[] cnode = null;
-			for(int i = 0; i < subNodes.size(); i++) {
-				//System.out.println("Row "+(int)subNodes.get(i)[0]+" "+(int)subNodes.get(i)[1]+" "+(int)subNodes.get(i)[2]);
-				if( i < subNodes.size()-1) {
-					//writer_file.line3D(dos, (int)((AbstractDepth)subNodes.get(i)).node.getCentroid().x, (int)((AbstractDepth)subNodes.get(i)).node.getCentroid().y, (int)((AbstractDepth)subNodes.get(i)).depth*10,
-					//		(int)((AbstractDepth)subNodes.get(i+1)).node.getCentroid().x, (int)((AbstractDepth)subNodes.get(i+1)).node.getCentroid().y, (int)((AbstractDepth)subNodes.get(i+1)).depth*10,
-					//		0, 255, 255);
-					writer_file.line3D(dos, (int)subNodes.get(i)[0] , (int)subNodes.get(i)[1], (int)subNodes.get(i)[2], 
-							(int)subNodes.get(i+1)[0], (int)subNodes.get(i+1)[1], (int)subNodes.get(i+1)[2], 0, 255, 255);
-				}
-				if((int)subNodes.get(i)[1] >= 0 && (int)subNodes.get(i)[0] >= leftBound && (int)subNodes.get(i)[0] <= rightBound &&
-						subNodes.get(i)[2] <= zMin) {
-					zMin = subNodes.get(i)[2];
-					cnode = subNodes.get(i);
-				}
-			}
-			//System.out.println("-----------");
-			//  min depth
-			if( cnode != null ) {
-			Vector4d cen1 = new Vector4d();
-			Vector4d cen2 = new Vector4d();
-			cen1.x = cnode[0] - (cnode[4]/2);
-			cen1.y = cnode[1] - (cnode[4]/2);
-			cen1.z = zMin;
-			cen2.x = cnode[0] + (cnode[4]/2);
-			cen2.y = cnode[1] + (cnode[4]/2);
-			cen2.z = zMin;
-			//if( DEBUG )
-			//	System.out.println("genColHist env minx,y,z="+cen1+" maxx,y,z="+cen2+" centroid node="+cnode);
-			// xmin, ymin, xmax, ymin
-			writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen1.y, (int)cen1.z, 255, 127, 0);
-			// xmax, ymin, xmax, ymax
-			writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 255, 127, 0);
-			// xmax, ymax, xmin, ymax
-			writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 255, 127, 0);
-			// xmin, ymax, xmin, ymin
-			writer_file.line3D(dos, (int)cen1.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 255, 127, 0);
-			}
-	}
-	public static void genColHist2(DataOutputStream dos, int xStart, int xEnd, List<envInterface> nodelA, List<double[]> splinePts) throws IOException{
-		//if(DEBUG)
-			//System.out.println("genColHist from="+xStart+" to="+xEnd);
-			List<envInterface> subNodes = nodelA.subList(xStart, xEnd);
-			final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
-					  @Override         
-					  public int compare(envInterface jc1, envInterface jc2) {             
-						      return ((int)((AbstractDepth)jc2).node.getMiddle().y < (int)((AbstractDepth)jc1).node.getMiddle().y ? -1 :                     
-						              ((int)((AbstractDepth)jc2).node.getMiddle().y == (int)((AbstractDepth)jc1).node.getMiddle().y ? 0 : 1));           
-					  }     
-			}; 
-			Collections.sort(subNodes, yComp);
-			/*
-			ArrayList<double[]> dpit = new ArrayList<double[]>();
-			if(SMOOTHEGRID) {
-				PolyBezierPathUtil pbpu = new  PolyBezierPathUtil();
-				ArrayList<PolyBezierPathUtil.EPointF> epfa = new ArrayList<PolyBezierPathUtil.EPointF>();
-				for(int i = 0; i < subNodes.size(); i++) {
-					PolyBezierPathUtil.EPointF epf = pbpu.new EPointF(((AbstractDepth)subNodes.get(i)).depth*10.0d, ((AbstractDepth)subNodes.get(i)).node.getMiddle().y);
-					epfa.add(epf);
-				}
-				if(epfa.size() < 2)
-					return;
-				Path2D.Double path = pbpu.computePathThroughKnots(epfa);
-				PathIterator pit = path.getPathIterator(null);
-				while(!pit.isDone()) {
-					double[] coords = new double[6];
-					pit.currentSegment(coords);
-					dpit.add(coords);
-					pit.next();
-				}
-			} else {
-				//---if we dont want to smooth
-				for(int i = 0; i < subNodes.size(); i++) {
-					double[] coords = new double[6];
-					coords[0] = ((AbstractDepth)subNodes.get(i)).depth*10.0d;
-					coords[1] = ((AbstractDepth)subNodes.get(i)).node.getMiddle().y;
-					dpit.add(coords);
-				}
-			}
-			*/
-			double zMin = Double.MAX_VALUE;
-			octree_t cnode = null;
-			int cpos = -1;
-			// sorted now by x and y
-			for(int i = 0; i < subNodes.size(); i++) {
-				//double[] splinep = dpit.get(i);
-				//splinep[2] = splinep[0]; // rotate X back to Z
-				//splinep[0] = ((AbstractDepth)subNodes.get(i)).node.getMiddle().x;// the x, then y is index 1 as originally
-				//splinep[3] = ((AbstractDepth)subNodes.get(i)).node.getMiddle().y;// we need to sort the rows on this value
-				//splinep[4] = ((AbstractDepth)subNodes.get(i)).node.getSize(); // to generate box
-				//splinePts.add(splinep); // collect it in our splined array to make rows later
-				//if( i < subNodes.size()-1) {
-					//writer_file.line3D(dos, (int)((AbstractDepth)subNodes.get(i)).node.getCentroid().x, (int)((AbstractDepth)subNodes.get(i)).node.getCentroid().y, (int)((AbstractDepth)subNodes.get(i)).depth*10,
-					//		(int)((AbstractDepth)subNodes.get(i+1)).node.getCentroid().x, (int)((AbstractDepth)subNodes.get(i+1)).node.getCentroid().y, (int)((AbstractDepth)subNodes.get(i+1)).depth*10,
-					//		0, 255, 255);
-					//writer_file.line3D(dos, (int)splinep[0] , (int)splinep[1], (int)splinep[2], 
-					//		(int)((AbstractDepth)subNodes.get(i+1)).node.getMiddle().x, (int)dpit.get(i+1)[1], (int)dpit.get(i+1)[0], 0, 255, 255);
-					//if( DEBUG ) 
-					//	System.out.println("genColHist line3D x="+(int)((AbstractDepth)subNodes.get(i)).node.getCentroid().x+" y="+(int)((AbstractDepth)subNodes.get(i)).node.getCentroid().y+" z="+(int)((AbstractDepth)subNodes.get(i)).depth*10+
-					//			" to x="+(int)((AbstractDepth)subNodes.get(i+1)).node.getCentroid().x+" y="+(int)((AbstractDepth)subNodes.get(i+1)).node.getCentroid().y+" z="+(int)((AbstractDepth)subNodes.get(i+1)).depth*10);
-					// y remains the same and we rotate our depth 90 degrees to become the x axis
-					// so we get an angular measurement thats perpendicular to frontal x,y plane
-					// this corresponds to the theta angle we get from cartestian_to_spherical, for some reason in this
-					// orientation, vs z axis vertical, the theta value is aligned along our depth, or z axis horizontal. 
-					// So if we use spherical the phi and theta are swapped in this orientation.
-					//double thet1 = Math.atan2( (((AbstractDepth)subNodes.get(i)).node.getCentroid().y-((AbstractDepth)subNodes.get(i+1)).node.getCentroid().y),
-					//			((((AbstractDepth)subNodes.get(i)).depth-((AbstractDepth)subNodes.get(i+1)).depth)*10) );
-					//double thet1 = Math.atan2( splinep[1]-dpit.get(i+1)[1], ((splinep[2]-dpit.get(i+1)[0])*10) );
-					//double degThet = Math.toDegrees(thet1);
-					//if( degThet < 0.0) {
-					//	    degThet += 360.0;
-					//}
-					//Vector4d point = new Vector4d( (((AbstractDepth)subNodes.get(i)).node.getCentroid().x-((AbstractDepth)subNodes.get(i+1)).node.getCentroid().x),
-					//		(((AbstractDepth)subNodes.get(i)).node.getCentroid().y-((AbstractDepth)subNodes.get(i+1)).node.getCentroid().y),
-					//			((((AbstractDepth)subNodes.get(i)).depth-((AbstractDepth)subNodes.get(i+1)).depth)*10), 1);
-					//double[] deg1 = octree_t.cartesian_to_spherical(point);
-					//
-					//System.out.println("Column "+(int)((AbstractDepth)subNodes.get(i)).node.getMiddle().x+" depth diff "+i+" degrees ="+degThet+" node="+((AbstractDepth)subNodes.get(i)).node);
-				//}
-				// since we sort descending to compute in the direction of robot motion, we want the highest numbered
-				// row as minimum so we know the top of an obstacle right in front of us. To this end we use <= zMin
-				// so identical depths will percolate to the top
-				if((int)((AbstractDepth)subNodes.get(i)).node.getMiddle().y >= 0 && 
-					//(int)splinep[0] >= leftBound && (int)splinep[0] <= rightBound &&
-					(int)((AbstractDepth)subNodes.get(i)).node.getMiddle().x >= leftBound &&
-					(int)((AbstractDepth)subNodes.get(i)).node.getMiddle().x <= rightBound &&
-					((AbstractDepth)subNodes.get(i)).depth <= zMin) {
-						zMin = ((AbstractDepth)subNodes.get(i)).depth;
-						//cnode = ((AbstractDepth)subNodes.get(i)).node;
-						cpos = i;
-				}
-			}
-			//  min depth
-			//if( cnode != null ) {
-			if( cpos != -1 ) { // there may have been 0 elements
-				cnode = ((AbstractDepth)subNodes.get(cpos)).node;
-				//System.out.println("Zmin="+zMin+" cpos="+cpos+" node="+cnode); //delinate column depth display
-				int isize = (int) cnode.getSize();
-				Vector4d cen1 = new Vector4d();
-				Vector4d cen2 = new Vector4d();
-				cen1.x = cnode.getMiddle().x - (isize/2);
-				cen1.y = cnode.getMiddle().y - (isize/2);
-				cen1.z = 0;//zMin*10.0d;//cnode.getCentroid().z - (cnode.getSize()/2);
-				cen2.x = cnode.getMiddle().x + (isize/2);
-				cen2.y = cnode.getMiddle().y + (isize/2);
-				cen2.z = 0;//zMin*10.0d;//cnode.getCentroid().z + (cnode.getSize()/2);
-				while(cen1.y < (camHeight/2)) {
-					//if( DEBUG )
-					//	System.out.println("genColHist env minx,y,z="+cen1+" maxx,y,z="+cen2+" centroid node="+cnode);
-					// xmin, ymin, xmax, ymin
-					writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
-					// xmax, ymin, xmax, ymax
-					writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-					// xmax, ymax, xmin, ymax
-					writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-					// xmin, ymax, xmin, ymin
-					writer_file.line3D(dos, (int)cen1.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
-					// xmin, ymin, xmax, ymax
-					writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-					// xmax, ymin, xmin, ymax
-					writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-					cen1.y += isize;
-					cen2.y += isize;
-				}
-			} //else
-				//System.out.println("no elements");
-	}
-	/**
-	 * Permutation that does not rely on octree node
-	 * @param nodes
-	 */
-	public static void genNav(List<envInterface> nodes) {
-		   final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
-				  @Override         
-				  public int compare(envInterface jc1, envInterface jc2) {
-					  int y1 = (int)(jc1.getEnv()[1]+((jc1.getEnv()[3]-jc1.getEnv()[1])/2));
-					  int y2 = (int)(jc2.getEnv()[1]+((jc2.getEnv()[3]-jc2.getEnv()[1])/2));
-					      return (y2 < y1 ? -1 : (y2 == y1 ? 0 : 1));           
-				  }     
-		   };
-		   final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
-				  @Override         
-				  public int compare(envInterface jc1, envInterface jc2) {
-					  int x1 = (int)(jc1.getEnv()[0]+((jc1.getEnv()[2]-jc1.getEnv()[0])/2));
-					  int x2 = (int)(jc2.getEnv()[0]+((jc2.getEnv()[2]-jc2.getEnv()[0])/2));
-					      return (x2 < x1 ? -1 : (x2 == x1 ? 0 : 1));           
-				  }     
-		   };
-		   Collections.sort(nodes, yComp);
-		   DataOutputStream dos = null;
-		   File f = new File(hough_settings.file+"NavLine"+files+hough_settings.extension);
-		   try {
-			   dos = new DataOutputStream(new FileOutputStream(f));
-			   int y = (int)(nodes.get(0).getEnv()[1]+((nodes.get(0).getEnv()[3]-nodes.get(0).getEnv()[1])/2));
-			   int iPosStart = 0;
-			   int iPosEnd = 0;
-			   for(int i = 0 ; i < nodes.size(); i++) {
-				   if( y != (int)(nodes.get(i).getEnv()[1]+((nodes.get(i).getEnv()[3]-nodes.get(i).getEnv()[1])/2))) {
-					   iPosEnd = i;
-					   genRow(dos, iPosStart, iPosEnd, nodes);
-					   iPosStart = i;
-					   y = (int)(nodes.get(i).getEnv()[1]+((nodes.get(i).getEnv()[3]-nodes.get(i).getEnv()[1])/2));
-				   }
-			   }
-			   iPosEnd = nodes.size();
-			   genRow(dos, iPosStart, iPosEnd, nodes);
-			   // col and min depth marker
-			   Collections.sort(nodes, xComp);
-			   int x = (int)(nodes.get(0).getEnv()[0]+((nodes.get(0).getEnv()[2]-nodes.get(0).getEnv()[0])/2));
-			   iPosStart = 0;
-			   iPosEnd = 0;
-			   for(int i = 0 ; i < nodes.size(); i++) {
-				   if( x != nodes.get(i).getEnv()[0]+((nodes.get(i).getEnv()[2]-nodes.get(i).getEnv()[0])/2)) {
-					   iPosEnd = i;
-					   genColHist(dos, iPosStart, iPosEnd, nodes);
-					   iPosStart = i;
-					   x =(int)(nodes.get(i).getEnv()[0]+((nodes.get(i).getEnv()[2]-nodes.get(i).getEnv()[0])/2));
-				   }
-			   }
-			   iPosEnd = nodes.size();
-			   genColHist(dos, iPosStart, iPosEnd, nodes);
-		   } catch (FileNotFoundException e) {
-				e.printStackTrace();
-				return;  
-		  } catch (IOException e) {
-			e.printStackTrace();
-		  } finally {
-				try {
-					if( dos != null ) {
-						dos.flush();
-						dos.close();
-					}
-				} catch (IOException e) {}		
-		  }   
-	}
-
-	public static void genRow(DataOutputStream dos, int yStart, int yEnd, List<envInterface> nodelA) throws IOException{
-		//if(DEBUG)
-		//	System.out.println("genRow from="+yStart+" to="+yEnd);
-			List<envInterface> subNodes = nodelA.subList(yStart, yEnd);
-			final Comparator<envInterface> xComp = new Comparator<envInterface>() {         
-					  @Override         
-					  public int compare(envInterface jc1, envInterface jc2) {
-						  int x1 = (int)(jc1.getEnv()[0]+((jc1.getEnv()[2]-jc1.getEnv()[0])/2));
-						  int x2 = (int)(jc2.getEnv()[0]+((jc2.getEnv()[2]-jc2.getEnv()[0])/2));
-						      return (x2 < x1 ? -1 : (x2 == x1 ? 0 : 1));           
-					  }     
-			};
-			Collections.sort(subNodes, xComp);
-			// sorted now by x and y
-			for(int i = 0; i < subNodes.size(); i++) {
-				if( i < subNodes.size()-1) {
-					int ix0 = (int)subNodes.get(i).getEnv()[0]+(((int)subNodes.get(i).getEnv()[2]-(int)subNodes.get(i).getEnv()[0])/2);
-					int iy0 = (int)subNodes.get(i).getEnv()[1]+(((int)subNodes.get(i).getEnv()[3]-(int)subNodes.get(i).getEnv()[1])/2);
-					int iz0 = (int)(subNodes.get(i).getDepth()*10.0d);
-					int ix1 = (int)subNodes.get(i+1).getEnv()[0]+(((int)subNodes.get(i+1).getEnv()[2]-(int)subNodes.get(i+1).getEnv()[0])/2);
-					int iy1 = (int)subNodes.get(i+1).getEnv()[1]+(((int)subNodes.get(i+1).getEnv()[3]-(int)subNodes.get(i+1).getEnv()[1])/2);
-					int iz1 = (int)(subNodes.get(i+1).getDepth()*10.0d);
-					writer_file.line3D(dos, ix0, iy0, iz0, ix1, iy1, iz1, 0, 255, 255);
-				}
-			}
-	}
 	
-	public static void genColHist(DataOutputStream dos, int xStart, int xEnd, List<envInterface> nodelA) throws IOException{
-		//if(DEBUG)
-			//System.out.println("genColHist from="+xStart+" to="+xEnd);
-			List<envInterface> subNodes = nodelA.subList(xStart, xEnd);
-			final Comparator<envInterface> yComp = new Comparator<envInterface>() {         
-					  @Override         
-					  public int compare(envInterface jc1, envInterface jc2) {
-						  int y1 = (int)(jc1.getEnv()[1]+((jc1.getEnv()[3]-jc1.getEnv()[1])/2));
-						  int y2 = (int)(jc2.getEnv()[1]+((jc2.getEnv()[3]-jc2.getEnv()[1])/2));
-						      return (y2 < y1 ? -1 : (y2 == y1 ? 0 : 1));           
-					  }     
-			};
-			Collections.sort(subNodes, yComp);
-			double zMin = Double.MAX_VALUE;
-			int ix0 = 0;
-			int iy0 = 0;
-			int iz0 = 0;
-			int ix1 = 0;
-			int iy1 = 0;
-			int iz1 = 0;
-			envInterface cnode = null;
-			// sorted now by x and y
-			for(int i = 0; i < subNodes.size(); i++) {
-				if( i < subNodes.size()-1) {
-					ix0 = (int)subNodes.get(i).getEnv()[0]+(((int)subNodes.get(i).getEnv()[2]-(int)subNodes.get(i).getEnv()[0])/2);
-					iy0 = (int)subNodes.get(i).getEnv()[1]+(((int)subNodes.get(i).getEnv()[3]-(int)subNodes.get(i).getEnv()[1])/2);
-					iz0 = (int)(subNodes.get(i).getDepth()*10.0d);
-					ix1 = (int)subNodes.get(i+1).getEnv()[0]+(((int)subNodes.get(i+1).getEnv()[2]-(int)subNodes.get(i+1).getEnv()[0])/2);
-					iy1 = (int)subNodes.get(i+1).getEnv()[1]+(((int)subNodes.get(i+1).getEnv()[3]-(int)subNodes.get(i+1).getEnv()[1])/2);
-					iz1 = (int)(subNodes.get(i+1).getDepth()*10.0d);
-					writer_file.line3D(dos, ix0, iy0, iz0, ix1, iy1, iz1, 0, 255, 255);
-					//if( DEBUG ) 
-					//	System.out.println("genColHist line3D x="+ix0+" y="+iy0+" z="+iz0+" to x="+iz1+" y="+iy1+" z="+iz1);
-				}
-				if(iy0 >= 0 && subNodes.get(i).getDepth() < zMin) {
-					zMin = subNodes.get(i).getDepth();
-					cnode = subNodes.get(i);
-				}
-			}
-			//  min depth
-			if( cnode != null ) {
-			Vector4d cen1 = new Vector4d();
-			Vector4d cen2 = new Vector4d();
-			cen1.x = cnode.getEnv()[0];
-			cen1.y = cnode.getEnv()[1];
-			cen1.z = cnode.getDepth()*10.0d;//cnode.getCentroid().z - (cnode.getSize()/2);
-			cen2.x = cnode.getEnv()[2];
-			cen2.y = cnode.getEnv()[3];
-			cen2.z = cnode.getDepth()*10.0d;//cnode.getCentroid().z + (cnode.getSize()/2);
-			//if( DEBUG )
-			//	System.out.println("genColHist env minx,y,z="+cen1+" maxx,y,z="+cen2+" centroid node="+cnode);
-			// xmin, ymin, xmax, ymin
-			writer_file.line3D(dos, (int)cen1.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
-			// xmax, ymin, xmax, ymax
-			writer_file.line3D(dos, (int)cen2.x, (int)cen1.y, (int)cen1.z, (int)cen2.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-			// xmax, ymax, xmin, ymax
-			writer_file.line3D(dos, (int)cen2.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen2.y, (int)cen2.z, 0, 127, 255);
-			// xmin, ymax, xmin, ymin
-			writer_file.line3D(dos, (int)cen1.x, (int)cen2.y, (int)cen2.z, (int)cen1.x, (int)cen1.y, (int)cen1.z, 0, 127, 255);
-			}
-	}
 		/**
 		 * Write CloudCompare point cloud viewer compatible file
 		 * for each point - X,Y,Z,R,G,B ascii delimited by space
