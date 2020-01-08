@@ -11,6 +11,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -27,52 +28,7 @@ public class SynchronizedFixedThreadPoolManager {
     private static Map<String, FactoryThreadsLimit> executor = new ConcurrentHashMap<String, FactoryThreadsLimit>();
 	public static volatile SynchronizedFixedThreadPoolManager threadPoolManager = null;
 	private SynchronizedFixedThreadPoolManager() { }
-	/**
-	 * Create a manager with the number of working threads and total threads to execute in the
-	 * default SYSTEMSYNC group
-	 * @param maxExecution
-	 * @param executionLimit
-	 * @return
-	 */
-	public static SynchronizedFixedThreadPoolManager getInstance(int maxThreads, int executionLimit) {
-		if( threadPoolManager == null ) {
-			synchronized(SynchronizedFixedThreadPoolManager.class) {
-				if(threadPoolManager == null) {
-					threadPoolManager = new SynchronizedFixedThreadPoolManager();
-					DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory("SYSTEMSYNC"));
-					ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
-					executor.put("SYSTEMSYNC", 
-							(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit("SYSTEMSYNC", dtf, tpx, maxThreads, executionLimit)));
-					((ExtendedExecutor)tpx).prestartAllCoreThreads();
-				}
-			}
-		}
-		return threadPoolManager;
-	}
-	/**
-	 * Create a manager with the number of working threads and total threads to execute in the
-	 * default named group
-	 * @param maxExecution
-	 * @param executionLimit
-	 * @param group The group name, to differentiate between working sets of different operation or thread counts
-	 * @return
-	 */
-	public static SynchronizedFixedThreadPoolManager getInstance(int maxThreads, int executionLimit, String group) {
-		if( threadPoolManager == null ) {
-			synchronized(SynchronizedFixedThreadPoolManager.class) {
-				if(threadPoolManager == null) {
-					threadPoolManager = new SynchronizedFixedThreadPoolManager();
-					DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory(group));
-					ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
-					executor.put(group, 
-							(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit(group, dtf, tpx, maxThreads, executionLimit)));
-					((ExtendedExecutor)tpx).prestartAllCoreThreads();
-				}
-			}
-		}
-		return threadPoolManager;
-	}
-	
+
 	public static SynchronizedFixedThreadPoolManager getInstance() {
 		if( threadPoolManager == null )
 			synchronized(SynchronizedFixedThreadPoolManager.class) {
@@ -83,18 +39,6 @@ public class SynchronizedFixedThreadPoolManager {
 		return threadPoolManager;
 	}
 	
-	public void init(int maxThreads, int executionLimit, String group) {
-		FactoryThreadsLimit ftl = executor.get(group);
-		if( ftl != null ) {
-			ftl.exs.shutdownNow();
-			executor.remove(ftl.group);
-		}
-		DaemonThreadFactory dtf = new DaemonThreadFactory(group);
-		ExecutorService tpx = new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf);
-		executor.put(group, new FactoryThreadsLimit(group, dtf, tpx, maxThreads, executionLimit));
-		((ExtendedExecutor)tpx).prestartAllCoreThreads();
-	}
-	
 	/**
 	 * Create an array of Executors that manage a cached thread pool for
 	 * reading topics. One thread pool per topic to notify listeners of data ready
@@ -103,12 +47,51 @@ public class SynchronizedFixedThreadPoolManager {
 	public static void init(int maxThreads, int executionLimit, String[] threadGroupNames) {
 		for(String tgn : threadGroupNames) {
 			//executor.put(tgn, getInstance(maxExecution, executionLimit).new ExtendedExecutor(maxExecution, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit)));
-			DaemonThreadFactory dtf = (getInstance(maxThreads, executionLimit).new DaemonThreadFactory(tgn));
-			ExecutorService tpx = (getInstance(maxThreads, executionLimit).new ExtendedExecutor(maxThreads, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit), dtf));
-			executor.put(tgn,
-					(getInstance(maxThreads, executionLimit).new FactoryThreadsLimit(tgn, dtf, tpx, maxThreads, executionLimit)));
+			DaemonThreadFactory dtf = (getInstance().new DaemonThreadFactory(tgn));
+			ExecutorService tpx = (getInstance().new ExtendedExecutor(maxThreads, executionLimit, new LinkedBlockingQueue<Runnable>(), dtf));
+			executor.put(tgn,getInstance().new FactoryThreadsLimit(tgn, dtf, tpx, maxThreads, executionLimit));
 			((ExtendedExecutor)tpx).prestartAllCoreThreads();
 		}
+	}
+	
+	public void init(int maxThreads, int executionLimit, String group) {
+		FactoryThreadsLimit ftl = executor.get(group);
+		if( ftl != null ) {
+			ftl.exs.shutdownNow();
+			executor.remove(ftl.group);
+		}
+		DaemonThreadFactory dtf = new DaemonThreadFactory(group);
+		ExecutorService tpx = new ExtendedExecutor(maxThreads, executionLimit, new LinkedBlockingQueue<Runnable>(), dtf);
+		executor.put(group, new FactoryThreadsLimit(group, dtf, tpx, maxThreads, executionLimit));
+		((ExtendedExecutor)tpx).prestartAllCoreThreads();
+	}
+	
+	public void init(int maxThreads, int executionLimit) {
+		FactoryThreadsLimit ftl = executor.get("SYSTEMSYNC");
+		if( ftl != null ) {
+			ftl.exs.shutdownNow();
+			executor.remove(ftl.group);
+		}
+		DaemonThreadFactory dtf = new DaemonThreadFactory("SYSTEMSYNC");
+		ExecutorService tpx = new ExtendedExecutor(maxThreads, executionLimit, new LinkedBlockingQueue<Runnable>(), dtf);
+		executor.put("SYSTEMSYNC", new FactoryThreadsLimit("SYSTEMSYNC", dtf, tpx, maxThreads, executionLimit));
+		((ExtendedExecutor)tpx).prestartAllCoreThreads();
+	}
+	
+	public static void resetLatch(int count) {
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get("SYSTEMSYNC"));
+		ExecutorService exe = ftl.exs;
+		ftl.maxExecution = count;
+		// now reset latch
+		((ExtendedExecutor)exe).latch = new CountDownLatch(ftl.maxExecution);
+	}
+	
+	public static void resetLatch(int count, String group) {
+		FactoryThreadsLimit ftl = ((FactoryThreadsLimit)executor.get(group));
+		ExecutorService exe = ftl.exs;
+		ftl.maxExecution = count;
+		// now reset latch
+		((ExtendedExecutor)exe).latch = new CountDownLatch(ftl.maxExecution);
 	}
 	
 	public static void waitForGroupToFinish(String group) throws InterruptedException {

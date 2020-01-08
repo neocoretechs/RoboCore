@@ -173,8 +173,9 @@ public class VideoProcessor extends AbstractNodeMain
     final static int corrHalfSize = 25;
     final static double DCTRMSSigma = 1.35; // number of standard deviations from DCT RMS mean before we decide its a new image
 
-    CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(5);
-	CircularBlockingDeque<stereo_msgs.DisparityImage2> queueO = new CircularBlockingDeque<stereo_msgs.DisparityImage2>(5);
+    final static int queueLength = 5;
+    CircularBlockingDeque<Object[]> queueI = new CircularBlockingDeque<Object[]>(queueLength);
+	CircularBlockingDeque<stereo_msgs.DisparityImage2> queueO = new CircularBlockingDeque<stereo_msgs.DisparityImage2>(queueLength);
 	
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
@@ -308,8 +309,9 @@ public class VideoProcessor extends AbstractNodeMain
 					++sequenceNumber;
 					if( DEBUG) System.out.println("Published:"+sequenceNumber+" INPUT queue size:"+queueI.length()+" OUTPUT queue size:"+queueO.length()+" file index:"+files);
 					pubcloud.publish(pubc);
-				}	
-				//Thread.sleep(1);
+					System.gc();
+				} else
+					Thread.sleep(1);
 			}
 		});  
 	} // onstart
@@ -368,6 +370,9 @@ public class VideoProcessor extends AbstractNodeMain
 		for(int channels = 0; channels < CHANNELS; channels++) {
 			yStart[channels] = new AtomicInteger(0);
 		}
+		SynchronizedFixedThreadPoolManager.getInstance().init(16, 16, "BUILDOCTREEA");
+		SynchronizedFixedThreadPoolManager.getInstance().init(16, 16, "MATCHREGIONA");
+		final int execLimit = camHeight;
 		ThreadPoolManager.getInstance().spin(new Runnable() {
 				@Override
 				public void run() {
@@ -383,15 +388,13 @@ public class VideoProcessor extends AbstractNodeMain
 					try {
 					  latch.await();
 					  long etime = System.currentTimeMillis();
-					  int numThreads = camHeight/10;
-					  int execLimit = camHeight;
 					  //
 					  // spin all threads necessary for execution
 					  //
 					  for(int channels = 0; channels < CHANNELS; channels++) {
 						  yStart[channels].set(0);
 					  }
-					  SynchronizedFixedThreadPoolManager.getInstance().init(numThreads, execLimit, "BUILDOCTREEA");
+					  SynchronizedFixedThreadPoolManager.resetLatch(execLimit, "BUILDOCTREEA");
 					  for(int syStart = 0; syStart < execLimit; syStart++) {
 					    	SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 					    		@Override
@@ -413,8 +416,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  latchOut.await();
 					  latch2.await();
 					  etime = System.currentTimeMillis();
-					  final int[] nSize = new int[CHANNELS];
-					  final int[] nSizeT = new int[CHANNELS];
+
 					  //leftYRange.clear();
 					  //radixTree.clear();
 					  final ArrayList<List<int[]>> leftYRange = new ArrayList<List<int[]>>(); // from/to position in array for sorted Y centroid processing
@@ -426,6 +428,7 @@ public class VideoProcessor extends AbstractNodeMain
 					  depth = new float[camWidth*camHeight];
 					  // build the work partition array
 					  for(int channels = 0; channels < CHANNELS; channels++){
+						  yStart[channels].set(0);
 						  tnodel.add(nodel[channels].get_nodes());
 						  tnoder.add(noder[channels].get_nodes());
 						  List<int[]> yr = Collections.synchronizedList(new ArrayList<int[]>());
@@ -445,16 +448,10 @@ public class VideoProcessor extends AbstractNodeMain
 						  iPosEnd = tnodel.get(channels).size();
 						  yr.add(new int[]{iPosStart, iPosEnd});
 					  }
-					  // build thread size and execution limit for each channel
-					  for(int channels = 0; channels < CHANNELS; channels++) {
-						yStart[channels].set(0);
-						nSize[channels] = leftYRange.get(channels).size();
-						nSizeT[channels] = Math.min(leftYRange.get(channels).size(), 16);
-					  }
 					  //indexDepth = Collections.synchronizedList(new ArrayList<envInterface>());
 					  indexUnproc = Collections.synchronizedList(new ArrayList<envInterface>());
-					  SynchronizedFixedThreadPoolManager.getInstance().init(nSizeT[0], nSize[0], "MATCHREGIONA");
-					  for(int syStart = 0; syStart < nSize[0]; syStart++) {
+					  SynchronizedFixedThreadPoolManager.resetLatch(leftYRange.get(0).size(), "MATCHREGIONA");
+					  for(int syStart = 0; syStart < leftYRange.get(0).size(); syStart++) {
 							SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 								@Override
 								public void run() {

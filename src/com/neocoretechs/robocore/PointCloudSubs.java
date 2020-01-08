@@ -79,6 +79,7 @@ public class PointCloudSubs extends AbstractNodeMain {
 						bufferL = cbL.array();
 						InputStream in = new ByteArrayInputStream(bufferL);
 						imageL1 = ImageIO.read(in);
+						in.close();
 						if( imageL1.getType() != BufferedImage.TYPE_3BYTE_BGR)
 							System.out.println("NOT 3 byte BGR, but:"+imageL1.getType());
 						imageWidth = imageL1.getWidth();
@@ -86,7 +87,6 @@ public class PointCloudSubs extends AbstractNodeMain {
 						datax = (byte[]) imageL1.getData().getDataElements(0, 0, imageWidth, imageHeight, null);
 						writeFile(datax, disp, "/robotEye"+fileNum);
 						++fileNum;
-						in.close();
 				} catch (IOException e1) {
 					System.out.println("Could not convert image payload due to:"+e1.getMessage());
 					return;
