@@ -23,6 +23,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 		//Port=/dev/ttyACM0
 		//PortSettings=115200,n,8,1
 	    private static String portName = "/dev/ttyACM0";
+	    //private static String portName = "/dev/ttyAMA0";
 	    private static int baud = 115200;
 	    private static int datab = 8;
 	    private static int stopb = 1;

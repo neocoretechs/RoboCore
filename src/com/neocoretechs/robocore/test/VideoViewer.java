@@ -292,6 +292,7 @@ public class VideoViewer extends AbstractNodeMain
 		ThreadPoolManager.getInstance().spin(new Runnable() {
 				@Override
 				public void run() {
+					SynchronizedFixedThreadPoolManager.getInstance().init(16, 16);
 					System.out.println("Processing "+camWidth+" by "+camHeight);
 					while(true) {
 					//
@@ -329,11 +330,12 @@ public class VideoViewer extends AbstractNodeMain
 					  //
 					  // spin all threads necessary for execution
 					  //
+					  SynchronizedFixedThreadPoolManager.resetLatch(execLimit);
 					  for(int syStart = 0; syStart < execLimit; syStart++) {
 						//for(; threads < camHeight/corrWinSize; threads++) {
 						//System.out.println("Spinning thread "+yStart);
 						//ThreadPoolManager.getInstance().spin(new Runnable() {
-						SynchronizedFixedThreadPoolManager.getInstance(numThreads, execLimit).spin(new Runnable() {
+						SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 						  //int yStart = threads*corrWinSize;
 						  //int yEnd = yStart+corrWinSize-1;
 						  @Override

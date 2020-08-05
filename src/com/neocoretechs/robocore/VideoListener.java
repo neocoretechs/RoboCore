@@ -172,16 +172,21 @@ public class VideoListener extends AbstractNodeMain
 				}
 			}*/
 		}
-		final Subscriber<sensor_msgs.Image> imgsub =
-				connectedNode.newSubscriber("/sensor_msgs/Image", sensor_msgs.Image._TYPE);
+		//final Subscriber<sensor_msgs.Image> imgsub =
+		//		connectedNode.newSubscriber("/sensor_msgs/Image", sensor_msgs.Image._TYPE);
+		final Subscriber<stereo_msgs.StereoImage> imgsub =
+				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = 
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
-		imgsub.addMessageListener(new MessageListener<sensor_msgs.Image>() {
-		@Override
-		public void onNewMessage(sensor_msgs.Image img) {
+		//imgsub.addMessageListener(new MessageListener<sensor_msgs.Image>() {
+		//@Override
+		//public void onNewMessage(sensor_msgs.Image img) {
+		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
+			@Override
+			public void onNewMessage(stereo_msgs.StereoImage img) {
 			long slew = System.currentTimeMillis() - time1;
 			if( SAMPLERATE && slew >= 1000) {
 				time1 = System.currentTimeMillis();
@@ -189,7 +194,7 @@ public class VideoListener extends AbstractNodeMain
 				lastSequenceNumber = sequenceNumber;
 			}
 			synchronized(buffer) {
-				cb = img.getData();
+				cb = img.getData(); // left image, right image is in getData2
 				buffer = cb.array(); // 3 byte BGR
 			}
 			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();

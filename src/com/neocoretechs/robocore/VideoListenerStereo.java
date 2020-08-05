@@ -50,15 +50,19 @@ import org.ros.node.topic.Subscriber;
  */
 public class VideoListenerStereo extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
-    private BufferedImage image = null;
-    private PlayerFrame displayPanel;
+    private BufferedImage imagel = null;
+    private BufferedImage imager = null;
+    private PlayerFrame displayPanel1;
+    private PlayerFrame displayPanel2;
     private Object mutex = new Object();
-    private Object navMutex = new Object();
-    ByteBuffer cb;
-    byte[] buffer = new byte[0];
+
+    ByteBuffer cbl;
+    byte[] bufferl = new byte[0];
+    ByteBuffer cbr;
+    byte[] bufferr = new byte[0];
     
     double eulers[] = new double[]{0.0,0.0,0.0};
    
@@ -70,7 +74,7 @@ public class VideoListenerStereo extends AbstractNodeMain
     int port = 8000;
     //CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
     //CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
-    byte[] bqueue;
+    byte[][] bqueue;
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
 	
@@ -81,22 +85,43 @@ public class VideoListenerStereo extends AbstractNodeMain
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
+		
+		final Subscriber<stereo_msgs.StereoImage> imgsub =
+				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
+		final Subscriber<sensor_msgs.Imu> subsimu = 
+				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.containsKey("__mode") )
 			mode = remaps.get("__mode");
 		if( mode.equals("display")) {
-			if( DEBUG )
-				System.out.println("Pumping frames to AWT Panel");
+			//if( DEBUG )
+				System.out.println("Invoking thread for pumping frames to AWT Panel");
+			
 			SwingUtilities.invokeLater(new Runnable() {
 			    public void run() {
-			        displayPanel = new PlayerFrame();
-			        displayPanel.paintPanel();
+					JFrame frame = new JFrame("Player");
+			        displayPanel1 = new PlayerFrame();
+			        frame.setLayout(new BorderLayout());
+					frame.add(displayPanel1, BorderLayout.EAST);
+					displayPanel1.setPreferredSize(new Dimension(640,480));
+					displayPanel1.setVisible(true);
+			        displayPanel2 = new PlayerFrame();
+					frame.add(displayPanel2, BorderLayout.WEST);
+					displayPanel2.setPreferredSize(new Dimension(640,480));
+					displayPanel2.setVisible(true);
+					frame.pack();
+					frame.setSize(new Dimension(1320, 520));
+					frame.setVisible(true);
+			        displayPanel1.paintPanel();
+			        displayPanel2.paintPanel();
 			    }
 			});
 			ThreadPoolManager.getInstance().spin(new Runnable() {
 				@Override
 				public void run() {
+					if(DEBUG)
+						System.out.println("Entering display loop");
 			        while(true) {
 			        	//java.awt.Image dimage=null;
 						//try {
@@ -104,20 +129,21 @@ public class VideoListenerStereo extends AbstractNodeMain
 						//} catch (InterruptedException e) {
 							//e.printStackTrace();
 						//}
-			        	if( image == null )
+			        	if( imagel == null || imager == null) {
 							try {
 								Thread.sleep(1);
 							} catch (InterruptedException e) {}
-			        	else {
+			        	} else {
 			        		synchronized(mutex) {
-			        		displayPanel.setLastFrame((java.awt.Image)/*d*/image);
-			        		synchronized(navMutex) {
-			        			displayPanel.setComputedValues(eulers[0], eulers[1], eulers[2]);
-			        		}
-			        	//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
-						//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
-			        		displayPanel.invalidate();
-			        		displayPanel.updateUI();
+			        			displayPanel1.setLastFrame((java.awt.Image)imagel);
+			        			displayPanel2.setLastFrame((java.awt.Image)imager);
+			        			displayPanel1.setComputedValues(eulers[0], eulers[1], eulers[2]);
+			        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
+			        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
+			        			displayPanel1.invalidate();
+			        			displayPanel2.invalidate();
+			        			displayPanel1.updateUI();
+			        			displayPanel2.updateUI();
 			        		}
 			        	}
 			        }
@@ -153,29 +179,27 @@ public class VideoListenerStereo extends AbstractNodeMain
 				        }
 					}
 				}, "SYSTEM");		
-			}/* else { // mode has output directory
+			}// else { // mode has output directory
 				
-				if( mode.equals("rtsp_server") ) {
-					if( DEBUG )
-						System.out.println("Pumping frames to RTSP server");
-					try {
-						RtspServer.init();
-					} catch (Exception e) {
+				//if( mode.equals("rtsp_server") ) {
+				//	if( DEBUG )
+				//		System.out.println("Pumping frames to RTSP server");
+				//	try {
+				//		RtspServer.init();
+				//	} catch (Exception e) {
 						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				} else {
+				//		e.printStackTrace();
+				//	}
+				//} else {
 					// if mode is not display, or display_server, look for output file directory
-					outDir = remaps.get("__mode");
-					if( DEBUG )
-						System.out.println("Sending video files to :"+outDir);
-				}
-			}*/
+				//	outDir = remaps.get("__mode");
+				//	if( DEBUG )
+				//		System.out.println("Sending video files to :"+outDir);
+				//}
+			//}
+			
 		}
-		final Subscriber<stereo_msgs.StereoImage> imgsub =
-				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
-		final Subscriber<sensor_msgs.Imu> subsimu = 
-				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
+
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
@@ -185,16 +209,18 @@ public class VideoListenerStereo extends AbstractNodeMain
 			long slew = System.currentTimeMillis() - time1;
 			if( SAMPLERATE && slew >= 1000) {
 				time1 = System.currentTimeMillis();
-				System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber)+". Slew rate="+(slew-1000));
+				System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+". Slew rate="+(slew-1000));
 				lastSequenceNumber = sequenceNumber;
 			}
-			synchronized(buffer) {
-				cb = img.getData();
-				buffer = cb.array(); // 3 byte BGR
+			synchronized(mutex) {
+				cbl = img.getData();
+				bufferl = cbl.array(); // 3 byte BGR
+				cbr = img.getData2();
+				bufferr = cbr.array(); // 3 byte BGR
 			}
 			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
 			if( DEBUG ) {
-				System.out.println("New image "+img.getWidth()+","+img.getHeight()+" size:"+buffer.length/*ib.limit()*/);
+				System.out.println("New images "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
 			}
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
@@ -224,17 +250,27 @@ public class VideoListenerStereo extends AbstractNodeMain
 			*/
 			
 			if( mode.equals("display")) {
+				synchronized(mutex) {
 				try {
-					synchronized(buffer) {
-						InputStream in = new ByteArrayInputStream(buffer);
+						InputStream in = new ByteArrayInputStream(bufferl);
 						synchronized(mutex) {
-						image = ImageIO.read(in);
+						imagel = ImageIO.read(in);
 						}
 						in.close();
-					}
 				} catch (IOException e1) {
-					System.out.println("Could not convert image payload due to:"+e1.getMessage());
+					System.out.println("Could not convert LEFT image payload due to:"+e1.getMessage());
 					return;
+				}
+				try {
+						InputStream in = new ByteArrayInputStream(bufferr);
+						synchronized(mutex) {
+						imager = ImageIO.read(in);
+						}
+						in.close();
+				} catch (IOException e1) {
+					System.out.println("Could not convert RIGHT image payload due to:"+e1.getMessage());
+					return;
+				}
 				}
 				//displayPanel.setLastFrame((java.awt.Image)image);
 				//displayPanel.setLastFrame(displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
@@ -246,7 +282,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 			} else {
 				if( mode.equals("display_server")) {
 					//bqueue.addLast(buffer);
-					bqueue = buffer;
+					bqueue = new byte[][]{bufferl, bufferr};
 				} /*else { 
 					if( mode.equals("rtsp_server")){
 						RtspServer.queue.addLast(buffer);
@@ -279,13 +315,13 @@ public class VideoListenerStereo extends AbstractNodeMain
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
-				synchronized(navMutex) {
+				synchronized(mutex) {
 					eulers = message.getOrientationCovariance();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
-					System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+					if(DEBUG)
+						System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 				}
 			}
-
 		});
 	}
 	
@@ -329,8 +365,11 @@ public class VideoListenerStereo extends AbstractNodeMain
 				out.write(("--" + BOUNDARY + "\n").getBytes());
 				while (true) {
 						out.write("Content-type: image/jpeg\n\n".getBytes());
-						byte[] b = bqueue;//.takeFirst();
-        				out.write(b, 0, b.length);
+						byte[][] b = bqueue;//.takeFirst();
+        				out.write(b[0], 0, b[0].length);
+						out.write(("--" + BOUNDARY + "\n").getBytes());
+						out.write("Content-type: image/jpeg\n\n".getBytes());
+        				out.write(b[1], 0, b[1].length);
 						out.write(("--" + BOUNDARY + "\n").getBytes());
 						out.flush();
 				}
@@ -347,27 +386,26 @@ public class VideoListenerStereo extends AbstractNodeMain
 	class PlayerFrame extends JPanel {
 		JFrame frame;
 		public PlayerFrame() {
-			frame = new JFrame("Player");
+			//frame = new JFrame("Player");
 			//---
 			//displayPanel = new PlayerFrame();
 			//frame.getContentPane().add(displayPanel, BorderLayout.CENTER);
 			//displayPanel.setVisible(true);
 			//---
-			//frame.getContentPane().add(this, BorderLayout.CENTER);
-			frame.add(this, BorderLayout.CENTER);
+			//frame.add(this, BorderLayout.CENTER);
 			// Remove window title and borders
-	        frame.setUndecorated(true);
+	        //frame.setUndecorated(true);
 	        // Make frame topmost
-	        frame.setAlwaysOnTop(true);
+	        //frame.setAlwaysOnTop(true);
 	        // Disable Alt+F4 on Windows
-	        frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+	        //frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 	        // Make frame full-screen
-	        frame.setExtendedState(Frame.MAXIMIZED_BOTH);
+	        //frame.setExtendedState(Frame.MAXIMIZED_BOTH);
 	        // Display frame
-			this.setVisible(true);
-			frame.pack();
+			//this.setVisible(true);
+			//frame.pack();
 			//frame.setSize(new Dimension(640, 480));
-			frame.setVisible(true);
+			//frame.setVisible(true);
 		}
 		private java.awt.Image lastFrame;
 		public void setLastFrame(java.awt.Image lf) {
@@ -377,11 +415,10 @@ public class VideoListenerStereo extends AbstractNodeMain
 				return;
 			}
 			synchronized(lastFrame) {
-				//lastFrame.getGraphics().dispose();
 				lastFrame = lf; 
 			} 
 		}
-		//public void paint(Graphics g) {
+
 		public void paintComponent(Graphics g) {
 			super.paintComponent(g);
 			if( lastFrame == null )

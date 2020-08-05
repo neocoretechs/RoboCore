@@ -1,6 +1,8 @@
 package com.neocoretechs.robocore;
 
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Map;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.namespace.GraphName;
@@ -13,6 +15,8 @@ import au.edu.jcu.v4l4j.CaptureCallback;
 import au.edu.jcu.v4l4j.DeviceInfo;
 import au.edu.jcu.v4l4j.FrameGrabber;
 import au.edu.jcu.v4l4j.ImageFormat;
+import au.edu.jcu.v4l4j.ImageFormatList;
+import au.edu.jcu.v4l4j.ResolutionInfo;
 import au.edu.jcu.v4l4j.V4L4JConstants;
 import au.edu.jcu.v4l4j.VideoDevice;
 import au.edu.jcu.v4l4j.VideoFrame;
@@ -51,6 +55,8 @@ public class VideoPubStereo extends AbstractNodeMain {
 	private VideoDevice videoDeviceR;
 	private FrameGrabber frameGrabberL;
 	private FrameGrabber frameGrabberR;
+	private ImageFormat videoBestImageFormatL = null;
+	private ImageFormat videoBestImageFormatR = null;
 
 	ByteBuffer bbL;
 	ByteBuffer bbR;
@@ -65,7 +71,12 @@ public class VideoPubStereo extends AbstractNodeMain {
 	 */
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-
+		// Optionally get video devices from command line __left:= and __right:= params
+		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		if( remaps.containsKey("__left") )
+			deviceL = remaps.get("__left");
+		if( remaps.containsKey("__right") )
+			deviceR = remaps.get("__right");
 		//final Log log = connectedNode.getLog();
 		final Publisher<stereo_msgs.StereoImage> imgpub =
 		connectedNode.newPublisher("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
@@ -246,9 +257,11 @@ public class VideoPubStereo extends AbstractNodeMain {
 			for(ImageFormat fi : deviceInfoL.getFormatList().getNativeFormats() )
 				System.out.println("\t"+fi.toNiceString());
 		}
+		videoBestImageFormatL = getVideoBestImageFormat(deviceInfoL);
 		  //ImageFormat imageFormat=deviceInfo.getFormatList().getNativeFormat(0);
 		
-		frameGrabberL = videoDeviceL.getJPEGFrameGrabber(width, height, channel, std, V4L4JConstants.MAX_JPEG_QUALITY);
+		//deviceInfoL.frameGrabberL = videoDeviceL.getJPEGFrameGrabber(width, height, channel, std, V4L4JConstants.MAX_JPEG_QUALITY);
+		frameGrabberL = videoDeviceL.getJPEGFrameGrabber(width, height, channel, std, 80, videoBestImageFormatL);
 		frameGrabberL.setCaptureCallback(this);
 		width = frameGrabberL.getWidth();
 		height = frameGrabberL.getHeight();
@@ -320,7 +333,9 @@ public class VideoPubStereo extends AbstractNodeMain {
 			for(ImageFormat fi : deviceInfoR.getFormatList().getNativeFormats() )
 				System.out.println(fi);
 		}
-		frameGrabberR = videoDeviceR.getJPEGFrameGrabber(width, height, channel, std, V4L4JConstants.MAX_JPEG_QUALITY);
+		videoBestImageFormatR = getVideoBestImageFormat(deviceInfoR);
+		//frameGrabberR = videoDeviceR.getJPEGFrameGrabber(width, height, channel, std, V4L4JConstants.MAX_JPEG_QUALITY);
+		frameGrabberR = videoDeviceR.getJPEGFrameGrabber(width, height, channel, std, 80, videoBestImageFormatR);
 		frameGrabberR.setCaptureCallback(this);
 		//width = frameGrabberR.getWidth();
 		//height = frameGrabberR.getHeight();
@@ -370,5 +385,65 @@ public class VideoPubStereo extends AbstractNodeMain {
 	public void exceptionReceived(V4L4JException e) {
 		e.printStackTrace();
 	}
+	}
+	
+	private static final String[] BEST_FORMATS = new String[] {
+			// MJPEG and JPEG are the best match because there is no need to
+			// recalculate too much, hardware will deliver what we need
+			"MJPEG", "JPEG",
+			// 24-bit formats where every pixel can be stored in 3 bytes
+			"BGR24", "RGB24",
+			// 32-bit formats where every pixel can be stored in 4 bytes
+			"BGR32", "RGB32",
+			// next are YUV formats where every 2 pixels can be written in 4 bytes
+			"YU", "UY", "YV", "UV"
+		};
+
+	private static ImageFormat getVideoBestImageFormat(DeviceInfo device) throws V4L4JException {
+
+		if (device == null) {
+			throw new IllegalArgumentException("Device must not be null!");
+		}
+
+		ImageFormatList formatsList = device.getFormatList();
+		List<ImageFormat> formats = formatsList.getNativeFormats();//getJPEGEncodableFormats();
+
+		int min = Integer.MAX_VALUE;
+		ImageFormat bestFormat = null;
+
+		for (ImageFormat format : formats) {
+
+			ResolutionInfo info = format.getResolutionInfo();
+			ResolutionInfo.Type type = info.getType();
+			String name = format.getName();
+
+			// skip unsupported resolution type
+
+			switch (type) {
+				case UNSUPPORTED:
+				case DISCRETE:
+				case STEPWISE:
+					break;
+				default:
+					throw new V4L4JException("Unknown resolution type " + type);
+			}
+
+			System.out.println("Testing "+name+" type="+type);
+
+			for (int i = 0; i < BEST_FORMATS.length; i++) {
+				if (name.startsWith(BEST_FORMATS[i]) && i < min) {
+					min = i;
+					bestFormat = format;
+				}
+			}
+		}
+
+		System.out.println("Best image format match "+bestFormat);
+
+		if (bestFormat == null) {
+			throw new V4L4JException("No suitable image format detected");
+		}
+
+		return bestFormat;
 	}
 }
