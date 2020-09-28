@@ -27,7 +27,12 @@ import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
  * Takes readings from the IMU DataPort and packages them for publication on the ROS bus.
  * Three messages will be published: sensor_msgs/Imu with the sensor_msgs.Imu class, sensor_msgs/Temperature with sensor_msgs.Temperature
  * and sensor_msgs/MagneticField with sensor_msgs.MagneticField.
- * IMUSerialDataPort class is oriented toward the Bosch BNO055
+ * IMUSerialDataPort class is oriented toward the Bosch BNO055.
+ * Option also exists for calibration mode, wherein a calibration kata must be performed until values reach their desired
+ * levels, as set by the parameters SYSTEM_CAL, ACC_CAL, GYRO_CAL, MAG_CAL, and calibration file is written to the file
+ * defined in IMUSerialDataPort. MAKE SURE TO DELETE FILE BEFORE CALIBRATION, as it is otherwise locked for update. 
+ * Deleting file will reset CALIBRATION VALUES TO ZERO.. After successful calibration, IMU enters normal data publishing loop mode.
+ * 
  * @author jg
  */
 public class IMUPubs extends AbstractNodeMain  {
@@ -46,12 +51,34 @@ public class IMUPubs extends AbstractNodeMain  {
 	int[] accels = null;
 	int[] gyros = null;
 	int[] mags = null;
+	int temp = -1;
 	double[] eulers = null;
 	double[] quats = null;
-	int temp = -1;
-	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
+	//
+	int[] last_accels = null;
+	int[] last_gyros = null;
+	int[] last_mags = null;
+	int last_temp = 0;
+	double[] last_imu = null;
+	
 
-	static IMUSerialDataPort imuPort;
+	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
+	long time1, startTime;
+	long time2;
+
+	IMUSerialDataPort imuPort;
+	
+	int SYSTEM_CAL = 3; // system calibration
+	int ACC_CAL = 3; // accel calibration
+	int GYRO_CAL = 3; // gyro calibration
+	int MAG_CAL = 3; // magnetometer calibration
+	int IMU_TOL = 3; // number of decimal places of position readout
+	int IMU_FREQ = 1000; // Update frequency, to publish regardless if data is unchanged
+	boolean acc_changed = false;
+	boolean gyro_changed = false;
+	boolean mag_changed = false;
+	boolean temp_changed = false;
+	boolean imu_changed = false;
 	
 	public IMUPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -109,14 +136,25 @@ public void onStart(final ConnectedNode connectedNode) {
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 	if( remaps.containsKey("__mode") )
 		mode = remaps.get("__mode");
-
+	if( remaps.containsKey("__system_cal") )
+		SYSTEM_CAL = Integer.parseInt(remaps.get("__system_cal"));// system calibration
+	if( remaps.containsKey("__acc_cal") )
+		ACC_CAL = Integer.parseInt(remaps.get("__acc_del")); // accel calibration
+	if( remaps.containsKey("__gyro_cal") )
+		GYRO_CAL = Integer.parseInt(remaps.get("__gyro_cal")); // gyro calibration
+	if( remaps.containsKey("__mag_cal") )
+		MAG_CAL = Integer.parseInt(remaps.get("__mag_cal"));// magnetometer calibration
+	if( remaps.containsKey("__imu_tol") )
+		IMU_TOL = Integer.parseInt(remaps.get("__imu_tol"));// number of decimal places of position readout
+	if( remaps.containsKey("__imu_freq") )
+		IMU_FREQ = Integer.parseInt(remaps.get("__imu_freq"));// number of milliseconds between maximum publication times (should data remain constant)
+	
 	// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
 	awaitStart.countDown();
 	// This CancellableLoop will be canceled automatically when the node shuts
 	// down.
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
 		private int sequenceNumber, lastSequenceNumber;
-		long time1, startTime;
 		org.ros.message.Time time = null;
 		@Override
 		protected void setup() {
@@ -124,7 +162,13 @@ public void onStart(final ConnectedNode connectedNode) {
 			lastSequenceNumber = 0;
 			time1 = System.currentTimeMillis();
 			startTime = time1;
+			time2 = System.currentTimeMillis();
 			imuPort = IMUSerialDataPort.getInstance();
+			imuPort.setSYSTEM_CAL(SYSTEM_CAL);
+			imuPort.setACC_CAL(ACC_CAL);
+			imuPort.setGYRO_CAL(GYRO_CAL);
+			imuPort.setMAG_CAL(MAG_CAL);
+			imuPort.setIMU_TOL(IMU_TOL);
 			try {
 				imuPort.displayRevision(imuPort.getRevision());
 				if( mode.equals("calibrate")) {
@@ -157,78 +201,84 @@ public void onStart(final ConnectedNode connectedNode) {
 				    	}
 				    }
 				}
-	
-				//MotionController.updatePID((float)eulers[0],  0.0f);
-				header.setSeq(sequenceNumber);
-				time = org.ros.message.Time.fromMillis(System.currentTimeMillis());
-				header.setStamp(time);
-				header.setFrameId(time.toString());
-				imumsg = imupub.newMessage();
-				tempmsg = temppub.newMessage();
-				magmsg = magpub.newMessage();
-				imumsg.setHeader(header);
-				tempmsg.setHeader(header);
-				magmsg.setHeader(header);
+				if( hasDataChanged() ) {
+					//MotionController.updatePID((float)eulers[0],  0.0f);
+					header.setSeq(sequenceNumber);
+					time = org.ros.message.Time.fromMillis(System.currentTimeMillis());
+					header.setStamp(time);
+					header.setFrameId(time.toString());
+					imumsg = imupub.newMessage();
+					tempmsg = temppub.newMessage();
+					magmsg = magpub.newMessage();
+					imumsg.setHeader(header);
+					tempmsg.setHeader(header);
+					magmsg.setHeader(header);
 				
-				if( accels != null ) {
-					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					val.setX(accels[0]);
-					val.setY(accels[1]);
-					val.setZ(accels[2]);
-					imumsg.setLinearAcceleration(val);
-				} else
-					System.out.println("ACCEL ERROR");
+					if( accels != null ) {
+						geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+						val.setX(accels[0]);
+						val.setY(accels[1]);
+						val.setZ(accels[2]);
+						imumsg.setLinearAcceleration(val);
+					} else {
+						System.out.println("ACCEL ERROR");
+					}
 	
-				if( gyros != null ) {
-					geometry_msgs.Vector3 vala = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					vala.setZ(gyros[2]);
-					vala.setX(gyros[0]);
-					vala.setY(gyros[1]);
-					imumsg.setAngularVelocity(vala);
-				} else
-					System.out.println("GYRO ERROR");
+					if( gyros != null ) {
+						geometry_msgs.Vector3 vala = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+						vala.setZ(gyros[2]);
+						vala.setX(gyros[0]);
+						vala.setY(gyros[1]);
+						imumsg.setAngularVelocity(vala);
+					} else {
+						System.out.println("GYRO ERROR");
+					}
 
-				if( quats != null ) {
-					geometry_msgs.Quaternion valq = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);
-					valq.setX(quats[0]);
-					valq.setY(quats[1]);
-					valq.setZ(quats[2]);
-					valq.setW(quats[3]);
-					imumsg.setOrientation(valq);
-					imumsg.setOrientationCovariance(eulers); // we send the euler angles through the covariance matrix
-				} else
-					System.out.println("QUAT ERROR");
-				if( accels != null && gyros != null && quats != null) {
-					if( DEBUG )
-						System.out.println("Publishing IMU:"+imumsg);
-					imupub.publish(imumsg);
-					Thread.sleep(10);
-				}
+					if( quats != null ) {
+						geometry_msgs.Quaternion valq = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);
+						valq.setX(quats[0]);
+						valq.setY(quats[1]);
+						valq.setZ(quats[2]);
+						valq.setW(quats[3]);
+						imumsg.setOrientation(valq);
+						imumsg.setOrientationCovariance(eulers); // we send the euler angles through the covariance matrix
+					} else {
+						System.out.println("QUAT ERROR");
+					}
+					if( accels != null && gyros != null && quats != null && imu_changed) {
+						if( DEBUG )
+							System.out.println("Publishing IMU:"+imumsg);
+						imupub.publish(imumsg);
+						Thread.sleep(10);
+					}
 				
-				// Temp
-				tempmsg.setTemperature(temp);
-				temppub.publish(tempmsg);
-				Thread.sleep(10);
-				if( DEBUG )
-					System.out.println("Publishing TEMP:"+tempmsg);
+					// Mag
+					if(mags != null && mag_changed) {
+						geometry_msgs.Vector3 valm = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+						valm.setZ(mags[2]);
+						valm.setX(mags[0]);
+						valm.setY(mags[1]);
+						magmsg.setMagneticField(valm);
+						magpub.publish(magmsg);
+						Thread.sleep(10);
+						if( DEBUG )
+							System.out.println("Publishing MAG:"+magmsg);
+					} else {
+						if(mags == null)
+							System.out.println("MAG ERROR");
+					}
+					// Temp
+					if(temp_changed) {
+						tempmsg.setTemperature(temp);
+						temppub.publish(tempmsg);
+						if( DEBUG )
+							System.out.println("Publishing TEMP:"+tempmsg);
+					}
 				
-				// Mag
-				if(mags != null) {
-					geometry_msgs.Vector3 valm = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-					valm.setZ(mags[2]);
-					valm.setX(mags[0]);
-					valm.setY(mags[1]);
-					magmsg.setMagneticField(valm);
-					magpub.publish(magmsg);
-					Thread.sleep(10);
-					if( DEBUG )
-						System.out.println("Publishing MAG:"+magmsg);
-				} else
-					System.out.println("MAG ERROR");
+				} // hasDataChanged
 				
-		
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
+				System.out.println("IMU publishing loop malfuntion "+e.getMessage());
 				e.printStackTrace();
 			}
 	
@@ -274,7 +324,6 @@ public void getIMU() throws IOException{
 	if( DEBUG && temp != Integer.MAX_VALUE)
 		System.out.println("Temp:"+temp);
 	
-	
 	// Output data to screen
 	if( DEBUG ) {
 		if( mags != null )
@@ -295,4 +344,69 @@ public void getIMU() throws IOException{
 			System.out.println("TEMPERATURE ERROR");
 	}
 }
+/**
+ * Attemtp to limit publishing of real time data by only sending on deltas
+ * @return true if any data has changed, then individual flags discern which data has changed and is to be published
+ */
+private boolean hasDataChanged() {
+	boolean dataChanged = false;
+	acc_changed = false;
+	gyro_changed = false;
+	mag_changed = false;
+	imu_changed = false;
+	temp_changed = false;
+	if(last_accels == null || last_gyros == null || last_mags == null) {
+		last_accels = new int[3];
+		last_gyros = new int[3];
+		last_mags = new int[3];
+		last_imu = new double[3];
+	}
+	if(accels == null || gyros == null || mags == null)
+		return true;
+	if(accels[0] != last_accels[0] || accels[1] != last_accels[1] || accels[2] != last_accels[2] ) {
+		last_accels[0] = accels[0];
+		last_accels[1] = accels[1];
+		last_accels[2] = accels[2];
+		dataChanged = true;
+		acc_changed = true;
+	}
+	if( gyros[0] != last_gyros[0] || gyros[1] != last_gyros[1] || gyros[2] != last_gyros[2]) {
+		last_gyros[0] = gyros[0];
+		last_gyros[1] = gyros[1];
+		last_gyros[2] = gyros[2];
+		dataChanged = true;
+		gyro_changed = true;
+	}
+	if( mags[0] != last_mags[0] || mags[1] != last_mags[1] || mags[2] != last_mags[2]) {
+		last_mags[0] = mags[0];
+		last_mags[1] = mags[1];
+		last_mags[2] = mags[2];
+		dataChanged = true;
+		mag_changed = true;
+	}
+	if( eulers[0] != last_imu[0] || eulers[1] != last_imu[1] || eulers[2] != last_imu[2]) {
+		last_imu[0] = eulers[0];
+		last_imu[1] = eulers[1];
+		last_imu[2] = eulers[2];
+		dataChanged = true;
+		imu_changed = true;
+	}
+	if( temp != last_temp ) {
+		last_temp = temp;
+		dataChanged = true;
+		temp_changed = true;
+	}
+	// heartbeat
+	if((System.currentTimeMillis() - time2) > IMU_FREQ) {
+		time2 = System.currentTimeMillis();
+		dataChanged = true;
+		acc_changed = true;
+		gyro_changed = true;
+		mag_changed = true;
+		imu_changed = true;
+		temp_changed = true;
+	}
+	return dataChanged;
+}
+
 }
