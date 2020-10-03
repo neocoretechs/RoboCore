@@ -27,14 +27,21 @@ import org.ros.node.topic.Subscriber;
 /**
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to affect
  * propulsion and issue status updates based on IMU data edge conditions that may indicate problems.
+ * Subscribing to:
+ * sensor_msgs/Joy (joystick information boxed as an array of buttons and axis values common to standard controllers)
+ * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)
+ * sensor_msgs/Temperature (most likely from IMU)
+ * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)
+ *
+ * Publishing to:
+ * absolute/cmd_vel (command velocity channel receiving absolute left and right motor speed values)
+ * robocore/status (status update channel to receive information on alerts, etc, derived from IMU and other sensors)
+ * 
  * Published on absolute/cmd_vel are the values from 0-1000 that represent actual power to each differential drive wheel.
- * Subscribers to absolute/cmd_vel include the process that manages serial data to the motor controller.
- * Publishers on robocore/status provide status updates relating to IMU extremes that are picked up by the VoxHumana voice synth or others.
- * sensor_msgs/MagneticField
- * sensor_msgs/Temperature
- * sensor_msgs/Imu
- * UpperFront/sensor_msgs/Range
- * LowerFront/sensor_msgs/Range
+ * Subscribers to absolute/cmd_vel include the process that manages serial data to the motor controller, possibly on a separate computer.
+ * Publishers on robocore/status provide status updates relating to IMU extremes that are picked up by the VoxHumana voice synth or others,
+ * again most probably on a completely separate single board computer within the robot.
+ *
  * To reduce incoming data, Two sets of flags and a threshold value are used to determine if:
  * a) The values have changed from last message
  * b) The value exceed a threshold deemed noteworthy
@@ -56,7 +63,7 @@ import org.ros.node.topic.Subscriber;
  * of small corrections to stay on course. Regardless of the amount the machine is knocked off course it can find its way back to the
  * proper heading through a circuitous route gradually refined to require only small correction.
  * 
- * @author jg Copyright (C) NeoCoreTechs 2017,2018
+ * @author jg Copyright (C) NeoCoreTechs 2017,2018,2019,2020
  *
  */
 public class MotionController extends AbstractNodeMain {
@@ -314,6 +321,7 @@ public class MotionController extends AbstractNodeMain {
 			      
 				//if( DEBUG )
 				//	System.out.println("Axes:"+axes[0]+","+axes[2]+" deg:"+bearingDegrees+" rad:"+radians);
+			    // Button 4 - triangle. Establish setpoint for autonomous course following.
 				// If we are pressing the button, dont update the setpoint with IMU yaw, this has the effect of locking
 				// the course onto the absolute track relative to the way the robot is pointing offset by stick position
 				// rather than a continuous update of stick offset added to current orientation. so if you want the robot to track
@@ -323,7 +331,7 @@ public class MotionController extends AbstractNodeMain {
 					if( !holdBearing ) {
 						holdBearing = true;
 						outputNeg = false;
-						Setpoint = (float) eulers[0];
+						Setpoint = (float) eulers[0]; // Setpoint is yaw angle from IMU,vs heading minus the joystick offset from 0
 						PTerm = 0.0f;
 						ITerm = 0.0f;
 						DTerm = 0.0f;
@@ -333,7 +341,7 @@ public class MotionController extends AbstractNodeMain {
 					}
 			    } else {
 			    	holdBearing = false;
-			    	Setpoint = offsetDegrees; // otherwise its the heading minus the joystick offset from 0
+			    	Setpoint = offsetDegrees; // joystick setting becomes heading and IMU is disregarded
 			    }
 	
 				Input = (float) eulers[0]; //eulers[0] is yaw angle from IMU
@@ -423,7 +431,7 @@ public class MotionController extends AbstractNodeMain {
 					arcout = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 					// error is difference in degrees between setpoint and input
 					// Stick position will override any IMU tolerances
-					if( stickDegrees != -180.0 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
+					if( stickDegrees != -180.0 && stickDegrees != 180 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
 						if( error < 0.0f )
 							speedL *= (arcin/arcout);
 						else
