@@ -2,6 +2,7 @@ package com.neocoretechs.robocore;
 
 //import org.apache.commons.logging.Log;
 import java.io.File;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,6 +23,8 @@ import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
+
+import com.neocoretechs.robocore.MotorControl.TwistInfo;
 
 
 /**
@@ -76,7 +79,10 @@ public class MotionController extends AbstractNodeMain {
 	double pressure, temperature;
 	double[] mag = {0, 0, 0};
 	double[] eulers = {0, 0, 0};
+	//TwistInfo twistInfo;
+	float last_theta;
 	
+	static final float TWOPI = (float) (Math.PI * 2.0f);
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
 	// If we call the wheelbase 1000, it implies that at maximum speed of 1000 it take 2 robot radii to turn 90 degrees
@@ -132,6 +138,7 @@ public class MotionController extends AbstractNodeMain {
 	Object rngMutex2 = new Object();
 	Object navMutex = new Object();
 	Object magMutex = new Object();
+
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -211,6 +218,8 @@ public class MotionController extends AbstractNodeMain {
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		final Publisher<std_msgs.Int32MultiArray> velpub =
 				connectedNode.newPublisher("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
+		final Publisher<std_msgs.Int32MultiArray> trigpub =
+				connectedNode.newPublisher("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
 		
 		//final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
 		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
@@ -279,21 +288,29 @@ public class MotionController extends AbstractNodeMain {
 					speedR = -axes[2] * SPEEDSCALE;
 					speedL = -speedR;
 					// set it up to send
-					ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+					ArrayList<Integer> speedVals = new ArrayList<Integer>(6);
+					speedVals.add(0); //controller slot
+					speedVals.add(1); // controller slot channel
 					speedVals.add((int)speedL);
+					speedVals.add(0); // controller slot
+					speedVals.add(2); // controller slot channel
 					speedVals.add((int)speedR);
-					velpub.publish(setupPub(connectedNode, speedVals));
+					velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
 					System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 					return;
 				} else {
-					if( buttons[5] != 0 ) { // right
+					if( buttons[5] != 0 ) { // right pivot
 						speedL = -axes[2] * SPEEDSCALE;
 						speedR = -speedL;
 						// set it up to send
-						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+						ArrayList<Integer> speedVals = new ArrayList<Integer>(6);
+						speedVals.add(0); //controller slot
+						speedVals.add(1); // controller slot channel
 						speedVals.add((int)speedL);
+						speedVals.add(0); // controller slot
+						speedVals.add(2); // controller slot channel
 						speedVals.add((int)speedR);
-						velpub.publish(setupPub(connectedNode, speedVals));
+						velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
 						System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 						return;
 					}
@@ -443,11 +460,40 @@ public class MotionController extends AbstractNodeMain {
 	
 				System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Hold=%b\n",PTerm, DTerm, ITerm, error, pidOutput, holdBearing);
 				// set it up to send
-				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(6);
+				speedVals.add(0); //controller slot
+				speedVals.add(1); // controller slot channel
 				speedVals.add((int)speedL);
+				speedVals.add(0); //controller slot
+				speedVals.add(2); // controller slot channel
 				speedVals.add((int)speedR);
-				velpub.publish(setupPub(connectedNode, speedVals));		
-			}
+				velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
+				//-------------------
+				// Above cases handle all steering and motor control and button press for automated
+				// control of course following by button press.
+				// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
+				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
+				// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
+				// for the majority of downstream processing. In the case of PWM, we are going to scale this
+				// form -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
+				// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
+				// sure to scale it to the positive range downstream. We are going to publish the scaled
+				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
+				// if necessary.
+				//-------------------
+				if(axes[4] != -1 || axes[5] != -1) {
+					ArrayList<Integer> triggerVals = new ArrayList<Integer>(6);
+					triggerVals.add(0); //controller slot
+					triggerVals.add(1); // controller slot channel
+					triggerVals.add( ((int)(axes[4]*SPEEDSCALE)) );
+					triggerVals.add(0); //controller slot
+					triggerVals.add(2); // controller slot channel
+					triggerVals.add( ((int)(axes[5]*SPEEDSCALE)) );
+					System.out.printf("Trigger Left = %f | Trigger Right = %f\n");
+					trigpub.publish(setupPub(connectedNode, triggerVals,"Left Trigger","Right Trigger"));
+				}
+			} // onMessage from Joystick controller, with all the axes[] and buttons[]
+			
 			/**
 			 * Increase power of right wheel based on PID results
 			 * If we hit max we are going to decrease power to left wheel by splitting the difference
@@ -830,25 +876,280 @@ public class MotionController extends AbstractNodeMain {
 
 	}
 	/**
-	 * Move the buffered values into the publishing message to send absolute vals to motor control
-	 * @param connectedNode
-	 * @return
+	 * Move the robot to an absolute pose of 0-360 degrees and attempt to travel the target distance in the target time
+	 * when the IMU and target coincide distance and time produce linear motion
+	 * otherwise when turning distance determines the radius of the arc segment described by the difference
+	 * of the current IMU and target and time becomes roughly the speed at which to make such traversal
+	 * @param yawIMURads Yaw is delivered in radians -1.0 to 1.0
+	 * @param yawTargetDegrees target final pose is in degrees for easier human input
+	 * @param targetDistance target distance to travel in mm
+	 * @param targetTime time in which to travel desired distance in seconds
+	 * 	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
+	 * @throws IOException 
 	 */
-	private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf) {
+	public synchronized TwistInfo moveRobotAbsolute(TwistInfo twistInfo, float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
+
+	        //while (true) {
+
+	                //leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
+	                //rightWheel.targetMM = (float)(right_velocity) / clicks_per_mm;
+
+	                //avg_mm = (float) ((leftWheel.targetMM + rightWheel.targetMM) / 2.0);
+	                //total_mm += avg_mm;
+	                // wheel_theta is travel of each wheel with desired velocity, if same angle is 0, forward
+	                //twistInfo.wheelTheta = (leftWheel.targetMM - rightWheel.targetMM) / wheelTrack;
+	        		
+	        		twistInfo.setWheelTheta((float)yawTargetDegrees * 0.0174532925f); // degr to radians
+	                /* read the YAW value from the imu struct and convert to radians */
+	                twistInfo.setImuTheta((float) (yawIMURads * Math.PI));
+	                if( twistInfo.getImuTheta() < 0.0f ) {
+	                	twistInfo.setImuTheta(twistInfo.getImuTheta() + TWOPI);
+	                }
+	                twistInfo.setYawDegrees(yawDegrees(twistInfo.getImuTheta()));
+	                
+	                /* calculate rotation rate-of-change  */
+	                twistInfo.setDeltaTheta(twistInfo.getImuTheta() - last_theta);
+	                last_theta = twistInfo.getImuTheta();
+
+	                // this will generate the +- value to turn us properly
+	                twistInfo.setRobotTheta(twistInfo.getWheelTheta() - twistInfo.getImuTheta());
+	                if( twistInfo.getRobotTheta() > TWOPI )
+	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() - TWOPI);
+	                if( twistInfo.getRobotTheta() < 0)
+	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() + TWOPI);
+	                    
+	                twistInfo.setX(twistInfo.getX() + (float)(targetDistance * Math.sin(twistInfo.getRobotTheta()))); 
+	                twistInfo.setY(twistInfo.getY() + (float)(targetDistance * Math.cos(twistInfo.getRobotTheta()))); 
+	                // so X is the arc radius, normally we will set as a call to
+	                // setMotorSpeed as 0 to turn in place or a value of arc radius
+	                // modified by current speed to make a gentle curve.
+	                // if theta is 0, move linear
+	                //stasis(fabs(wheel_theta),fabs(imu_theta));
+	                if( DEBUG )
+	                	System.out.println(twistInfo);
+	                setMotorArcSpeed(targetDistance, targetDistance, targetDistance, targetDistance, twistInfo.getRobotTheta(), yawIMURads);
+	                return twistInfo;//twistInfo.robotTheta;
+	        //}
+	}
+	
+	/**
+	 * Move the robot to an relative pose of 0-360 degrees and attempt to travel the target distance in the target time
+	 * Here, targetDegrees can be negative
+	 * when the IMU and target coincide distance and time produce linear motion
+	 * otherwise when turning distance determines the radius of the arc segment described by the difference
+	 * of the current IMU and target and time becomes roughly the speed at which to make such traversal
+	 * @param yawIMURads Yaw is delivered in radians -1.0 to 1.0
+	 * @param yawTargetDegrees target final pose is in degrees for easier human input and represents motion relative to current pose vs absolute position
+	 * @param targetDistance target distance to travel in mm
+	 * @param targetTime time in which to travel desired distance in seconds
+	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
+	 * @throws IOException 
+	 */
+	public synchronized TwistInfo moveRobotRelative(TwistInfo twistInfo, float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
+	        //while (true) {
+
+	                //leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
+	                //rightWheel.targetMM = (float)(right_velocity) / clicks_per_mm;
+
+	                //avg_mm = (float) ((leftWheel.targetMM + rightWheel.targetMM) / 2.0);
+	                //total_mm += avg_mm;
+	                // wheel_theta is travel of each wheel with desired velocity, if same angle is 0, forward
+	                //twistInfo.wheelTheta = (leftWheel.targetMM - rightWheel.targetMM) / wheelTrack;
+	        		
+	        		twistInfo.setWheelTheta((float)yawTargetDegrees * 0.0174532925f); // degr to radians
+	                /* read the YAW value from the imu struct and convert to radians */
+	                twistInfo.setImuTheta((float) (yawIMURads * Math.PI));
+	                if( twistInfo.getImuTheta() < 0.0f ) {
+	                	twistInfo.setImuTheta(twistInfo.getImuTheta() + TWOPI);
+	                }
+	                twistInfo.setYawDegrees(yawDegrees(twistInfo.getImuTheta()));
+	                
+	                /* calculate rotation rate-of-change  */
+	                twistInfo.setDeltaTheta(twistInfo.getImuTheta() - last_theta);
+	                last_theta = twistInfo.getImuTheta();
+
+	                twistInfo.setRobotTheta(twistInfo.getImuTheta() + twistInfo.getWheelTheta());
+	                // this will generate the value to turn us properly
+	                if( twistInfo.getRobotTheta() > TWOPI )
+	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() - TWOPI);
+	                if( twistInfo.getRobotTheta() < 0)
+	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() + TWOPI);
+
+	                twistInfo.setX(twistInfo.getX() + (float)(targetDistance * Math.sin(twistInfo.getRobotTheta()))); 
+	                twistInfo.setY(twistInfo.getY() + (float)(targetDistance * Math.cos(twistInfo.getRobotTheta()))); 
+	                // so X is the arc radius, normally we will set as a call to
+	                // setMotorSpeed as 0 to turn in place or a value of arc radius
+	                // modified by current speed to make a gentle curve.
+	                // if theta is 0, move linear in x
+	                // if x and theta not 0 its rotation about a point in space
+	                //stasis(fabs(wheel_theta),fabs(imu_theta));
+	                if( DEBUG )
+	                	System.out.println(twistInfo);
+	                // slot, channel 1, slot, channel 2, theta, yaw radians
+	                setMotorArcSpeed(0, 1, 0, 2, twistInfo.getWheelTheta(), yawIMURads);
+	                return twistInfo;//twistInfo.robotTheta;
+	        //}
+	}
+	
+	/**
+	 *  The function computes motor speeds.
+	 *  results in leftWheel.targetSpeed and rightWheel.targetSpeed
+	 * so X is the arc radius, normally we will set as a call to
+	 * setMotorSpeed as 0 to turn in place or a value of arc radius
+	 * modified by current speed to make a gentle curve.
+	 * if theta is 0, move linear in x
+	 * if x and theta not 0 its rotation about a point in space
+	 * @param x The radius from the center point of the arc about which we are rotating, if 0 turn in place
+	 * @param th The 2PI polar measure of arc segment we are traversing, if 0 pure forward/back motion
+	 * @return int 2 element array of final wheel speed left, right
+	 * @throws IOException 
+	 */
+	public synchronized int[] setMotorArcSpeed(int slot1, int channel1, int slot2, int channel2, float x, float th) throws IOException {
+
+		float spd_left, spd_right;
+  
+		/* Reset the auto stop timer */
+		//motorControl.lastMotorCommand = System.currentTimeMillis();
+
+		if (x == 0 && th == 0) {
+			MotorControl.moving  = false;
+			return new int[]{0,0};
+		}
+
+		/* Indicate that we are moving */
+		//moving = true;
+
+		if (x == 0) {
+			// Turn in place, rotate the proper wheel forward, the other backward for a spin
+			if( th < 0 ) { // left
+				//spd_right = (float) (th * wheelTrack / 2.0);
+				spd_right = th;
+			} else {
+				//spd_right = -((float) (th * wheelTrack / 2.0));
+				spd_right = -th;
+			}	
+			spd_left = -spd_right;
+		} else {
+			if (th == 0) {	
+				// Pure forward/backward motion
+				spd_left = spd_right = x;
+			} else {
+				// Rotation about a point in space
+				// Calculate Drive Turn output due to X input
+				if (x > 0) {
+				  // Forward
+				  spd_left = ( th > 0 ) ? MotorControl.MAXOUTPUT : (MotorControl.MAXOUTPUT + th);
+				  spd_right = ( th > 0 ) ? (MotorControl.MAXOUTPUT - th) : MotorControl.MAXOUTPUT;
+				} else {
+				  // Reverse
+				  spd_left = (th > 0 ) ? (MotorControl.MAXOUTPUT - th) : MotorControl.MAXOUTPUT;
+				  spd_right = (th > 0 ) ? MotorControl.MAXOUTPUT : (MotorControl.MAXOUTPUT + th);
+				}
+
+				// Scale Drive output due to X input (throttle)
+				spd_left = spd_left * x / MotorControl.MAXOUTPUT;
+				spd_right = spd_right *  x / MotorControl.MAXOUTPUT;
+				
+				// Now calculate pivot amount
+				// - Strength of pivot (nPivSpeed) based on  X input
+				// - Blending of pivot vs drive (fPivScale) based on Y input
+				nPivSpeed = (int) th;
+				// if th beyond pivlimit scale in 
+				fPivScale = (float) ((Math.abs(x)>fPivYLimit)? 0.0 : (1.0 - Math.abs(x)/fPivYLimit));
+
+				// Calculate final mix of Drive and Pivot
+				/* Set the target speeds in meters per second */
+				spd_left = (float) ((1.0-fPivScale)*spd_left + fPivScale*( nPivSpeed));
+				spd_right = (float) ((1.0-fPivScale)*spd_right + fPivScale*(-nPivSpeed));
+			}
+		}
+
+		// Calculate final mix of Drive and Pivot
+		// Set the target speeds in wheel rotation command units -1000, 1000 and if indoor mode div by ten
+		leftWheel.TargetSpeed = indoor ? spd_left/10 : spd_left;
+		rightWheel.TargetSpeed = indoor ? spd_right/10 : spd_right;
+		if( DEBUG )
+			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+leftWheel.TargetSpeed+" R:"+rightWheel.TargetSpeed);
+		/* Convert speeds to ticks per frame */
+		leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
+		rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
+		/* Read the encoders */
+		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
+		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
+
+		/* Record the time that the readings were taken */
+		odomInfo.lastOdomTime = System.currentTimeMillis();
+		//odomInfo.encoderStamp = nh.now;
+
+		/* Compute PID update for each motor */
+		doPID(leftWheel);
+		doPID(rightWheel);
+
+		/* Set the motor speeds accordingly */
+		//if( DEBUG )
+		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
+		updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
+		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
+	}
+	
+	public static float yawDegrees(float yaw) {
+		float yaw_degrees = (float) (yaw * 180.0 / Math.PI); // conversion to degrees
+		if( yaw_degrees < 0 ) yaw_degrees += 360.0; // convert negative to positive angles
+		return yaw_degrees;
+	}
+	
+	/**
+	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
+	 * We will be sending [<slot> <channel> <value>]
+	 * We use a Int32MultiArray type of 2 dimensions, row of each value times column of all values.
+	 * The multiarray declares a generic multi-dimensional array of a particular data type. 
+	 * Dimensions are ordered from outer most to inner most.
+	 * MultiArrayDimension[] dim # Array of dimension properties
+	 * uint32 data_offset        # padding elements at front of data
+ 	 * Accessors should ALWAYS be written in terms of dimension stride and specified outer-most dimension first. 
+	 * multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
+ 	 * A standard, 3-channel 640x480 image with interleaved color channels would be specified as:
+	 * dim[0].label  = "height"
+	 * dim[0].size   = 480
+ 	 * dim[0].stride = 3*640*480 = 921600  (note dim[0] stride is just size of image)
+	 * dim[1].label  = "width"
+	 * dim[1].size   = 640
+	 * dim[1].stride = 3*640 = 1920
+	 * dim[2].label  = "channel"
+	 * dim[2].size   = 3
+	 * dim[2].stride = 3
+ 	 * multiarray(i,j,k) refers to the ith row, jth column, and kth channel.
+ 	 * Our setup is 10 possible slots for either motor or peripheral controllers
+ 	 * 10 possible channels per controller
+ 	 * 1 value per slot and channel.
+ 	 * The data will come in in a linear array of 3 elements * number of elements
+ 	 * So basically a 2D array of the 3 values, one for each controller slot/channel array[3,N] 
+	 * @param connectedNode Our node transceiver info
+	 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
+	 * @param label1 The label for dimension 1 of the array
+	 * @param label2 The label for dimension 2 of the array
+	 * @return The multi array we create
+	 */
+	private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf, String label1, String label2) {
 		std_msgs.Int32MultiArray val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32MultiArray._TYPE);
 		std_msgs.MultiArrayLayout vlayout = new std_msgs.MultiArrayLayout();
 		List<std_msgs.MultiArrayDimension> vdim = new ArrayList<std_msgs.MultiArrayDimension>();
 		std_msgs.MultiArrayDimension vdim1 = new std_msgs.MultiArrayDimension();
 		std_msgs.MultiArrayDimension vdim2 = new std_msgs.MultiArrayDimension();
-		vdim1.setLabel("Motor Channel");
-		vdim2.setLabel("Motor Channel value");
-		vdim1.setSize(2);
-		vdim2.setSize(valBuf.size()/2);
+		vdim1.setLabel(label1);
+		vdim2.setLabel(label2);
+		//
+		vdim1.setSize(3);
+		vdim2.setSize(valBuf.size()/3);
+		//
+		// multiarray(i,j) = data[data_offset + dim_stride[1]*i + k]
 		vdim1.setStride(valBuf.size());
-		vdim2.setStride(2);
+		vdim2.setStride(3);
+		//
 		vdim.add(vdim1);
 		vdim.add(vdim2);
 		vlayout.setDim(vdim);
+		vlayout.setDataOffset(0);
 		val.setLayout(vlayout);
 		int[] vali = new int[valBuf.size()];
 		int i = 0;

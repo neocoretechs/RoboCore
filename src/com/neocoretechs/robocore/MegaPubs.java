@@ -55,7 +55,7 @@ import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
  * Anything attached to the microcontroller: UART aux port or low level motor driver H bridge, issued a series of M codes 
  * to activate the functions of the PWM and GPIO pins on the Mega. 
  * Controller M and G code examples:
- * G5 C<channel> P<power> - Issue move command to controller on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
+ * G5 Z<slot> C<channel> P<power> - Issue move command to controller in slot Z<slot> on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
  * H Bridge Driver:
@@ -156,6 +156,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
 			connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
 	
+	final Subscriber<std_msgs.Int32MultiArray> substrigger = 
+	connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
+	
 	final Subscriber<std_msgs.UInt32MultiArray> subspwm = 
 			connectedNode.newSubscriber("cmd_pwm", std_msgs.UInt32MultiArray._TYPE);
 	
@@ -214,7 +217,10 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	}
 	});
-	
+	/**
+	 * Process the direct velocity commands from remote source to extract 2 32 bit int values and apply those to the
+	 * left and right propulsion wheels.
+	 */
 	subsvelocity.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 	@Override
 	public void onNewMessage(std_msgs.Int32MultiArray message) {
@@ -222,9 +228,10 @@ public void onStart(final ConnectedNode connectedNode) {
 		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		int[] valch = message.getData();
 		// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
-		for(int i = 0; i < valch.length; i+=2) {
-			int valch1 = valch[i];
-			int valch2 = valch[i+1];
+		for(int i = 0; i < valch.length; i+=3) {
+			int valch1 = valch[i]; // slot
+			int valch2 = valch[i+1]; // channel
+			int valch3 = valch[i+3]; // value
 			if( valch1 == 0.0 && valch2 == 0.0 )
 				isMoving = false;
 			else
@@ -237,6 +244,30 @@ public void onStart(final ConnectedNode connectedNode) {
 					motorControlHost.setAbsoluteMotorSpeed(valch1, valch2);
 				} else
 					System.out.println("Emergency stop directive in effect, no motor power "+valch1+" "+valch2);
+			} catch (IOException e) {
+				System.out.println("there was a problem communicating with motor controller:"+e);
+				e.printStackTrace();
+			}
+		}
+	}
+	});
+	/**
+	 * Process a trigger value from the remote source, most likely a controller such as PS/3.
+	 * Take the 2 trigger values as int32 and send them on to the microcontroller PWM non-propulsion 
+	 * related subsystem. this subsystem is composed of a software controller instance talking to a 
+	 * hardware driver such as an H-bridge or half bridge or even a simple switch.
+	 * the values here are <slot> <channel> <value>
+	 */
+	substrigger.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
+	@Override
+	public void onNewMessage(std_msgs.Int32MultiArray message) {
+		int[] valch = message.getData();
+		for(int i = 0; i < valch.length; i+=3) {
+			int valch1 = valch[i];
+			int valch2 = valch[i+1];
+			int valch3 = valch[i+2];
+			try {
+				((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
 			} catch (IOException e) {
 				System.out.println("there was a problem communicating with motor controller:"+e);
 				e.printStackTrace();
@@ -269,7 +300,10 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	*/
-	
+	/**
+	 * Activates a direct PWM timer without going through one of the various controller
+	 * objects. Issues an M45 to the Marlinspike on the Mega2560
+	 */
 	subspwm.addMessageListener(new MessageListener<std_msgs.UInt32MultiArray>() {
 		@Override
 		public void onNewMessage(std_msgs.UInt32MultiArray message) {

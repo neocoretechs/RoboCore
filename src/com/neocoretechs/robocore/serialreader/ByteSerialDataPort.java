@@ -13,7 +13,12 @@ import java.io.OutputStream;
 import java.util.Enumeration;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
-
+/**
+ * Singleton class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
+ * to effect transmission and reception.
+ * @author groff
+ *
+ */
 public class ByteSerialDataPort implements DataPortInterface {
 		private static boolean DEBUG = true;
 	    private SerialPort serialPort;
