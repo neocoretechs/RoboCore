@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.propulsion;
 
 //import org.apache.commons.logging.Log;
 import java.io.File;
@@ -24,7 +24,9 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.robocore.MotorControl.TwistInfo;
+import com.neocoretechs.robocore.MegaControl;
+import com.neocoretechs.robocore.PID.IMUSetpointInfo;
+import com.neocoretechs.robocore.PID.MotionPIDController;
 
 
 /**
@@ -121,13 +123,8 @@ public class MotionController extends AbstractNodeMain {
 	static boolean holdBearing = false; // hold steering to current bearing
 
 	static float speedL, speedR;
-	static float pidOutput = 0;
-	static float kp = 1.5f;
-	static float ki = 0.9f;
-	static float kd = 3.0f;
+
 	static long lastTime = System.currentTimeMillis();
-	static float Input, lastInput, lastError, Setpoint, error;
-	static float ITerm, DTerm, PTerm;
 	static int SampleTime = 100; //.1 sec
 	static float outMin, outMax;
 	static boolean inAuto = false;
@@ -138,7 +135,10 @@ public class MotionController extends AbstractNodeMain {
 	Object rngMutex2 = new Object();
 	Object navMutex = new Object();
 	Object magMutex = new Object();
-
+	
+	//kp, ki, kd, ko, pidRate (hz), maximum
+	MotionPIDController motionPIDController = new MotionPIDController(1.5f, 0.9f, 3.0f, 1.0f, 1, SPEEDLIMIT);
+	IMUSetpointInfo IMUSetpoint = new IMUSetpointInfo();
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -208,9 +208,9 @@ public class MotionController extends AbstractNodeMain {
 		if( remaps.containsKey("__speedlimit") )
 			SPEEDLIMIT = Float.parseFloat(remaps.get("__speedlimit"));
 		if( remaps.containsKey("__kp") )
-			kp = Float.parseFloat(remaps.get("__kp"));
+			motionPIDController.setKp(Float.parseFloat(remaps.get("__kp")));
 		if( remaps.containsKey("__kd") )
-			kd = Float.parseFloat(remaps.get("__kd"));
+			motionPIDController.setKd(Float.parseFloat(remaps.get("__kd")));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
 		
@@ -348,21 +348,18 @@ public class MotionController extends AbstractNodeMain {
 					if( !holdBearing ) {
 						holdBearing = true;
 						outputNeg = false;
-						Setpoint = (float) eulers[0]; // Setpoint is yaw angle from IMU,vs heading minus the joystick offset from 0
-						PTerm = 0.0f;
-						ITerm = 0.0f;
-						DTerm = 0.0f;
-						pidOutput = 0.0f;
+						IMUSetpoint.setDesiredTarget((float) eulers[0]); // Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
+						motionPIDController.clearPID();
 						wasPid = true; // start with PID control until we get out of tolerance
-						System.out.println("Stick absolute deg set:"+Setpoint);	
+						System.out.println("Stick absolute deg set:"+eulers[0]);	
 					}
 			    } else {
 			    	holdBearing = false;
-			    	Setpoint = offsetDegrees; // joystick setting becomes heading and IMU is disregarded
+			    	IMUSetpoint.setDesiredTarget(offsetDegrees); // joystick setting becomes desired target yaw angle heading and IMU is disregarded
 			    }
 	
-				Input = (float) eulers[0]; //eulers[0] is yaw angle from IMU
-				Compute();
+				IMUSetpoint.setTarget((float) eulers[0]); //eulers[0] is Input: target yaw angle from IMU
+				motionPIDController.Compute(IMUSetpoint);
 				
 				// Speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
 				// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
@@ -405,61 +402,64 @@ public class MotionController extends AbstractNodeMain {
 				// being crosstrack deviation.
 				//
 				if( holdBearing ) {
-					System.out.printf("Inertial Setpoint=%f | Hold=%b ", Setpoint, holdBearing);
+					System.out.printf("Inertial Setpoint=%f | Hold=%b ", IMUSetpoint.getDesiredTarget(), holdBearing);
 					// In auto
-					if( Math.abs(error) <= TRIANGLE_THRESHOLD ) {
-						if( error < 0.0f ) { // decrease left wheel power goal
+					if( Math.abs(motionPIDController.getOutput()) <= TRIANGLE_THRESHOLD ) {
+						if( motionPIDController.getOutput() < 0.0f ) { // decrease left wheel power goal
 							// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
-							if( Math.abs(error) <= PID_THRESHOLD ) {
+							if( Math.abs(motionPIDController.getOutput()) <= PID_THRESHOLD ) {
 								rightPid(radius);
 							} else {
 								rightAngle(radius);
 							}
 						} else {
-							if( error > 0.0f ) { // decrease right wheel power goal
-								if( error <= PID_THRESHOLD) {
+							if( motionPIDController.getOutput() > 0.0f ) { // decrease right wheel power goal
+								if( motionPIDController.getOutput() <= PID_THRESHOLD) {
 									leftPid(radius);
 								} else {
 									leftAngle(radius);
 								}
 							} else {
 								// we are critically damped, set integral to 0
-								ITerm = 0;
+								//ITerm = 0;
+								motionPIDController.setIerror(0);
 							}
 						}
 						System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
-						// Exceeded tolerance, proceed to geometric solution in arcs
-						ITerm = 0;
+						// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
+						motionPIDController.setIerror(0);//ITerm = 0;
 						wasPid = false;
-						arcin = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * radius);
-						arcout = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+						arcin = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * radius);
+						arcout = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 						// error is difference in degrees between setpoint and input
-						if( error < 0.0f )
+						if( motionPIDController.getOutput() < 0.0f )
 							speedL *= (arcin/arcout);
 						else
-							if( error > 0.0f )
+							if( motionPIDController.getOutput() > 0.0f )
 								speedR *= (arcin/arcout);
 						System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
-					arcin = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * radius);
-					arcout = (float) (Math.abs(error/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+					arcin = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * radius);
+					arcout = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 					// error is difference in degrees between setpoint and input
 					// Stick position will override any IMU tolerances
 					if( stickDegrees != -180.0 && stickDegrees != 180 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
-						if( error < 0.0f )
+						if( motionPIDController.getOutput() < 0.0f )
 							speedL *= (arcin/arcout);
 						else
-							if( error > 0.0f )
+							if( motionPIDController.getOutput() > 0.0f )
 								speedR *= (arcin/arcout);
 					}
 					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 				}
 	
-				System.out.printf("Output = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Hold=%b\n",PTerm, DTerm, ITerm, error, pidOutput, holdBearing);
-				// set it up to send
+				System.out.printf("%s | Hold=%b\n",motionPIDController.toString(), holdBearing);
+				//
+				// set it up to send down the publishing pipeline
+				//
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(6);
 				speedVals.add(0); //controller slot
 				speedVals.add(1); // controller slot channel
@@ -519,7 +519,7 @@ public class MotionController extends AbstractNodeMain {
 				*/
 				// Reduce speed of left wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
 				// scale it by speed
-				speedL -= ( Math.abs(pidOutput) * (speed/350) );
+				speedL -= ( Math.abs(motionPIDController.getOutput()) * (speed/350) );
 				/*
 				// goal is to increase power of right wheel
 				// We scale it by speed with the assumption that at full speed,
@@ -560,7 +560,7 @@ public class MotionController extends AbstractNodeMain {
 				*/
 				// Reduce speed of right wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
 				// scale it by speed
-				speedR -= ( Math.abs(pidOutput) * (speed/350) );
+				speedR -= ( Math.abs(motionPIDController.getOutput()) * (speed/350) );
 				/*
 				// goal is net increase of left wheel power
 				// We scale it by speed with the assumption that at full speed,
@@ -583,11 +583,11 @@ public class MotionController extends AbstractNodeMain {
 			 */
 			private void rightAngle(float radius) {
 				// Mitigate integral windup
-				ITerm = 0;
+				motionPIDController.setIerror(0);//ITerm = 0;
 				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
 				// chord is 2Rsin(theta/2) ( we convert to radians first)
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(error/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
@@ -603,11 +603,11 @@ public class MotionController extends AbstractNodeMain {
 			 */
 			private void leftAngle(float radius) {
 				// Mitigate integral windup
-				ITerm = 0;
+				motionPIDController.setIerror(0);//ITerm = 0;
 				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
 				// chord is 2Rsin(theta/2), R is half wheelbase so we assume our robot is roughly 'square'
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(error/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
@@ -754,20 +754,21 @@ public class MotionController extends AbstractNodeMain {
 		
 		// tell the waiting constructors that we have registered publishers
 		awaitStart.countDown();
-		//
+		
+		//----------------------------------------
 		// Begin publishing loop
-		//
+		//----------------------------------------
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
 			private int sequenceNumber;
 
 			@Override
 			protected void setup() {
 				sequenceNumber = 0;
-				Setpoint = 0.0f; // 0 degrees yaw
+				IMUSetpoint.setPrevErr(0.0f); // 0 degrees yaw
+				motionPIDController.clearPID();
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
-				SetOutputLimits(0.0f, SPEEDLIMIT);
-				SetMode(true);
+				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
 			}
 
 			@Override
@@ -905,7 +906,7 @@ public class MotionController extends AbstractNodeMain {
 	                if( twistInfo.getImuTheta() < 0.0f ) {
 	                	twistInfo.setImuTheta(twistInfo.getImuTheta() + TWOPI);
 	                }
-	                twistInfo.setYawDegrees(yawDegrees(twistInfo.getImuTheta()));
+	                twistInfo.setYawDegrees(IMUSetpointInfo.yawDegrees(twistInfo.getImuTheta()));
 	                
 	                /* calculate rotation rate-of-change  */
 	                twistInfo.setDeltaTheta(twistInfo.getImuTheta() - last_theta);
@@ -927,7 +928,7 @@ public class MotionController extends AbstractNodeMain {
 	                //stasis(fabs(wheel_theta),fabs(imu_theta));
 	                if( DEBUG )
 	                	System.out.println(twistInfo);
-	                setMotorArcSpeed(targetDistance, targetDistance, targetDistance, targetDistance, twistInfo.getRobotTheta(), yawIMURads);
+	                setMotorArcSpeed(0, 1, 0, 2, twistInfo.getRobotTheta(), yawIMURads);
 	                return twistInfo;//twistInfo.robotTheta;
 	        //}
 	}
@@ -962,7 +963,7 @@ public class MotionController extends AbstractNodeMain {
 	                if( twistInfo.getImuTheta() < 0.0f ) {
 	                	twistInfo.setImuTheta(twistInfo.getImuTheta() + TWOPI);
 	                }
-	                twistInfo.setYawDegrees(yawDegrees(twistInfo.getImuTheta()));
+	                twistInfo.setYawDegrees(IMUSetpointInfo.yawDegrees(twistInfo.getImuTheta()));
 	                
 	                /* calculate rotation rate-of-change  */
 	                twistInfo.setDeltaTheta(twistInfo.getImuTheta() - last_theta);
@@ -1011,11 +1012,6 @@ public class MotionController extends AbstractNodeMain {
 		/* Reset the auto stop timer */
 		//motorControl.lastMotorCommand = System.currentTimeMillis();
 
-		if (x == 0 && th == 0) {
-			MotorControl.moving  = false;
-			return new int[]{0,0};
-		}
-
 		/* Indicate that we are moving */
 		//moving = true;
 
@@ -1038,24 +1034,25 @@ public class MotionController extends AbstractNodeMain {
 				// Calculate Drive Turn output due to X input
 				if (x > 0) {
 				  // Forward
-				  spd_left = ( th > 0 ) ? MotorControl.MAXOUTPUT : (MotorControl.MAXOUTPUT + th);
-				  spd_right = ( th > 0 ) ? (MotorControl.MAXOUTPUT - th) : MotorControl.MAXOUTPUT;
+				  spd_left = ( th > 0 ) ? motionPIDController.getMaximum() : (motionPIDController.getMaximum() + th);
+				  spd_right = ( th > 0 ) ? (motionPIDController.getMaximum() - th) : motionPIDController.getMaximum();
 				} else {
 				  // Reverse
-				  spd_left = (th > 0 ) ? (MotorControl.MAXOUTPUT - th) : MotorControl.MAXOUTPUT;
-				  spd_right = (th > 0 ) ? MotorControl.MAXOUTPUT : (MotorControl.MAXOUTPUT + th);
+				  spd_left = (th > 0 ) ? (motionPIDController.getMaximum() - th) : motionPIDController.getMaximum();
+				  spd_right = (th > 0 ) ? motionPIDController.getMaximum() : (motionPIDController.getMaximum() + th);
 				}
 
 				// Scale Drive output due to X input (throttle)
-				spd_left = spd_left * x / MotorControl.MAXOUTPUT;
-				spd_right = spd_right *  x / MotorControl.MAXOUTPUT;
+				spd_left = spd_left * x / motionPIDController.getMaximum();
+				spd_right = spd_right *  x / motionPIDController.getMaximum();
 				
 				// Now calculate pivot amount
 				// - Strength of pivot (nPivSpeed) based on  X input
 				// - Blending of pivot vs drive (fPivScale) based on Y input
-				nPivSpeed = (int) th;
+				float fPivYLimit = 250.0f;
+				int nPivSpeed = (int) th;
 				// if th beyond pivlimit scale in 
-				fPivScale = (float) ((Math.abs(x)>fPivYLimit)? 0.0 : (1.0 - Math.abs(x)/fPivYLimit));
+				float fPivScale = (float) ((Math.abs(x)>fPivYLimit)? 0.0 : (1.0 - Math.abs(x)/fPivYLimit));
 
 				// Calculate final mix of Drive and Pivot
 				/* Set the target speeds in meters per second */
@@ -1088,15 +1085,12 @@ public class MotionController extends AbstractNodeMain {
 		/* Set the motor speeds accordingly */
 		//if( DEBUG )
 		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
+		// call to motor controller to update speed using absolute terms
 		updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
 		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
 	}
 	
-	public static float yawDegrees(float yaw) {
-		float yaw_degrees = (float) (yaw * 180.0 / Math.PI); // conversion to degrees
-		if( yaw_degrees < 0 ) yaw_degrees += 360.0; // convert negative to positive angles
-		return yaw_degrees;
-	}
+
 	
 	/**
 	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
@@ -1158,123 +1152,8 @@ public class MotionController extends AbstractNodeMain {
 		val.setData(vali);
 		return val;
 	}
-	/**
-	 * Calculate the PID values, PTerm contains the proportion times scalar
-	 * DTerm is the derivative, ITerm is the integral of error variable.
-	 * pidOutput is output.
-	 */
-	static void Compute()
-	{
-	   //if(!inAuto) return;
-	   //long now = System.currentTimeMillis();
-	   //long timeChange = (now - lastTime);
-	   //if(timeChange >= SampleTime) {
-	      lastError = error;
-	      // Compute all the working error variables
-	      error = Setpoint - Input;
-	      // This is specific to pid control of heading
-	      // reduce the angle  
-	      error =  error % 360; // angle or 360 - angle
-	      //force it to be the positive remainder, so that 0 <= angle < 360  
-	      //error = (error + 360) % 360;  
-	      //force into the minimum absolute value residue class, so that -180 < angle <= 180  
-	      if (error <= -180.0)
-	            error += 360.0;
-	      if (error >= 180)  
-	         error -= 360;  
-	      //
-	      //float dInput = (Input - lastInput);
-	      // Compute PID Output, proportion
-	      PTerm = kp * error ;//+ ITerm - kd * dInput;
-	      // derivative
-	      DTerm = kd * (error - lastError);
-	      // integral
-	      ITerm += error; // integrate the error
-	      ITerm = ki * ITerm; // then scale it, this limits windup
-	      //ITerm += (ki * error);
-	      // clamp the I term to prevent reset windup
-	      if( ITerm > 0 ) {
-	    	  if(ITerm > outMax) 
-	    		  ITerm = outMax;
-	    	  else 
-	    		  if(ITerm < outMin) 
-	    			  ITerm = outMin;
-	      } else {
-	    	  if(-ITerm > outMax )
-	    		  ITerm = -outMax;
-	    	  else
-	    		  if(-ITerm < outMin)
-	    			  ITerm = -outMin;
-	      }
-	      lastInput = Input;
-	      //lastTime = now;
-	      //error is positive if current_heading > bearing (compass direction)
-	      // To Use the PD form, set ki to 0.0 default, thus eliminating integrator
-	      pidOutput = PTerm /*+ ITerm*/ + DTerm;
-	      //System.out.printf("P = %f | I = %f | D = %f | PTerm = %f | pidErr = %f\n",error,ITerm,dInput,PTerm,error);
-	      //System.out.printf("PTerm = %f | DTerm = %f | ITerm = %f | Err = %f | PID=%f | Auto = %b\n",PTerm, DTerm, ITerm, error, pidOutput, holdBearing);
-	   //}
-	}
-	/**
-	 * Currently we are using a non time based control, this is for reference.
-	 * @param Kp
-	 * @param Ki
-	 * @param Kd
-	 */
-	static void SetTunings(float Kp, float Ki, float Kd)
-	{
-	  float SampleTimeInSec = ((float)SampleTime)/1000.0f;
-	  kp = Kp;
-	  ki = Ki * SampleTimeInSec;
-	  kd = Kd / SampleTimeInSec;
-	}
-	 /**
-	  * If we used a time based control.
-	  * @param NewSampleTime
-	  */
-	static void SetSampleTime(int NewSampleTime)
-	{
-	   if( NewSampleTime > 0) {
-	      float ratio  = (float)NewSampleTime / (float)SampleTime;
-	      ki *= ratio;
-	      kd /= ratio;
-	      SampleTime = NewSampleTime;
-	   }
-	}
-	/**
-	 * Set output limits to clamp Iterm and output
-	 * @param Min
-	 * @param Max
-	 */
-	static void SetOutputLimits(float Min, float Max)
-	{
-	   if(Min > Max) return;
-	   outMin = Min;
-	   outMax = Max;
-	}
-	 
-	static void SetMode(boolean isAuto)
-	{
-	    if(isAuto && !inAuto)
-	    {  
-	    	/*we just went from manual to auto*/
-	        Initialize();
-	    }
-	    inAuto = isAuto;
-	}
-	/**
-	 * Init lastInput (last IMU), ITerm integral, and check for integral windup
-	 */
-	static void Initialize()
-	{
-	   lastInput = Input;
-	   ITerm = PTerm;
-	   if(ITerm > outMax) 
-		   ITerm = outMax;
-	   else 
-		   if(ITerm < outMin) 
-			   ITerm = outMin;
-	}
+	
+
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 
 	double yy = quat.y() * quat.y(); // 2 Uses below

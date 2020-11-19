@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.propulsion;
 
 public class TwistInfo {
 	private float yawDegrees;

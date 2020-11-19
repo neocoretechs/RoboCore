@@ -2,10 +2,14 @@ package com.neocoretechs.robocore;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.PID.AbstractPIDController;
+import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
+import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
+import com.neocoretechs.robocore.propulsion.TwistInfo;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 /**
- * The motor control endpoint that controls serial data.
+ * The MEGA control endpoint that controls serial data.
  * This class talks to the serial drivers that communicate with the attached USB SBC. In fact, this is code that talks to the
  * RS232 board that converts to TTL that talks to the SBC that runs the embedded code that manages
  * the comm to the motor controller.
@@ -16,7 +20,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2020
  *
  */
-public class MotorControl implements MotorControlInterface2D, PWMControlInterface {
+public class MegaControl implements MotorControlInterface2D, PWMControlInterface {
 	public static boolean DEBUG = true;
 	//float yawIMURads; = twistInfo.imuTheta
 	int yawTargetDegrees;
@@ -50,7 +54,7 @@ public class MotorControl implements MotorControlInterface2D, PWMControlInterfac
 	private float yawIMURads;
 
 	
-	public MotorControl() { 
+	public MegaControl() { 
 		init(); 
 	}
 
@@ -192,7 +196,7 @@ public class MotorControl implements MotorControlInterface2D, PWMControlInterfac
 			}
 
 			@Override
-			public PIDController getPIDController() {
+			public AbstractPIDController getPIDController() {
 				// TODO Auto-generated method stub
 				return null;
 			}
@@ -260,7 +264,7 @@ public class MotorControl implements MotorControlInterface2D, PWMControlInterfac
 			}
 
 			@Override
-			public PIDController getPIDController() {
+			public AbstractPIDController getPIDController() {
 				// TODO Auto-generated method stub
 				return null;
 			}
@@ -300,9 +304,9 @@ public class MotorControl implements MotorControlInterface2D, PWMControlInterfac
 	
 	public static void main(String[] args) throws Exception {
 		if( args.length < 1 ) {
-			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MotorControl");
+			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MegaControl");
 		}
-		MotorControl mc = new MotorControl();
+		MegaControl mc = new MegaControl();
 		//mc.setMotorSpeed(100.0f, 1f);
 		/*
 		 * TODO: make this something
@@ -355,7 +359,7 @@ public class MotorControl implements MotorControlInterface2D, PWMControlInterfac
 		// if any ranges close than about 200mm
 		if( accelDeltas[0] > 500.0f || accelDeltas[1] > 500.0f || accelDeltas[2] > 500.0f) {
 			if( DEBUG )
-				System.out.println("MotorControl issuing stop based on accel deltas");
+				System.out.println("MegaControl issuing stop based on accel deltas");
 				commandStop(); // pick up further motion on subsequent commands when accel deltas are nicer
 				return false;
 		}
@@ -401,7 +405,7 @@ public class MotorControl implements MotorControlInterface2D, PWMControlInterfac
 		// if any ranges close than about 200mm
 		if( accelDeltas[0] > 500.0f || accelDeltas[1] > 500.0f || accelDeltas[2] > 500.0f) {
 			if( DEBUG )
-				System.out.println("MotorControl issuing stop based on accel deltas "+accelDeltas[0]+" "+accelDeltas[1]+" "+accelDeltas[2]);
+				System.out.println("MegaControl issuing stop based on accel deltas "+accelDeltas[0]+" "+accelDeltas[1]+" "+accelDeltas[2]);
 				commandStop(); // pick up further motion on subsequent commands when accel deltas are nicer
 				return false;
 		} 
@@ -414,14 +418,14 @@ public class MotorControl implements MotorControlInterface2D, PWMControlInterfac
 				this.yawTargetDegrees = 0;
 			} else {
 				if( DEBUG )
-					System.out.println("MotorControl issuing 30 degr. rotation based on obstacle detection "+ranges[0]+" "+ranges[1]);
+					System.out.println("MegaControl issuing 30 degr. rotation based on obstacle detection "+ranges[0]+" "+ranges[1]);
 				if( yawTargetDegrees < 30 )
 					this.yawTargetDegrees = 30;
 			}
 			this.targetDistance = 0;
 		}
 		if( DEBUG )
-			System.out.println("MotorControl moving robot relative:"+this.yawIMURads+" "+this.yawTargetDegrees+" "+this.targetDistance+" "+this.targetTime);
+			System.out.println("MegaControl moving robot relative:"+this.yawIMURads+" "+this.yawTargetDegrees+" "+this.targetDistance+" "+this.targetTime);
 		moveRobotRelative(this.yawIMURads, this.yawTargetDegrees, this.targetDistance);	
 		return true;
 	}

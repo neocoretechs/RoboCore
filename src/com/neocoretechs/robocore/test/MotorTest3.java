@@ -1,13 +1,13 @@
 package com.neocoretechs.robocore.test;
 
-import com.neocoretechs.robocore.MotorControl;
+import com.neocoretechs.robocore.MegaControl;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class MotorTest3 {
 	public static void main(String[] args) throws Exception {
 		AsynchDemuxer.getInstance().config(); // will read /home/pi/startup.gcode and begin demux of real time Mega2560 data
-		MotorControl motoCon = new MotorControl();
+		MegaControl motoCon = new MegaControl();
 		for(int i = 0 ; i < 5000; i++) {
 			motoCon.setAbsoluteMotorSpeed(500, 0); // half power channel 1,2 / 10
 			System.out.println("Forward "+i);

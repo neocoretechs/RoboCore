@@ -1,8 +1,6 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.propulsion;
 
 import java.io.IOException;
-
-import com.neocoretechs.robocore.TwistInfo;
 
 /**
  * This interface could be the cut between land/sea/space robots. 

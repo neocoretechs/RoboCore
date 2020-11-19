@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore;
 
+import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
+
 public interface NavListenerMotorControlInterface {
 
 	public abstract void pushData(NavPacket np);

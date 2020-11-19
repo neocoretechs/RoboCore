@@ -30,6 +30,7 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.BatteryListener;
 import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
 import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
+import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 
 /**
  * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
@@ -78,6 +79,13 @@ public class MegaPubs extends AbstractNodeMain  {
 	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
 	private boolean shouldMove = true;
+	
+	private int targetPitch;
+	private int targetDist;
+	private float targetYaw;
+	// if angularMode is true, interpret the last TWIST subscription as intended target to move to and
+	// compute incoming channel velocities as scaling factors to that movement
+	protected boolean angularMode = false;
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -148,7 +156,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		AsynchDemuxer.getInstance();	
 	}
 	
-	motorControlHost = new MotorControl();
+	motorControlHost = new MegaControl();
 	
 	final Subscriber<geometry_msgs.Twist> substwist = 
 			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
@@ -190,36 +198,21 @@ public void onStart(final ConnectedNode connectedNode) {
 	 *		}
 	 */
 	substwist.addMessageListener(new MessageListener<geometry_msgs.Twist>() {
-	@Override
-	public void onNewMessage(geometry_msgs.Twist message) {
-		geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		val = message.getLinear();
-		int targetPitch = (int) val.getX();
-		int targetDist = (int) val.getY();
-		val = message.getAngular();
-		float targetYaw = (float) val.getZ();
-
-		if( targetPitch == 0.0 && targetYaw == 0.0 )
-				isMoving = false;
-		else
-				isMoving = true;
-		//if( DEBUG )
-			System.out.println("Robot commanded to move LIN:" + targetPitch + " ANG:" + targetYaw);
-		//log.debug("Robot commanded to move:" + targetPitch + "mm linear in orientation " + targetYaw);
-		try {
-			if( shouldMove ) {
-				int[] speed = motorControlHost.setMotorArcSpeed(targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
-			} else
-				System.out.println("Emergency stop directive in effect, no move to "+targetDist + "mm, yawANGZ " + targetYaw+" pitchLINX:"+targetPitch);
-		} catch (IOException e) {
-			System.out.println("there was a problem communicating with motor controller:"+e);
-			e.printStackTrace();
+		@Override
+		public void onNewMessage(geometry_msgs.Twist message) {
+			geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+			val = message.getLinear();
+			targetPitch = (int) val.getX();
+			targetDist = (int) val.getY();
+			val = message.getAngular();
+			targetYaw = (float) val.getZ();
 		}
-	}
 	});
 	/**
-	 * Process the direct velocity commands from remote source to extract 2 32 bit int values and apply those to the
-	 * left and right propulsion wheels.
+	 * Process the direct velocity commands from remote source to extract 2 3x32 bit int values and apply those to the
+	 * left and right propulsion wheels. the values represent <slot><channel<value> for each wheel where slot = controller
+	 * slot dynamically assigned vie M-code in the MEGA firmware, <channel> is the channel in the controller in the slot,
+	 * and value is the value to be applied to the channel in the slot.
 	 */
 	subsvelocity.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 	@Override
@@ -228,22 +221,30 @@ public void onStart(final ConnectedNode connectedNode) {
 		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		int[] valch = message.getData();
 		// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
-		for(int i = 0; i < valch.length; i+=3) {
+		for(int i = 0; i < valch.length; i+=6) {
 			int valch1 = valch[i]; // slot
 			int valch2 = valch[i+1]; // channel
-			int valch3 = valch[i+3]; // value
+			int valch3 = valch[i+2]; // value
+			int valch4 = valch[i+3]; // slot
+			int valch5 = valch[i+4]; // channel
+			int valch6 = valch[i+5]; // value
 			if( valch1 == 0.0 && valch2 == 0.0 )
 				isMoving = false;
 			else
 				isMoving = true;
 			//if( DEBUG )
-				System.out.println("Robot commanded to move ABS ch1:" + valch1 + " ch2:" + valch2);
+				System.out.println("Robot commanded to move Left wheel ABS slot "+valch1+" channel:"+valch2+ ":" + valch3);
+				System.out.println("Right wheel ABS slot "+valch4+" channel:"+valch5+ ":" + valch6);
 
 			try {
 				if( shouldMove ) {
-					motorControlHost.setAbsoluteMotorSpeed(valch1, valch2);
+					//if(angularMode )
+					//	motorControlHost.setMotorArcSpeed(valch1, valch2, valch3, valch4, targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
+					//else
+					motorControlHost.setAbsoluteMotorSpeed(valch1, valch2, valch3, valch4, valch5, valch6);
 				} else
-					System.out.println("Emergency stop directive in effect, no motor power "+valch1+" "+valch2);
+					System.out.println("Emergency stop directive in effect, no motor power slot:"+valch1+
+							" channel:"+valch2+" slot:"+valch4+" channel:"+valch5);
 			} catch (IOException e) {
 				System.out.println("there was a problem communicating with motor controller:"+e);
 				e.printStackTrace();
