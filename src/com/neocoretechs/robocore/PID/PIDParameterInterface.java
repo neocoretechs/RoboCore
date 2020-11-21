@@ -27,7 +27,7 @@ public interface PIDParameterInterface {
 	public float getKi();
 	public float getKo();
 	public int getPIDRate();
-	public float getPIDInterval();
+	public float getPIDInterval(SetpointInfoInterface p);
 	
 	/**
 	 * Currently we are using a non time based control, this is for reference.

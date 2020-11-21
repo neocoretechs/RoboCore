@@ -13,7 +13,7 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	float Ko;// = 50;
 	int PID_RATE;// = 30;     // Hz
 	/* Rate at which PID loop is updated */
-	public float getPIDInterval() {return getMaximum() / (float)getPIDRate(); }
+	public float getPIDInterval(SetpointInfoInterface spi) {return spi.getMaximum() / (float)getPIDRate(); }
 
 	/* Counters to track update rates for PID and Odometry */
 	int nextPID = 0;

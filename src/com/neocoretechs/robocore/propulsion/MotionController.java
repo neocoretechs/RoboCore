@@ -1055,7 +1055,7 @@ public class MotionController extends AbstractNodeMain {
 
 				// Scale Drive output due to X input (throttle)
 				spd_left = spd_left * x / robot.getLeftDistanceSetpointInfo().getMaximum();
-				spd_right = spd_right *  x / robot.getRightSpeedSetpointInfo().getMaximum();
+				spd_right = spd_right * x / robot.getRightSpeedSetpointInfo().getMaximum();
 				
 				// Now calculate pivot amount
 				// - Strength of pivot (nPivSpeed) based on  X input
@@ -1085,8 +1085,8 @@ public class MotionController extends AbstractNodeMain {
 			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().getTarget()+
 								" R:"+robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().getTarget());
 		/* Convert speeds to ticks per frame */
-		robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getLeftMotorPIDController(), robot.getDiffDrive().getLeftWheel());
-		robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getRightMotorPIDController(), robot.getDiffDrive().getRightWheel());
+		//robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getLeftMotorPIDController(), robot.getDiffDrive().getLeftWheel());
+		//robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getRightMotorPIDController(), robot.getDiffDrive().getRightWheel());
 		//leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
 		//rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
 		/* Read the encoders */
@@ -1105,8 +1105,9 @@ public class MotionController extends AbstractNodeMain {
 		//if( DEBUG )
 		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
 		// call to motor controller to update speed using absolute terms
-		motorControl.updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
-		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
+		//motorControl.updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
+		return new int[]{slot1, channel1, (int) robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().getTarget(),
+						 slot2, channel2, (int) robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().getTarget()};
 	}
 	
 

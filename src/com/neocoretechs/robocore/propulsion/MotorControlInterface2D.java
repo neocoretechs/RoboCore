@@ -15,12 +15,8 @@ import java.io.IOException;
  *
  */
 public interface MotorControlInterface2D {
-	public boolean move2DRelative(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException;
-	public boolean move2DAbsolute(float yawIMURads, int yawTargetDegrees, int targetDistance, float[] accelDeltas, int[] ranges) throws IOException;
 	public void commandStop() throws IOException;
-	//public TwistInfo moveRobotAbsolute(TwistInfo twistInfo, float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException;
-	//public TwistInfo moveRobotRelative(TwistInfo twistInfo, float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException;
-	//public int[] setMotorArcSpeed(int slot1, int channel1, int slot2, int channel2, float lin, float ang) throws IOException;
-	public void setAbsoluteMotorSpeed(int slot1, int channel1, int channel1Speed, int slot2, int channel2, int channel2Speed) throws IOException;
-	void updateSpeed(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException;
+	public void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int channel1Speed, int slot2, int channel2, int channel2Speed) throws IOException;
+	public void setAbsolutePWMLevel(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException;
+	public void setAbsolutePWMLevel(int slot, int channel, int pwmLevel)throws IOException;
 }

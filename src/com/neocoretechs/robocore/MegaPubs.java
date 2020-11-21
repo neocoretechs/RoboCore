@@ -3,7 +3,6 @@ package com.neocoretechs.robocore;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -241,7 +240,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					//if(angularMode )
 					//	motorControlHost.setMotorArcSpeed(valch1, valch2, valch3, valch4, targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
 					//else
-					motorControlHost.setAbsoluteMotorSpeed(valch1, valch2, valch3, valch4, valch5, valch6);
+					motorControlHost.setAbsoluteDiffDriveSpeed(valch1, valch2, valch3, valch4, valch5, valch6);
 				} else
 					System.out.println("Emergency stop directive in effect, no motor power slot:"+valch1+
 							" channel:"+valch2+" slot:"+valch4+" channel:"+valch5);

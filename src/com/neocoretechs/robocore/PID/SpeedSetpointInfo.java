@@ -30,6 +30,9 @@ public class SpeedSetpointInfo implements SetpointInfoInterface {
 	public void setDesiredTarget(float t) {	targetVelocity = t;}
 	@Override
 	public float getDesiredTarget() {	return targetVelocity; }
+	/**
+	 * delta = Target - velocity
+	 */
 	@Override
 	public float delta() {return targetVelocity - velocity; }
 	@Override
