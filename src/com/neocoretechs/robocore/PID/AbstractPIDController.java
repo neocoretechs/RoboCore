@@ -12,7 +12,6 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	float Ki;// = 0;
 	float Ko;// = 50;
 	int PID_RATE;// = 30;     // Hz
-	float MAXIMUM;// = 1000.0f;
 	/* Rate at which PID loop is updated */
 	public float getPIDInterval() {return getMaximum() / (float)getPIDRate(); }
 
@@ -56,10 +55,7 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	public int getPIDRate() {return PID_RATE;}
 	@Override
 	public void setPIDRate(int pID_RATE) {PID_RATE = pID_RATE;}
-	@Override
-	public float getMaximum() {return MAXIMUM;}
-	@Override
-	public void setMaximum(float mAXIMUM) {MAXIMUM = mAXIMUM;}
+
 	/**
 	 * 
 	 * @param kp
@@ -69,13 +65,12 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	 * @param pidRate
 	 * @param maximum
 	 */
-	public AbstractPIDController(float kp, float kd, float ki, float ko, int pidRate, float maximum) {
+	public AbstractPIDController(float kp, float kd, float ki, float ko, int pidRate) {
 		setKp(kp);
 		setKd(kd);
 		setKi(ki);
 		setKo(ko);
 		setPIDRate(pidRate);
-		setMaximum(maximum);
 	}
 
 	public void clearPID() {

@@ -24,8 +24,8 @@ public class MotorPIDController extends AbstractPIDController {
 	 * @param ko
 	 * @param pidRate
 	 */
-	public MotorPIDController(float kp, float kd, float ki, float ko, int pidRate, float max) {
-		super(kp, kd, ki, ko, pidRate, max);
+	public MotorPIDController(float kp, float kd, float ki, float ko, int pidRate) {
+		super(kp, kd, ki, ko, pidRate);
 	}
 	/**
 	 *  PID routine to compute the next motor commands 
@@ -51,11 +51,11 @@ public class MotorPIDController extends AbstractPIDController {
 
 		p.output = (int) output;
 		*/
-		if (p.getTarget() >= MAXIMUM)
-			p.setTarget(MAXIMUM);
+		if (p.getTarget() >= p.getMaximum())
+			p.setTarget(p.getMaximum());
 		else 
-			if (p.getTarget() <= -MAXIMUM)
-				p.setTarget(-MAXIMUM);	
+			if (p.getTarget() <= -p.getMaximum())
+				p.setTarget(-p.getMaximum());	
 	}
 
 

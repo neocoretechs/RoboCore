@@ -25,8 +25,11 @@ import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.robocore.MegaControl;
+import com.neocoretechs.robocore.Robot;
+import com.neocoretechs.robocore.RobotInterface;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
+import com.neocoretechs.robocore.PID.MotorPIDController;
 
 
 /**
@@ -136,9 +139,7 @@ public class MotionController extends AbstractNodeMain {
 	Object navMutex = new Object();
 	Object magMutex = new Object();
 	
-	//kp, ki, kd, ko, pidRate (hz), maximum
-	MotionPIDController motionPIDController = new MotionPIDController(1.5f, 0.9f, 3.0f, 1.0f, 1, SPEEDLIMIT);
-	IMUSetpointInfo IMUSetpoint = new IMUSetpointInfo();
+	RobotInterface robot;
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -208,11 +209,21 @@ public class MotionController extends AbstractNodeMain {
 		if( remaps.containsKey("__speedlimit") )
 			SPEEDLIMIT = Float.parseFloat(remaps.get("__speedlimit"));
 		if( remaps.containsKey("__kp") )
-			motionPIDController.setKp(Float.parseFloat(remaps.get("__kp")));
+			robot.getMotionPIDController().setKp(Float.parseFloat(remaps.get("__kp")));
 		if( remaps.containsKey("__kd") )
-			motionPIDController.setKd(Float.parseFloat(remaps.get("__kd")));
+			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
+		if( remaps.containsKey("__robot") ) {
+			switch(remaps.get("__robot")) {
+			case "ROSCOE1":
+				robot= new Robot(1); // controller slot, left channel, right channel
+				break;
+			default:
+				robot= new Robot(2); // controller slot, left channel, right channel
+				break;
+			}
+		}
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -348,18 +359,18 @@ public class MotionController extends AbstractNodeMain {
 					if( !holdBearing ) {
 						holdBearing = true;
 						outputNeg = false;
-						IMUSetpoint.setDesiredTarget((float) eulers[0]); // Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
-						motionPIDController.clearPID();
+						robot.getIMUSetpointInfo().setDesiredTarget((float) eulers[0]); // Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
+						robot.getMotionPIDController().clearPID();
 						wasPid = true; // start with PID control until we get out of tolerance
 						System.out.println("Stick absolute deg set:"+eulers[0]);	
 					}
 			    } else {
 			    	holdBearing = false;
-			    	IMUSetpoint.setDesiredTarget(offsetDegrees); // joystick setting becomes desired target yaw angle heading and IMU is disregarded
+			    	robot.getIMUSetpointInfo().setDesiredTarget(offsetDegrees); // joystick setting becomes desired target yaw angle heading and IMU is disregarded
 			    }
 	
-				IMUSetpoint.setTarget((float) eulers[0]); //eulers[0] is Input: target yaw angle from IMU
-				motionPIDController.Compute(IMUSetpoint);
+				robot.getIMUSetpointInfo().setTarget((float) eulers[0]); //eulers[0] is Input: target yaw angle from IMU
+				((MotionPIDController) robot.getMotionPIDController()).Compute(robot.getIMUSetpointInfo());
 				
 				// Speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
 				// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
@@ -402,19 +413,19 @@ public class MotionController extends AbstractNodeMain {
 				// being crosstrack deviation.
 				//
 				if( holdBearing ) {
-					System.out.printf("Inertial Setpoint=%f | Hold=%b ", IMUSetpoint.getDesiredTarget(), holdBearing);
+					System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
 					// In auto
-					if( Math.abs(motionPIDController.getOutput()) <= TRIANGLE_THRESHOLD ) {
-						if( motionPIDController.getOutput() < 0.0f ) { // decrease left wheel power goal
+					if( Math.abs(robot.getMotionPIDController().getOutput()) <= TRIANGLE_THRESHOLD ) {
+						if( robot.getMotionPIDController().getOutput() < 0.0f ) { // decrease left wheel power goal
 							// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
-							if( Math.abs(motionPIDController.getOutput()) <= PID_THRESHOLD ) {
+							if( Math.abs(robot.getMotionPIDController().getOutput()) <= PID_THRESHOLD ) {
 								rightPid(radius);
 							} else {
 								rightAngle(radius);
 							}
 						} else {
-							if( motionPIDController.getOutput() > 0.0f ) { // decrease right wheel power goal
-								if( motionPIDController.getOutput() <= PID_THRESHOLD) {
+							if( robot.getMotionPIDController().getOutput() > 0.0f ) { // decrease right wheel power goal
+								if( robot.getMotionPIDController().getOutput() <= PID_THRESHOLD) {
 									leftPid(radius);
 								} else {
 									leftAngle(radius);
@@ -422,41 +433,41 @@ public class MotionController extends AbstractNodeMain {
 							} else {
 								// we are critically damped, set integral to 0
 								//ITerm = 0;
-								motionPIDController.setIerror(0);
+								robot.getMotionPIDController().setIerror(0);
 							}
 						}
 						System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
 						// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
-						motionPIDController.setIerror(0);//ITerm = 0;
+						robot.getMotionPIDController().setIerror(0);//ITerm = 0;
 						wasPid = false;
-						arcin = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * radius);
-						arcout = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+						arcin = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * radius);
+						arcout = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 						// error is difference in degrees between setpoint and input
-						if( motionPIDController.getOutput() < 0.0f )
+						if( robot.getMotionPIDController().getOutput() < 0.0f )
 							speedL *= (arcin/arcout);
 						else
-							if( motionPIDController.getOutput() > 0.0f )
+							if( robot.getMotionPIDController().getOutput() > 0.0f )
 								speedR *= (arcin/arcout);
 						System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
-					arcin = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * radius);
-					arcout = (float) (Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+					arcin = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * radius);
+					arcout = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 					// error is difference in degrees between setpoint and input
 					// Stick position will override any IMU tolerances
 					if( stickDegrees != -180.0 && stickDegrees != 180 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
-						if( motionPIDController.getOutput() < 0.0f )
+						if( robot.getMotionPIDController().getOutput() < 0.0f )
 							speedL *= (arcin/arcout);
 						else
-							if( motionPIDController.getOutput() > 0.0f )
+							if( robot.getMotionPIDController().getOutput() > 0.0f )
 								speedR *= (arcin/arcout);
 					}
 					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 				}
 	
-				System.out.printf("%s | Hold=%b\n",motionPIDController.toString(), holdBearing);
+				System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
 				//
 				// set it up to send down the publishing pipeline
 				//
@@ -519,7 +530,7 @@ public class MotionController extends AbstractNodeMain {
 				*/
 				// Reduce speed of left wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
 				// scale it by speed
-				speedL -= ( Math.abs(motionPIDController.getOutput()) * (speed/350) );
+				speedL -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
 				/*
 				// goal is to increase power of right wheel
 				// We scale it by speed with the assumption that at full speed,
@@ -560,7 +571,7 @@ public class MotionController extends AbstractNodeMain {
 				*/
 				// Reduce speed of right wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
 				// scale it by speed
-				speedR -= ( Math.abs(motionPIDController.getOutput()) * (speed/350) );
+				speedR -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
 				/*
 				// goal is net increase of left wheel power
 				// We scale it by speed with the assumption that at full speed,
@@ -583,11 +594,11 @@ public class MotionController extends AbstractNodeMain {
 			 */
 			private void rightAngle(float radius) {
 				// Mitigate integral windup
-				motionPIDController.setIerror(0);//ITerm = 0;
+				robot.getMotionPIDController().setIerror(0);//ITerm = 0;
 				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
 				// chord is 2Rsin(theta/2) ( we convert to radians first)
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
@@ -603,11 +614,11 @@ public class MotionController extends AbstractNodeMain {
 			 */
 			private void leftAngle(float radius) {
 				// Mitigate integral windup
-				motionPIDController.setIerror(0);//ITerm = 0;
+				robot.getMotionPIDController().setIerror(0);//ITerm = 0;
 				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
 				// chord is 2Rsin(theta/2), R is half wheelbase so we assume our robot is roughly 'square'
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(motionPIDController.getOutput()/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
@@ -764,8 +775,8 @@ public class MotionController extends AbstractNodeMain {
 			@Override
 			protected void setup() {
 				sequenceNumber = 0;
-				IMUSetpoint.setPrevErr(0.0f); // 0 degrees yaw
-				motionPIDController.clearPID();
+				robot.getIMUSetpointInfo().setPrevErr(0.0f); // 0 degrees yaw
+				robot.getMotionPIDController().clearPID();
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
@@ -1034,17 +1045,17 @@ public class MotionController extends AbstractNodeMain {
 				// Calculate Drive Turn output due to X input
 				if (x > 0) {
 				  // Forward
-				  spd_left = ( th > 0 ) ? motionPIDController.getMaximum() : (motionPIDController.getMaximum() + th);
-				  spd_right = ( th > 0 ) ? (motionPIDController.getMaximum() - th) : motionPIDController.getMaximum();
+				  spd_left = ( th > 0 ) ? robot.getLeftSpeedSetpointInfo().getMaximum() : (robot.getLeftSpeedSetpointInfo().getMaximum() + th);
+				  spd_right = ( th > 0 ) ? (robot.getRightSpeedSetpointInfo().getMaximum() - th) : robot.getRightSpeedSetpointInfo().getMaximum();
 				} else {
 				  // Reverse
-				  spd_left = (th > 0 ) ? (motionPIDController.getMaximum() - th) : motionPIDController.getMaximum();
-				  spd_right = (th > 0 ) ? motionPIDController.getMaximum() : (motionPIDController.getMaximum() + th);
+				  spd_left = (th > 0 ) ? (robot.getLeftSpeedSetpointInfo().getMaximum() - th) : robot.getLeftSpeedSetpointInfo().getMaximum();
+				  spd_right = (th > 0 ) ? robot.getRightSpeedSetpointInfo().getMaximum() : (robot.getRightSpeedSetpointInfo().getMaximum() + th);
 				}
 
 				// Scale Drive output due to X input (throttle)
-				spd_left = spd_left * x / motionPIDController.getMaximum();
-				spd_right = spd_right *  x / motionPIDController.getMaximum();
+				spd_left = spd_left * x / robot.getLeftDistanceSetpointInfo().getMaximum();
+				spd_right = spd_right *  x / robot.getRightSpeedSetpointInfo().getMaximum();
 				
 				// Now calculate pivot amount
 				// - Strength of pivot (nPivSpeed) based on  X input
@@ -1063,30 +1074,38 @@ public class MotionController extends AbstractNodeMain {
 
 		// Calculate final mix of Drive and Pivot
 		// Set the target speeds in wheel rotation command units -1000, 1000 and if indoor mode div by ten
-		leftWheel.TargetSpeed = indoor ? spd_left/10 : spd_left;
-		rightWheel.TargetSpeed = indoor ? spd_right/10 : spd_right;
+		if(robot.getDiffDrive().isIndoor()) {
+			robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().setTarget(spd_left/10);
+			robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().setTarget(spd_left/10);
+		} else {
+			robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().setTarget(spd_left);
+			robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().setTarget(spd_left);
+		}
 		if( DEBUG )
-			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+leftWheel.TargetSpeed+" R:"+rightWheel.TargetSpeed);
+			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().getTarget()+
+								" R:"+robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().getTarget());
 		/* Convert speeds to ticks per frame */
-		leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
-		rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
+		robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getLeftMotorPIDController(), robot.getDiffDrive().getLeftWheel());
+		robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getRightMotorPIDController(), robot.getDiffDrive().getRightWheel());
+		//leftWheel.TargetTicksPerFrame = SpeedToTicks((float) leftWheel.TargetSpeed);
+		//rightWheel.TargetTicksPerFrame = SpeedToTicks((float) rightWheel.TargetSpeed);
 		/* Read the encoders */
 		//leftWheel.Encoder = 0;//encoders.YAxisGetCount();
 		//rightWheel.Encoder = 0;//encoders.XAxisGetCount();
 
 		/* Record the time that the readings were taken */
-		odomInfo.lastOdomTime = System.currentTimeMillis();
+		//robot.getDiffDrive().odomInfo.lastOdomTime = System.currentTimeMillis();
 		//odomInfo.encoderStamp = nh.now;
 
 		/* Compute PID update for each motor */
-		doPID(leftWheel);
-		doPID(rightWheel);
+		robot.getLeftMotorPIDController().Compute(robot.getLeftSpeedSetpointInfo());
+		robot.getRightMotorPIDController().Compute(robot.getRightSpeedSetpointInfo());
 
 		/* Set the motor speeds accordingly */
 		//if( DEBUG )
 		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
 		// call to motor controller to update speed using absolute terms
-		updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
+		motorControl.updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
 		return new int[]{(int) leftWheel.TargetSpeed, (int) rightWheel.TargetSpeed};
 	}
 	

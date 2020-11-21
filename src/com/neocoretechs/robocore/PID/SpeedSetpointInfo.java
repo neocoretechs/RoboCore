@@ -1,10 +1,14 @@
 package com.neocoretechs.robocore.PID;
+
+import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
+
 /**
  * Speed in meters/second used as setpoint for PID processing.
  * @author Jonathan Groff (C) NeoCoreTechs 20202
  *
  */
 public class SpeedSetpointInfo implements SetpointInfoInterface {
+	float MAXIMUM = 1000.0f;
 	float velocity, targetVelocity, prevErr;
 	/**
 	 * Convert meters per second to ticks per time frame.
@@ -15,8 +19,8 @@ public class SpeedSetpointInfo implements SetpointInfoInterface {
 	 * @param v
 	 * @return
 	 */
-	public int SpeedToTicks( PIDParameterInterface ppi, TickSetpointInfo tsi) {
-		return (int) (velocity * tsi.getTarget() / (ppi.getPIDRate() * Math.PI * tsi.getWheelDiameter()));
+	public int SpeedToTicks( PIDParameterInterface ppi, DrivenWheelInterface dwi) {
+		return (int) (velocity * dwi.getTickSetpointInfo().getTarget() / (ppi.getPIDRate() * Math.PI * dwi.getTickSetpointInfo().getWheelDiameter()));
 	}
 	@Override
 	public void setTarget(float t) { velocity = t;}
@@ -32,4 +36,8 @@ public class SpeedSetpointInfo implements SetpointInfoInterface {
 	public void setPrevErr(float i) { prevErr = i; }
 	@Override
 	public float getPrevErr() { return prevErr; }
+	@Override
+	public void setMaximum(float max) { MAXIMUM = max; }
+	@Override
+	public float getMaximum() { return MAXIMUM; }
 }

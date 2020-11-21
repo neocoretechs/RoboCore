@@ -10,12 +10,14 @@ public class MotionPIDController extends AbstractPIDController {
 	 * @param pidRate
 	 * @param maximum
 	 */
-	public MotionPIDController(float kp, float kd, float ki, float ko, int pidRate, float maximum) {
-		super(kp, kd, ki, ko, pidRate, maximum);
+	public MotionPIDController(float kp, float kd, float ki, float ko, int pidRate) {
+		super(kp, kd, ki, ko, pidRate);
 	}
 	/**
-	 * Calculate the PID values, PTerm contains the proportion times scalar
-	 * DTerm is the derivative, ITerm is the integral of error variable.
+	 * Calculate the PID values, Perror contains the proportion times scalar
+	 * Derror is the derivative, Ierror is the integral of error variable which we
+	 * may or may not use. If we do, maximum should probably be set to no more than
+	 * 45 degrees in the IMU setpoint.
 	 * pidOutput is output.<br/>
 	 * @param ppi The SetpointInfoInterface of type IMU
 	 */
@@ -44,32 +46,32 @@ public class MotionPIDController extends AbstractPIDController {
 	      //
 	      //float dInput = (Input - lastInput);
 	      // Compute PID Output, proportion
-	      Perror = (int) (Kp * output) ;//+ ITerm - kd * dInput;
+	      Perror = (Kp * output) ;//+ ITerm - kd * dInput;
 	      // derivative
 	      Derror = Kd * (Perror - ppi.getPrevErr());
 	      // integral
 	      Ierror += output; // integrate the error
-	      Ierror = (int) (Ki * Ierror); // then scale it, this limits windup
+	      Ierror = (Ki * Ierror); // then scale it, this limits windup
 	      //ITerm += (ki * error);
 	      // clamp the I term to prevent reset windup
 	      if( Ierror > 0 ) {
-	    	  if(Ierror > getMaximum()) 
-	    		  Ierror = getMaximum();
+	    	  if(Ierror > ppi.getMaximum()) 
+	    		  Ierror = ppi.getMaximum();
 	    	  else 
-	    		  if(Ierror < -getMaximum()) 
-	    			  Ierror = -getMaximum();
+	    		  if(Ierror < -ppi.getMaximum()) 
+	    			  Ierror = -ppi.getMaximum();
 	      } else {
-	    	  if(-Ierror > getMaximum() )
-	    		  Ierror = -getMaximum();
+	    	  if(-Ierror > ppi.getMaximum() )
+	    		  Ierror = -ppi.getMaximum();
 	    	  else
-	    		  if(-Ierror < -getMaximum())
-	    			  Ierror = -getMaximum();
+	    		  if(-Ierror < -ppi.getMaximum())
+	    			  Ierror = -ppi.getMaximum();
 	      }
 	      //lastInput = Input;
 	      //lastTime = now;
 	      //error is positive if current_heading > bearing (compass direction)
 	      // To Use the PD form, set ki to 0.0 default, thus eliminating integrator
-	      output = (int) (Perror /*+ ITerm*/ + Derror);
+	      output = (Perror /*+ ITerm*/ + Derror);
 	   //}
 	}
 	

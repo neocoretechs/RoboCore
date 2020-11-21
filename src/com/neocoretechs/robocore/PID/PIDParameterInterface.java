@@ -15,8 +15,9 @@ public interface PIDParameterInterface {
 	public void setKi(float i);
 	public void setKo(float i);
 	public void setPIDRate(int i);     // Hz Rate at which PID loop is updated 
-	public void setMaximum(float max); // Max integral windup
-	
+	public void clearPID();
+	public void Compute(SetpointInfoInterface p);
+
 	public float getPerror();					// Proportion
 	public float getIerror();                   // integrated error
 	public float getDerror();					// Derivative
@@ -27,7 +28,6 @@ public interface PIDParameterInterface {
 	public float getKo();
 	public int getPIDRate();
 	public float getPIDInterval();
-	public float getMaximum();
 	
 	/**
 	 * Currently we are using a non time based control, this is for reference.

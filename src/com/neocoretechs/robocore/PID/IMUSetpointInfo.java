@@ -7,6 +7,7 @@ package com.neocoretechs.robocore.PID;
  *
  */
 public class IMUSetpointInfo implements SetpointInfoInterface {
+	float MAXIMUM;
 	float yawAngle, desiredYawAngle, prevErr;
 	@Override
 	public void setTarget(float t) { yawAngle = t;	}
@@ -28,4 +29,8 @@ public class IMUSetpointInfo implements SetpointInfoInterface {
 	public void setPrevErr(float i) { prevErr = i;	}
 	@Override
 	public float getPrevErr() { return prevErr; }
+	@Override
+	public void setMaximum(float max) {MAXIMUM = max; }
+	@Override
+	public float getMaximum() { return MAXIMUM; }
 }

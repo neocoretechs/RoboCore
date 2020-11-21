@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.propulsion;
 
 import com.neocoretechs.robocore.PID.AbstractPIDController;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
+import com.neocoretechs.robocore.PID.SpeedSetpointInfo;
 import com.neocoretechs.robocore.PID.TickSetpointInfo;
 
 /**
@@ -23,14 +24,10 @@ import com.neocoretechs.robocore.PID.TickSetpointInfo;
 */
 public interface DrivenWheelInterface {
 	/* Define the robot parameters */
-	public static boolean indoor = true; // div power by ten indoor mode
-
-	
 	public void setprevX(float t);
-	public void setTwistInfo(TwistInfo t);
-	public TwistInfo getTwistInfo();
-
-	
+	public void setTickSetpointInfo(TickSetpointInfo t);
+	public TickSetpointInfo getTickSetpointInfo();
+	public SpeedSetpointInfo getSpeedsetPointInfo();
 	public AbstractPIDController getPIDController();
 			
 }

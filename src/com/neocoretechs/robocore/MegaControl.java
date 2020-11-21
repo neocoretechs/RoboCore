@@ -38,26 +38,18 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	//String baseFrame = "/base_link";
 	//String odomFrame = "/odom";
 	
-
-
 	protected static boolean moving = false; // is the base in motion?
 
-
-
 	float theta_offset;     /* offset from from global theta to local theta */
-
-
 	
 	//int nextOdom = 0;
 	DrivenWheelInterface leftWheel, rightWheel;
 	OdomInfo odomInfo;
 	private float yawIMURads;
 
-	
 	public MegaControl() { 
 		init(); 
 	}
-
 	
 	public synchronized void setAbsoluteMotorSpeed(int slot1, int channel1, int ch1, int slot2, int channel2, int ch2) throws IOException {
 
