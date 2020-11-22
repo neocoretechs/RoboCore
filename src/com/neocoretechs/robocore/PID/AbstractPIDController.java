@@ -81,5 +81,9 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	}
 	
 	public abstract void Compute(SetpointInfoInterface ppi);
+	
+	public String toString() {
+		return "Kp="+String.valueOf(Kp)+" Kd="+String.valueOf(Kd)+" Ki="+String.valueOf(Ki)+" Ko="+String.valueOf(Ko)+" PID Rate="+String.valueOf(PID_RATE);
+	}
 
 }

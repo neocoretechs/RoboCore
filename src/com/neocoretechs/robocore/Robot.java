@@ -2,18 +2,14 @@ package com.neocoretechs.robocore;
 
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
-import com.neocoretechs.robocore.PID.MotorPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
-import com.neocoretechs.robocore.PID.SpeedSetpointInfo;
-import com.neocoretechs.robocore.PID.TickSetpointInfo;
 import com.neocoretechs.robocore.propulsion.ROSCOE1;
 import com.neocoretechs.robocore.propulsion.ROSCOE2;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
 public class Robot implements RobotInterface {
 	MotionPIDController motionPIDController;
-	MotorPIDController motorPIDController;
 	RobotDiffDriveInterface robot;
 	IMUSetpointInfo IMUSetpoint;
 	public Robot(int robotType) {
@@ -27,7 +23,6 @@ public class Robot implements RobotInterface {
 		}
 		//kp, ki, kd, ko, pidRate (hz)
 		motionPIDController = new MotionPIDController(1.5f, 0.9f, 3.0f, 1.0f, 1);
-		motorPIDController = new MotorPIDController(1.0f, 1.0f, 1.0f, 1.0f, 1);
 		IMUSetpoint = new IMUSetpointInfo();
 		IMUSetpoint.setMaximum(45); // max deviation allowed from course
 	}
@@ -44,7 +39,7 @@ public class Robot implements RobotInterface {
 
 	@Override
 	public PIDParameterInterface getLeftMotorPIDController() {
-		return motorPIDController;
+		return robot.getLeftWheel().getPIDController();
 	}
 
 	@Override
@@ -69,7 +64,7 @@ public class Robot implements RobotInterface {
 
 	@Override
 	public PIDParameterInterface getRightMotorPIDController() {
-		return motorPIDController; // for now, both the same one due to limited function
+		return robot.getRightWheel().getPIDController(); // for now, both the same one due to limited function
 	}
 
 	@Override
@@ -85,6 +80,13 @@ public class Robot implements RobotInterface {
 	@Override
 	public SetpointInfoInterface getRightTickSetpointInfo() {
 		return robot.getRightWheel().getTickSetpointInfo();
+	}
+	
+	public String toString() {
+		return String.format("Robot %s\r\nMotion Controller:%s\r\n IMU:%s", 
+				robot == null ? "NULL" : robot.toString(),
+				motionPIDController == null ? "NULL" : motionPIDController.toString(),
+					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString());
 	}
 
 }

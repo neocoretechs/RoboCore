@@ -23,4 +23,8 @@ public class TickSetpointInfo extends DistanceSetpointInfo {
 		this.wheelDiameter = wheelDiameter;
 		this.ticksPerRevolution = ticksPerRevolution;
 	}
+	
+	public String toString() {
+		return "Distance Max ticks="+getMaximum()+" Wheel diameter="+wheelDiameter+" ticker per rev="+ticksPerRevolution+" err="+getPrevErr();
+	}
 }

@@ -33,4 +33,7 @@ public class IMUSetpointInfo implements SetpointInfoInterface {
 	public void setMaximum(float max) {MAXIMUM = max; }
 	@Override
 	public float getMaximum() { return MAXIMUM; }
+	public String toString() {
+		return "IMU Max Angle="+ MAXIMUM+" Yaw="+yawAngle+" target Yaw="+desiredYawAngle+" err="+prevErr;
+	}
 }

@@ -76,7 +76,8 @@ public class MotionPIDController extends AbstractPIDController {
 	}
 	
 	public String toString() {
-		return String.format("Output = %f | DTerm = %f | ITerm = %f | PTerm = %f ",output, Derror, Ierror, Perror);
+		return String.format("Motion PID Constants: %s\r\nMotion PID Output = %f | DTerm = %f | ITerm = %f | PTerm = %f ",
+				super.toString(),output, Derror, Ierror, Perror);
 	}
 
 }

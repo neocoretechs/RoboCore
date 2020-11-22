@@ -21,8 +21,8 @@ public class ROSCOE2 implements RobotDiffDriveInterface {
 		this.slot = slot;
 		this.leftChannel = leftChannel;
 		this.rightChannel = rightChannel;
-		leftWheel = new RobotWheel(wheelDiameter, ticksPerRevolution);
-		rightWheel = new RobotWheel(wheelDiameter, ticksPerRevolution);
+		leftWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, 1.0f, 1.0f, 1.0f, 1.0f, 1);
+		rightWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, 1.0f, 1.0f, 1.0f, 1.0f, 1);
 	}
 	@Override
 	public DrivenWheelInterface getLeftWheel() {
@@ -59,6 +59,11 @@ public class ROSCOE2 implements RobotDiffDriveInterface {
 	@Override
 	public boolean isIndoor() {
 		return indoor;
+	}
+	public String toString() {
+		return String.format("ROSCOE2: Controller Slot:%d Left Channel=%d Right Channel=%d Wheel Track=%f Indoor=%b\r\n"
+				+ "Left Wheel=%s\r\nRight Wheel=%s\r\n",slot, leftChannel, rightChannel, wheelTrack, indoor,
+				leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
 	}
 		
 }

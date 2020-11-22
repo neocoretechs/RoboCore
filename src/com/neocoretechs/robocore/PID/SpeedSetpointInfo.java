@@ -16,11 +16,11 @@ public class SpeedSetpointInfo implements SetpointInfoInterface {
 	 * ticksPerMeter = (float) (cpr / (Math.PI * wheelDiameter));
 	 * ticksPerMeter = ticksPerRevolution / wheel Circumference
 	 * SpeedToTicks = velocity * ticksPerMeter
-	 * @param v
-	 * @return
+	 * @param dwi the interface for the wheel
+	 * @return 
 	 */
-	public int SpeedToTicks( PIDParameterInterface ppi, DrivenWheelInterface dwi) {
-		return (int) (velocity * dwi.getTickSetpointInfo().getTarget() / (ppi.getPIDRate() * Math.PI * dwi.getTickSetpointInfo().getWheelDiameter()));
+	public int SpeedToTicks( DrivenWheelInterface dwi) {
+		return (int) (velocity * dwi.getTickSetpointInfo().getTarget() / (dwi.getPIDController().getPIDRate() * Math.PI * dwi.getTickSetpointInfo().getWheelDiameter()));
 	}
 	@Override
 	public void setTarget(float t) { velocity = t;}
@@ -43,4 +43,8 @@ public class SpeedSetpointInfo implements SetpointInfoInterface {
 	public void setMaximum(float max) { MAXIMUM = max; }
 	@Override
 	public float getMaximum() { return MAXIMUM; }
+	
+	public String toString() {
+		return "Speed Max="+ MAXIMUM+" velocity="+velocity+" target velocity="+targetVelocity+" err="+prevErr;
+	}
 }

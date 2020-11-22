@@ -21,4 +21,8 @@ public class DistanceSetpointInfo implements SetpointInfoInterface {
 	public void setMaximum(float max) { MAXIMUM = max;}
 	@Override
 	public float getMaximum() { return MAXIMUM; }
+	
+	public String toString() {
+		return "Distance Max="+MAXIMUM+" distance="+distance+" target distance="+desiredDistance+" err="+prevErr;
+	}
 }

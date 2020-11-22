@@ -90,12 +90,7 @@ public class MotionController extends AbstractNodeMain {
 	static final float TWOPI = (float) (Math.PI * 2.0f);
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
-	// If we call the wheelbase 1000, it implies that at maximum speed of 1000 it take 2 robot radii to turn 90 degrees
-	// This is because the radius of the inner wheel is from speed 0 to speed max, and the outer is from speed 0 to speed max plus wheelbase.
-	// Correspondingly at speed 1 the arc describing the inner wheel is 1 and the inner wheel turns at 1, or in place 
-	// and the arc describing the outer wheel has a radius equivalent to the wheelbase and the 
-	// outer wheel turns at the robot wheelbase through 90 degrees.
-	public static float WHEELBASE = 1000.0f;
+	
 	// deltas. 971, 136, 36 relatively normal values. seismic: last value swings from rangeTop -40 to 140
 	public static float[] SHOCK_BASELINE = { 971.0f, 136.0f, 36.0f};
 
@@ -118,14 +113,13 @@ public class MotionController extends AbstractNodeMain {
 	public static boolean isVision = false; // machine vision recognition event
 	public static final float PID_THRESHOLD  = 45; // point at which PID engages/disengages
 	public static final float TRIANGLE_THRESHOLD = 90; // Point at which geometric solution begins/disengages
-	public static float SPEEDSCALE = 1000; // multiplier for throttle 0-1
-	public static float SPEEDLIMIT = 1000; // max speed allowable
+
 	
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
 	static boolean holdBearing = false; // hold steering to current bearing
 
-	static float speedL, speedR;
+	static float speedL, speedR, SPEEDSCALE;
 
 	static long lastTime = System.currentTimeMillis();
 	static int SampleTime = 100; //.1 sec
@@ -140,6 +134,7 @@ public class MotionController extends AbstractNodeMain {
 	Object magMutex = new Object();
 	
 	RobotInterface robot;
+
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -202,18 +197,6 @@ public class MotionController extends AbstractNodeMain {
 	public void onStart(final ConnectedNode connectedNode) {
 		//final Log log = connectedNode.getLog();
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-		if( remaps.containsKey("__wheelbase") )
-			WHEELBASE = Float.parseFloat(remaps.get("__wheelbase"));
-		if( remaps.containsKey("__speedscale") )
-			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
-		if( remaps.containsKey("__speedlimit") )
-			SPEEDLIMIT = Float.parseFloat(remaps.get("__speedlimit"));
-		if( remaps.containsKey("__kp") )
-			robot.getMotionPIDController().setKp(Float.parseFloat(remaps.get("__kp")));
-		if( remaps.containsKey("__kd") )
-			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
-		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
-		// statpub has status alerts that may come from sensors.
 		if( remaps.containsKey("__robot") ) {
 			switch(remaps.get("__robot")) {
 			case "ROSCOE1":
@@ -224,6 +207,22 @@ public class MotionController extends AbstractNodeMain {
 				break;
 			}
 		}
+		// Display the robot parameters
+		System.out.println(robot);		
+		if( remaps.containsKey("__speedlimit") ) {
+			robot.getLeftSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
+			robot.getRightSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
+		}
+		if( remaps.containsKey("__kp") )
+			robot.getMotionPIDController().setKp(Float.parseFloat(remaps.get("__kp")));
+		if( remaps.containsKey("__kd") )
+			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
+		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
+		// statpub has status alerts that may come from sensors.
+		if(robot.getDiffDrive().isIndoor())
+			SPEEDSCALE = 10.0f;
+		else
+			SPEEDSCALE = 1.0f;
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -442,7 +441,7 @@ public class MotionController extends AbstractNodeMain {
 						robot.getMotionPIDController().setIerror(0);//ITerm = 0;
 						wasPid = false;
 						arcin = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * radius);
-						arcout = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+						arcout = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * (radius + robot.getDiffDrive().getWheelTrack()));
 						// error is difference in degrees between setpoint and input
 						if( robot.getMotionPIDController().getOutput() < 0.0f )
 							speedL *= (arcin/arcout);
@@ -454,7 +453,7 @@ public class MotionController extends AbstractNodeMain {
 				} else {
 					// manual steering mode, use tight radii and a human integrator
 					arcin = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * radius);
-					arcout = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+					arcout = (float) (Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI) * (radius + robot.getDiffDrive().getWheelTrack()));
 					// error is difference in degrees between setpoint and input
 					// Stick position will override any IMU tolerances
 					if( stickDegrees != -180.0 && stickDegrees != 180 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
@@ -598,14 +597,14 @@ public class MotionController extends AbstractNodeMain {
 				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
 				// chord is 2Rsin(theta/2) ( we convert to radians first)
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI))/2);
+				double chord = 2 * ((robot.getDiffDrive().getWheelTrack()/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
-				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
+				double hypot = Math.sqrt((chord*chord) + ((radius+(robot.getDiffDrive().getWheelTrack()/2))*(radius+(robot.getDiffDrive().getWheelTrack()/2))));
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
-				System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
-				speedL *= ((radius+(WHEELBASE/2))/hypot);
+				System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot),holdBearing);
+				speedL *= ((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot);
 			}
 			/**
 			 * Apply a solution in triangles as we do with solution in arcs to reduce right wheel speed.
@@ -617,15 +616,15 @@ public class MotionController extends AbstractNodeMain {
 				robot.getMotionPIDController().setIerror(0);//ITerm = 0;
 				wasPid = false;
 				// compute chord of course deviation, this is short leg of triangle.
-				// chord is 2Rsin(theta/2), R is half wheelbase so we assume our robot is roughly 'square'
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI))/2);
+				// chord is 2Rsin(theta/2), R is half wheeltrack so we assume our robot is roughly 'square'
+				double chord = 2 * ((robot.getDiffDrive().getWheelTrack()/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getOutput()/360.0) * (2.0 * Math.PI))/2);
 				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
 				// square root of sum of square of base and leg
-				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
+				double hypot = Math.sqrt((chord*chord) + ((radius+(robot.getDiffDrive().getWheelTrack()/2))*(radius+(robot.getDiffDrive().getWheelTrack()/2))));
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
-				System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
-				speedR *= ((radius+(WHEELBASE/2))/hypot);
+				System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot),holdBearing);
+				speedR *= ((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot);
 			}
 		});
 		

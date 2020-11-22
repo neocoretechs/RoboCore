@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.propulsion;
 
 import com.neocoretechs.robocore.PID.AbstractPIDController;
+import com.neocoretechs.robocore.PID.MotorPIDController;
 import com.neocoretechs.robocore.PID.SpeedSetpointInfo;
 import com.neocoretechs.robocore.PID.TickSetpointInfo;
 /**
@@ -16,9 +17,11 @@ public class RobotWheel implements DrivenWheelInterface {
 	// it is variable based on desired speed.
 	private TickSetpointInfo tickSetpointInfo;
 	private SpeedSetpointInfo speedSetpointInfo = new SpeedSetpointInfo();
-
-	public RobotWheel(float wheelDiameter, int ticksPerRevolution) {
+	private MotorPIDController motorPIDController;
+	
+	public RobotWheel(float wheelDiameter, int ticksPerRevolution, float kp, float ki, float kd, float ko, int pidRate) {
 		tickSetpointInfo = new TickSetpointInfo(wheelDiameter, ticksPerRevolution);
+		motorPIDController = new MotorPIDController(kp, ki, kd, ko, pidRate);
 	}
 
 	@Override
@@ -44,8 +47,14 @@ public class RobotWheel implements DrivenWheelInterface {
 	
 	@Override
 	public AbstractPIDController getPIDController() {
-		// TODO Auto-generated method stub
-		return null;
+		return motorPIDController;
+	}
+	
+	public String toString() {
+		return String.format("Tick Setpoint %s\r\nSpeed Setpoint %s\r\nPID Control %s\r\n", 
+				tickSetpointInfo == null ? "NULL" : tickSetpointInfo.toString(),
+				speedSetpointInfo == null ? "NULL" : speedSetpointInfo.toString(),
+				motorPIDController == null ? "NULL" : motorPIDController.toString());
 	}
 	
 	// A struct to hold Odometry info 
