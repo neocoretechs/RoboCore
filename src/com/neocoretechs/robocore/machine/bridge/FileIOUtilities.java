@@ -26,8 +26,13 @@ public class FileIOUtilities {
 		private static final String propsFile = "startup.gcode";
 		private static String propfile = null;
 		private static ArrayList<String> config = new ArrayList<String>();
+		static DateFormat f = DateFormat.getDateInstance(DateFormat.SHORT, Locale.ENGLISH);
+		public static final String dataDirectory = "/home/pi/";
+		public static final String portSettingsFile = "rcportsettings.cfg";
 		/**
-		 * assume properties file is in 'startup.gcode'
+		 * assume properties file is in 'startup.gcode', defined by -Dstartup.gcode=file
+		 * failing that, we will try to load a file name startup.gcode from the system resource stream
+		 * located on the classpath, failing that, we will try to load startup.gcode from the dataDirectory path.
 		 */
 		static {
 			try {
@@ -35,18 +40,13 @@ public class FileIOUtilities {
 				if (file == null) {
 					init(top());
 				} else {
-					if(DEBUG)
-						System.out.println("Loading properties:"+file);
 					init(new FileInputStream(file));
 				}
 			} catch (IOException ioe) {
-				throw new RuntimeException(ioe.toString());
+				System.out.println(ioe.getMessage());
 			}
 		}
-        static DateFormat f = DateFormat.getDateInstance(DateFormat.SHORT, Locale.ENGLISH);
-        public static final String dataDirectory = "/home/pi/"; // this is our extended partition mount on debian, our bogus dirs on Win for dev
-        public static final String portSettingsFile = "rcportsettings.cfg";
- 
+
         /**
     	 * Load the properties from the stream
     	 * @param propFile The stream for reading properties
@@ -54,7 +54,7 @@ public class FileIOUtilities {
     	 */
     	public static void init(InputStream propFile) throws IOException {
     		try {							   	
-                BufferedReader reader =  new BufferedReader(new InputStreamReader(propFile));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(propFile));
                 String line = null;
                 while ((line = reader.readLine()) != null) {
                 	//System.out.println("Startup :"+line);
@@ -66,7 +66,7 @@ public class FileIOUtilities {
                 	System.out.println(f.getCalendar().getTime()+":"+propFile+" read with "+config.size()+" lines");
                 reader.close();
     		} catch (Exception ex) {
-    			throw new IOException("FATAL ERROR:  unable to load "+propsFile+" file " + ex.toString());
+    			throw new IOException("ATENTION: unable to load "+propsFile+" file due to " + ex.toString());
     		}
     	}
     	
@@ -81,11 +81,10 @@ public class FileIOUtilities {
     		java.net.URL loader =
     			ClassLoader.getSystemResource(propsFile);
     		if (loader == null) {
-    			propfile = System.getProperty(propsFile); // now we look for -Dstartup.gcode= on cmdl
-    			if( propfile == null ) {
-    				propfile = dataDirectory+propsFile;
-    			}
-    			loader = ClassLoader.getSystemResource(propfile);
+    			propfile = dataDirectory+propsFile;
+    	  		if( DEBUG )
+        			System.out.println("Loading properties:"+propfile);
+ 				return new FileInputStream(propfile);
     		}
     		if( DEBUG )
     			System.out.println("Loading properties:"+loader);

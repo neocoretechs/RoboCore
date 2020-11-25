@@ -256,7 +256,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	 * Take the 2 trigger values as int32 and send them on to the microcontroller PWM non-propulsion 
 	 * related subsystem. this subsystem is composed of a software controller instance talking to a 
 	 * hardware driver such as an H-bridge or half bridge or even a simple switch.
-	 * the values here are <slot> <channel> <value>
+	 * the values here are <slot> <channel> <value>.
+	 * Alternately, we are sending a -1 as the channel value to invoke emergency stop. 
 	 */
 	substrigger.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 	@Override
@@ -267,7 +268,11 @@ public void onStart(final ConnectedNode connectedNode) {
 			int valch2 = valch[i+1];
 			int valch3 = valch[i+2];
 			try {
-				((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
+				if(valch1 == -1) {
+					motorControlHost.commandStop();
+				} else {
+					((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
+				}
 			} catch (IOException e) {
 				System.out.println("there was a problem communicating with motor controller:"+e);
 				e.printStackTrace();

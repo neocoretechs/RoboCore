@@ -133,6 +133,7 @@ public class MotionController extends AbstractNodeMain {
 	static boolean inAuto = false;
 	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
 	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
+	static boolean LEDCamlightIsOn = false;
 	
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
@@ -140,7 +141,7 @@ public class MotionController extends AbstractNodeMain {
 	Object magMutex = new Object();
 	
 	RobotInterface robot = new Robot();
-
+	
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -284,7 +285,7 @@ public class MotionController extends AbstractNodeMain {
 				int[] buttons = message.getButtons();
 				// check for emergency stop, on X or A or green or lower button
 				if( buttons[6] != 0 ) {
-					System.out.println("**CANCELLED "+axes[2]);
+					System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
 					return;
 				}
 				// If the button square or circle is depressed, rotate in place at stick position Y speed
@@ -482,22 +483,27 @@ public class MotionController extends AbstractNodeMain {
 				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
 				// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
 				// for the majority of downstream processing. In the case of PWM, we are going to scale this
-				// form -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
+				// fr0m -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
 				// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
 				// sure to scale it to the positive range downstream. We are going to publish the scaled
 				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
-				// if necessary.
+				// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
+				// hence the boolean checks.
+				// LEDCameraIlluminatorControl:4
+				// LEDCameraIlluminatorSlot:1
+				// LEDCameraIlluminatorChannel:1
 				//-------------------
-				if(axes[4] != -1 || axes[5] != -1) {
-					ArrayList<Integer> triggerVals = new ArrayList<Integer>(6);
-					triggerVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
-					triggerVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
-					triggerVals.add( ((int)(axes[4]*SPEEDSCALE)) );
-					triggerVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
-					triggerVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
-					triggerVals.add( ((int)(axes[5]*SPEEDSCALE)) );
-					System.out.printf("Trigger Left = %f | Trigger Right = %f\n");
-					trigpub.publish(setupPub(connectedNode, triggerVals,"Left Trigger","Right Trigger"));
+				if(axes[Props.toInt("LEDCameraIlluminatorControl")] != -1 || LEDCamlightIsOn) {//|| axes[5] != -1) {
+					if(axes[Props.toInt("LEDCameraIlluminatorControl")] == -1) {
+						LEDCamlightIsOn = false;
+					} else {
+						LEDCamlightIsOn = true;
+					}
+					ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
+					triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
+					triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
+					System.out.printf("LEDCameraIlluminatorControl = %d\n",axes[Props.toInt("LEDCameraIlluminatorControl")]);
+					trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
 				}
 			} // onMessage from Joystick controller, with all the axes[] and buttons[]
 			
@@ -776,6 +782,7 @@ public class MotionController extends AbstractNodeMain {
 				robot.getIMUSetpointInfo().setMaximum(TRIANGLE_THRESHOLD); // maximum 45 degree windup
 				robot.getMotionPIDController().clearPID();
 				WHEELBASE = Props.toFloat("MaxSpeedValue");
+				System.out.println(robot);
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
