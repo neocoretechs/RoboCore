@@ -1,7 +1,7 @@
 package com.neocoretechs.robocore.PID;
 
 public class DistanceSetpointInfo implements SetpointInfoInterface {
-	private float MAXIMUM;
+	private float MAXIMUM, MINIMUM;
 	private float distance, desiredDistance, prevErr;
 	@Override
 	public void setTarget(float t) { distance = t; }
@@ -21,8 +21,12 @@ public class DistanceSetpointInfo implements SetpointInfoInterface {
 	public void setMaximum(float max) { MAXIMUM = max;}
 	@Override
 	public float getMaximum() { return MAXIMUM; }
+	@Override
+	public void setMinimum(float min) { MINIMUM = min;}
+	@Override
+	public float getMinimum() { return MINIMUM; }
 	
 	public String toString() {
-		return "Distance Max="+MAXIMUM+" distance="+distance+" target distance="+desiredDistance+" err="+prevErr;
+		return "Distance Max="+MAXIMUM+" Min="+MINIMUM+" distance="+distance+" target distance="+desiredDistance+" err="+prevErr;
 	}
 }

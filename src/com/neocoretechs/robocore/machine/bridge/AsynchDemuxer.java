@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.machine.bridge;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
@@ -301,7 +302,8 @@ public class AsynchDemuxer implements Runnable {
 		// now read the startup G-code directives to initiate
 		try {
 			ByteSerialDataPort bsdp = ByteSerialDataPort.getInstance();
-			String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
+			//String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
+			List<String> starts = FileIOUtilities.getConfig();
 			for(String s : starts) {
 				System.out.println("Startup GCode:"+s);
 				bsdp.writeLine(s);

@@ -9,6 +9,7 @@ import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
  */
 public class SpeedSetpointInfo implements SetpointInfoInterface {
 	float MAXIMUM = 1000.0f;
+	float MINIMUM = 0.0f;
 	float velocity, targetVelocity, prevErr;
 	/**
 	 * Convert meters per second to ticks per time frame.
@@ -43,8 +44,12 @@ public class SpeedSetpointInfo implements SetpointInfoInterface {
 	public void setMaximum(float max) { MAXIMUM = max; }
 	@Override
 	public float getMaximum() { return MAXIMUM; }
+	@Override
+	public void setMinimum(float min) { MINIMUM = min; }
+	@Override
+	public float getMinimum() { return MINIMUM; }
 	
 	public String toString() {
-		return "Speed Max="+ MAXIMUM+" velocity="+velocity+" target velocity="+targetVelocity+" err="+prevErr;
+		return "Speed Max="+ MAXIMUM+" Min="+MINIMUM+" velocity="+velocity+" target velocity="+targetVelocity+" err="+prevErr;
 	}
 }

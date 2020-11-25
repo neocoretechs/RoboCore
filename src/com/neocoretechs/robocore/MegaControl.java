@@ -2,10 +2,7 @@ package com.neocoretechs.robocore;
 
 import java.io.IOException;
 
-import com.neocoretechs.robocore.PID.AbstractPIDController;
-import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
-import com.neocoretechs.robocore.propulsion.TwistInfo;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 /**
@@ -20,7 +17,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2020
  *
  */
-public class MegaControl implements MotorControlInterface2D {
+public class MegaControl implements MotorControlInterface2D, PWMControlInterface {
 	public static boolean DEBUG = true;
 	//float yawIMURads; = twistInfo.imuTheta
 	int yawTargetDegrees;

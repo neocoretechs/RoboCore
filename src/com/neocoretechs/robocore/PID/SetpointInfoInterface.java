@@ -13,5 +13,7 @@ public interface SetpointInfoInterface {
 	public float getDesiredTarget();
 	public float delta();
 	public void setMaximum(float max); // Max integral windup
+	public void setMinimum(float min); // min output
 	public float getMaximum();
+	public float getMinimum();
 }

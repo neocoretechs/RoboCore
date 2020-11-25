@@ -2,10 +2,11 @@ package com.neocoretechs.robocore.PID;
 
 public abstract class AbstractPIDController implements PIDParameterInterface {
 
-	float Perror;
+	float PTerm;
 	float output;
-	float Ierror;
-	float Derror;
+	float ITerm;
+	float DTerm;
+	float error;
 	/* PID Parameters */
 	float Kp;// = 20;
 	float Kd;// = 12;
@@ -19,22 +20,26 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	int nextPID = 0;
 
 	@Override
-	public float getPerror() { return Perror; }
+	public float getPTerm() { return PTerm; }
 	@Override
-	public float getIerror() {return Ierror;}
+	public float getITerm() {return ITerm;}
 	@Override
-	public float getDerror() {return Derror;}
+	public float getDTerm() {return DTerm;}
 	@Override
 	public float getOutput() {return output;}
+	@Override
+	public float getError() { return error;}
 
 	@Override
-	public void setPerror(float i) {Perror = i;}					// Proportion
+	public void setPTerm(float i) {PTerm = i;}					// Proportion
 	@Override
-	public void setIerror(float i) {Ierror = i;}                    // integrated error
+	public void setITerm(float i) {ITerm = i;}                    // integrated error
 	@Override
-	public void setDerror(float i) {Derror = i; }					// Derivative
+	public void setDTerm(float i) {DTerm = i; }					// Derivative
 	@Override
 	public void setOutput(float i) {output = i;}
+	@Override
+	public void setError(float i) { error = i;}
 	@Override
 	public float getKp() {return Kp;}
 	@Override
@@ -74,9 +79,9 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	}
 
 	public void clearPID() {
-		Perror = 0;
-		Ierror = 0;
-		Derror = 0;
+		PTerm = 0;
+		ITerm = 0;
+		DTerm = 0;
 		output = 0;
 	}
 	

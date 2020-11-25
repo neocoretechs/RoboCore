@@ -6,10 +6,11 @@ package com.neocoretechs.robocore.PID;
  */
 public interface PIDParameterInterface {
 
-	public void setPerror(float i); 	 // Proportion
-	public void setIerror(float i);      // integrated error
-	public void setDerror(float i);		 // Derivative
+	public void setPTerm(float i); 	 // Proportion
+	public void setITerm(float i);      // integrated error
+	public void setDTerm(float i);		 // Derivative
 	public void setOutput(float i);		 // result
+	public void setError(float i); 		// total error
 	public void setKp(float i);
 	public void setKd(float i);
 	public void setKi(float i);
@@ -18,10 +19,11 @@ public interface PIDParameterInterface {
 	public void clearPID();
 	public void Compute(SetpointInfoInterface p);
 
-	public float getPerror();					// Proportion
-	public float getIerror();                   // integrated error
-	public float getDerror();					// Derivative
+	public float getPTerm();					// Proportion
+	public float getITerm();                   // integrated error
+	public float getDTerm();					// Derivative
 	public float getOutput();					// result
+	public float getError();					// total error
 	public float getKp();
 	public float getKd();
 	public float getKi();

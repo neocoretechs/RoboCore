@@ -33,11 +33,11 @@ public class MotorPIDController extends AbstractPIDController {
 	public synchronized void Compute(SetpointInfoInterface p) {
 		/*
 	
-		Perror = (int) (p.TargetTicksPerFrame - (p.X - p.prevX));
+		PTerm = (int) (p.TargetTicksPerFrame - (p.X - p.prevX));
 
-		// Derivative error is the delta Perror
-		output = (Kp * Perror + Kd * (Perror - p.PrevErr) + Ki * p.Ierror) / Ko;
-		p.PrevErr = (int) Perror;
+		// Derivative error is the delta PTerm
+		output = (Kp * PTerm + Kd * (PTerm - p.PrevErr) + Ki * p.Ierror) / Ko;
+		p.PrevErr = (int) PTerm;
 		//p.PrevEnc = p.Encoder;
 
 		output += p.output;
@@ -47,15 +47,15 @@ public class MotorPIDController extends AbstractPIDController {
 		else if (output <= -MAXOUTPUT)
 			output = -MAXOUTPUT;
 		else
-			p.Ierror += Perror;
+			p.Ierror += PTerm;
 
 		p.output = (int) output;
 		*/
-		if (p.getTarget() >= p.getMaximum())
+		if (p.getTarget() > p.getMaximum())
 			p.setTarget(p.getMaximum());
 		else 
-			if (p.getTarget() <= -p.getMaximum())
-				p.setTarget(-p.getMaximum());	
+			if (p.getTarget() < p.getMinimum())
+				p.setTarget(p.getMinimum());	
 	}
 
 

@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.config;
 
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
@@ -10,7 +10,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * Fundamentally, it is a collection of PID controller setpoints, configurations as to the physical locations of 
  * various hardware controller slots and channels, and some PID controllers that are handed into the
  * various subsystems.<br/>
- * 'Essence' may be a bit of sa stretch, but certainly these parameters are the primary ones that differ
+ * 'Essence' may be a bit of a stretch, but certainly these parameters are the primary ones that differ
  * from robot to robot that use this common framework based on RosJavaLite and the MarlinSpike
  * realtime unit.
  * 
@@ -18,6 +18,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public interface RobotInterface {
+	public String getName(); // The name of the Robot. Each one is special and unique.
 	public RobotDiffDriveInterface getDiffDrive(); // embodies different differential drive characteristics
 	public PIDParameterInterface getMotionPIDController(); // PID control parameters for trave by the different diff drives
 	public PIDParameterInterface getLeftMotorPIDController(); // motor PID control accounting for different drivers and propulsion motors
