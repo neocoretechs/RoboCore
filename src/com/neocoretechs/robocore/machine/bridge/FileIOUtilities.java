@@ -10,6 +10,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,7 +55,7 @@ public class FileIOUtilities {
     	 */
     	public static void init(InputStream propFile) throws IOException {
     		try {							   	
-                BufferedReader reader = new BufferedReader(new InputStreamReader(propFile));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(propFile,StandardCharsets.UTF_8));
                 String line = null;
                 while ((line = reader.readLine()) != null) {
                 	//System.out.println("Startup :"+line);
@@ -63,7 +64,7 @@ public class FileIOUtilities {
                     }
                 }
                 if(DEBUG)
-                	System.out.println(f.getCalendar().getTime()+":"+propFile+" read with "+config.size()+" lines");
+                	System.out.println(f.getCalendar().getTime()+":configuration read with "+config.size()+" lines");
                 reader.close();
     		} catch (Exception ex) {
     			throw new IOException("ATENTION: unable to load "+propsFile+" file due to " + ex.toString());
@@ -87,7 +88,7 @@ public class FileIOUtilities {
  				return new FileInputStream(propfile);
     		}
     		if( DEBUG )
-    			System.out.println("Loading properties:"+loader);
+    			System.out.println("Loading properties:"+loader.getFile());
     		return loader.openStream();
     	}
 
