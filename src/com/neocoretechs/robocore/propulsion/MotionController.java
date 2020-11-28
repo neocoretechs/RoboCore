@@ -140,7 +140,7 @@ public class MotionController extends AbstractNodeMain {
 	Object navMutex = new Object();
 	Object magMutex = new Object();
 	
-	RobotInterface robot = new Robot();
+	RobotInterface robot;
 	
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
@@ -179,10 +179,15 @@ public class MotionController extends AbstractNodeMain {
 		} catch (InterruptedException e) {}
 	}
 	
-	public MotionController() { }
+	public MotionController() {
+		System.out.println("CTOR robot...");
+		robot = new Robot();
+		System.out.println("CTOR build robot"+robot);
+	}
+	
 	
 	/**
-	 * Create NodeConfiguration 
+	 * Create NodeConfiguration.
 	 */
 	public NodeConfiguration build()  {
 	  //NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
@@ -202,6 +207,9 @@ public class MotionController extends AbstractNodeMain {
 	
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
+		//robot = new Robot();
+		//System.out.println("onStart build robot...");
+		//System.out.println("onStart robot"+robot);
 		//final Log log = connectedNode.getLog();
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();	
 		if( remaps.containsKey("__speedlimit") ) {
@@ -254,6 +262,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 		});
 		*/
+		System.out.println("PREPUBLISHING robot"+robot);
 		//
 		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
 		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
@@ -778,11 +787,11 @@ public class MotionController extends AbstractNodeMain {
 			protected void setup() {
 				sequenceNumber = 0;
 				robot.getIMUSetpointInfo().setPrevErr(0.0f); // 0 degrees yaw
-				robot.getIMUSetpointInfo().setMinimum(-TRIANGLE_THRESHOLD); // -45 degree minimum integral windup
-				robot.getIMUSetpointInfo().setMaximum(TRIANGLE_THRESHOLD); // maximum 45 degree windup
+				robot.getIMUSetpointInfo().setMinimum(-TRIANGLE_THRESHOLD); //  degree minimum integral windup
+				robot.getIMUSetpointInfo().setMaximum(TRIANGLE_THRESHOLD); // maximum degree windup
 				robot.getMotionPIDController().clearPID();
 				WHEELBASE = Props.toFloat("MaxSpeedValue");
-				System.out.println(robot);
+				System.out.println("POST setup robot"+robot);
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified

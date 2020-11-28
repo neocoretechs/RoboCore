@@ -4,6 +4,7 @@ import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
+import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
 public class Robot implements RobotInterface {
@@ -11,6 +12,7 @@ public class Robot implements RobotInterface {
 	RobotDiffDriveInterface robotDrive;
 	IMUSetpointInfo IMUSetpoint;
 	public Robot() {
+		robotDrive = new RobotDiffDrive();
 		//kp, ki, kd, ko, pidRate (hz)
 		motionPIDController = new MotionPIDController(Props.toFloat("CrosstrackKp"), 
 														Props.toFloat("CrosstrackKd"), 
@@ -18,8 +20,8 @@ public class Robot implements RobotInterface {
 														Props.toFloat("CrosstrackKo"), 
 														Props.toInt("CrosstrackPIDRate"));
 		IMUSetpoint = new IMUSetpointInfo();
-		IMUSetpoint.setMaximum(45); // max deviation allowed from course
-		IMUSetpoint.setMinimum(-45);
+		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
+		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
 	}
 
 	@Override

@@ -9,9 +9,9 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 public class RobotDiffDrive implements RobotDiffDriveInterface {
 	int slot, leftChannel, rightChannel;
 	/* Define the robot parameters */
-	public static float wheelTrack = Props.toFloat("WheelTrack"); // millimeters
+	public static float wheelTrack = Props.toFloat("WheelTrackMM"); // millimeters
 	public static boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
-	private float wheelDiameter = Props.toFloat("WheelDiameter"); // millimeters, 16"
+	private float wheelDiameter = Props.toFloat("WheelDiameterMM"); // millimeters, 16"
 	public int ticksPerRevolution = Props.toInt("TicksPerRevolution"); // ticks per revolution, if IMU reports .5 m/s as 500 mm/s then 500, else we have to dynamically change based on speed
 	DrivenWheelInterface leftWheel;
 	DrivenWheelInterface rightWheel;

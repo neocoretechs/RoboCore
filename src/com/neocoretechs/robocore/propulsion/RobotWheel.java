@@ -16,10 +16,11 @@ public class RobotWheel implements DrivenWheelInterface {
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.
 	private TickSetpointInfo tickSetpointInfo;
-	private SpeedSetpointInfo speedSetpointInfo = new SpeedSetpointInfo();
+	private SpeedSetpointInfo speedSetpointInfo;
 	private MotorPIDController motorPIDController;
 	
 	public RobotWheel(float wheelDiameter, int ticksPerRevolution, float kp, float ki, float kd, float ko, int pidRate) {
+		speedSetpointInfo = new SpeedSetpointInfo();
 		tickSetpointInfo = new TickSetpointInfo(wheelDiameter, ticksPerRevolution);
 		motorPIDController = new MotorPIDController(kp, ki, kd, ko, pidRate);
 	}
