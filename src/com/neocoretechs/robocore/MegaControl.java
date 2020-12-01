@@ -2,6 +2,7 @@ package com.neocoretechs.robocore;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
@@ -52,6 +53,45 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		} catch (InterruptedException e) {}
 	}
 	
+	public synchronized void reportAllControllerStatus() throws IOException {
+		System.out.println("All pins in use:");
+		String statCommand1 = "M706"; // report all pins in use
+		ByteSerialDataPort.getInstance().writeLine(statCommand1);
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}
+		// <assignedpins> header returned from MarlinSpike
+		System.out.println(AsynchDemuxer.getInstance().getAssignedPins());
+		//
+		System.out.println("All controllers in use:");
+		statCommand1 = "M705"; // report all controllers
+		ByteSerialDataPort.getInstance().writeLine(statCommand1);
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}
+		// <motorcontrolsetting> header returned from MarlinSpike
+		System.out.println(AsynchDemuxer.getInstance().getMotorControlSetting());
+		//
+		for(int i = 0; i < 10; i++) {
+			System.out.println("Controller in use in slot:"+i);
+			statCommand1 = "M798 Z"+i; // report all controllers
+			ByteSerialDataPort.getInstance().writeLine(statCommand1);
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {}
+			// <controllerstatus> header
+			System.out.println(AsynchDemuxer.getInstance().getControllerStatus());
+			//
+			System.out.println("PWM Controller in use in slot:"+i);
+			statCommand1 = "M798 Z"+i+" X"; // report all controllers
+			ByteSerialDataPort.getInstance().writeLine(statCommand1);
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {}
+			// <pwmcontrolsetting>
+			System.out.println(AsynchDemuxer.getInstance().getPWMControlSetting());
+		}
+	}
 	public synchronized void setAbsolutePWMLevel(int slot, int channel, int pwmLevel) throws IOException {
 		String pwmCommand1 = "G5 Z"+slot+" C"+channel+" X"+pwmLevel;
 		ByteSerialDataPort.getInstance().writeLine(pwmCommand1);

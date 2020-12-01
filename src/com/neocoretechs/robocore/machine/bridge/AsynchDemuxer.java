@@ -53,7 +53,9 @@ public class AsynchDemuxer implements Runnable {
 		return instance;
 	}
 	private Map<String, TopicList> topics = new HashMap<String, TopicList>();
-	private static String[] topicNames = new String[]{"dataset","battery","motorfault","ultrasonic","digitalpin","analogpin"};
+	private static String[] topicNames = new String[]{"dataset","battery","motorfault","ultrasonic",
+													"digitalpin","analogpin","assignedpins",
+													"motorcontrolsetting","pwncontrolsetting","controllerstatus"};
 	
 	public static String[] getTopicNames() { return topicNames; }
 	
@@ -196,7 +198,7 @@ public class AsynchDemuxer implements Runnable {
 		// start an analog pin listener
 		AnalogPinListener.getInstance();
 		
-		MachineBridge.getInstance("digitalpin").init(16);
+		MachineBridge.getInstance("digitalpin").init(32);
 		topics.put("digitalpin", new TopicList() {
 			MachineBridge mb = MachineBridge.getInstance("digitalpin");
 			@Override
@@ -229,8 +231,88 @@ public class AsynchDemuxer implements Runnable {
 		});
 		// start a digital pin listener
 		DigitalPinListener.getInstance();
+		
+		// reporting functions
+		MachineBridge.getInstance("assignedpins").init(16);
+		topics.put("assignedpins", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("assignedpins");
+			@Override
+			public void retrieveData() {  
+			    String readLine;
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</assignedpins>") ) {
+					if( readLine == null ||  readLine.length() == 0 ) {
+						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+						return;
+					}
+					String data =  getReadingValueString(readLine);
+					//if( Props.DEBUG ) System.out.println(readLine);
+					MachineReading mr = new MachineReading(data);
+					mb.add(mr);
+				}
+			}		
+		});
+			
+		MachineBridge.getInstance("motorcontrolsetting").init(128);
+		topics.put("motorcontrolsetting", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("motorcontrolsetting");
+			@Override
+			public void retrieveData() {  
+				String readLine;
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</motorcontrolsetting>") ) {
+					if( readLine == null ||  readLine.length() == 0 ) {
+						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+						return;
+					}
+					String data =  getReadingValueString(readLine);
+					//if( Props.DEBUG ) System.out.println(readLine);
+					MachineReading mr = new MachineReading(data);
+					mb.add(mr);
+				}
+			}		
+		});
+				
+		MachineBridge.getInstance("pwncontrolsetting").init(128);
+		topics.put("pwncontrolsetting", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("pwncontrolsetting");
+			@Override
+			public void retrieveData() {  
+				String readLine;
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</pwncontrolsetting>") ) {
+					if( readLine == null ||  readLine.length() == 0 ) {
+						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+						return;
+					}
+					String data =  getReadingValueString(readLine);
+					//if( Props.DEBUG ) System.out.println(readLine);
+					MachineReading mr = new MachineReading(data);
+					mb.add(mr);
+				}
+			}		
+		});
+					
+		MachineBridge.getInstance("controllerstatus").init(128);
+		topics.put("controllerstatus", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("controllerstatus");
+			@Override
+			public void retrieveData() {  
+				String readLine;
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</controllerstatus>") ) {
+						if( readLine == null ||  readLine.length() == 0 ) {
+							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+							return;
+						}
+						String data =  getReadingValueString(readLine);
+						//if( Props.DEBUG ) System.out.println(readLine);
+						MachineReading mr = new MachineReading(data);
+						mb.add(mr);
+				}
+			}		
+		});
 	}
 	
+	//
+	// Methods to extract data from the line acquired from the serial port read
+	//
     public double getReadingValueDouble(String readLine) {
     	if( readLine != null ) {
     		int sindex = readLine.indexOf(" ");
@@ -294,6 +376,43 @@ public class AsynchDemuxer implements Runnable {
 	       	return 0;
 	}
 
+    // 
+    // Report methods. The sequence is to issue the M-code to the MarlinSpike. The returned data will
+    // include the proper <headers> which are 'demuxxed' and the correct MachineReadings are created from
+    // the retrieved data and added to the queues in each MachineBridge instance for that topic
+    // as they are retrieved from the MarlinSpike.<br/>
+    // After issuing each M-code, call one of these methods to acquire the queue with the MachineReadings 
+    // and call toString on them to build the proper output buffer for each topic, then do whatever with the String
+    // payload.
+    //
+    /**
+     * M706
+     * @return A String payload of all assigned pins (if any), comma separated.
+     */
+    public String getAssignedPins() {
+    	return MachineBridge.getInstance("assignedpins").toString();
+    }
+    /**
+     * M705
+     * @return A String payload of motor controller configurations (if any), each one a multiline report.
+     */
+    public String getMotorControlSetting() {
+    	return MachineBridge.getInstance("motorcontrolsetting").toString();
+    }
+    /**
+     * M798 Z<slot> X
+     * @return A String payload of PWM controller status (if any), each one a multiline report.
+     */
+    public String getPWMControlSetting() {
+    	return MachineBridge.getInstance("pwncontrolsetting").toString();
+    }
+    /**
+     * M798 Z<slot>
+     * @return A String payload of the status of each of the assigned motor controllers.
+     */
+    public String getControllerStatus() {
+    	return MachineBridge.getInstance("controllerstatus").toString();
+    }
 	/**
 	 * Configure the robot with a series of G-code directives at startup in file startup.gcode
 	 * @throws IOException

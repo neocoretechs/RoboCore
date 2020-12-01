@@ -172,6 +172,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<std_msgs.UInt32MultiArray> subsgpio = 
 			connectedNode.newSubscriber("cmd_gpio", std_msgs.UInt32MultiArray._TYPE);
 	
+	final Subscriber<std_msgs.Empty> subsreport = 
+			connectedNode.newSubscriber("cmd_report", std_msgs.Empty._TYPE);
+	
 	
 	/**
 	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
@@ -319,7 +322,6 @@ public void onStart(final ConnectedNode connectedNode) {
 			try {
 				auxPWM.activateAux(message.getData());
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}			
 		}
@@ -335,11 +337,22 @@ public void onStart(final ConnectedNode connectedNode) {
 			try {
 				auxGPIO.activateAux(message.getData());
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}			
 		}
 	});
+	
+	subsreport.addMessageListener(new MessageListener<std_msgs.Empty>() {
+		@Override
+		public void onNewMessage(std_msgs.Empty message) {
+			try {
+				motorControlHost.reportAllControllerStatus();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	});
+	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
 

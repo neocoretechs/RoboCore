@@ -84,11 +84,20 @@ public final class MachineReading implements Serializable{
 		this.rawReadingNum = rawReadingNum;
 		this.readingValString = readingVal;
 	}
+	public MachineReading(String readingVal) {
+		this.rawGroup = -1;
+		this.rawSeq = -1;
+		this.rawReadingNum = -1;
+		this.readingValString = readingVal;
+	}
 	
 	public MachineReading() {}
 	
 	@Override
 	public String toString() {
-		return "Group "+rawGroup+" Sequence "+rawSeq+" Reading # "+rawReadingNum+" = "+readingVal+" "+readingValInt+" "+readingValString;
+		if(rawGroup == -1 && rawSeq == -1 && rawReadingNum == -1 )
+			return readingValString;
+		else
+			return "Group "+rawGroup+" Sequence "+rawSeq+" Reading # "+rawReadingNum+" = "+readingVal+" "+readingValInt+" "+readingValString;
 	}
 }

@@ -33,7 +33,7 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 		@XmlJavaTypeAdapter(RawDataXmlAdapter.class)
 		//@XmlElementWrapper()
 		//@XmlAnyElement(lax=true)
-    	CircularBlockingDeque<MachineReading> machineReadings = new CircularBlockingDeque<MachineReading>(16);
+    	CircularBlockingDeque<MachineReading> machineReadings = new CircularBlockingDeque<MachineReading>(256);
    
 		private String group;
     	private static volatile MachineBridge[] instance = null;
@@ -126,7 +126,17 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 			}
 			//if( Props.DEBUG ) System.out.println("Bridge: "+writer.toString());
 			return writer.toString();
-		}		
+		}
+		
+		@Override
+		public String toString() {
+			MachineReading mr;
+			StringBuilder sb = new StringBuilder();
+			while((mr = waitForNewReading()) != null) {
+				sb.append(mr.toString());
+			}
+			return sb.toString();
+		}
 
     }
 
