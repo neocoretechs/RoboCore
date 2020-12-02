@@ -20,7 +20,19 @@ import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.RaspiPin;
 import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
 import com.pi4j.io.gpio.event.GpioPinListenerDigital;
-
+/**
+ * Use the Pi4J GPIO libraries to drive an ultrasonic range finder attached to GPIO pins 2 and 3 on the RasPi.
+ * Pin2 being the trigger and pin 3 being the resulting signal.
+ * The trigger pulse goes high to low with a 10 microsecond wait.
+ * There is a 2 second window where the result pin goes from low to high that we use as our interval
+ * for sensing an object.
+ * We use a 250 millisecond delay between trigger and result pin provisioning with trigger set to low and result pulled up.
+ * From there we enter the loop to acquire the ranging checking for a 300cm maximum distance.
+ * If we get something that fits these parameters we publish to the robocore/status bus. We can also shut down
+ * publishing to the bus while remaining in the detection loop by sending a message to the alarm/shutdown topic.
+ * @author Jonathan Groff (C) NeoCoreTechs 2020
+ *
+ */
 public class RangeFinderPubs  extends AbstractNodeMain {
 	private static boolean DEBUG = false;
 	static long count = 0;

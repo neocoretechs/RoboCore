@@ -24,9 +24,12 @@ import org.ros.message.MessageListener;
 import org.ros.message.Time;
 
 import rosgraph_msgs.Log;
+import sensor_msgs.Range;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.BatteryListener;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
 import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
@@ -78,13 +81,14 @@ public class MegaPubs extends AbstractNodeMain  {
 	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
 	private boolean shouldMove = true;
-	
 	private int targetPitch;
 	private int targetDist;
 	private float targetYaw;
 	// if angularMode is true, interpret the last TWIST subscription as intended target to move to and
 	// compute incoming channel velocities as scaling factors to that movement
 	protected boolean angularMode = false;
+	// Queue for outgoing diagnostic messages
+	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -110,7 +114,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	public MegaPubs() {}
 	
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("pubsubs_robocore");
+		return GraphName.of("megapubs");
 	}
 
 /**
@@ -175,7 +179,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<std_msgs.Empty> subsreport = 
 			connectedNode.newSubscriber("cmd_report", std_msgs.Empty._TYPE);
 	
-	
+	//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+	//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+
 	/**
 	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
 	 * angular Z (yaw) and send them to motor control. This results in motion planning computing a turn which
@@ -346,12 +352,75 @@ public void onStart(final ConnectedNode connectedNode) {
 		@Override
 		public void onNewMessage(std_msgs.Empty message) {
 			try {
-				motorControlHost.reportAllControllerStatus();
+				String rs = motorControlHost.reportAllControllerStatus();
+				diagnostic_msgs.DiagnosticStatus statmsg = null;
+				statmsg = statpub.newMessage();
+				statmsg.setName("ControllerStatus");
+				statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
+				statmsg.setMessage(rs);
+				diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+				List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+				li.add(kv);
+				statmsg.setValues(li);
+				outgoingDiagnostics.addLast(statmsg);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
 	});
+	/*
+	subsrange.addMessageListener(new MessageListener<sensor_msgs.Range>() {
+		@Override
+		public void onNewMessage(Range message) {
+			float range = message.getRange();
+			if( DEBUG )
+				System.out.println("Floor Range "+range);
+			try {
+				if(speak && (message.getRange() < 300.0) ) {
+					//speaker.doSpeak
+					diagnostic_msgs.DiagnosticStatus statmsg = null;
+					statmsg = statpub.newMessage();
+					statmsg.setName("FloorRange");
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
+					statmsg.setMessage(message.getRange()++" centimeters from feet");
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					outgoingDiagnostics.addLast(statmsg);
+				}
+			} catch (Throwable e) {
+				e.printStackTrace();
+			}	
+		}
+	});
+	
+	subsrange2.addMessageListener(new MessageListener<sensor_msgs.Range>() {
+		@Override
+		public void onNewMessage(Range message) {
+			float range = message.getRange();
+			if( DEBUG )
+				System.out.println("Head Range "+range);
+			try {
+				if(speak && (message.getRange() < 350.0) ) {
+					//speaker.doSpeak
+					diagnostic_msgs.DiagnosticStatus statmsg = null;
+					statmsg = statpub.newMessage();
+					statmsg.setName("HeadRange");
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
+					statmsg.setMessage(message.getRange()++" centimeters from head");
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					outgoingDiagnostics.addLast(statmsg);
+				}
+			} catch (Throwable e) {
+				e.printStackTrace();
+			}	
+		}
+	});
+	*/
 	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
@@ -367,7 +436,6 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
-			boolean upSeq = false;
 			std_msgs.Header ihead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
@@ -384,9 +452,11 @@ public void onStart(final ConnectedNode connectedNode) {
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					li.add(kv);
 					statmsg.setValues(li);
-					statpub.publish(statmsg);
-					Thread.sleep(1);
-					if( DEBUG) System.out.println("Published seq#"+sequenceNumber+" battery: "+statmsg.getMessage().toString());
+					outgoingDiagnostics.addFirst(statmsg); // push this top top for priority
+					//statpub.publish(statmsg);
+					//Thread.sleep(1);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" battery: "+statmsg.getMessage().toString());
 				}		
 	
 				if( !UltrasonicListener.data.isEmpty() ) {
@@ -405,7 +475,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					rangepub.publish(rangemsg);
 					Thread.sleep(1);
 					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange());
-					upSeq = true;
+					++sequenceNumber;
 				}				
 			
 	
@@ -419,12 +489,20 @@ public void onStart(final ConnectedNode connectedNode) {
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					li.add(kv);
 					statmsg.setValues(li);
-					statpub.publish(statmsg);
-					if( DEBUG) System.out.println("Published seq#"+sequenceNumber+" motor fault: "+statmsg.getMessage().toString());
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" motor fault: "+statmsg.getMessage().toString());
 				}			
 		
-			if( upSeq )
+			while(!outgoingDiagnostics.isEmpty()) {
+				diagnostic_msgs.DiagnosticStatus ds = outgoingDiagnostics.takeFirst();
+				statpub.publish(ds);
+				System.out.println("Published "+ds.getMessage());
 				++sequenceNumber;
+				Thread.sleep(1);
+			}
+				
 			Thread.sleep(10);
 		}
 	});  

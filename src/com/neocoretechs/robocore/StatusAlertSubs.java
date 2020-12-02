@@ -14,17 +14,17 @@ import diagnostic_msgs.DiagnosticStatus;
 import diagnostic_msgs.KeyValue;
 
 /**
- * Listen for status messages on the 'status' channel and translate to speech
- * @author jg
+ * Listen for status messages on the 'status' channel and translate to speech or display on console.
+ * @author Jonathan Groff (C) NeocoreTechs 2020
  *
  */
-public class SpeechSubs extends AbstractNodeMain {
+public class StatusAlertSubs extends AbstractNodeMain {
 	private static boolean DEBUG = false;
 	private static boolean speak = true;
 	public static VoxHumana speaker = null;
 	@Override
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("subs_speech");
+		return GraphName.of("subs_statusalerts");
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
