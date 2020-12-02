@@ -176,8 +176,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<std_msgs.UInt32MultiArray> subsgpio = 
 			connectedNode.newSubscriber("cmd_gpio", std_msgs.UInt32MultiArray._TYPE);
 	
-	final Subscriber<std_msgs.Empty> subsreport = 
-			connectedNode.newSubscriber("cmd_report", std_msgs.Empty._TYPE);
+	final Subscriber<std_msgs.String> subsreport = 
+			connectedNode.newSubscriber("cmd_report", std_msgs.String._TYPE);
 	
 	//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 	//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
@@ -348,14 +348,22 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	
-	subsreport.addMessageListener(new MessageListener<std_msgs.Empty>() {
+	subsreport.addMessageListener(new MessageListener<std_msgs.String>() {
 		@Override
-		public void onNewMessage(std_msgs.Empty message) {
+		public void onNewMessage(std_msgs.String message) {
 			try {
-				String rs = motorControlHost.reportAllControllerStatus();
+				String rs = null;
 				diagnostic_msgs.DiagnosticStatus statmsg = null;
 				statmsg = statpub.newMessage();
-				statmsg.setName("ControllerStatus");
+				statmsg.setName(message.getData()); // get the name of the desired status report
+				switch(message.getData()) {
+					case "megastatus":
+						rs = motorControlHost.reportAllControllerStatus();
+						break;
+					default:
+						rs = motorControlHost.reportAllControllerStatus();
+						break;
+				}
 				statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
 				statmsg.setMessage(rs);
 				diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
