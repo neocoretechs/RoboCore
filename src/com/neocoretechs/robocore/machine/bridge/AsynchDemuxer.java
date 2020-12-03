@@ -55,7 +55,7 @@ public class AsynchDemuxer implements Runnable {
 	private Map<String, TopicList> topics = new HashMap<String, TopicList>();
 	private static String[] topicNames = new String[]{"dataset","battery","motorfault","ultrasonic",
 													"digitalpin","analogpin","assignedpins",
-													"motorcontrolsetting","pwncontrolsetting","controllerstatus"};
+													"motorcontrolsetting","pwmcontrolsetting","controllerstatus"};
 	
 	public static String[] getTopicNames() { return topicNames; }
 	
@@ -232,7 +232,9 @@ public class AsynchDemuxer implements Runnable {
 		// start a digital pin listener
 		DigitalPinListener.getInstance();
 		
+		//
 		// reporting functions
+		//
 		MachineBridge.getInstance("assignedpins").init(16);
 		topics.put("assignedpins", new TopicList() {
 			MachineBridge mb = MachineBridge.getInstance("assignedpins");
@@ -240,13 +242,12 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData() {  
 			    String readLine;
 				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</assignedpins>") ) {
-					if( readLine == null ||  readLine.length() == 0 ) {
+					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
 					}
-					String data =  getReadingValueString(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(data);
+					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
 			}		
@@ -259,32 +260,30 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData() {  
 				String readLine;
 				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</motorcontrolsetting>") ) {
-					if( readLine == null ||  readLine.length() == 0 ) {
+					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
 					}
-					String data =  getReadingValueString(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(data);
+					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
 			}		
 		});
 				
-		MachineBridge.getInstance("pwncontrolsetting").init(128);
-		topics.put("pwncontrolsetting", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("pwncontrolsetting");
+		MachineBridge.getInstance("pwmcontrolsetting").init(128);
+		topics.put("pwmcontrolsetting", new TopicList() {
+			MachineBridge mb = MachineBridge.getInstance("pwmcontrolsetting");
 			@Override
 			public void retrieveData() {  
 				String readLine;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</pwncontrolsetting>") ) {
-					if( readLine == null ||  readLine.length() == 0 ) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</pwmcontrolsetting>") ) {
+					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
 					}
-					String data =  getReadingValueString(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(data);
+					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
 			}		
@@ -297,13 +296,12 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData() {  
 				String readLine;
 				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</controllerstatus>") ) {
-						if( readLine == null ||  readLine.length() == 0 ) {
+						if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 							return;
 						}
-						String data =  getReadingValueString(readLine);
 						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(data);
+						MachineReading mr = new MachineReading(readLine);
 						mb.add(mr);
 				}
 			}		

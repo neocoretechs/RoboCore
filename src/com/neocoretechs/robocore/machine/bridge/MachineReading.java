@@ -8,6 +8,9 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
 /**
+ * This class represents a machine reading taken from the Marlinspike code via the
+ * attached single board computer. The format of this reading is a line delimited by a numeric
+ * 
  * @author jg
  *
  */
