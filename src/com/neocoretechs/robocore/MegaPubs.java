@@ -352,6 +352,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		@Override
 		public void onNewMessage(std_msgs.String message) {
 			try {
+				System.out.println("Received report directive "+message.getData());
 				String rs = null;
 				diagnostic_msgs.DiagnosticStatus statmsg = null;
 				statmsg = statpub.newMessage();
@@ -370,6 +371,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 				li.add(kv);
 				statmsg.setValues(li);
+				System.out.println("Queued "+statmsg.getMessage());
 				outgoingDiagnostics.addLast(statmsg);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -504,9 +506,9 @@ public void onStart(final ConnectedNode connectedNode) {
 				}			
 		
 			while(!outgoingDiagnostics.isEmpty()) {
-				diagnostic_msgs.DiagnosticStatus ds = outgoingDiagnostics.takeFirst();
-				statpub.publish(ds);
-				System.out.println("Published "+ds.getMessage());
+				statmsg = outgoingDiagnostics.takeFirst();
+				statpub.publish(statmsg);
+				System.out.println("Published "+statmsg.getMessage());
 				++sequenceNumber;
 				Thread.sleep(1);
 			}
