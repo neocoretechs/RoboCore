@@ -1,6 +1,7 @@
 <h1>RoboCore</h1>
 The RoboCore is the virtual description of the physical robots that run under its messaging bus and realtime unit.<p/>
 RoboCore acts as an interface between real time devices and ROSJavaLite for the purpose of collecting real time data and presenting it on the ROSJavaLite messaging bus under various topics as a publisher, and for receiving control signals as a subscriber, and delivering those to the intended subsystem on the robot.<p/>
+ROS Services are also employed as tools for diagnostic reporting and ad hoc control of PNM and GPIO low level functions for prototyping and testing of various subsystems prior and subsequent to integration with the mainline system.<p/> 
 In addition to presenting the robot as a logical collection of configurations and process setpoints, modules for reading low level hardware devices, PS3 style controllers, Laser based range finders, video, and other external devices are provided. A portion of the code is devoted to communication with the MarlinSpike realtime subsystem, which uses a Mega2560 controller and custom M and G codes to effect functions on that board.<p/>
 A series of asynchronous serial readers and writers handle the different types of messages coming from the MarlinSpike, including low level GPIO, ultrasonic sensor,and motor controller propulsion, configuration, and monitoring codes.<p/>
 Virtually any type of smart motor controller and various types of Half bridge, Split bridge, and H bridge motor controller can be configured
