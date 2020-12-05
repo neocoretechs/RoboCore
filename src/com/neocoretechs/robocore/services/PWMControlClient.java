@@ -27,6 +27,7 @@ import org.ros.node.service.ServiceResponseListener;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
+import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.ThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -119,16 +120,17 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	case "pwm":
 		if( !pubdataPWM.isEmpty() ) {
-			int pubc = 0,pubd = 0;
+			ArrayList<Integer> pwmOut = new ArrayList<Integer>();
 			try {
-				pubc = pubdataPWM.takeFirst();
-				pubc = pubdataPWM.takeFirst();
+				pwmOut.add(pubdataPWM.takeFirst());
+				pwmOut.add(pubdataPWM.takeFirst());
 			} catch (InterruptedException e1) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
 			PWMControlRequest request = pwmsvc.newMessage();
-			if( DEBUG) System.out.println("Set pwm:"+pubc+","+pubd);
+			request.setPwm(RosArrayUtilities.setupUInt32Array(connectedNode, pwmOut, "2DInt"));
+			if( DEBUG) System.out.println("Set pwm:"+request.getPwm().getData()[0]+","+request.getPwm().getData()[1]);
 			pwmsvc.call(request, new ServiceResponseListener<PWMControlResponse>() {
 				@Override
 				public void onFailure(RemoteException e) {
