@@ -27,27 +27,30 @@ import org.ros.node.service.ServiceResponseListener;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
+import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.ThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
  * Publishes user constructed messages to the Marlinspike MegaPubs controller then onto Marlinspike MegaControl controller.
- * directives to generate the reporting 
- * function on cmd_report channel in the Marlinspike code on the Mega board.
+ * functions as GPIO directives on cmd_gpio channel,
+ * in the Marlinspike code on the Mega board.
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  */
-public class ControllerStatusReportClient extends AbstractNodeMain  {
+public class GPIOControlClient extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
 	private String host;
-	private String command = "report";
-	private String rptName = "megastatus";
+	private String command = "gpio";
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
+	std_msgs.UInt32MultiArray gpiomsg = null;
+	public CircularBlockingDeque<Integer> pubdataGPIO = new CircularBlockingDeque<Integer>(16);
+	private String pin;
+	private String value;
 
-	public CircularBlockingDeque<String> pubdataRPT = new CircularBlockingDeque<String>(16);
 
 	
-	public ControllerStatusReportClient(String host, InetSocketAddress master) {
+	public GPIOControlClient(String host, InetSocketAddress master) {
 		this.host = host;
 		this.master = master;
 		NodeConfiguration nc = build();
@@ -59,7 +62,7 @@ public class ControllerStatusReportClient extends AbstractNodeMain  {
 	    
 	}
 	
-	public ControllerStatusReportClient(String[] args) {
+	public GPIOControlClient(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 	    nodeMainExecutor.execute(this, cl.build());
@@ -68,10 +71,10 @@ public class ControllerStatusReportClient extends AbstractNodeMain  {
 		} catch (InterruptedException e) {}
 	}
 	
-	public ControllerStatusReportClient() {}
+	public GPIOControlClient() {}
 	
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("megastatusclient");
+		return GraphName.of("gpiocontrolclient");
 	}
 
 /**
@@ -95,101 +98,70 @@ public void onStart(final ConnectedNode connectedNode) {
 	if( remaps.containsKey("__command") ) {
 		command = remaps.get("__command");
 	}
+	// Based on value of 'command' parameter as 'pwm' or 'direct' open the file and read the pwm values
+	// or take 2 values from the command line from "__pin" and "__value" and place those entries onto the
+	// queue
 	switch(command) {
-		case "report":
-			//TODO: add additional command line report names and add to queue
-			if( remaps.containsKey("__name") ) {
-				rptName = remaps.get("__name");
+		case "gpio":
+			// spinup reader that will place PWM commands on queue
+			fileReader<Integer> reader = new fileReader<Integer>(pubdataGPIO,"/home/pi/gpio", Integer.class);
+			ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
+			break;
+		case "direct":
+			if( remaps.containsKey("__pin") ) {
+				pin = remaps.get("__pin");
+				if( remaps.containsKey("__value") ) {
+					value = remaps.get("__value");
+					pubdataGPIO.addLast(Integer.parseInt(pin));
+					pubdataGPIO.addLast(Integer.parseInt(value));
+				}
 			}
-			pubdataRPT.addFirst(rptName);
-			break;
+
 		default:
-			pubdataRPT.addFirst(rptName);
 			break;
 	}
-	ServiceClient<ControllerStatusRequest, ControllerStatusResponse> rptsvc = null;
-	//final RosoutLogger log = (Log) connectedNode.getLog();
+	
 	try {
-		rptsvc = connectedNode.newServiceClient("cmd_report", ControllerStatusMessage._TYPE);
-	} catch (Exception e) {
-		e.printStackTrace();
-	}
+		ServiceClient<GPIOControlRequest, GPIOControlResponse> gpiosvc = null;
+		//final RosoutLogger log = (Log) connectedNode.getLog();
+		gpiosvc = connectedNode.newServiceClient("cmd_gpio", GPIOControlMessage._TYPE);
+
       //serviceClient = connectedNode.newServiceClient(SERVICE_NAME, test_ros.AddTwoInts._TYPE);
 	// tell the waiting constructors that we have registered service clients
 	awaitStart.countDown();
 	
 	switch(command) {
-	case "report":
-		if( !pubdataRPT.isEmpty() ) {
-			ControllerStatusRequest request = rptsvc.newMessage();
+
+	case "gpio":
+		if( !pubdataGPIO.isEmpty() ) {
+			ArrayList<Integer> gpioOut = new ArrayList<Integer>();
 			try {
-				request.setMegastatus(pubdataRPT.takeFirst());
+				gpioOut.add(pubdataGPIO.takeFirst());
+				gpioOut.add(pubdataGPIO.takeFirst());
 			} catch (InterruptedException e1) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
-			if( DEBUG) System.out.println("Sending report "+request.getMegastatus()+", results should appear on StatusAlertSubs console..");
-			rptsvc.call(request, new ServiceResponseListener<ControllerStatusResponse>() {
-			      @Override
-			      public void onSuccess(ControllerStatusResponse response) {
-			        System.out.println(response.getMegastatus());
-			      }
-			      @Override
-			      public void onFailure(RemoteException e) {
-			        throw new RuntimeException(e);
-			      }
-			    });
+			GPIOControlRequest request = gpiosvc.newMessage();
+			request.setGpio(RosArrayUtilities.setupUInt32Array(connectedNode, gpioOut, "2DInt"));
+			if( DEBUG) System.out.println("Set pwm:"+request.getGpio().getData()[0]+","+request.getGpio().getData()[1]);
+			gpiosvc.call(request, new ServiceResponseListener<GPIOControlResponse>() {
+				@Override
+				public void onFailure(RemoteException e) {
+					throw new RuntimeException(e);		
+				}
+				@Override
+				public void onSuccess(GPIOControlResponse arg0) {
+					System.out.println(arg0.getStatus());	
+				}
+			});
 		}
 		break;
 		default:
 			break;
 	}
-} 
-
+	} catch (Exception e) {
+		e.printStackTrace();
+	} 
 }
-
-
-	/**
-	 * Get the hardware type, revision, and serial from /proc/cpuinfo (linux only of course).
-	 * @return 3 element string array of hardware type, revision, and serial
-	 * @throws IOException If the format is janky
-	 
-	public static String[] readInfo() throws IOException {
-		FileReader fr = new FileReader("/proc/cpuinfo");
-		CharBuffer barg = CharBuffer.allocate(2048);
-		while( fr.read(barg) != -1);
-		fr.close();
-		String bargs = new String(barg.array());
-		//
-		int hardPos = bargs.indexOf("Hardware");
-		if( hardPos == -1)
-			throw new IOException("Can't find Hardware type in cpuinfo");
-		int colPos = bargs.indexOf(':',hardPos)+1;
-		if( colPos == -1) {
-			throw new IOException("Can't find Hardware type in cpuinfo");
-		}
-		String bhard = bargs.substring(colPos+1);
-		//
-		int revPos = bargs.indexOf("Revision");
-		if( revPos == -1)
-			throw new IOException("Can't find Hardware revision in cpuinfo");
-		colPos = bargs.indexOf(':',hardPos)+1;
-		if( colPos == -1) {
-			throw new IOException("Can't find Hardware revision in cpuinfo");
-		}
-		String brev = bargs.substring(colPos+1);
-		//
-		// May not have serial, Odroid C2 does not
-		String bser = "000000000000000";
-		int serPos = bargs.indexOf("Serial");
-		if( serPos != -1) {
-			colPos = bargs.indexOf(':',serPos)+1;
-			if( colPos != -1) {
-				bser = bargs.substring(colPos+1);
-			}
-		}
-		//
-		return new String[]{bhard, brev, bser};
-	
-	}
-	*/
+}

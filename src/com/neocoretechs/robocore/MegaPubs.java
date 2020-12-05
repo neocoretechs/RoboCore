@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore;
 
+
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -8,8 +9,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.ros.concurrent.CancellableLoop;
+import org.ros.exception.DuplicateServiceException;
 import org.ros.namespace.GraphName;
 import org.ros.namespace.NameResolver;
 import org.ros.node.AbstractNodeMain;
@@ -17,9 +20,14 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
+import org.ros.node.service.CountDownServiceServerListener;
+import org.ros.node.service.ServiceResponseBuilder;
+import org.ros.node.service.ServiceServer;
+import org.ros.node.service.ServiceServerListener;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 import org.ros.internal.loader.CommandLineLoader;
+import org.ros.internal.node.CountDownRegistrantListener;
 import org.ros.message.MessageListener;
 import org.ros.message.Time;
 
@@ -33,6 +41,15 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
 import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
+import com.neocoretechs.robocore.services.ControllerStatusMessage;
+import com.neocoretechs.robocore.services.ControllerStatusRequest;
+import com.neocoretechs.robocore.services.ControllerStatusResponse;
+import com.neocoretechs.robocore.services.GPIOControlMessage;
+import com.neocoretechs.robocore.services.GPIOControlRequest;
+import com.neocoretechs.robocore.services.GPIOControlResponse;
+import com.neocoretechs.robocore.services.PWMControlMessage;
+import com.neocoretechs.robocore.services.PWMControlRequest;
+import com.neocoretechs.robocore.services.PWMControlResponse;
 
 /**
  * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
@@ -87,6 +104,10 @@ public class MegaPubs extends AbstractNodeMain  {
 	// if angularMode is true, interpret the last TWIST subscription as intended target to move to and
 	// compute incoming channel velocities as scaling factors to that movement
 	protected boolean angularMode = false;
+	private final String RPT_SERVICE = "cmd_report";
+	private final String PWM_SERVICE = "cmd_pwm";
+	private final String GPIO_SERVICE = "cmd_gpio";
+	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	// Queue for outgoing diagnostic messages
 	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
 	
@@ -158,7 +179,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	} else {
 		AsynchDemuxer.getInstance();	
 	}
-	
+	if( remaps.containsKey("__pwm") )
+		PWM_MODE = remaps.get("__pwm");
+
 	motorControlHost = new MegaControl();
 	
 	final Subscriber<geometry_msgs.Twist> substwist = 
@@ -170,15 +193,94 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Subscriber<std_msgs.Int32MultiArray> substrigger = 
 	connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
 	
-	final Subscriber<std_msgs.UInt32MultiArray> subspwm = 
-			connectedNode.newSubscriber("cmd_pwm", std_msgs.UInt32MultiArray._TYPE);
+
+	final CountDownServiceServerListener<ControllerStatusRequest, ControllerStatusResponse> serviceServerListener =
+		        CountDownServiceServerListener.newDefault();
+	final ServiceServer<ControllerStatusRequest, ControllerStatusResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE, ControllerStatusMessage._TYPE,
+		    new ServiceResponseBuilder<ControllerStatusRequest, ControllerStatusResponse>() {
+				@Override
+				public void build(ControllerStatusRequest request,ControllerStatusResponse response) {	
+					try {
+						response.setMegastatus(motorControlHost.reportAllControllerStatus());
+					} catch (IOException e) {
+						System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA REPORT SERVICE");
+						e.printStackTrace();
+					}
+				}
+			});	
+	serviceServer.addListener(serviceServerListener);	      
+	try {
+		serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+	} catch (InterruptedException e1) {
+		System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
+		e1.printStackTrace();
+	}
+
+	final CountDownServiceServerListener<PWMControlRequest, PWMControlResponse> servicePWMServerListener =
+	        CountDownServiceServerListener.newDefault();
+	final ServiceServer<PWMControlRequest, PWMControlResponse> servicePWMServer = connectedNode.newServiceServer(PWM_SERVICE, PWMControlMessage._TYPE,
+	    new ServiceResponseBuilder<PWMControlRequest, PWMControlResponse>() {
+			@Override
+			public void build(PWMControlRequest request, PWMControlResponse response) {	
+				try {
+					switch(PWM_MODE) {
+						case "controller":
+							motorControlHost.setAbsolutePWMLevel(0, 1, request.getPwm().getData()[0], 
+									0, 2, request.getPwm().getData()[1]);
+							break;
+							// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
+							// Activates a direct PWM timer without going through one of the various controller
+							// objects. Issues an M45 to the Marlinspike on the Mega2560
+						case "direct":
+						default:
+							System.out.println("PWM direct");
+							if( auxPWM == null )
+								auxPWM = new AuxPWMControl();
+							auxPWM.activateAux(request.getPwm().getData());	
+							break;
+					}
+					response.setStatus("success");
+				} catch (IOException e) {
+					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE");
+					e.printStackTrace();
+					response.setStatus("fail");
+				}
+			}
+		});	
+	servicePWMServer.addListener(servicePWMServerListener);	      
+	try {
+		serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+	} catch (InterruptedException e1) {
+		System.out.println("PWM SERVICE REGISTRATION WAS INTERRUPTED");
+		e1.printStackTrace();
+	}
 	
-	final Subscriber<std_msgs.UInt32MultiArray> subsgpio = 
-			connectedNode.newSubscriber("cmd_gpio", std_msgs.UInt32MultiArray._TYPE);
-	
-	final Subscriber<std_msgs.String> subsreport = 
-			connectedNode.newSubscriber("cmd_report", std_msgs.String._TYPE);
-	
+	final CountDownServiceServerListener<GPIOControlRequest, GPIOControlResponse> serviceGPIOServerListener =
+	        CountDownServiceServerListener.newDefault();
+	final ServiceServer<GPIOControlRequest, GPIOControlResponse> serviceGPIOServer = connectedNode.newServiceServer(GPIO_SERVICE, GPIOControlMessage._TYPE,
+	    new ServiceResponseBuilder<GPIOControlRequest, GPIOControlResponse>() {
+			@Override
+			public void build(GPIOControlRequest request, GPIOControlResponse response) {	
+				try {
+					System.out.println("GPIO direct");
+					if( auxGPIO == null )
+						auxGPIO = new AuxGPIOControl();
+					auxGPIO.activateAux(request.getGpio().getData());
+					response.setStatus("success");
+				} catch (IOException e) {
+					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
+					e.printStackTrace();
+					response.setStatus("fail");
+				}
+			}
+		});	
+	servicePWMServer.addListener(servicePWMServerListener);	      
+	try {
+		serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+	} catch (InterruptedException e1) {
+		System.out.println("GPIO SERVICE REGISTRATION WAS INTERRUPTED");
+		e1.printStackTrace();
+	}
 	//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 	//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
@@ -314,70 +416,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	*/
-	/**
-	 * Activates a direct PWM timer without going through one of the various controller
-	 * objects. Issues an M45 to the Marlinspike on the Mega2560
-	 */
-	subspwm.addMessageListener(new MessageListener<std_msgs.UInt32MultiArray>() {
-		@Override
-		public void onNewMessage(std_msgs.UInt32MultiArray message) {
-			//if( DEBUG )
-				System.out.println("PWM directive:"+message.getData());
-			if( auxPWM == null )
-				auxPWM = new AuxPWMControl();
-			try {
-				auxPWM.activateAux(message.getData());
-			} catch (IOException e) {
-				e.printStackTrace();
-			}			
-		}
-	});
-	
-	subsgpio.addMessageListener(new MessageListener<std_msgs.UInt32MultiArray>() {
-		@Override
-		public void onNewMessage(std_msgs.UInt32MultiArray message) {
-			//if( DEBUG )
-				System.out.println("GPIO directive:"+message.getData());
-			if( auxGPIO == null )
-				auxGPIO = new AuxGPIOControl();
-			try {
-				auxGPIO.activateAux(message.getData());
-			} catch (IOException e) {
-				e.printStackTrace();
-			}			
-		}
-	});
-	
-	subsreport.addMessageListener(new MessageListener<std_msgs.String>() {
-		@Override
-		public void onNewMessage(std_msgs.String message) {
-			try {
-				System.out.println("Received report directive "+message.getData());
-				String rs = null;
-				diagnostic_msgs.DiagnosticStatus statmsg = null;
-				statmsg = statpub.newMessage();
-				statmsg.setName(message.getData()); // get the name of the desired status report
-				switch(message.getData()) {
-					case "megastatus":
-						rs = motorControlHost.reportAllControllerStatus();
-						break;
-					default:
-						rs = motorControlHost.reportAllControllerStatus();
-						break;
-				}
-				statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
-				statmsg.setMessage(rs);
-				diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-				List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-				li.add(kv);
-				statmsg.setValues(li);
-				System.out.println("Queued "+statmsg.getMessage());
-				outgoingDiagnostics.addLast(statmsg);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-	});
+
 	/*
 	subsrange.addMessageListener(new MessageListener<sensor_msgs.Range>() {
 		@Override
@@ -517,7 +556,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});  
 
-
 }
+
 
 }

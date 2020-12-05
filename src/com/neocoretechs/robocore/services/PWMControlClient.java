@@ -40,12 +40,13 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 public class PWMControlClient extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
 	private String host;
-	private String command = "report";
-	private String rptName = "megastatus";
+	private String command = "pwm";
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	std_msgs.UInt32MultiArray pwmmsg = null;
 	public CircularBlockingDeque<Integer> pubdataPWM = new CircularBlockingDeque<Integer>(16);
+	private String pin;
+	private String value;
 
 
 	
@@ -97,12 +98,25 @@ public void onStart(final ConnectedNode connectedNode) {
 	if( remaps.containsKey("__command") ) {
 		command = remaps.get("__command");
 	}
+	// Based on value of 'command' parameter as 'pwm' or 'direct' open the file and read the pwm values
+	// or take 2 values from the command line from "__pin" and "__value" and place those entries onto the
+	// queue
 	switch(command) {
 		case "pwm":
 			// spinup reader that will place PWM commands on queue
 			fileReader<Integer> reader = new fileReader<Integer>(pubdataPWM,"/home/pi/pwm", Integer.class);
 			ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 			break;
+		case "direct":
+			if( remaps.containsKey("__pin") ) {
+				pin = remaps.get("__pin");
+				if( remaps.containsKey("__value") ) {
+					value = remaps.get("__value");
+					pubdataPWM.addLast(Integer.parseInt(pin));
+					pubdataPWM.addLast(Integer.parseInt(value));
+				}
+			}
+
 		default:
 			break;
 	}
@@ -151,49 +165,3 @@ public void onStart(final ConnectedNode connectedNode) {
 	} 
 }
 }
-
-
-	/**
-	 * Get the hardware type, revision, and serial from /proc/cpuinfo (linux only of course).
-	 * @return 3 element string array of hardware type, revision, and serial
-	 * @throws IOException If the format is janky
-	 
-	public static String[] readInfo() throws IOException {
-		FileReader fr = new FileReader("/proc/cpuinfo");
-		CharBuffer barg = CharBuffer.allocate(2048);
-		while( fr.read(barg) != -1);
-		fr.close();
-		String bargs = new String(barg.array());
-		//
-		int hardPos = bargs.indexOf("Hardware");
-		if( hardPos == -1)
-			throw new IOException("Can't find Hardware type in cpuinfo");
-		int colPos = bargs.indexOf(':',hardPos)+1;
-		if( colPos == -1) {
-			throw new IOException("Can't find Hardware type in cpuinfo");
-		}
-		String bhard = bargs.substring(colPos+1);
-		//
-		int revPos = bargs.indexOf("Revision");
-		if( revPos == -1)
-			throw new IOException("Can't find Hardware revision in cpuinfo");
-		colPos = bargs.indexOf(':',hardPos)+1;
-		if( colPos == -1) {
-			throw new IOException("Can't find Hardware revision in cpuinfo");
-		}
-		String brev = bargs.substring(colPos+1);
-		//
-		// May not have serial, Odroid C2 does not
-		String bser = "000000000000000";
-		int serPos = bargs.indexOf("Serial");
-		if( serPos != -1) {
-			colPos = bargs.indexOf(':',serPos)+1;
-			if( colPos != -1) {
-				bser = bargs.substring(colPos+1);
-			}
-		}
-		//
-		return new String[]{bhard, brev, bser};
-	
-	}
-	*/

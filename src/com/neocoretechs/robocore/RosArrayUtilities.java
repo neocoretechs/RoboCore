@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -96,6 +97,20 @@ public class RosArrayUtilities {
 			vali[i++] = inv;
 		val.setData(vali);
 		return val;
+	}
+	
+	public diagnostic_msgs.DiagnosticStatus setupDiagnostic(ConnectedNode connectedNode, String directive) {
+		diagnostic_msgs.DiagnosticStatus statmsg = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.DiagnosticStatus._TYPE);
+		String rs = null;
+		statmsg.setName(directive);
+		statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
+		statmsg.setMessage(rs);
+		diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+		List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+		li.add(kv);
+		statmsg.setValues(li);
+		System.out.println("Returned status "+statmsg.getMessage());
+		return statmsg;
 	}
 
 }
