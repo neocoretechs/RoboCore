@@ -122,7 +122,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	}
 	
 	try {
-		ServiceClient<PWMControlRequest, PWMControlResponse> pwmsvc = null;
+		ServiceClient<PWMControlMessageRequest, PWMControlMessageResponse> pwmsvc = null;
 		//final RosoutLogger log = (Log) connectedNode.getLog();
 		pwmsvc = connectedNode.newServiceClient("cmd_pwm", PWMControlMessage._TYPE);
 
@@ -142,17 +142,17 @@ public void onStart(final ConnectedNode connectedNode) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
-			PWMControlRequest request = pwmsvc.newMessage();
-			request.setPwm(RosArrayUtilities.setupUInt32Array(connectedNode, pwmOut, "2DInt"));
-			if( DEBUG) System.out.println("Set pwm:"+request.getPwm().getData()[0]+","+request.getPwm().getData()[1]);
-			pwmsvc.call(request, new ServiceResponseListener<PWMControlResponse>() {
+			PWMControlMessageRequest request = pwmsvc.newMessage();
+			request.setData(RosArrayUtilities.setupUInt32Array(connectedNode, pwmOut, "2DInt"));
+			if( DEBUG) System.out.println("Set pwm:"+request.getData().getData()[0]+","+request.getData().getData()[1]);
+			pwmsvc.call(request, new ServiceResponseListener<PWMControlMessageResponse>() {
 				@Override
 				public void onFailure(RemoteException e) {
 					throw new RuntimeException(e);		
 				}
 				@Override
-				public void onSuccess(PWMControlResponse arg0) {
-					System.out.println(arg0.getStatus());	
+				public void onSuccess(PWMControlMessageResponse arg0) {
+					System.out.println(arg0.getData());	
 				}
 			});
 		}

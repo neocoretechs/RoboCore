@@ -42,14 +42,14 @@ import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
 import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
-import com.neocoretechs.robocore.services.ControllerStatusRequest;
-import com.neocoretechs.robocore.services.ControllerStatusResponse;
+import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
+import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 import com.neocoretechs.robocore.services.GPIOControlMessage;
-import com.neocoretechs.robocore.services.GPIOControlRequest;
-import com.neocoretechs.robocore.services.GPIOControlResponse;
+import com.neocoretechs.robocore.services.GPIOControlMessageRequest;
+import com.neocoretechs.robocore.services.GPIOControlMessageResponse;
 import com.neocoretechs.robocore.services.PWMControlMessage;
-import com.neocoretechs.robocore.services.PWMControlRequest;
-import com.neocoretechs.robocore.services.PWMControlResponse;
+import com.neocoretechs.robocore.services.PWMControlMessageRequest;
+import com.neocoretechs.robocore.services.PWMControlMessageResponse;
 
 /**
  * Publish the data acquired from the Mega board through the serial interface. Motor controller, ultrasonic sensor
@@ -194,14 +194,14 @@ public void onStart(final ConnectedNode connectedNode) {
 	connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
 	
 
-	final CountDownServiceServerListener<ControllerStatusRequest, ControllerStatusResponse> serviceServerListener =
+	final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
 		        CountDownServiceServerListener.newDefault();
-	final ServiceServer<ControllerStatusRequest, ControllerStatusResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE, ControllerStatusMessage._TYPE,
-		    new ServiceResponseBuilder<ControllerStatusRequest, ControllerStatusResponse>() {
+	final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE, ControllerStatusMessage._TYPE,
+		    new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
 				@Override
-				public void build(ControllerStatusRequest request,ControllerStatusResponse response) {	
+				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
 					try {
-						response.setMegastatus(motorControlHost.reportAllControllerStatus());
+						response.setData(motorControlHost.reportAllControllerStatus());
 					} catch (IOException e) {
 						System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA REPORT SERVICE");
 						e.printStackTrace();
@@ -216,17 +216,17 @@ public void onStart(final ConnectedNode connectedNode) {
 		e1.printStackTrace();
 	}
 
-	final CountDownServiceServerListener<PWMControlRequest, PWMControlResponse> servicePWMServerListener =
+	final CountDownServiceServerListener<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServerListener =
 	        CountDownServiceServerListener.newDefault();
-	final ServiceServer<PWMControlRequest, PWMControlResponse> servicePWMServer = connectedNode.newServiceServer(PWM_SERVICE, PWMControlMessage._TYPE,
-	    new ServiceResponseBuilder<PWMControlRequest, PWMControlResponse>() {
+	final ServiceServer<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServer = connectedNode.newServiceServer(PWM_SERVICE, PWMControlMessage._TYPE,
+	    new ServiceResponseBuilder<PWMControlMessageRequest, PWMControlMessageResponse>() {
 			@Override
-			public void build(PWMControlRequest request, PWMControlResponse response) {	
+			public void build(PWMControlMessageRequest request, PWMControlMessageResponse response) {	
 				try {
 					switch(PWM_MODE) {
 						case "controller":
-							motorControlHost.setAbsolutePWMLevel(0, 1, request.getPwm().getData()[0], 
-									0, 2, request.getPwm().getData()[1]);
+							motorControlHost.setAbsolutePWMLevel(0, 1, request.getData().getData()[0], 
+									0, 2, request.getData().getData()[1]);
 							break;
 							// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
 							// Activates a direct PWM timer without going through one of the various controller
@@ -236,14 +236,14 @@ public void onStart(final ConnectedNode connectedNode) {
 							System.out.println("PWM direct");
 							if( auxPWM == null )
 								auxPWM = new AuxPWMControl();
-							auxPWM.activateAux(request.getPwm().getData());	
+							auxPWM.activateAux(request.getData().getData());	
 							break;
 					}
-					response.setStatus("success");
+					response.setData("success");
 				} catch (IOException e) {
 					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE");
 					e.printStackTrace();
-					response.setStatus("fail");
+					response.setData("fail");
 				}
 			}
 		});	
@@ -255,22 +255,22 @@ public void onStart(final ConnectedNode connectedNode) {
 		e1.printStackTrace();
 	}
 	
-	final CountDownServiceServerListener<GPIOControlRequest, GPIOControlResponse> serviceGPIOServerListener =
+	final CountDownServiceServerListener<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServerListener =
 	        CountDownServiceServerListener.newDefault();
-	final ServiceServer<GPIOControlRequest, GPIOControlResponse> serviceGPIOServer = connectedNode.newServiceServer(GPIO_SERVICE, GPIOControlMessage._TYPE,
-	    new ServiceResponseBuilder<GPIOControlRequest, GPIOControlResponse>() {
+	final ServiceServer<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServer = connectedNode.newServiceServer(GPIO_SERVICE, GPIOControlMessage._TYPE,
+	    new ServiceResponseBuilder<GPIOControlMessageRequest, GPIOControlMessageResponse>() {
 			@Override
-			public void build(GPIOControlRequest request, GPIOControlResponse response) {	
+			public void build(GPIOControlMessageRequest request, GPIOControlMessageResponse response) {	
 				try {
 					System.out.println("GPIO direct");
 					if( auxGPIO == null )
 						auxGPIO = new AuxGPIOControl();
-					auxGPIO.activateAux(request.getGpio().getData());
-					response.setStatus("success");
+					auxGPIO.activateAux(request.getData().getData());
+					response.setData("success");
 				} catch (IOException e) {
 					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
 					e.printStackTrace();
-					response.setStatus("fail");
+					response.setData("fail");
 				}
 			}
 		});	

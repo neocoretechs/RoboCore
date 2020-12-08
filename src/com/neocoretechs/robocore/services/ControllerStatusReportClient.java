@@ -107,7 +107,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			pubdataRPT.addFirst(rptName);
 			break;
 	}
-	ServiceClient<ControllerStatusRequest, ControllerStatusResponse> rptsvc = null;
+	ServiceClient<ControllerStatusMessageRequest, ControllerStatusMessageResponse> rptsvc = null;
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	try {
 		rptsvc = connectedNode.newServiceClient("cmd_report", ControllerStatusMessage._TYPE);
@@ -121,18 +121,18 @@ public void onStart(final ConnectedNode connectedNode) {
 	switch(command) {
 	case "report":
 		if( !pubdataRPT.isEmpty() ) {
-			ControllerStatusRequest request = rptsvc.newMessage();
+			ControllerStatusMessageRequest request = rptsvc.newMessage();
 			try {
-				request.setMegastatus(pubdataRPT.takeFirst());
+				request.setData(pubdataRPT.takeFirst());
 			} catch (InterruptedException e1) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
-			if( DEBUG) System.out.println("Sending report "+request.getMegastatus()+", results should appear on StatusAlertSubs console..");
-			rptsvc.call(request, new ServiceResponseListener<ControllerStatusResponse>() {
+			if( DEBUG) System.out.println("Sending report "+request.getData()+", results should appear on StatusAlertSubs console..");
+			rptsvc.call(request, new ServiceResponseListener<ControllerStatusMessageResponse>() {
 			      @Override
-			      public void onSuccess(ControllerStatusResponse response) {
-			        System.out.println(response.getMegastatus());
+			      public void onSuccess(ControllerStatusMessageResponse response) {
+			        System.out.println(response.getData());
 			      }
 			      @Override
 			      public void onFailure(RemoteException e) {

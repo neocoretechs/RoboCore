@@ -122,7 +122,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	}
 	
 	try {
-		ServiceClient<GPIOControlRequest, GPIOControlResponse> gpiosvc = null;
+		ServiceClient<GPIOControlMessageRequest, GPIOControlMessageResponse> gpiosvc = null;
 		//final RosoutLogger log = (Log) connectedNode.getLog();
 		gpiosvc = connectedNode.newServiceClient("cmd_gpio", GPIOControlMessage._TYPE);
 
@@ -142,17 +142,17 @@ public void onStart(final ConnectedNode connectedNode) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
-			GPIOControlRequest request = gpiosvc.newMessage();
-			request.setGpio(RosArrayUtilities.setupUInt32Array(connectedNode, gpioOut, "2DInt"));
-			if( DEBUG) System.out.println("Set pwm:"+request.getGpio().getData()[0]+","+request.getGpio().getData()[1]);
-			gpiosvc.call(request, new ServiceResponseListener<GPIOControlResponse>() {
+			GPIOControlMessageRequest request = gpiosvc.newMessage();
+			request.setData(RosArrayUtilities.setupUInt32Array(connectedNode, gpioOut, "2DInt"));
+			if( DEBUG) System.out.println("Set pwm:"+request.getData().getData()[0]+","+request.getData().getData()[1]);
+			gpiosvc.call(request, new ServiceResponseListener<GPIOControlMessageResponse>() {
 				@Override
 				public void onFailure(RemoteException e) {
 					throw new RuntimeException(e);		
 				}
 				@Override
-				public void onSuccess(GPIOControlResponse arg0) {
-					System.out.println(arg0.getStatus());	
+				public void onSuccess(GPIOControlMessageResponse arg0) {
+					System.out.println(arg0.getData());	
 				}
 			});
 		}
