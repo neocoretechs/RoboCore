@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.machine.bridge;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 
 /**
  * Retrieve the real time digital pin state from attached microcontroller and place in 2 element array
@@ -25,13 +26,18 @@ public class DigitalPinListener implements Runnable {
 	private static MachineBridge bridge;
 	private static volatile DigitalPinListener instance = null;
 	public static DigitalPinListener getInstance() { 
-		if(instance == null)
-			instance = new DigitalPinListener();
+		if(instance == null) {
+			synchronized(DigitalPinListener.class) {
+				if(instance == null) {
+					instance = new DigitalPinListener();
+				}
+			}
+		}
 		return instance;		
 	}
 	private DigitalPinListener() {
-		ThreadPoolManager.getInstance().spin(this, "digitalpin");
-		bridge = MachineBridge.getInstance("digitalpin");
+		ThreadPoolManager.getInstance().spin(this, topicNames.DIGITALPIN.val());
+		bridge = MachineBridge.getInstance(topicNames.DIGITALPIN.val());
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()

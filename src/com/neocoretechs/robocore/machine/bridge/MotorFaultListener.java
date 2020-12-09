@@ -4,6 +4,7 @@
 package com.neocoretechs.robocore.machine.bridge;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
  * Motor control status returned as a string describing condition.
  * This class functions with a series of singletons for each type of message coming form the real time
@@ -19,13 +20,18 @@ public class MotorFaultListener implements Runnable {
 	private static MachineBridge bridge;
 	private static volatile MotorFaultListener instance = null;
 	public static MotorFaultListener getInstance() {
-		if( instance == null )
-			instance = new MotorFaultListener();
+		if( instance == null ) {
+			synchronized(MotorFaultListener.class) { 
+				if(instance == null) {
+					instance = new MotorFaultListener();
+				}
+			}
+		}
 		return instance;
 	}
 	public MotorFaultListener() {
-		ThreadPoolManager.getInstance().spin(this, "motorfault");
-		bridge = MachineBridge.getInstance("motorfault");
+		ThreadPoolManager.getInstance().spin(this, AsynchDemuxer.topicNames.MOTORFAULT.val());
+		bridge = MachineBridge.getInstance(AsynchDemuxer.topicNames.MOTORFAULT.val());
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()

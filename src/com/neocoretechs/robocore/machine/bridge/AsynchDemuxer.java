@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
@@ -39,37 +40,59 @@ public class AsynchDemuxer implements Runnable {
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private volatile static AsynchDemuxer instance = null;
+
+	public static enum topicNames {
+		DATASET("dataset"),
+		BATTERY("battery"),
+		MOTORFAULT("motorfault"),
+		ULTRASONIC("ultrasonic"),
+		DIGITALPIN("digitalpin"),
+		ANALOGPIN("analogpin"),
+		ASSIGNEDPINS("assignedpins"),
+		MOTORCONTROLSETTING("motorcontrolsetting"),
+		PWMCONTROLSETTING("pwmcontrolsetting"),
+		CONROLLERSTATUS("controllerstatus");
+		String name;
+		topicNames(String name) { this.name = name;}
+		public String val() { return name; }
+	};
+	
 	private AsynchDemuxer() {}
+	/**
+	 * Double check lock singleton
+	 * @return
+	 */
 	public static AsynchDemuxer getInstance() {
-		if( instance == null ) {
-			instance = new AsynchDemuxer();
-			instance.init();
-			ThreadPoolManager.getInstance().spin(instance, "SYSTEM");
-			while(!instance.isRunning)
-				try {
-					Thread .sleep(1);
-				} catch (InterruptedException e) {}
+		if(instance == null ) {
+			synchronized(AsynchDemuxer.class) {	
+				if( instance == null ) {
+					instance = new AsynchDemuxer();
+					instance.init();
+					ThreadPoolManager.getInstance().spin(instance, "SYSTEM");
+					while(!instance.isRunning)
+						try {
+							Thread.sleep(1);
+						} catch (InterruptedException e) {}
+				}
+			}
 		}
 		return instance;
 	}
-	private Map<String, TopicList> topics = new HashMap<String, TopicList>();
-	private static String[] topicNames = new String[]{"dataset","battery","motorfault","ultrasonic",
-													"digitalpin","analogpin","assignedpins",
-													"motorcontrolsetting","pwmcontrolsetting","controllerstatus"};
+	private Map<String, TopicList> topics = new ConcurrentHashMap<String, TopicList>();
+
 	
-	public static String[] getTopicNames() { return topicNames; }
-	
-	
-	private void init() {
-		ThreadPoolManager.init(topicNames);
-		
-        MachineBridge.getInstance("dataset").init(16);
-		topics.put("dataset", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("dataset");
+	private synchronized void init() {
+		topicNames[] xtopics = topicNames.values();
+		String[] stopics = new String[xtopics.length];
+		for(int i = 0; i < xtopics.length; i++) stopics[i] = xtopics[i].val();
+		ThreadPoolManager.init(stopics);
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DATASET.val());
+        MachineBridge.getInstance(topicNames.DATASET.val()).init(16);
+		topics.put(topicNames.DATASET.val(), new TopicList() {
 			@Override
-			public void retrieveData() {  
-		        String readLine;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</dataset>") ) {
+			public void retrieveData(String readLine) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.DATASET.val()+">") ) {
 					if( readLine == null ||  readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
@@ -78,18 +101,21 @@ public class AsynchDemuxer implements Runnable {
 					double data =  getReadingValueDouble(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
-					mb.add(mr);
+					MachineBridge.getInstance(topicNames.DATASET.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.DATASET.val());
 			}		
 		});
-
-        MachineBridge.getInstance("battery").init(16);
-		topics.put("battery",new TopicList() {
-	        MachineBridge mb = MachineBridge.getInstance("battery");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BATTERY.val());
+        MachineBridge.getInstance(topicNames.BATTERY.val()).init(16);
+		topics.put(topicNames.BATTERY.val(),new TopicList() {
 			@Override
-			public void retrieveData() {
-				String readLine;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</battery>") ) {
+			public void retrieveData(String readLine) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.BATTERY.val()+">") ) {
 					if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 							return;
@@ -98,21 +124,26 @@ public class AsynchDemuxer implements Runnable {
 					int data =  getReadingValueInt(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
-					mb.add(mr);
+					MachineBridge.getInstance(topicNames.BATTERY.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.BATTERY.val());
 			}
 		});
 		// start the listener thread for this topic
 		BatteryListener.getInstance();
-		
-		MachineBridge.getInstance("motorfault").init(16);
-		topics.put("motorfault", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("motorfault");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init "+topicNames.BATTERY.val()+" listener engaged");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORFAULT.val());
+		MachineBridge.getInstance(topicNames.MOTORFAULT.val()).init(16);
+		topics.put(topicNames.MOTORFAULT.val(), new TopicList() {
 			@Override
-			public void retrieveData() {
-				String readLine;
+			public void retrieveData(String readLine) {		
 				//for(int i = 0; i < 8; i++) {
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</motorfault>") ) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.MOTORFAULT.val()+">") ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						//continue;
@@ -122,24 +153,28 @@ public class AsynchDemuxer implements Runnable {
 					String data =  getReadingValueString(readLine);
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
-					mb.add(mr);
+					MachineBridge.getInstance(topicNames.MOTORFAULT.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.MOTORFAULT.val());
 			}
 		});
 		MotorFaultListener.getInstance();
-		
-		MachineBridge.getInstance("ultrasonic").init(16);
-		topics.put("ultrasonic", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("ultrasonic");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init "+topicNames.MOTORFAULT.val()+" engaged");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONIC.val());
+		MachineBridge.getInstance(topicNames.ULTRASONIC.val()).init(16);
+		topics.put(topicNames.ULTRASONIC.val(), new TopicList() {
 			@Override
-			public void retrieveData() {	
-				//mb.init();
-				String readLine;
+			public void retrieveData(String readLine) {	
 				int pin = 0;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</ultrasonic>") ) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.ULTRASONIC.val()+">") ) {
 				// get element 1 <pin>
 				if( readLine == null || readLine.length() == 0 ) {
-					if(DEBUG) System.out.println("Empty line returned from readLine of ultrasonic pin");
+					if(DEBUG) System.out.println("Empty line returned from readLine of "+topicNames.ULTRASONIC.val());
 					continue;
 				}
 				int reading = getReadingNumber(readLine);
@@ -148,7 +183,7 @@ public class AsynchDemuxer implements Runnable {
 				// get element 2 <range>
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
-						if(DEBUG) System.out.println("Empty line returned from readLine of ultrasonic range");
+						if(DEBUG) System.out.println("Empty line returned from readLine of "+topicNames.ULTRASONIC.val());
 						continue;
 				}
 				reading = getReadingNumber(readLine);
@@ -156,34 +191,38 @@ public class AsynchDemuxer implements Runnable {
 				//if( DEBUG ) 
 				//		System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
-				mb.add(mr);
+				MachineBridge.getInstance(topicNames.ULTRASONIC.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.ULTRASONIC.val());
 			}
 		});
 		// start an ultrasonic listener
 		UltrasonicListener.getInstance();
-		
-		MachineBridge.getInstance("analogpin").init(16);
-		topics.put("analogpin", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("analogpin");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init "+topicNames.ULTRASONIC.val()+" engaged");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
+		MachineBridge.getInstance(topicNames.ANALOGPIN.val()).init(16);
+		topics.put(topicNames.ANALOGPIN.val(), new TopicList() {
 			@Override
-			public void retrieveData() {
-				//mb.init();
-				String readLine;
+			public void retrieveData(String readLine) {
 				int pin = 0;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</analogpin>") ) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.ANALOGPIN.val()+">") ) {
 				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return analogpin retrieveData from empty line");
+					System.out.println("Premature return retrieveData "+topicNames.ANALOGPIN.val());
 					return;
 				}
 				int reading = getReadingNumber(readLine);
 				int data =  getReadingValueInt(readLine);
 				if( DEBUG ) 
-						System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
+						System.out.println(topicNames.ANALOGPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				pin = data;
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return analogpin retrieveData from empty line");
+					System.out.println("Premature return retrieveData from empty line "+topicNames.ANALOGPIN.val());
 					return;
 				}
 				reading = getReadingNumber(readLine);
@@ -191,127 +230,152 @@ public class AsynchDemuxer implements Runnable {
 				if( DEBUG ) 
 					System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				MachineReading mr = new MachineReading(1, pin, reading, data);
-				mb.add(mr);
+				MachineBridge.getInstance(topicNames.ANALOGPIN.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.ANALOGPIN.val());
 			}
 		});
 		// start an analog pin listener
 		AnalogPinListener.getInstance();
-		
-		MachineBridge.getInstance("digitalpin").init(32);
-		topics.put("digitalpin", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("digitalpin");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init "+topicNames.ANALOGPIN.val()+" engaged");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPIN.val());
+		MachineBridge.getInstance(topicNames.DIGITALPIN.val()).init(32);
+		topics.put(topicNames.DIGITALPIN.val(), new TopicList() {
 			@Override
-			public void retrieveData() {
-				String readLine;
+			public void retrieveData(String readLine) {
 				int pin = 0;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</digitalpin>") ) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.DIGITALPIN.val()+">") ) {
 				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return digitalpin retrieveData pin # from empty line");
+					System.out.println("Premature return retrieveData pin # from empty line "+topicNames.DIGITALPIN.val());
 					return;
 				}
 				int reading = getReadingNumber(readLine);
 				int data =  getReadingValueInt(readLine);
 				if( DEBUG ) 
-						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
+						System.out.println(topicNames.DIGITALPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				pin = data;
 				readLine = ByteSerialDataPort.getInstance().readLine();
 				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return digitalpin retrieveData value from empty line");
+					System.out.println("Premature return retrieveData value from empty line "+topicNames.DIGITALPIN.val());
 					return;
 				}
 				reading = getReadingNumber(readLine);
 				data =  getReadingValueInt(readLine);
 				if( DEBUG ) 
-						System.out.println("digital pin retrieveData:"+readLine+"| converted:"+reading+" "+data);	
+						System.out.println(topicNames.DIGITALPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);	
 				MachineReading mr = new MachineReading(1, pin, reading, data);
-				mb.add(mr);	
+				MachineBridge.getInstance(topicNames.DIGITALPIN.val()).add(mr);	
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.DIGITALPIN.val());
 			}
 		});
 		// start a digital pin listener
 		DigitalPinListener.getInstance();
-		
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init engaged "+topicNames.DIGITALPIN.val());
 		//
 		// reporting functions
 		//
-		MachineBridge.getInstance("assignedpins").init(16);
-		topics.put("assignedpins", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("assignedpins");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ASSIGNEDPINS.val());
+		MachineBridge.getInstance(topicNames.ASSIGNEDPINS.val()).init(16);
+		topics.put(topicNames.ASSIGNEDPINS.val(), new TopicList() {
 			@Override
-			public void retrieveData() {  
-			    String readLine;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</assignedpins>") ) {
+			public void retrieveData(String readLine) {  
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.ASSIGNEDPINS.val()+">") ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
 					}
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(readLine);
-					mb.add(mr);
+					MachineBridge.getInstance(topicNames.ASSIGNEDPINS.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.ASSIGNEDPINS.val());
 			}		
 		});
-			
-		MachineBridge.getInstance("motorcontrolsetting").init(128);
-		topics.put("motorcontrolsetting", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("motorcontrolsetting");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORCONTROLSETTING.val());	
+		MachineBridge.getInstance(topicNames.MOTORCONTROLSETTING.val()).init(128);
+		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList() {
 			@Override
-			public void retrieveData() {  
-				String readLine;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</motorcontrolsetting>") ) {
+			public void retrieveData(String readLine) {  
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.MOTORCONTROLSETTING.val()+">") ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
 					}
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(readLine);
-					mb.add(mr);
+					MachineBridge.getInstance(topicNames.MOTORCONTROLSETTING.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.MOTORCONTROLSETTING.val());
 			}		
 		});
-				
-		MachineBridge.getInstance("pwmcontrolsetting").init(128);
-		topics.put("pwmcontrolsetting", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("pwmcontrolsetting");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMCONTROLSETTING.val());	
+		MachineBridge.getInstance(topicNames.PWMCONTROLSETTING.val()).init(128);
+		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList() {
 			@Override
-			public void retrieveData() {  
-				String readLine;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</pwmcontrolsetting>") ) {
+			public void retrieveData(String readLine) {  
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.PWMCONTROLSETTING.val()+">") ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						return;
 					}
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(readLine);
-					mb.add(mr);
+					MachineBridge.getInstance(topicNames.PWMCONTROLSETTING.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.PWMCONTROLSETTING.val());
 			}		
 		});
-					
-		MachineBridge.getInstance("controllerstatus").init(128);
-		topics.put("controllerstatus", new TopicList() {
-			MachineBridge mb = MachineBridge.getInstance("controllerstatus");
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONROLLERSTATUS);			
+		MachineBridge.getInstance(topicNames.CONROLLERSTATUS.val()).init(128);
+		topics.put(topicNames.CONROLLERSTATUS.val(), new TopicList() {
 			@Override
-			public void retrieveData() {  
-				String readLine;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</controllerstatus>") ) {
+			public void retrieveData(String readLine) {  
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.CONROLLERSTATUS+">") ) {
 						if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 							return;
 						}
 						//if( Props.DEBUG ) System.out.println(readLine);
 						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
+						MachineBridge.getInstance(topicNames.CONROLLERSTATUS.val()).add(mr);
 				}
+			}
+			@Override
+			public MachineBridge getMachineBridge() {
+				return MachineBridge.getInstance(topicNames.CONROLLERSTATUS.val());
 			}		
 		});
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init END OF INITIALIZATION of Marlinspike topic listeners");
 	}
 	
 	//
 	// Methods to extract data from the line acquired from the serial port read
 	//
-    public double getReadingValueDouble(String readLine) {
+    public synchronized double getReadingValueDouble(String readLine) {
     	if( readLine != null ) {
     		int sindex = readLine.indexOf(" ");
     		if( sindex != -1 && sindex+1 < readLine.length() ) {
@@ -326,7 +390,7 @@ public class AsynchDemuxer implements Runnable {
     	System.out.println("Can't get valid Double value from:"+readLine);
     	return 0;
 	}
-	public int getReadingValueInt(String readLine) {
+	public synchronized int getReadingValueInt(String readLine) {
       	if( readLine != null ) {
       		int sindex = readLine.indexOf(" ");
       		if( sindex != -1 && sindex+1 < readLine.length() ) {
@@ -342,7 +406,7 @@ public class AsynchDemuxer implements Runnable {
       	return 0;
 	}
       
-    public String getReadingValueString(String readLine) {
+    public synchronized String getReadingValueString(String readLine) {
       	if( readLine != null ) {
       		int sindex = readLine.indexOf(" ");
       		if( sindex != -1 && sindex+1 < readLine.length() ) {
@@ -358,7 +422,7 @@ public class AsynchDemuxer implements Runnable {
      * @param readLine
      * @return The integer value of the field
      */
-    public int getReadingNumber(String readLine) {
+    public synchronized int getReadingNumber(String readLine) {
 	       	if( readLine != null ) {
 	       		int sindex = readLine.indexOf(" ");
       			if( sindex != -1 && sindex+1 < readLine.length() ) {
@@ -387,35 +451,35 @@ public class AsynchDemuxer implements Runnable {
      * M706
      * @return A String payload of all assigned pins (if any), comma separated.
      */
-    public String getAssignedPins() {
+    public synchronized  String getAssignedPins() {
     	return MachineBridge.getInstance("assignedpins").toString();
     }
     /**
      * M705
      * @return A String payload of motor controller configurations (if any), each one a multiline report.
      */
-    public String getMotorControlSetting() {
+    public synchronized String getMotorControlSetting() {
     	return MachineBridge.getInstance("motorcontrolsetting").toString();
     }
     /**
      * M798 Z<slot> X
      * @return A String payload of PWM controller status (if any), each one a multiline report.
      */
-    public String getPWMControlSetting() {
+    public synchronized String getPWMControlSetting() {
     	return MachineBridge.getInstance("pwncontrolsetting").toString();
     }
     /**
      * M798 Z<slot>
      * @return A String payload of the status of each of the assigned motor controllers.
      */
-    public String getControllerStatus() {
+    public synchronized String getControllerStatus() {
     	return MachineBridge.getInstance("controllerstatus").toString();
     }
 	/**
 	 * Configure the robot with a series of G-code directives at startup in file startup.gcode
 	 * @throws IOException
 	 */
-	public void config() throws IOException {
+	public synchronized void config() throws IOException {
 		// now read the startup G-code directives to initiate
 		try {
 			ByteSerialDataPort bsdp = ByteSerialDataPort.getInstance();
@@ -437,25 +501,27 @@ public class AsynchDemuxer implements Runnable {
 	public void run() {
 		isRunning = true;
 		while(shouldRun) {
-			String op, fop;
+			String fop, line;
+			char op;
 			try {
-				if((op=ByteSerialDataPort.getInstance().readLine()).charAt(0) == '<' ) {
-					int endDelim = op.indexOf('>');
+				line = ByteSerialDataPort.getInstance().readLine();
+				if((op=line.charAt(0)) == '<' ) {
+					int endDelim = line.indexOf('>');
 					if( endDelim == -1 ) {
 						System.out.println("Cannot demux received raw directive:"+op);
 						continue;
 					}
-					fop = op.substring(1, endDelim);
+					fop = line.substring(1, endDelim);
 					//if(DEBUG)
 					//	System.out.println("op:"+op);
 					TopicList tl = topics.get(fop);
 					if( tl != null )
-						tl.retrieveData();
+						tl.retrieveData(line);
 					else
-						System.out.println("Cannot retrieve topic "+fop+" from raw directive "+op);
+						System.out.println("Cannot retrieve topic "+fop+" from raw directive "+line);
 					
 				} else {
-						System.out.println("Expecting directive but instead found:"+op);
+						System.out.println("Expecting directive but instead found:"+line);
 						continue;
 				}
 	
@@ -469,7 +535,8 @@ public class AsynchDemuxer implements Runnable {
 	}
 	
 	private static interface TopicList {
-		public void retrieveData();
+		public void retrieveData(String line);
+		public MachineBridge getMachineBridge();
 	}
 	
 	public static void main(String[] args) throws Exception {

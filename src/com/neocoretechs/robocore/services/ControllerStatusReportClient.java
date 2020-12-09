@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.exception.RemoteException;
@@ -117,7 +118,7 @@ public void onStart(final ConnectedNode connectedNode) {
       //serviceClient = connectedNode.newServiceClient(SERVICE_NAME, test_ros.AddTwoInts._TYPE);
 	// tell the waiting constructors that we have registered service clients
 	awaitStart.countDown();
-	
+	awaitStart = new CountDownLatch(1);
 	switch(command) {
 	case "report":
 		if( !pubdataRPT.isEmpty() ) {
@@ -132,10 +133,13 @@ public void onStart(final ConnectedNode connectedNode) {
 			rptsvc.call(request, new ServiceResponseListener<ControllerStatusMessageResponse>() {
 			      @Override
 			      public void onSuccess(ControllerStatusMessageResponse response) {
+			    	  System.out.println("Successful Response:"+response);
 			        System.out.println(response.getData());
+			        awaitStart.countDown();
 			      }
 			      @Override
 			      public void onFailure(RemoteException e) {
+			    	  System.out.println("FAILURE Response:"+e);
 			        throw new RuntimeException(e);
 			      }
 			    });
@@ -143,6 +147,11 @@ public void onStart(final ConnectedNode connectedNode) {
 		break;
 		default:
 			break;
+	}
+	try {
+		awaitStart.await(10, TimeUnit.SECONDS);
+	} catch (InterruptedException e) {
+		e.printStackTrace();
 	}
 } 
 

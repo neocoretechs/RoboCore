@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.machine.bridge;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 
 /**
  * This class functions with a series of singletons for each type of message coming form the real time
@@ -17,14 +18,17 @@ public class UltrasonicListener implements Runnable {
 	private MachineBridge bridge;
 	private static volatile UltrasonicListener instance = null;
 	public static UltrasonicListener getInstance() { 
-		if(instance == null)
-			instance = new UltrasonicListener();
+		if(instance == null) {
+			synchronized(UltrasonicListener.class) { 
+				instance = new UltrasonicListener();
+			}
+		}
 		return instance;		
 	}
 
 	private UltrasonicListener() {
-		ThreadPoolManager.getInstance().spin(this, "ultrasonic");
-		bridge = MachineBridge.getInstance("ultrasonic");
+		ThreadPoolManager.getInstance().spin(this, topicNames.ULTRASONIC.val());
+		bridge = MachineBridge.getInstance(topicNames.ULTRASONIC.val());
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()

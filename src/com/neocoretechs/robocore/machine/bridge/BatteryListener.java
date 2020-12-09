@@ -16,13 +16,17 @@ public class BatteryListener implements Runnable {
 	private static MachineBridge bridge;
 	public static BatteryListener getInstance() {
 		if( instance == null ) {
-			instance = new BatteryListener();
+			synchronized(BatteryListener.class) {
+				if(instance == null) {
+					instance = new BatteryListener();
+				}
+			}
 		}
 		return instance;
 	}
 	private BatteryListener() {
-		ThreadPoolManager.getInstance().spin(this, "battery");
-		bridge = MachineBridge.getInstance("battery");
+		ThreadPoolManager.getInstance().spin(this, AsynchDemuxer.topicNames.BATTERY.val());
+		bridge = MachineBridge.getInstance(AsynchDemuxer.topicNames.BATTERY.val());
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()

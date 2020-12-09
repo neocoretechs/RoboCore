@@ -46,23 +46,21 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    private static int writeBufferTail = 0;
 	    
 	    private static volatile ByteSerialDataPort instance = null;
-	    private static Object mutex = new Object();
 	    private boolean portOwned = false;
 	    
 	    public static ByteSerialDataPort getInstance() {
-	    	synchronized(mutex) {
 	    	if( instance == null ) {
-	    		try {
-					instance = new ByteSerialDataPort(portName, baud, datab, stopb, parityb);
-													 
-				} catch (IOException e) {
-					System.out.println("Could not initialize ByteSerialDataPort:"+e);
-					e.printStackTrace();
-					throw new RuntimeException(e);
-				}
+	    		synchronized(ByteSerialDataPort.class) { 
+	    			try {
+	    				instance = new ByteSerialDataPort(portName, baud, datab, stopb, parityb);											 
+	    			} catch (IOException e) {
+	    				System.out.println("Could not initialize ByteSerialDataPort:"+e);
+	    				e.printStackTrace();
+	    				throw new RuntimeException(e);
+	    			}
+	    		}
 	    	}
 	    	return instance;
-	    	}
 	    }
 	    
 	    private ByteSerialDataPort(String tportName, int tbaud, int tdatab, int tstopb, int tparityb) throws IOException {
@@ -77,7 +75,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	    }
 	    
-	    public void connect(boolean writeable) throws IOException {
+	    public synchronized void connect(boolean writeable) throws IOException {
 	    	portOwned = false;
 	    	//if( Props.DEBUG ) System.out.println("Trying connect to serial port "+portName);
 	        try {
@@ -145,16 +143,16 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        //if( Props.DEBUG ) System.out.println("Connected to "+portName);
 	    }
 	    
-	    public void close() {
+	    public synchronized void close() {
 	    	if( serialPort != null)
 	    		serialPort.close();
 	    }
 	    
-	    public int bytesToRead() throws IOException {
+	    public synchronized int bytesToRead() throws IOException {
 	    	return inStream.available();
 	    }
 	 
-	    public void write(int c) throws IOException {
+	    public synchronized void write(int c) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("write "+c);
 	    	synchronized(writeMx) {
 	    		checkWriteBuffer();
@@ -165,7 +163,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	}
 	    }
 	    
-	    public void writeLine(String bytesToWrite) throws IOException {
+	    public synchronized void writeLine(String bytesToWrite) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("writeLine "+bytesToWrite);
 	    	synchronized(writeMx) {
 	    		byte[] bytes = bytesToWrite.getBytes();
@@ -186,13 +184,13 @@ public class ByteSerialDataPort implements DataPortInterface {
 
 	    }
 	    
-	    private void checkWriteBuffer() {
+	    private synchronized void checkWriteBuffer() {
 	    	if( writeBufferTail >= writeBuffer.length) {	
     				writeBufferTail = 0;
 			}
 	    }
 	    
-	    public int read() throws IOException {
+	    public synchronized int read() throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("read");
 	    	synchronized(readMx) {
 	    		try {
@@ -213,7 +211,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	     * @return
 	     * @throws IOException
 	     */
-	    private int read(long timeout) throws IOException {
+	    private synchronized int read(long timeout) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("read");
 	    	synchronized(readMx) {
 	    		try {
@@ -231,11 +229,12 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		return readBuffer[readBufferHead++];
 	    	}
 	    }
+	    	
 	    /**
 	     * Mutex wait on inputLine
 	     * @return
 	     */
-	    public String readLine() {
+	    public synchronized String readLine() {
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
@@ -261,7 +260,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	     * @throws IOException 
 	     * @Exception MachineNotReadyException on timeout
 	     */
-	    public String readLine(long timeout) throws IOException {
+	    public synchronized String readLine(long timeout) throws IOException {
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
@@ -281,7 +280,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    /**
 	     * pacman the jizzle in the inputstream
 	     */
-	    public void clear() {
+	    public synchronized void clear() {
 	    	synchronized(readMx) {
 	    		readBufferHead = readBufferTail = 0;
 	    		try {
@@ -301,7 +300,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    public int getDataBits() { return datab; }
 	    public int getStopBits() { return stopb; }
 	    public int getParity() { return parityb; }
-	    public int getHandshake() { return (serialPort == null ? -1 : serialPort.getFlowControlMode()); }
+	    public synchronized int getHandshake() { return (serialPort == null ? -1 : serialPort.getFlowControlMode()); }
 	    public boolean isEOT() { return EOT; }
 	    
 	    /**
@@ -312,7 +311,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	     * @param baud 
 	     * @throws UnsupportedCommOperationException 
 	     */
-	    private void setSerialPortParameters(int baud, int datab, int stopb, int parityb) throws IOException, UnsupportedCommOperationException {
+	    private synchronized void setSerialPortParameters(int baud, int datab, int stopb, int parityb) throws IOException, UnsupportedCommOperationException {
 	    	//if( Props.DEBUG ) System.out.println("Setting serial port "+baud+" "+datab+" "+stopb+" "+parityb);
 
 	        // Set serial port
@@ -339,14 +338,13 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        //SerialPort.WriteTimeout = 5500;
 	    }
 	    
-	    public static Enumeration getPortIdentifiers() {
+	    public synchronized static Enumeration getPortIdentifiers() {
 	    	return CommPortIdentifier.getPortIdentifiers();
 	    }
 	    /**
 	     * Data about machine and port settings
 	     */
-	    public String stringSettings()
-	    {
+	    public synchronized String stringSettings() {
 		    String msg = "ByteSerialDataPort\n";
 		    msg = msg + "Port Name = " + getPortName() + "\n";
 		    msg = msg + "Port BaudRate = " + getBaudRate() + "\n";

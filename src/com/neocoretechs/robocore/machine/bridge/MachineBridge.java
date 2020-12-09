@@ -36,18 +36,16 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
     	CircularBlockingDeque<MachineReading> machineReadings = new CircularBlockingDeque<MachineReading>(256);
    
 		private String group;
-    	private static volatile MachineBridge[] instance = null;
-    	public static MachineBridge getInstance(String group) { 
-    		if( instance == null ) {
-    			instance = new MachineBridge[AsynchDemuxer.getTopicNames().length];
-    			for(int i = 0; i < AsynchDemuxer.getTopicNames().length; i++) {
-    				instance[i] = new MachineBridge(AsynchDemuxer.getTopicNames()[i]);
+    	private static volatile MachineBridge instance = null;
+    	public static MachineBridge getInstance(String group) {
+    		if(instance == null) {
+    			synchronized(MachineBridge.class) { 
+    				if( instance == null ) {
+    					instance = new MachineBridge(group);
+    				}
     			}
     		}
-    		for(int i = 0; i < instance.length; i++)
-    			if( instance[i].getGroup().equals(group) )
-    				return instance[i];
-    		return null;
+    		return instance;
     	}
  
         public MachineBridge() { }
@@ -92,7 +90,7 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 					}
 		}
 		
-		public static void fromXml(String xml, String group) {
+		public synchronized static void fromXml(String xml) {
 			//MachineBridge mb = MachineBridge.getInstance();
 			StringReader reader = new StringReader(xml);
 			JAXBContext context;
@@ -102,17 +100,13 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 		        //Schema schema = sf.newSchema(new File("MachineReading.xsd")); 
 				Unmarshaller m = context.createUnmarshaller();
 		        //m.setSchema(schema);
-				int i;
-				for(i = 0; i < AsynchDemuxer.getTopicNames().length; i++ )
-					if( AsynchDemuxer.getTopicNames()[i].equals(group) )
-						break;
-				instance[i] =  (MachineBridge)m.unmarshal(reader);
+				instance =  (MachineBridge)m.unmarshal(reader);
 			} catch (JAXBException /*| SAXException*/ e) {
 				e.printStackTrace();
 			}
 		}
 		
-		public static String toXml(String group) {
+		public synchronized static String toXml(String group) {
 			MachineBridge mb = MachineBridge.getInstance(group);
 			StringWriter writer = new StringWriter();
 			JAXBContext context;
@@ -130,12 +124,14 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 		
 		@Override
 		public String toString() {
-			MachineReading mr;
-			StringBuilder sb = new StringBuilder();
-			while((mr = waitForNewReading()) != null) {
-				sb.append(mr.toString());
+			synchronized(MachineBridge.class) { 
+				MachineReading mr;
+				StringBuilder sb = new StringBuilder();
+				while((mr = waitForNewReading()) != null) {
+					sb.append(mr.toString());
+				}
+				return sb.toString();
 			}
-			return sb.toString();
 		}
 
     }

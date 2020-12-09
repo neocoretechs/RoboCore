@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.machine.bridge;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 
 /**
  * Retrieve the real time analog pin data from attached microcontroller and place in 2 element array.
@@ -26,13 +27,17 @@ public class AnalogPinListener implements Runnable {
 	//private int xDeadMin = 670;
 	//private int xDeadMax = 700;
 	public static AnalogPinListener getInstance() { 
-		if(instance == null)
-			instance = new AnalogPinListener();
+		if(instance == null) {
+			synchronized(AnalogPinListener.class) {
+				if(instance == null)
+					instance = new AnalogPinListener();
+			}
+		}
 		return instance;		
 	}
 	private AnalogPinListener() {
-		ThreadPoolManager.getInstance().spin(this, "analogpin");
-		bridge = MachineBridge.getInstance("analogpin");
+		ThreadPoolManager.getInstance().spin(this, topicNames.ANALOGPIN.val());
+		bridge = MachineBridge.getInstance(topicNames.ANALOGPIN.val());
 	}
 	/* (non-Javadoc)
 	 * @see java.lang.Runnable#run()
