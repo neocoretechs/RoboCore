@@ -4,7 +4,8 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class SerialPortTest {
 	public static void main(String[] args) throws Exception {
-		String motorCommand = "M700";
+		String motorCommand = "M700";		
+		ByteSerialDataPort.getInstance().connect(true);
 		for(int i = 0 ; i < 5000; i++) {
 			ByteSerialDataPort.getInstance().writeLine(motorCommand);
 			System.out.println("wrote "+i);

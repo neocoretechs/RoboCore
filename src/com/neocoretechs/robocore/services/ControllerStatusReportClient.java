@@ -130,6 +130,12 @@ public void onStart(final ConnectedNode connectedNode) {
 				e1.printStackTrace();
 			}
 			if( DEBUG) System.out.println("Sending report "+request.getData()+", results should appear on StatusAlertSubs console..");
+			try {
+				rptsvc.connect(connectedNode.lookupServiceUri(GraphName.of("cmd_report")));
+			} catch (Exception e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 			rptsvc.call(request, new ServiceResponseListener<ControllerStatusMessageResponse>() {
 			      @Override
 			      public void onSuccess(ControllerStatusMessageResponse response) {

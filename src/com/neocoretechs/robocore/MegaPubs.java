@@ -41,6 +41,7 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
 import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
 import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
 import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
@@ -162,6 +163,14 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Publisher<sensor_msgs.Range> rangepub = 
 		connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
+	try {
+		AsynchDemuxer.getInstance().connect();
+	} catch (IOException e) {
+		System.out.println("Could not connect to Marlinspike.."+e);
+		e.printStackTrace();
+		return;
+	}
+	
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
@@ -172,15 +181,15 @@ public void onStart(final ConnectedNode connectedNode) {
 		try {
 			AsynchDemuxer.getInstance().config();
 		} catch (IOException e) {
-			System.out.println("Could not start process to read attached serial port.."+e);
+			System.out.println("Could not issue configuration commands to Marlinspike.."+e);
 			e.printStackTrace();
 			return;
 		}
-	} else {
-		AsynchDemuxer.getInstance();	
 	}
 	if( remaps.containsKey("__pwm") )
 		PWM_MODE = remaps.get("__pwm");
+
+	AsynchDemuxer.getInstance().init();
 
 	motorControlHost = new MegaControl();
 	

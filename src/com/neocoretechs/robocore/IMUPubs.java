@@ -193,7 +193,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					lastSequenceNumber = sequenceNumber;
 					byte[] stat = imuPort.reportCalibrationStatus();
 					// If overall system status falls below 1, attempt an on-the-fly recalibration
-				    if( stat[0] <= 1 ) {
+				    if( stat == null || stat[0] <= 1 ) {
 				    	if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
 				    		startTime = time1; // start time is when we recalibrated last
 				    		imuPort.resetCalibration();

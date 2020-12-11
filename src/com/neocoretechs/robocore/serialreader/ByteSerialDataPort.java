@@ -69,7 +69,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	datab = tdatab;
 	    	stopb = tstopb;
 	    	parityb = tparityb;
-	    	connect(true);
+	    	//connect(true);
 	    	//clear();
 	    	if( DEBUG ) 
 	    		System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
@@ -264,15 +264,29 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
-				while( c != '\r' && c != '\n' ) {
+				while( c != '\r' ) {
 					c = read(timeout);
 					//if( DEBUG )
 					//	System.out.print("["+Character.toChars(c)[0]+"]");
-					if( c != -1 )
+					if( c != -1 ) {
+						// not an 'r' but we got an 'n' must have dropped the 'r'?
+						if( c == '\n')
+							return sb.toString();
 						sb.append((char)c);
+					}
+				}
+				// got an 'r', must get an 'n' anything else is bad 
+				while( c != '\n' ) {
+					c = read(timeout);
+					//if( DEBUG )
+					//	System.out.print("["+Character.toChars(c)[0]+"]");
+					// got an 'r' but no 'n', must have dropped the 'n'?
+					if( c != -1 ) {
+							break;
+					}
 				}
 			} catch (IOException e) {
-				System.out.println("IOException reading line:"+sb.toString());
+				System.out.println("IOException "+e+" reading line:"+sb.toString());
 				return null;
 			}
 	    	return sb.toString();

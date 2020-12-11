@@ -3,7 +3,7 @@ package com.neocoretechs.robocore.machine.bridge;
 
 import java.io.StringReader;
 import java.io.StringWriter;
-
+import java.util.Iterator;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -124,14 +124,13 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 		
 		@Override
 		public String toString() {
-			synchronized(MachineBridge.class) { 
-				MachineReading mr;
-				StringBuilder sb = new StringBuilder();
-				while((mr = waitForNewReading()) != null) {
-					sb.append(mr.toString());
-				}
-				return sb.toString();
+			StringBuilder sb = new StringBuilder();
+			Iterator<MachineReading> it = machineReadings.iterator();
+			while(it.hasNext()) {
+				sb.append(it.next());
+				sb.append("\r\n");
 			}
+			return sb.toString();
 		}
 
     }

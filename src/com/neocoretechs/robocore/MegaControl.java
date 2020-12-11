@@ -41,6 +41,9 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	public MegaControl() {}
 	
 	public synchronized void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException {
+		if(DEBUG) 
+			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed BEGIN writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
+					"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
 		String motorCommand1 = "G5 Z"+slot1+" C"+channel1+" P"+String.valueOf(leftWheelSpeed);
 		ByteSerialDataPort.getInstance().writeLine(motorCommand1);
 		try {
@@ -51,49 +54,36 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		try {
 			Thread.sleep(100);
 		} catch (InterruptedException e) {}
+		if(DEBUG) 
+			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed END writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
+					"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
 	}
 	
 	public synchronized String reportAllControllerStatus() throws IOException {
+		if(DEBUG)
+			System.out.println(this.getClass().getName()+".reportAllControllerStatus pins in use");
 		StringBuilder sb = new StringBuilder();
 		sb.append("All pins in use:\r\n");
-		String statCommand1 = "M706"; // report all pins in use
-		ByteSerialDataPort.getInstance().writeLine(statCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
 		// <assignedpins> header returned from MarlinSpike
 		sb.append(AsynchDemuxer.getInstance().getAssignedPins());
 		//
+		if(DEBUG)
+			System.out.println(this.getClass().getName()+".reportAllControllerStatus controllers in use");
 		sb.append("\r\nAll controllers in use:\r\n");
-		statCommand1 = "M705"; // report all controllers
-		ByteSerialDataPort.getInstance().writeLine(statCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
 		// <motorcontrolsetting> header returned from MarlinSpike
 		sb.append(AsynchDemuxer.getInstance().getMotorControlSetting());
 		//
-		for(int i = 0; i < 10; i++) {
-			sb.append("\r\nController in use in slot:"+i+"\r\n");
-			statCommand1 = "M798 Z"+i; // report all controllers
-			ByteSerialDataPort.getInstance().writeLine(statCommand1);
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {}
-			// <controllerstatus> header
-			sb.append(AsynchDemuxer.getInstance().getControllerStatus());
-			//
-			sb.append("\r\nPWM Controller in use in slot:"+i+"\r\n");
-			statCommand1 = "M798 Z"+i+" X"; // report all controllers
-			ByteSerialDataPort.getInstance().writeLine(statCommand1);
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {}
-			// <pwmcontrolsetting>
-			sb.append(AsynchDemuxer.getInstance().getPWMControlSetting()+"\r\n");
-		}
+		// <controllerstatus> header
+		sb.append(AsynchDemuxer.getInstance().getControllerStatus());
+		//
+		sb.append("\r\nPWM controllers in use:\r\n");
+		// <pwmcontrolsetting>
+		sb.append(AsynchDemuxer.getInstance().getPWMControlSetting()+"\r\n");
+		if(DEBUG)
+			System.out.println(this.getClass().getName()+".reportAllControllerStatus returning:\r\n"+sb.toString());
 		return sb.toString();
 	}
+	
 	public synchronized void setAbsolutePWMLevel(int slot, int channel, int pwmLevel) throws IOException {
 		String pwmCommand1 = "G5 Z"+slot+" C"+channel+" X"+pwmLevel;
 		ByteSerialDataPort.getInstance().writeLine(pwmCommand1);
