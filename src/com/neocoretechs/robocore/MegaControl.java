@@ -3,6 +3,9 @@ package com.neocoretechs.robocore;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
+import com.neocoretechs.robocore.machine.bridge.MachineReading;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
@@ -61,29 +64,131 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	
 	public synchronized String reportAllControllerStatus() throws IOException {
 		if(DEBUG)
-			System.out.println(this.getClass().getName()+".reportAllControllerStatus pins in use");
+			System.out.println(this.getClass().getName()+".reportAllControllerStatus System status");
 		StringBuilder sb = new StringBuilder();
+		sb.append("System status:\r\n");
+		// <a> header returned from MarlinSpike
+		sb.append(getSystemStatus());
+		if(DEBUG)
+			System.out.println(this.getClass().getName()+".reportAllControllerStatus pins in use");
+		//
 		sb.append("All pins in use:\r\n");
 		// <assignedpins> header returned from MarlinSpike
-		sb.append(AsynchDemuxer.getInstance().getAssignedPins());
+		sb.append(getAssignedPins());
 		//
 		if(DEBUG)
 			System.out.println(this.getClass().getName()+".reportAllControllerStatus controllers in use");
 		sb.append("\r\nAll controllers in use:\r\n");
 		// <motorcontrolsetting> header returned from MarlinSpike
-		sb.append(AsynchDemuxer.getInstance().getMotorControlSetting());
+		sb.append(getMotorControlSetting());
 		//
 		// <controllerstatus> header
-		sb.append(AsynchDemuxer.getInstance().getControllerStatus());
+		sb.append(getControllerStatus());
 		//
 		sb.append("\r\nPWM controllers in use:\r\n");
 		// <pwmcontrolsetting>
-		sb.append(AsynchDemuxer.getInstance().getPWMControlSetting()+"\r\n");
+		sb.append(getPWMControlSetting()+"\r\n");
 		if(DEBUG)
 			System.out.println(this.getClass().getName()+".reportAllControllerStatus returning:\r\n"+sb.toString());
 		return sb.toString();
 	}
 	
+	public String getReading(String group) {
+			MachineReading mr;
+			StringBuilder sb = new StringBuilder();
+			MachineBridge mb = AsynchDemuxer.getInstance().getMachineBridge(group);
+			while((mr = mb.waitForNewReading()) != null) {
+				sb.append(mr.toString());
+			}
+			return sb.toString();
+	}
+	   // 
+    // Report methods. The sequence is to issue the M-code to the MarlinSpike. The returned data will
+    // include the proper <headers> which are 'demuxxed' and the correct MachineReadings are created from
+    // the retrieved data and added to the queues in each MachineBridge instance for that topic
+    // as they are retrieved from the MarlinSpike.<br/>
+    // After issuing each M-code, call one of these methods to acquire the queue with the MachineReadings 
+    // and call toString on them to build the proper output buffer for each topic, then do whatever with the String
+    // payload.
+    //
+    /**
+     * M700
+     * @return A string payload of robot overall status
+     */
+    public synchronized String getSystemStatus() throws IOException {
+		String statCommand1 = "M700"; // report satus
+		ByteSerialDataPort.getInstance().writeLine(statCommand1);
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}		
+    	return getReading(topicNames.STATUS.val());
+    }
+    /**
+     * M706
+     * @return A String payload of all assigned pins (if any), comma separated.
+     * @throws IOException 
+     */
+    public synchronized String getAssignedPins() throws IOException {
+		String statCommand1 = "M706"; // report all pins in use
+		ByteSerialDataPort.getInstance().writeLine(statCommand1);
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}		
+    	return getReading(topicNames.ASSIGNEDPINS.val());
+    }
+    /**
+     * M705
+     * @return A String payload of motor controller configurations (if any), each one a multiline report.
+     * @throws IOException 
+     */
+    public synchronized String getMotorControlSetting() throws IOException {
+		String statCommand1 = "M705"; // report all pins in use
+		ByteSerialDataPort.getInstance().writeLine(statCommand1);
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}		
+    	return getReading(topicNames.MOTORCONTROLSETTING.val());
+    }
+    /**
+     * M798 Z<slot> X
+     * @return A String payload of PWM controller status (if any), each one a multiline report.
+     * @throws IOException 
+     */
+    public synchronized String getPWMControlSetting() throws IOException {
+    	StringBuilder sb = new StringBuilder();
+    	for(int i = 0; i < 10; i++) {
+    		sb.append("\r\nPWM Controller in use in slot:"+i+"\r\n");
+    		String statCommand1 = "M798 Z"+i+" X"; // report all pins in use
+    		ByteSerialDataPort.getInstance().writeLine(statCommand1);
+    		try {
+    			Thread.sleep(100);
+    		} catch (InterruptedException e) {}
+    		sb.append(getReading(topicNames.PWMCONTROLSETTING.val()));
+    		sb.append("---");
+    	}
+    	return sb.toString();
+    }
+    /**
+     * M798 Z<slot>
+     * @return A String payload of the status of each of the assigned motor controllers.
+     * @throws IOException 
+     */
+    public synchronized String getControllerStatus() throws IOException {
+       	StringBuilder sb = new StringBuilder();
+    	for(int i = 0; i < 10; i++) {
+    		sb.append("\r\nController in use in slot:"+i+"\r\n");
+			if(DEBUG)
+				System.out.println(this.getClass().getName()+".reportAllControllerSatus controller in use in slot"+i);
+    		String statCommand1 = "M798 Z"+i; // report all pins in use
+    		ByteSerialDataPort.getInstance().writeLine(statCommand1);
+    		try {
+    			Thread.sleep(100);
+    		} catch (InterruptedException e) {}
+    		sb.append(getReading(topicNames.CONTROLLERSTATUS.val()));
+    		sb.append("---");
+    	}
+    	return sb.toString();
+    }
 	public synchronized void setAbsolutePWMLevel(int slot, int channel, int pwmLevel) throws IOException {
 		String pwmCommand1 = "G5 Z"+slot+" C"+channel+" X"+pwmLevel;
 		ByteSerialDataPort.getInstance().writeLine(pwmCommand1);

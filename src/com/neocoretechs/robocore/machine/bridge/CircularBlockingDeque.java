@@ -1,6 +1,10 @@
 package com.neocoretechs.robocore.machine.bridge;
 
+import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.NoSuchElementException;
 
 /**
@@ -10,7 +14,7 @@ import java.util.NoSuchElementException;
  * 
  * @author jg
  */
-public class CircularBlockingDeque<T> implements Iterable<T> {
+public class CircularBlockingDeque<T> implements Iterable<T>, List<T> {
 
   private final T[] deque;
   private final Object mutex;
@@ -177,6 +181,9 @@ public class CircularBlockingDeque<T> implements Iterable<T> {
   public int length() {
 	    return length;
   }
+  
+  public Object getMutex() {return mutex;}
+  
   /**
    * Returns an iterator over the queue.
    * <p>
@@ -211,4 +218,109 @@ public class CircularBlockingDeque<T> implements Iterable<T> {
       }
     };
   }
+@Override
+public int size() {
+	return deque.length;
+}
+@Override
+public boolean contains(Object o) {
+	for(Object o2 : deque)
+		if(o.equals((o2))) return true;
+	return false;
+}
+@Override
+public Object[] toArray() {
+	return deque;
+}
+@Override
+public Object[] toArray(Object[] a) {
+	Object n = Array.newInstance(a.getClass(), a.length);
+	Iterator<T> it = iterator();
+	for(int i = 0; i < a.length; i++) {
+		if(!it.hasNext())
+			break;
+		((Object[])n)[i] = it.next();
+	}
+	return (Object[]) n;	
+}
+@Override
+public boolean add(Object e) {
+	addLast((T) e);
+	return true;
+}
+@Override
+public boolean remove(Object o) {
+	// TODO Auto-generated method stub
+	return false;
+}
+@Override
+public boolean containsAll(Collection c) {
+	// TODO Auto-generated method stub
+	return false;
+}
+@Override
+public boolean addAll(Collection c) {
+	// TODO Auto-generated method stub
+	return false;
+}
+@Override
+public boolean addAll(int index, Collection c) {
+	// TODO Auto-generated method stub
+	return false;
+}
+@Override
+public boolean removeAll(Collection c) {
+	// TODO Auto-generated method stub
+	return false;
+}
+@Override
+public boolean retainAll(Collection c) {
+	// TODO Auto-generated method stub
+	return false;
+}
+
+@Override
+public Object set(int index, Object element) {
+	// TODO Auto-generated method stub
+	return null;
+}
+@Override
+public void add(int index, Object element) {
+	// TODO Auto-generated method stub
+	
+}
+@Override
+public T remove(int index) {
+	// TODO Auto-generated method stub
+	return null;
+}
+@Override
+public int indexOf(Object o) {
+	// TODO Auto-generated method stub
+	return 0;
+}
+@Override
+public int lastIndexOf(Object o) {
+	// TODO Auto-generated method stub
+	return 0;
+}
+@Override
+public ListIterator listIterator() {
+	// TODO Auto-generated method stub
+	return null;
+}
+@Override
+public ListIterator listIterator(int index) {
+	// TODO Auto-generated method stub
+	return null;
+}
+@Override
+public List subList(int fromIndex, int toIndex) {
+	// TODO Auto-generated method stub
+	return null;
+}
+@Override
+public T get(int index) {
+	return deque[index];
+}
 }

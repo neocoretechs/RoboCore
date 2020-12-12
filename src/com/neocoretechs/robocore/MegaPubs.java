@@ -35,11 +35,10 @@ import rosgraph_msgs.Log;
 import sensor_msgs.Range;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.BatteryListener;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.TopicListInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.MotorFaultListener;
-import com.neocoretechs.robocore.machine.bridge.UltrasonicListener;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
@@ -498,14 +497,15 @@ public void onStart(final ConnectedNode connectedNode) {
 
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
 			sensor_msgs.Range rangemsg = null;
-
-				if( !BatteryListener.data.isEmpty() ) {
-					Float batt = BatteryListener.data.takeFirst();
+			TopicListInterface tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.BATTERY.val());
+			MachineBridge mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					Float batt = (Float) tli.getResult(mb.take());
 					volts = batt.floatValue();
 					statmsg = statpub.newMessage();
-					statmsg.setName("battery");
+					statmsg.setName(AsynchDemuxer.topicNames.BATTERY.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
-					statmsg.setMessage("Battery voltage warning "+((int)volts)+" volts");
+					statmsg.setMessage(AsynchDemuxer.topicNames.BATTERY.val()+" voltage warning "+((int)volts)+" volts");
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					li.add(kv);
@@ -514,11 +514,12 @@ public void onStart(final ConnectedNode connectedNode) {
 					//statpub.publish(statmsg);
 					//Thread.sleep(1);
 					if( DEBUG) 
-						System.out.println("Queued seq#"+sequenceNumber+" battery: "+statmsg.getMessage().toString());
-				}		
-	
-				if( !UltrasonicListener.data.isEmpty() ) {
-					Integer range = UltrasonicListener.data.takeFirst();
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BATTERY.val()+":"+statmsg.getMessage().toString());
+			}		
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.ULTRASONIC.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					Integer range = (Integer) tli.getResult(mb.take());
 					ihead.setSeq(sequenceNumber);
 					Time tst = connectedNode.getCurrentTime();
 					ihead.setStamp(tst);
@@ -535,14 +536,14 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange());
 					++sequenceNumber;
 				}				
-			
-	
-				if( !MotorFaultListener.data.isEmpty() ) {
-					String mfd = MotorFaultListener.data.takeFirst();
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.MOTORFAULT.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.take());
 					statmsg = statpub.newMessage();
-					statmsg.setName("motor");
+					statmsg.setName(AsynchDemuxer.topicNames.MOTORFAULT.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
-					statmsg.setMessage("Motor fault warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.MOTORFAULT.val()+" warning "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					li.add(kv);
@@ -550,7 +551,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
-						System.out.println("Queued seq#"+sequenceNumber+" motor fault: "+statmsg.getMessage().toString());
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.MOTORFAULT.val()+": "+statmsg.getMessage().toString());
 				}			
 		
 			while(!outgoingDiagnostics.isEmpty()) {

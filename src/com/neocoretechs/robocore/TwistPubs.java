@@ -22,9 +22,10 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
-import com.neocoretechs.robocore.machine.bridge.AnalogPinListener;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.TopicListInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 
 
@@ -135,13 +136,15 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
+			TopicListInterface tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.ANALOGPIN.val());
+			MachineBridge mb = tli.getMachineBridge();
 			for(int i = 0; i < 2 ; i++) {
-			if( !AnalogPinListener.data.isEmpty() ) {
-				int[] mr = AnalogPinListener.data.peekFirst();
+			if( !mb.get().isEmpty() ) {
+				int[] mr = (int[]) tli.getResult(mb.get().peekFirst());
 				// wait for our pins to be displayed as we are potentially demuxxing numerous analogpin messages
 				// look for Y input (throttle)
 				if( mr[0] == joystickPinY) {// linear pin
-					AnalogPinListener.data.takeFirst();
+					mb.get().takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 					int r = mr[1];
 					r = (r - (joystickMax/2)) * -1;	
@@ -157,7 +160,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 				// look for x input (pivot)
 				if( mr[0] == joystickPinX) {// angular pin
-					AnalogPinListener.data.takeFirst();
+					mb.get().takeFirst();
 					geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 					int r = mr[1];
 					r = (r - (joystickMax/2));

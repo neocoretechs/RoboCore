@@ -21,7 +21,9 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  */
 public class ByteSerialDataPort implements DataPortInterface {
 		private static boolean DEBUG = true;
+		private static boolean PORTDEBUG = false;
 	    private SerialPort serialPort;
+        CommPortIdentifier portId = null;
 	    private OutputStream outStream;
 	    private InputStream inStream;
 		// serial settings
@@ -46,7 +48,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    private static int writeBufferTail = 0;
 	    
 	    private static volatile ByteSerialDataPort instance = null;
-	    private boolean portOwned = false;
+	    private int portOwned = CommPortOwnershipListener.PORT_UNOWNED; 
 	    
 	    public static ByteSerialDataPort getInstance() {
 	    	if( instance == null ) {
@@ -75,29 +77,34 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	    }
 	    
-	    public synchronized void connect(boolean writeable) throws IOException {
-	    	portOwned = false;
-	    	//if( Props.DEBUG ) System.out.println("Trying connect to serial port "+portName);
+	    public void connect(boolean writeable) throws IOException {
+	    	if(portOwned == CommPortOwnershipListener.PORT_OWNED) {
+	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port already owned by.."+portId.getCurrentOwner());
+	    	}
+	    	if(portOwned == CommPortOwnershipListener.PORT_OWNERSHIP_REQUESTED) {
+	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port whose ownership has already been requested by "+portId.getCurrentOwner());
+	    	}
 	        try {
 	            // Obtain a CommPortIdentifier object for the port you want to open
-	            CommPortIdentifier portId =
-	                    CommPortIdentifier.getPortIdentifier(portName);
+	        	portId = CommPortIdentifier.getPortIdentifier(portName);
 	            if( portId == null ) {
 	            	throw new IOException("Cant get CommPortIdentifier for "+portName);
 	            }
 	        	// Add ownership event listener
 	            portId.addPortOwnershipListener(new SerialOwnershipHandler());
-
+	        	if( PORTDEBUG ) 
+		    		System.out.println("Trying connect to serial port "+portName);
 	            serialPort =
 	                    (SerialPort) portId.open("", 5500);
 	            if( serialPort == null ) {
 	            	throw new IOException("Cant open SerialPort "+portName);
 	            }
-	            
-	            while(!portOwned)
+	            long portTime = System.nanoTime();
+	            while(portOwned != CommPortOwnershipListener.PORT_OWNED)
 					try {
-						Thread.sleep(1);
+						Thread.sleep(0,1);
 					} catch (InterruptedException e1) {}
+	            System.out.println("Took port ownership in "+(System.nanoTime()-portTime)+" .ns");
 	            //if (! (serialPort instanceof SerialPort) )
 	            //{
 	            //	err
@@ -140,20 +147,24 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        	}
 	            throw new IOException(e);
 	        }
-	        //if( Props.DEBUG ) System.out.println("Connected to "+portName);
+	        if( PORTDEBUG ) 
+	        	System.out.println("Connected to "+portName);
 	    }
 	    
-	    public synchronized void close() {
+	    public void close() {
 	    	if( serialPort != null)
 	    		serialPort.close();
 	    }
 	    
-	    public synchronized int bytesToRead() throws IOException {
-	    	return inStream.available();
+	    public int bytesToRead() throws IOException {
+	    	synchronized(readMx) {
+	    		return inStream.available();
+	    	}
 	    }
 	 
-	    public synchronized void write(int c) throws IOException {
-	    	//if( Props.DEBUG ) System.out.println("write "+c);
+	    public void write(int c) throws IOException {
+	    	if( PORTDEBUG ) 
+	    		System.out.print("<"+c+">");
 	    	synchronized(writeMx) {
 	    		checkWriteBuffer();
 	    		writeBuffer[writeBufferTail++] = c;
@@ -163,8 +174,9 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	}
 	    }
 	    
-	    public synchronized void writeLine(String bytesToWrite) throws IOException {
-	    	//if( Props.DEBUG ) System.out.println("writeLine "+bytesToWrite);
+	    public void writeLine(String bytesToWrite) throws IOException {
+	    	if( PORTDEBUG ) 
+	    		System.out.println(this.getClass().getName()+".writeLine:"+bytesToWrite);
 	    	synchronized(writeMx) {
 	    		byte[] bytes = bytesToWrite.getBytes();
 	    		for(int i = 0 ; i < bytes.length; i++) {
@@ -173,7 +185,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    			writeMx.notify();
 	    		}
 	    		checkWriteBuffer();
-    			writeBuffer[writeBufferTail++] = 13;	
+    			writeBuffer[writeBufferTail++] = '\r';
+    			writeBuffer[writeBufferTail++] = '\n';	
     			//writeBuffer[writeBufferTail++] = -1;
     			//checkWriteBuffer();
 	    		writeMx.notify();
@@ -184,14 +197,17 @@ public class ByteSerialDataPort implements DataPortInterface {
 
 	    }
 	    
-	    private synchronized void checkWriteBuffer() {
-	    	if( writeBufferTail >= writeBuffer.length) {	
+	    private void checkWriteBuffer() {
+	    	synchronized(writeMx) {
+	    		if( writeBufferTail >= writeBuffer.length) {	
     				writeBufferTail = 0;
-			}
+	    		}
+	    	}
 	    }
 	    
-	    public synchronized int read() throws IOException {
-	    	//if( Props.DEBUG ) System.out.println("read");
+	    public int read() throws IOException {
+	    	if( PORTDEBUG ) 
+	    		System.out.println(this.getClass().getName()+".read");
 	    	synchronized(readMx) {
 	    		try {
 	    			if( readBufferHead == readBufferTail )
@@ -200,7 +216,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    				readBufferHead = 0;
 				} catch (InterruptedException e) {
 				}
-	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
+	    		if( PORTDEBUG ) 
+	    			System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
 	    		return readBuffer[readBufferHead++];
 	    	}
 	    	//return inStream.read();
@@ -211,8 +228,9 @@ public class ByteSerialDataPort implements DataPortInterface {
 	     * @return
 	     * @throws IOException
 	     */
-	    private synchronized int read(long timeout) throws IOException {
-	    	//if( Props.DEBUG ) System.out.println("read");
+	    private int read(long timeout) throws IOException {
+	    	if( PORTDEBUG ) 
+	    		System.out.println(this.getClass().getName()+".read");
 	    	synchronized(readMx) {
 	    		try {
 	    			if( readBufferHead == readBufferTail )
@@ -225,7 +243,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		if( readBufferHead == readBufferTail ) {
 	    			throw new IOException("Serial port not responding..");
 	    		}
-	    		//if( Props.DEBUG ) System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
+	    		if( PORTDEBUG ) 
+	    			System.out.println(this.getClass().getName()+".read readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
 	    		return readBuffer[readBufferHead++];
 	    	}
 	    }
@@ -234,14 +253,16 @@ public class ByteSerialDataPort implements DataPortInterface {
 	     * Mutex wait on inputLine
 	     * @return
 	     */
-	    public synchronized String readLine() {
+	    public String readLine() {
+	    	if( PORTDEBUG ) 
+	    		System.out.println(this.getClass().getName()+".readLine");
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
 				while( c != '\r' && c != '\n' || sb.length() <= 1 ) {
 					c = read();
-					//if( DEBUG )
-					//	System.out.print("["+Character.toChars(c)[0]+"]");
+					if( PORTDEBUG )
+						System.out.print("["+Character.toChars(c)[0]+"]");
 					if( c != -1 && c != '\r' && c != '\n')
 						sb.append(Character.toString((char)c));
 				}
@@ -249,8 +270,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 				System.out.println("IOException reading line:"+sb.toString());
 				return null;
 			}
-	    	//if( DEBUG )
-	    	//	System.out.println("readLine:"+sb.toString());
+	    	if( PORTDEBUG )
+	    		System.out.println(this.getClass().getName()+".readLine, exiting with:"+sb.toString());
 	    	return sb.toString();
 	    }
 	    
@@ -260,14 +281,16 @@ public class ByteSerialDataPort implements DataPortInterface {
 	     * @throws IOException 
 	     * @Exception MachineNotReadyException on timeout
 	     */
-	    public synchronized String readLine(long timeout) throws IOException {
+	    public String readLine(long timeout) throws IOException {
+	    	if( PORTDEBUG ) 
+	    		System.out.println(this.getClass().getName()+".readLine("+timeout+")");
 	    	int c = -1;
 	    	StringBuffer sb = new StringBuffer();
 	    	try {
 				while( c != '\r' ) {
 					c = read(timeout);
-					//if( DEBUG )
-					//	System.out.print("["+Character.toChars(c)[0]+"]");
+					if( PORTDEBUG )
+						System.out.print("["+Character.toChars(c)[0]+"]");
 					if( c != -1 ) {
 						// not an 'r' but we got an 'n' must have dropped the 'r'?
 						if( c == '\n')
@@ -278,8 +301,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 				// got an 'r', must get an 'n' anything else is bad 
 				while( c != '\n' ) {
 					c = read(timeout);
-					//if( DEBUG )
-					//	System.out.print("["+Character.toChars(c)[0]+"]");
+					if( PORTDEBUG )
+						System.out.print("["+Character.toChars(c)[0]+"]");
 					// got an 'r' but no 'n', must have dropped the 'n'?
 					if( c != -1 ) {
 							break;
@@ -289,18 +312,20 @@ public class ByteSerialDataPort implements DataPortInterface {
 				System.out.println("IOException "+e+" reading line:"+sb.toString());
 				return null;
 			}
+	    	if( PORTDEBUG )
+	    		System.out.println(this.getClass().getName()+".readLine("+timeout+"), exiting with:"+sb.toString());
 	    	return sb.toString();
 	    }
 	    /**
 	     * pacman the jizzle in the inputstream
 	     */
-	    public synchronized void clear() {
+	    public void clear() {
 	    	synchronized(readMx) {
 	    		readBufferHead = readBufferTail = 0;
 	    		try {
 					int navail = inStream.available();
-					//if( Props.DEBUG )
-					//	System.out.println("Clearing "+navail+" from input");
+					if( PORTDEBUG )
+						System.out.println(this.getClass().getName()+".clear Clearing "+navail+" from input");
 					for(int i = 0; i < navail; i++) inStream.read();
 				} catch (IOException e) {
 					e.printStackTrace();
@@ -325,7 +350,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	     * @param baud 
 	     * @throws UnsupportedCommOperationException 
 	     */
-	    private synchronized void setSerialPortParameters(int baud, int datab, int stopb, int parityb) throws IOException, UnsupportedCommOperationException {
+	    private void setSerialPortParameters(int baud, int datab, int stopb, int parityb) throws IOException, UnsupportedCommOperationException {
 	    	//if( Props.DEBUG ) System.out.println("Setting serial port "+baud+" "+datab+" "+stopb+" "+parityb);
 
 	        // Set serial port
@@ -352,13 +377,13 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        //SerialPort.WriteTimeout = 5500;
 	    }
 	    
-	    public synchronized static Enumeration getPortIdentifiers() {
+	    public static Enumeration getPortIdentifiers() {
 	    	return CommPortIdentifier.getPortIdentifiers();
 	    }
 	    /**
 	     * Data about machine and port settings
 	     */
-	    public synchronized String stringSettings() {
+	    public String stringSettings() {
 		    String msg = "ByteSerialDataPort\n";
 		    msg = msg + "Port Name = " + getPortName() + "\n";
 		    msg = msg + "Port BaudRate = " + getBaudRate() + "\n";
@@ -390,12 +415,14 @@ public class ByteSerialDataPort implements DataPortInterface {
 					{
 						try {
 							inChar = this.in.read();
-							//System.out.println("SR="+inChar+" "+(char)inChar);
+							if(PORTDEBUG)
+								System.out.print((char)inChar);
 							// rxtx returns -1 on timeout of port
 							if( inChar == 255 ) {
 								EOT = true;
 								inChar = -1;
-								//if(Props.DEBUG) System.out.println("EOT signaled...");
+								if(DEBUG) 
+									System.out.println("<EOT>");
 							} else {
 								EOT = false;
 							}
@@ -445,7 +472,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 	                			}
 	                   			if( writeBufferHead == writeBuffer.length)
 	                				writeBufferHead = 0;
-	                			//System.out.print("["+(char)(writeBuffer[writeBufferHead])+"@"+writeBufferHead+"]");
+	                   			if(PORTDEBUG)
+	                   				System.out.print("<"+(char)(writeBuffer[writeBufferHead])+"@"+writeBufferHead+">");
 	                			this.out.write(writeBuffer[writeBufferHead++]);
 	                			writeMx.notify();
 	                		}
@@ -464,19 +492,17 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        class SerialOwnershipHandler implements CommPortOwnershipListener
 	        {
 	            public void ownershipChange(int type) {
+	            	portOwned = type;
+	            	/*
 	                switch (type) {
-	                    case CommPortOwnershipListener.PORT_OWNED:
+	                    case CommPortOwnershipListener.PORT_OWNED:1
 	                        //System.out.println("We got the port");
-	                    	portOwned = true;
-	                        break;
-	                    case CommPortOwnershipListener.PORT_UNOWNED:
+	                    case CommPortOwnershipListener.PORT_UNOWNED:2
 	                        //System.out.println("We've just lost our port ownership");
-	                    	portOwned = false;
-	                        break;
-	                    case CommPortOwnershipListener.PORT_OWNERSHIP_REQUESTED:
+	                    case CommPortOwnershipListener.PORT_OWNERSHIP_REQUESTED:3
 	                        //System.out.println("Someone is asking our port's ownership");
-	                        break;
 	                }
+	                */
 	            }
 	        }
 	        

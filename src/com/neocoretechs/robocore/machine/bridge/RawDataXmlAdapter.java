@@ -6,7 +6,7 @@ import javax.xml.bind.annotation.adapters.XmlAdapter;
 /**
  * This class is called by JAXB by installing it as an adapter to control serialization/deserialization
  * of subsets of the data. These subsets are controlled by the parameters in the class variables which require being preset.
- * Two different modes allow for different parameters to fuction in page mode, where page number and
+ * Two different modes allow for different parameters to function in page mode, where page number and
  * page size are specified to return a single page oriented data structure, and offset mode for an absolute
  * start and end to be specified.
  * @author jg
