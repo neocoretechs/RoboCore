@@ -97,7 +97,9 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 			MachineReading mr;
 			StringBuilder sb = new StringBuilder();
 			MachineBridge mb = AsynchDemuxer.getInstance().getMachineBridge(group);
-			while((mr = mb.waitForNewReading()) != null) {
+			while((mr = mb.waitForNewReading()) != MachineReading.EMPTYREADING) {
+				if(mr == null)
+					throw new RuntimeException("PREMATURE END OF MACHINEREADINGS!");
 				sb.append(mr.toString());
 			}
 			return sb.toString();
@@ -116,7 +118,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
      * @return A string payload of robot overall status
      */
     public synchronized String getSystemStatus() throws IOException {
-		String statCommand1 = "M700"; // report satus
+		String statCommand1 = "M700"; // report status
 		ByteSerialDataPort.getInstance().writeLine(statCommand1);
 		try {
 			Thread.sleep(100);
@@ -163,7 +165,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
     		try {
     			Thread.sleep(100);
     		} catch (InterruptedException e) {}
-    		sb.append(getReading(topicNames.PWMCONTROLSETTING.val()));
+    		sb.append(getReading(topicNames.CONTROLLERSTATUS.val()));
     		sb.append("---");
     	}
     	return sb.toString();

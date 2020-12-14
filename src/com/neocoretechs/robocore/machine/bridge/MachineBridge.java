@@ -44,15 +44,6 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
         }
         
         public CircularBlockingDeque<MachineReading> get() { return machineReadings; }
-        
-		
-		public MachineReading take() {
-				try {
-					return machineReadings.takeFirst();
-				} catch (InterruptedException e) {
-					return null;
-				}
-		}
 	
 		public void add(MachineReading entry) {
 				machineReadings.addLast(entry);
@@ -76,7 +67,12 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 		 */
 		public MachineReading waitForNewReading() {
 					try {
-						return machineReadings.takeFirst();
+						if(DEBUG)
+							System.out.println(this.getClass().getName()+".waitForNewReading wait..");
+						MachineReading mr = machineReadings.takeFirst();
+						if(DEBUG)
+							System.out.println(this.getClass().getName()+".waitForNewReading got "+mr);
+						return mr;
 					} catch (InterruptedException e) {
 						return null; // premature end
 					}

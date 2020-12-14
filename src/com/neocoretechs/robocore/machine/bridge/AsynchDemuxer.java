@@ -97,13 +97,15 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData(String readLine) {
 				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.STATUS.val()+">") ) {
 					if( readLine == null ||  readLine.length() == 0 ) {
-						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+						if(DEBUG)System.out.println(this.getClass().getName()+".retrieveData: premature EOR before "+"</"+topicNames.STATUS.val()+">");
 						return;
 					}
-					//if( Props.DEBUG ) System.out.println(readLine);
+					if( DEBUG ) 
+						System.out.println(this.getClass().getName()+".retrieveData:"+readLine);
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -127,6 +129,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -149,6 +152,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -175,8 +179,8 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
-
 			@Override
 			public Object getResult(MachineReading mr) {
 				return mr.getReadingValString();
@@ -212,6 +216,7 @@ public class AsynchDemuxer implements Runnable {
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -249,6 +254,7 @@ public class AsynchDemuxer implements Runnable {
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -285,6 +291,7 @@ public class AsynchDemuxer implements Runnable {
 				MachineReading mr = new MachineReading(1, pin, reading, data);
 				mb.add(mr);	
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -311,6 +318,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -331,6 +339,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -351,6 +360,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -362,7 +372,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(topicNames.CONTROLLERSTATUS.val(),128) {
 			@Override
 			public void retrieveData(String readLine) {  
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.CONTROLLERSTATUS+">") ) {
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.CONTROLLERSTATUS.val()+">") ) {
 						if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 							return;
@@ -371,6 +381,7 @@ public class AsynchDemuxer implements Runnable {
 						MachineReading mr = new MachineReading(readLine);
 						mb.add(mr);
 				}
+				mb.add(MachineReading.EMPTYREADING);
 			}
 
 			@Override

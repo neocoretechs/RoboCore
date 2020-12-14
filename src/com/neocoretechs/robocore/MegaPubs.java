@@ -500,7 +500,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			TopicListInterface tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.BATTERY.val());
 			MachineBridge mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
-					Float batt = (Float) tli.getResult(mb.take());
+					Float batt = (Float) tli.getResult(mb.waitForNewReading());
 					volts = batt.floatValue();
 					statmsg = statpub.newMessage();
 					statmsg.setName(AsynchDemuxer.topicNames.BATTERY.val());
@@ -519,7 +519,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.ULTRASONIC.val());
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
-					Integer range = (Integer) tli.getResult(mb.take());
+					Integer range = (Integer) tli.getResult(mb.waitForNewReading());
 					ihead.setSeq(sequenceNumber);
 					Time tst = connectedNode.getCurrentTime();
 					ihead.setStamp(tst);
@@ -539,7 +539,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.MOTORFAULT.val());
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
-					String mfd = (String) tli.getResult(mb.take());
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
 					statmsg = statpub.newMessage();
 					statmsg.setName(AsynchDemuxer.topicNames.MOTORFAULT.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);

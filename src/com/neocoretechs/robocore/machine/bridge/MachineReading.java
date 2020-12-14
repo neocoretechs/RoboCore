@@ -59,6 +59,8 @@ public final class MachineReading implements Serializable{
 		return readingValString;
 	}
 	
+	public static MachineReading EMPTYREADING = new MachineReading(-1,-1,Integer.MAX_VALUE,-1);
+	
 	public void setReadingValDouble(double readingVal) {
 		this.readingVal = readingVal;
 	}
@@ -102,5 +104,22 @@ public final class MachineReading implements Serializable{
 			return readingValString;
 		else
 			return "Group "+rawGroup+" Sequence "+rawSeq+" Reading # "+rawReadingNum+" = "+readingVal+" "+readingValInt+" "+readingValString;
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if(o.getClass() != MachineReading.class)
+			return false;
+		if(((MachineReading)o).rawGroup != this.rawGroup || 
+		   ((MachineReading)o).rawSeq != this.rawSeq || 
+		   ((MachineReading)o).rawReadingNum == this.rawReadingNum)
+			return false;
+		if((((MachineReading)o).readingValString == null && readingValString != null))
+			return false;
+		if((((MachineReading)o).readingValString != null && readingValString == null))
+			return false;
+		if((((MachineReading)o).readingValString == null && readingValString == null))
+			return true;
+		return (((MachineReading)o).readingValString.equals(readingValString));
 	}
 }
