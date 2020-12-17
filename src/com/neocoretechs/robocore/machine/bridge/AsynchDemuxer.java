@@ -74,6 +74,7 @@ public class AsynchDemuxer implements Runnable {
 		return instance;
 	}
 	private Map<String, TopicList> topics = new ConcurrentHashMap<String, TopicList>(topicNames.values().length);
+	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(256);
 	
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
@@ -95,13 +96,26 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.STATUS.val(), new TopicList(topicNames.STATUS.val(),16) {
 			@Override
 			public void retrieveData(String readLine) {
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.STATUS.val()+">") ) {
+				String sMarker = "</"+topicNames.STATUS.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
+					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
 					if( readLine == null ||  readLine.length() == 0 ) {
-						if(DEBUG)System.out.println(this.getClass().getName()+".retrieveData: premature EOR before "+"</"+topicNames.STATUS.val()+">");
-						return;
+						if(DEBUG)System.out.println(this.getClass().getName()+".retrieveData: premature EOR before "+sMarker);
+						break;
 					}
 					if( DEBUG ) 
 						System.out.println(this.getClass().getName()+".retrieveData:"+readLine);
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
+						mb.add(mr);
+						break;
+					}
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
@@ -118,16 +132,32 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.DATASET.val(), new TopicList(topicNames.DATASET.val(), 16) {
 			@Override
 			public void retrieveData(String readLine) {
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.DATASET.val()+">") ) {
-					if( readLine == null ||  readLine.length() == 0 ) {
-						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						return;
-					}
-					int reading = getReadingNumber(readLine);
-					double data =  getReadingValueDouble(readLine);
-					//if( Props.DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(1, reading, reading+1, data);
+				String sMarker = "</"+topicNames.DATASET.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+					if( readLine == null ||  readLine.length() == 0 ) {
+						//if(DEBUG)System.out.println("Empty line returned from readLine");
+						break;
+					}
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						int reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
+						double data =  getReadingValueDouble( readLine.substring(0,readLine.length()-sMarker.length()));
+						MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						mb.add(mr);
+						break;
+					} else {
+						int reading = getReadingNumber(readLine);
+						double data =  getReadingValueDouble(readLine);
+						//if( DEBUG ) System.out.println(readLine);
+						MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						mb.add(mr);
+					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
 			}
@@ -141,16 +171,32 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.BATTERY.val(),new TopicList(topicNames.BATTERY.val(),16) {
 			@Override
 			public void retrieveData(String readLine) {
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.BATTERY.val()+">") ) {
-					if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							return;
-					}
-					int reading = getReadingNumber(readLine);
-					int data =  getReadingValueInt(readLine);
-					//if( Props.DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(1, reading, reading+1, data);
+				String sMarker = "</"+topicNames.BATTERY.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+					if( readLine == null || readLine.length() == 0 ) {
+							//if(DEBUG)System.out.println("Empty line returned from readLine");
+							break;
+					}
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						int reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
+						int data =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
+						MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						mb.add(mr);
+						break;
+					} else {
+						int reading = getReadingNumber(readLine);
+						int data =  getReadingValueInt(readLine);
+						//if( DEBUG ) System.out.println(readLine);
+						MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						mb.add(mr);
+					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
 			}
@@ -159,25 +205,42 @@ public class AsynchDemuxer implements Runnable {
 				return new Float(((float)mr.getReadingValInt())/10.0);
 			}
 		});
-		if(DEBUG)
-			System.out.println("AsynchDemuxer.Init "+topicNames.BATTERY.val()+" listener engaged");
-		if(DEBUG)
+		if(DEBUG) {
+			System.out.println("AsynchDemuxer.Init "+topicNames.BATTERY.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORFAULT.val());
+		}
 		topics.put(topicNames.MOTORFAULT.val(), new TopicList(topicNames.MOTORFAULT.val(),16) {
 			@Override
 			public void retrieveData(String readLine) {		
-				//for(int i = 0; i < 8; i++) {
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.MOTORFAULT.val()+">") ) {
-					if( readLine == null || readLine.length() == 0 ) {
-						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						//continue;
-						return;
-					}
-					int reading = getReadingNumber(readLine);
-					String data =  getReadingValueString(readLine);
-					//if( Props.DEBUG ) System.out.println(readLine);
+				String sMarker = "</"+topicNames.MOTORFAULT.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					int reading = getReadingNumber(readLine.substring(sMarker.length(),readLine.length()));
+					String data =  getReadingValueString(readLine.substring(sMarker.length(),readLine.length()));
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+					if( readLine == null || readLine.length() == 0 ) {
+						//if(DEBUG)System.out.println("Empty line returned from readLine");
+						//continue;
+						break;
+					}
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						int reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
+						String data =  getReadingValueString( readLine.substring(0,readLine.length()-sMarker.length()));
+						MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						mb.add(mr);
+						break;
+					} else {
+						int reading = getReadingNumber(readLine);
+						String data =  getReadingValueString(readLine);
+						//if( DEBUG ) System.out.println(readLine);
+						MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						mb.add(mr);
+					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
 			}
@@ -186,36 +249,50 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}
 		});
-		if(DEBUG)
+		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.MOTORFAULT.val()+" engaged");
-		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONIC.val());
+		}
 		topics.put(topicNames.ULTRASONIC.val(), new TopicList(topicNames.ULTRASONIC.val(),16) {
 			@Override
 			public void retrieveData(String readLine) {	
-				int pin = 0;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.ULTRASONIC.val()+">") ) {
-				// get element 1 <pin>
-				if( readLine == null || readLine.length() == 0 ) {
-					if(DEBUG) System.out.println("Empty line returned from readLine of "+topicNames.ULTRASONIC.val());
-					continue;
+				int pin = 0, reading = 0, data = 0;
+				String sMarker = "</"+topicNames.ULTRASONIC.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					pin =  getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));                             
 				}
-				int reading = getReadingNumber(readLine);
-				int data =  getReadingValueInt(readLine);
-				pin = data;
-				// get element 2 <range>
-				readLine = ByteSerialDataPort.getInstance().readLine();
-				if( readLine == null || readLine.length() == 0 ) {
-						if(DEBUG) System.out.println("Empty line returned from readLine of "+topicNames.ULTRASONIC.val());
-						continue;
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+					if( readLine == null || readLine.length() == 0 ) {
+							if(DEBUG) System.out.println("Empty line returned from readLine of "+topicNames.ULTRASONIC.val());
+							break;
+					}
+					if(readLine.endsWith(sMarker)) {
+						reading = getReadingNumber(readLine.substring(sMarker.length(),readLine.length()));
+						data =  getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));
+						if(reading == 1) {
+							System.out.println("Malformed request for "+topicNames.ULTRASONIC.val()+":"+readLine);
+							continue;
+						}
+						MachineReading mr = new MachineReading(1, pin, reading, data);
+						mb.add(mr);
+						break;
+					} else {
+						//if( DEBUG ) 
+						//		System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
+						reading = getReadingNumber(readLine);
+						data =  getReadingValueInt(readLine);
+						if(reading == 1) {
+							pin = data;
+						} else {
+							MachineReading mr = new MachineReading(1, pin, reading, data);
+							mb.add(mr);
+						}
+					}
 				}
-				reading = getReadingNumber(readLine);
-				data =  (int) getReadingValueDouble(readLine);
-				//if( DEBUG ) 
-				//		System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
-				MachineReading mr = new MachineReading(1, pin, reading, data);
-				mb.add(mr);
-				}
+				if( DEBUG ) 
+					System.out.println(topicNames.ULTRASONIC.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				mb.add(MachineReading.EMPTYREADING);
 			}
 			@Override
@@ -224,35 +301,51 @@ public class AsynchDemuxer implements Runnable {
 			}
 			
 		});
-		if(DEBUG)
+		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.ULTRASONIC.val()+" engaged");
-		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
+		}
 		topics.put(topicNames.ANALOGPIN.val(), new TopicList(topicNames.ANALOGPIN.val(),16) {
 			@Override
 			public void retrieveData(String readLine) {
 				int pin = 0;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.ANALOGPIN.val()+">") ) {
-				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return retrieveData "+topicNames.ANALOGPIN.val());
-					return;
+				String sMarker = "</"+topicNames.ANALOGPIN.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					pin = getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));
 				}
-				int reading = getReadingNumber(readLine);
-				int data =  getReadingValueInt(readLine);
-				if( DEBUG ) 
-						System.out.println(topicNames.ANALOGPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
-				pin = data;
-				readLine = ByteSerialDataPort.getInstance().readLine();
-				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return retrieveData from empty line "+topicNames.ANALOGPIN.val());
-					return;
-				}
-				reading = getReadingNumber(readLine);
-				data =  getReadingValueInt(readLine);
-				if( DEBUG ) 
-					System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
-				MachineReading mr = new MachineReading(1, pin, reading, data);
-				mb.add(mr);
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+					if( readLine == null || readLine.length() == 0 ) {
+						System.out.println("Premature return retrieveData "+topicNames.ANALOGPIN.val());
+						break;
+					}
+					int reading = 0, data = 0;
+					//if( DEBUG ) 
+					//	System.out.println(topicNames.ANALOGPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
+						data =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
+						if(reading == 1) {
+							System.out.println("Malformed request for "+topicNames.ANALOGPIN.val()+":"+readLine);
+							continue;
+						}
+						MachineReading mr = new MachineReading(1, pin, reading, data);
+						mb.add(mr);
+						break;
+					} else {
+						reading = getReadingNumber(readLine);
+						data =  getReadingValueInt(readLine);
+						if(reading == 1) {
+							pin = data;
+						} else {
+							MachineReading mr = new MachineReading(1, pin, reading, data);
+							mb.add(mr);
+						}
+						if( DEBUG ) 
+							System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
+					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
 			}
@@ -261,35 +354,49 @@ public class AsynchDemuxer implements Runnable {
 				return new int[]{ mr.getRawSeq(), mr.getReadingValInt() };
 			}
 		});
-		if(DEBUG)
+		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.ANALOGPIN.val()+" engaged");
-		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPIN.val());
+		}
 		topics.put(topicNames.DIGITALPIN.val(), new TopicList(topicNames.DIGITALPIN.val(),32) {
 			@Override
 			public void retrieveData(String readLine) {
+				int reading = 0, data = 0;
 				int pin = 0;
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.DIGITALPIN.val()+">") ) {
-				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return retrieveData pin # from empty line "+topicNames.DIGITALPIN.val());
-					return;
+				String sMarker = "</"+topicNames.DIGITALPIN.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					pin =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
 				}
-				int reading = getReadingNumber(readLine);
-				int data =  getReadingValueInt(readLine);
-				if( DEBUG ) 
-						System.out.println(topicNames.DIGITALPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
-				pin = data;
-				readLine = ByteSerialDataPort.getInstance().readLine();
-				if( readLine == null || readLine.length() == 0 ) {
-					System.out.println("Premature return retrieveData value from empty line "+topicNames.DIGITALPIN.val());
-					return;
-				}
-				reading = getReadingNumber(readLine);
-				data =  getReadingValueInt(readLine);
-				if( DEBUG ) 
-						System.out.println(topicNames.DIGITALPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);	
-				MachineReading mr = new MachineReading(1, pin, reading, data);
-				mb.add(mr);	
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+					if( readLine == null || readLine.length() == 0 ) {
+						System.out.println("Premature return retrieveData pin # from empty line "+topicNames.DIGITALPIN.val());
+						break;
+					}
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
+						data =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
+						if(reading == 1) {
+							System.out.println("Malformed request for "+topicNames.DIGITALPIN.val()+":"+readLine);
+							continue;
+						}
+						MachineReading mr = new MachineReading(1, pin, reading, data);
+						mb.add(mr);
+						break;
+					} else {
+						reading = getReadingNumber(readLine);
+						data =  getReadingValueInt(readLine);
+						if( DEBUG ) 
+							System.out.println(topicNames.DIGITALPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
+						if(reading == 1) {
+							pin = data;
+						} else {
+							MachineReading mr = new MachineReading(1, pin, reading, data);
+							mb.add(mr);
+						}
+					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
 			}
@@ -309,12 +416,26 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.ASSIGNEDPINS.val(), new TopicList(topicNames.ASSIGNEDPINS.val(),16) {
 			@Override
 			public void retrieveData(String readLine) {  
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.ASSIGNEDPINS.val()+">") ) {
+				String sMarker = "</"+topicNames.ASSIGNEDPINS.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
+					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						return;
+						break;
 					}
-					//if( Props.DEBUG ) System.out.println(readLine);
+					if(DEBUG) 
+						System.out.println("AssignedPins subretrieval:"+readLine);
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
+						mb.add(mr);
+						break;
+					}
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
@@ -329,11 +450,24 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORCONTROLSETTING.val());	
 		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList(topicNames.MOTORCONTROLSETTING.val(), 128) {
 			@Override
-			public void retrieveData(String readLine) {  
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.MOTORCONTROLSETTING.val()+">") ) {
+			public void retrieveData(String readLine) {
+				String sMarker = "</"+topicNames.MOTORCONTROLSETTING.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
+					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						return;
+						break;
+					}
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
+						mb.add(mr);
+						break;
 					}
 					//if( Props.DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(readLine);
@@ -350,13 +484,26 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMCONTROLSETTING.val());	
 		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList(topicNames.PWMCONTROLSETTING.val(),128) {
 			@Override
-			public void retrieveData(String readLine) {  
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.PWMCONTROLSETTING.val()+">") ) {
+			public void retrieveData(String readLine) {
+				String sMarker = "</"+topicNames.PWMCONTROLSETTING.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
+					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						return;
+						break;
 					}
-					//if( Props.DEBUG ) System.out.println(readLine);
+					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+					if(readLine.endsWith(sMarker)) {
+						MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
+						mb.add(mr);
+						break;
+					}
+					//if( DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
@@ -371,11 +518,24 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTATUS.val());			
 		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(topicNames.CONTROLLERSTATUS.val(),128) {
 			@Override
-			public void retrieveData(String readLine) {  
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith("</"+topicNames.CONTROLLERSTATUS.val()+">") ) {
+			public void retrieveData(String readLine) {
+				String sMarker = "</"+topicNames.CONTROLLERSTATUS.val()+">";
+				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
+				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
+				if(readLine.length() > sMarker.length()) {
+					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
+					mb.add(mr);
+				}
+				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
 						if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							return;
+							break;
+						}
+						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+						if(readLine.endsWith(sMarker)) {
+							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
+							mb.add(mr);
+							break;
 						}
 						//if( Props.DEBUG ) System.out.println(readLine);
 						MachineReading mr = new MachineReading(readLine);
