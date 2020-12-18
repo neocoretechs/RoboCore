@@ -61,26 +61,47 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed END writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
 					"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
 	}
-	
+	/**
+	 * Generate a series of requests to query the Marlinspike realtime subsystem and retrieve status
+	 * reports via various M codes issued to the realtime processing loop.<p>
+	 * We issue the commands directly through the serial USB or other port and wait for status messages to be
+	 * returned from the Marlinspike.<p/>
+	 * These reports are delineated by XML type headers and have various levels of structure, so a handler
+	 * is used in a separate thread for each 'topic' that corresponds to a header from the status payload from the Marlinspike.<p/>
+	 * These processing threads get the asynchronously returned data by demultiplexing them from a circular blocking queue
+	 * populated by the main run method of (@code AsynchDemuxer} which reads from the Marlinspike using the third party
+	 * open source RxTx library and its own read and write threads.<p/>
+	 * Once each handler has demuxxed the data from the queue, it creates a series of {@code MachineReading} instances which
+	 * serve to order and give further structure to the retrieved data.<p/>
+	 * Each topic handler has it own queue of MachineReading instances and so in this way the realtime data which may come back
+	 * in all sorts of order and at various times is categorized and ordered.<p/>
+	 * The other purpose of the MachineReading and the {@code MachineBridge} arbiter that mitigates the intermediate MachineReading
+	 * processing is XML formatting using JAXB and suppling a JQuery ready set of XML compliant structures for web facing
+	 * applications.
+	 */
 	public synchronized String reportAllControllerStatus() throws IOException {
+		AsynchDemuxer.getInstance().clearLineBuffer();
 		if(DEBUG)
 			System.out.println(this.getClass().getName()+".reportAllControllerStatus System status");
 		StringBuilder sb = new StringBuilder();
 		sb.append("System status:\r\n");
 		// <a> header returned from MarlinSpike
 		sb.append(getSystemStatus());
+		sb.append("\r\n");
 		if(DEBUG)
 			System.out.println(this.getClass().getName()+".reportAllControllerStatus pins in use");
 		//
 		sb.append("All pins in use:\r\n");
 		// <assignedpins> header returned from MarlinSpike
 		sb.append(getAssignedPins());
+		sb.append("\r\n");
 		//
 		if(DEBUG)
 			System.out.println(this.getClass().getName()+".reportAllControllerStatus controllers in use");
 		sb.append("\r\nAll controllers in use:\r\n");
 		// <motorcontrolsetting> header returned from MarlinSpike
 		sb.append(getMotorControlSetting());
+		sb.append("\r\n");
 		//
 		// <controllerstatus> header
 		sb.append(getControllerStatus());
@@ -93,14 +114,15 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		return sb.toString();
 	}
 	
-	public String getReading(String group) {
+	public String getMachineReadingsFromBridge(String group) throws IOException {
 			MachineReading mr;
 			StringBuilder sb = new StringBuilder();
 			MachineBridge mb = AsynchDemuxer.getInstance().getMachineBridge(group);
 			while((mr = mb.waitForNewReading()) != MachineReading.EMPTYREADING) {
 				if(mr == null)
-					throw new RuntimeException("PREMATURE END OF MACHINEREADINGS!");
+					throw new IOException("PREMATURE END OF MACHINEREADINGS!");
 				sb.append(mr.toString());
+				sb.append("\r\n");
 			}
 			return sb.toString();
 	}
@@ -123,7 +145,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		try {
 			Thread.sleep(100);
 		} catch (InterruptedException e) {}		
-    	return getReading(topicNames.STATUS.val());
+    	return getMachineReadingsFromBridge(topicNames.STATUS.val());
     }
     /**
      * M706
@@ -136,7 +158,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		try {
 			Thread.sleep(100);
 		} catch (InterruptedException e) {}		
-    	return getReading(topicNames.ASSIGNEDPINS.val());
+    	return getMachineReadingsFromBridge(topicNames.ASSIGNEDPINS.val());
     }
     /**
      * M705
@@ -149,7 +171,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		try {
 			Thread.sleep(100);
 		} catch (InterruptedException e) {}		
-    	return getReading(topicNames.MOTORCONTROLSETTING.val());
+    	return getMachineReadingsFromBridge(topicNames.MOTORCONTROLSETTING.val());
     }
     /**
      * M798 Z<slot> X
@@ -165,7 +187,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
     		try {
     			Thread.sleep(100);
     		} catch (InterruptedException e) {}
-    		sb.append(getReading(topicNames.CONTROLLERSTATUS.val()));
+    		sb.append(getMachineReadingsFromBridge(topicNames.CONTROLLERSTATUS.val()));
     		sb.append("---");
     	}
     	return sb.toString();
@@ -186,7 +208,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
     		try {
     			Thread.sleep(100);
     		} catch (InterruptedException e) {}
-    		sb.append(getReading(topicNames.CONTROLLERSTATUS.val()));
+    		sb.append(getMachineReadingsFromBridge(topicNames.CONTROLLERSTATUS.val()));
     		sb.append("---");
     	}
     	return sb.toString();

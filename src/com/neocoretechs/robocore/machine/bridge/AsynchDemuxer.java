@@ -74,9 +74,10 @@ public class AsynchDemuxer implements Runnable {
 		return instance;
 	}
 	private Map<String, TopicList> topics = new ConcurrentHashMap<String, TopicList>(topicNames.values().length);
-	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(256);
-	
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
+	
+	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(256);
+	public void clearLineBuffer() { marlinLines.clear(); }
 	
 	public MachineBridge getMachineBridge(String group) {
 		return topics.get(group).getMachineBridge();
@@ -95,7 +96,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.STATUS.val());
 		topics.put(topicNames.STATUS.val(), new TopicList(topicNames.STATUS.val(),16) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.STATUS.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -103,7 +104,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null ||  readLine.length() == 0 ) {
 						if(DEBUG)System.out.println(this.getClass().getName()+".retrieveData: premature EOR before "+sMarker);
 						break;
@@ -131,7 +132,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DATASET.val());
 		topics.put(topicNames.DATASET.val(), new TopicList(topicNames.DATASET.val(), 16) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.DATASET.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -139,7 +140,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null ||  readLine.length() == 0 ) {
 						//if(DEBUG)System.out.println("Empty line returned from readLine");
 						break;
@@ -170,7 +171,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BATTERY.val());
 		topics.put(topicNames.BATTERY.val(),new TopicList(topicNames.BATTERY.val(),16) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.BATTERY.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -178,7 +179,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 							//if(DEBUG)System.out.println("Empty line returned from readLine");
 							break;
@@ -211,7 +212,7 @@ public class AsynchDemuxer implements Runnable {
 		}
 		topics.put(topicNames.MOTORFAULT.val(), new TopicList(topicNames.MOTORFAULT.val(),16) {
 			@Override
-			public void retrieveData(String readLine) {		
+			public void retrieveData(String readLine) throws InterruptedException {		
 				String sMarker = "</"+topicNames.MOTORFAULT.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -221,7 +222,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(DEBUG)System.out.println("Empty line returned from readLine");
 						//continue;
@@ -255,7 +256,7 @@ public class AsynchDemuxer implements Runnable {
 		}
 		topics.put(topicNames.ULTRASONIC.val(), new TopicList(topicNames.ULTRASONIC.val(),16) {
 			@Override
-			public void retrieveData(String readLine) {	
+			public void retrieveData(String readLine) throws InterruptedException {	
 				int pin = 0, reading = 0, data = 0;
 				String sMarker = "</"+topicNames.ULTRASONIC.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
@@ -263,7 +264,7 @@ public class AsynchDemuxer implements Runnable {
 				if(readLine.length() > sMarker.length()) {
 					pin =  getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));                             
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 							if(DEBUG) System.out.println("Empty line returned from readLine of "+topicNames.ULTRASONIC.val());
 							break;
@@ -307,7 +308,7 @@ public class AsynchDemuxer implements Runnable {
 		}
 		topics.put(topicNames.ANALOGPIN.val(), new TopicList(topicNames.ANALOGPIN.val(),16) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				int pin = 0;
 				String sMarker = "</"+topicNames.ANALOGPIN.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
@@ -315,7 +316,7 @@ public class AsynchDemuxer implements Runnable {
 				if(readLine.length() > sMarker.length()) {
 					pin = getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						System.out.println("Premature return retrieveData "+topicNames.ANALOGPIN.val());
 						break;
@@ -360,7 +361,7 @@ public class AsynchDemuxer implements Runnable {
 		}
 		topics.put(topicNames.DIGITALPIN.val(), new TopicList(topicNames.DIGITALPIN.val(),32) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				int reading = 0, data = 0;
 				int pin = 0;
 				String sMarker = "</"+topicNames.DIGITALPIN.val()+">";
@@ -369,7 +370,7 @@ public class AsynchDemuxer implements Runnable {
 				if(readLine.length() > sMarker.length()) {
 					pin =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						System.out.println("Premature return retrieveData pin # from empty line "+topicNames.DIGITALPIN.val());
 						break;
@@ -415,7 +416,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ASSIGNEDPINS.val());
 		topics.put(topicNames.ASSIGNEDPINS.val(), new TopicList(topicNames.ASSIGNEDPINS.val(),16) {
 			@Override
-			public void retrieveData(String readLine) {  
+			public void retrieveData(String readLine) throws InterruptedException {  
 				String sMarker = "</"+topicNames.ASSIGNEDPINS.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -423,7 +424,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						break;
@@ -450,7 +451,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORCONTROLSETTING.val());	
 		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList(topicNames.MOTORCONTROLSETTING.val(), 128) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.MOTORCONTROLSETTING.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -458,9 +459,9 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
-						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
+						//if(DEBUG)System.out.println("Empty line returned from readLine");
 						break;
 					}
 					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
@@ -469,7 +470,7 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 						break;
 					}
-					//if( Props.DEBUG ) System.out.println(readLine);
+					//if( DEBUG ) System.out.println(readLine);
 					MachineReading mr = new MachineReading(readLine);
 					mb.add(mr);
 				}
@@ -484,7 +485,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMCONTROLSETTING.val());	
 		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList(topicNames.PWMCONTROLSETTING.val(),128) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.PWMCONTROLSETTING.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -492,7 +493,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 					if( readLine == null || readLine.length() == 0 ) {
 						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 						break;
@@ -518,7 +519,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTATUS.val());			
 		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(topicNames.CONTROLLERSTATUS.val(),128) {
 			@Override
-			public void retrieveData(String readLine) {
+			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.CONTROLLERSTATUS.val()+">";
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -526,7 +527,7 @@ public class AsynchDemuxer implements Runnable {
 					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
 					mb.add(mr);
 				}
-				while( !(readLine = ByteSerialDataPort.getInstance().readLine()).startsWith(sMarker) ) {
+				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
 						if( readLine == null || readLine.length() == 0 ) {
 							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
 							break;
@@ -653,45 +654,55 @@ public class AsynchDemuxer implements Runnable {
 	 */
 	@Override
 	public void run() {
+		// spin another worker thread to take lines from circular blocking deque and demux them
+		ThreadPoolManager.getInstance().spin(new Runnable() {
+			String line,fop;
+			char op;
+			@Override
+			public void run() {
+				while(shouldRun) {
+					try {
+						line = marlinLines.takeFirst();
+						if((op=line.charAt(0)) == '<' ) {
+							int endDelim = line.indexOf('>');
+							if( endDelim == -1 ) {
+								System.out.println("Cannot demux received raw directive:"+op);
+								continue;
+							}
+							fop = line.substring(1, endDelim);
+							//if(DEBUG)
+							//	System.out.println("op:"+op);
+							TopicList tl = topics.get(fop);
+							if( tl != null )
+								tl.retrieveData(line);
+							else
+								System.out.println("Cannot retrieve topic "+fop+" from raw directive "+line);
+					
+						} else {
+							System.out.println("Expecting directive but instead found:"+line);
+							continue;
+						}
+					} catch (IndexOutOfBoundsException ioob) {
+						System.out.println("AsynchDemux zero length directive, continuing..");
+						continue;
+					} catch (InterruptedException e) {
+						shouldRun = false;			
+					}		
+				}
+			}
+		});	
 		isRunning = true;
 		while(shouldRun) {
-			String fop, line;
-			char op;
-			try {
-				line = ByteSerialDataPort.getInstance().readLine();
-				if(DEBUG)
-					System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
-				if((op=line.charAt(0)) == '<' ) {
-					int endDelim = line.indexOf('>');
-					if( endDelim == -1 ) {
-						System.out.println("Cannot demux received raw directive:"+op);
-						continue;
-					}
-					fop = line.substring(1, endDelim);
-					//if(DEBUG)
-					//	System.out.println("op:"+op);
-					TopicList tl = topics.get(fop);
-					if( tl != null )
-						tl.retrieveData(line);
-					else
-						System.out.println("Cannot retrieve topic "+fop+" from raw directive "+line);
-					
-				} else {
-						System.out.println("Expecting directive but instead found:"+line);
-						continue;
-				}
-	
-			} catch (IndexOutOfBoundsException ioe) {
-				System.out.println("AsynchDemux zero length directive, continuing..");
-				continue;
-			}
-	
+			String line = ByteSerialDataPort.getInstance().readLine();
+			marlinLines.add(line);
+			if(DEBUG)
+				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
 		} // shouldRun
 		isRunning = false;
 	}
 	
 	public static interface TopicListInterface {
-		public void retrieveData(String line);
+		public void retrieveData(String line) throws InterruptedException;
 		public MachineBridge getMachineBridge();
 		public Object getResult(MachineReading mr);
 	}
