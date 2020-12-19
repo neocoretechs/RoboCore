@@ -482,8 +482,12 @@ public void onStart(final ConnectedNode connectedNode) {
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
 
-	// This CancellableLoop will be canceled automatically when the node shuts
-	// down.
+
+	/**
+	 * 	A CancellableLoop will be canceled automatically when the node shuts down.
+	 * Check the various topic message queues for entries and if any are present, multiplex them onto the outbound bus
+	 * under the DiagnosticStatus tops for any waiting subscribers to process and deal with.
+	 */
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
 		private int sequenceNumber;
 		@Override
@@ -552,8 +556,260 @@ public void onStart(final ConnectedNode connectedNode) {
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.MOTORFAULT.val()+": "+statmsg.getMessage().toString());
+				}
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.TIME.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.TIME.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.OK);
+					statmsg.setMessage(AsynchDemuxer.topicNames.TIME.val()+" Time "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.TIME.val()+": "+statmsg.getMessage().toString());
+				}
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+": "+statmsg.getMessage().toString());
+				}
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+": "+statmsg.getMessage().toString());
+				}
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.NOMORGCODE.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.NOMORGCODE.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.NOMORGCODE.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.NOMORGCODE.val()+": "+statmsg.getMessage().toString());
+				}	
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.BADMOTOR.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.BADMOTOR.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.BADMOTOR.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BADMOTOR.val()+": "+statmsg.getMessage().toString());
+				}
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.BADPWM.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.BADPWM.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.BADPWM.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BADPWM.val()+": "+statmsg.getMessage().toString());
+				}	
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.UNKNOWNG.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.UNKNOWNG.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.UNKNOWNG.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.UNKNOWNG.val()+": "+statmsg.getMessage().toString());
+				}	
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.UNKNOWNM.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.UNKNOWNM.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.UNKNOWNM.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.UNKNOWNM.val()+": "+statmsg.getMessage().toString());
+				}
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.BADCONTROL.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.BADCONTROL.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.BADCONTROL.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BADCONTROL.val()+": "+statmsg.getMessage().toString());
+				}	
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.NOCHECKSUM.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.NOCHECKSUM.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.NOCHECKSUM.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.NOCHECKSUM.val()+": "+statmsg.getMessage().toString());
+				}	
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.NOLINECHECK.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.NOLINECHECK.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.NOLINECHECK.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.NOLINECHECK.val()+": "+statmsg.getMessage().toString());
+				}
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.CHECKMISMATCH.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.CHECKMISMATCH.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.CHECKMISMATCH.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.CHECKMISMATCH.val()+": "+statmsg.getMessage().toString());
+				}
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.LINESEQ.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.LINESEQ.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.LINESEQ.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.LINESEQ.val()+": "+statmsg.getMessage().toString());
+				}	
+			
+			tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.M115.val());
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.M115.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setMessage(AsynchDemuxer.topicNames.M115.val()+" warning "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					li.add(kv);
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.M115.val()+": "+statmsg.getMessage().toString());
 				}			
-		
+			//
+			// Poll the outgoing message array for diagnostics enqueued by al the above processing
+			//
 			while(!outgoingDiagnostics.isEmpty()) {
 				statmsg = outgoingDiagnostics.takeFirst();
 				statpub.publish(statmsg);
