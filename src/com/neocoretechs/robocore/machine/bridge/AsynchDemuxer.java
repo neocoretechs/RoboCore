@@ -675,7 +675,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADMOTOR.val());			
-		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(topicNames.BADMOTOR.val(),16) {
+		topics.put(topicNames.BADMOTOR.val(), new TopicList(topicNames.BADMOTOR.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.BADMOTOR.val()+">";
