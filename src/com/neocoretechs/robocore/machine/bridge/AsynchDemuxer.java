@@ -9,18 +9,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
+import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
 /**
  * This class is the primary interface between real time data and the other subsystems.
- * Its primary function is to demultiplex the input stream coming from data sources such as the attached
- * microcontroller Mega2560 etc that utilize a protocol with '<header>',line number, data value.
+ * Its primary function is to demultiplex the input stream coming from {@code DataPortInterface} 
+ * data sources such as the attached microcontroller Mega2560 etc that implement the interface and 
+ * utilize a protocol with '<header>',line number, data value.
  * Each 'topic' described by the demultiplexed header as it flows in with its associated data is expected to have:
  * OPTIONAL:
  * 1) A thread that services the final processing listener class and deque for the given topic '<header>'
  * 2) A listener class that is serviced by the above thread that takes raw MachineReadings and transforms them if necessary
  * MANDATORY:
- * 3) A 'TopicList' class in the hash table with its associated 'header'
- * 4) An instance of 'MachineBridge' that operates on the raw data for a given topic 'header'
+ * 3) An instance of {@code DataPortInterface} to connect to.
+ * 4) A 'TopicList' class in the hash table with its associated 'header'
+ * 5) An instance of 'MachineBridge' that operates on the raw data for a given topic 'header'
  * The optional items are necessary for data streamed at high rates. Notice in the code that 'dataset' has no
  * associated listener since it is a low volume data item. In this case the item is retrieved from the MachineBridge deque itself
  * rather than the associated listener deque.
@@ -40,9 +43,9 @@ public class AsynchDemuxer implements Runnable {
 	private static boolean DEBUG = true;
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
-	private volatile static AsynchDemuxer instance = null;
+	private DataPortInterface dataPort;
 
-	public static enum topicNames {
+	public enum topicNames {
 		STATUS("status"),
 		DATASET("dataset"),
 		BATTERY("battery"),
@@ -72,21 +75,6 @@ public class AsynchDemuxer implements Runnable {
 		public String val() { return name; }
 	};
 	
-	private AsynchDemuxer() {}
-	/**
-	 * Double check lock singleton
-	 * @return
-	 */
-	public static AsynchDemuxer getInstance() {
-		if(instance == null ) {
-			synchronized(AsynchDemuxer.class) {	
-				if( instance == null ) {
-					instance = new AsynchDemuxer();
-				}
-			}
-		}
-		return instance;
-	}
 	private Map<String, TopicList> topics = new ConcurrentHashMap<String, TopicList>(topicNames.values().length);
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
@@ -97,9 +85,12 @@ public class AsynchDemuxer implements Runnable {
 		return topics.get(group).getMachineBridge();
 	}
 
-	public synchronized void connect() throws IOException {
-		ByteSerialDataPort.getInstance().connect(true);
+	public synchronized void connect(DataPortInterface dataPort) throws IOException {
+		this.dataPort = dataPort;
+		dataPort.connect(true);
 	}
+	
+	public DataPortInterface getDataPort() { return dataPort; }
 	
 	public synchronized void init() {
 		topicNames[] xtopics = topicNames.values();
@@ -1034,7 +1025,7 @@ public class AsynchDemuxer implements Runnable {
 		});
 		
 		// spin the main loop to read lines from the Marlinspike and muxx them
-		ThreadPoolManager.getInstance().spin(getInstance(), "SYSTEM");
+		ThreadPoolManager.getInstance().spin(this, "SYSTEM");
 
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init END OF INITIALIZATION of Marlinspike topic listeners");
@@ -1114,12 +1105,12 @@ public class AsynchDemuxer implements Runnable {
 	public synchronized void config() throws IOException {
 		// now read the startup G-code directives to initiate
 		try {
-			ByteSerialDataPort bsdp = ByteSerialDataPort.getInstance();
+			//ByteSerialDataPort bsdp = ByteSerialDataPort.getInstance();
 			//String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
 			List<String> starts = FileIOUtilities.getConfig();
 			for(String s : starts) {
 				System.out.println("Startup GCode:"+s);
-				bsdp.writeLine(s);
+				dataPort.writeLine(s);
 				Thread.sleep(100);
 			}
 		} catch (IOException e) {
@@ -1189,7 +1180,7 @@ public class AsynchDemuxer implements Runnable {
 		});	
 		isRunning = true;
 		while(shouldRun) {
-			String line = ByteSerialDataPort.getInstance().readLine();
+			String line = dataPort.readLine();
 			marlinLines.add(line);
 			if(DEBUG)
 				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
@@ -1212,7 +1203,8 @@ public class AsynchDemuxer implements Runnable {
 	
 	public static void main(String[] args) throws Exception {
 		// start demux
-		AsynchDemuxer.getInstance();
+		AsynchDemuxer demuxer = new AsynchDemuxer();	
+		demuxer.connect(ByteSerialDataPort.getInstance());
 		// the L H and T values represent those to EXCLUDE
 		// So we are looking for state 0 on digital pin and value not between L and H analog
 		ByteSerialDataPort.getInstance().writeLine("M303 P54 L470 H510");

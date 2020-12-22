@@ -27,6 +27,7 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.TopicListInterface
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 
 /**
@@ -101,6 +102,7 @@ public NodeConfiguration build()  {
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {
+	final AsynchDemuxer asynchDemuxer;
 	//fileReader reader = new fileReader();
 	//ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
@@ -116,7 +118,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	//	mode = remaps.get("__mode");
 	//if( mode.equals("startup")) {
 		try {
-			AsynchDemuxer.getInstance().config();
+			asynchDemuxer = new AsynchDemuxer();
+			asynchDemuxer.connect(ByteSerialDataPort.getInstance());
+			asynchDemuxer.config();
 		} catch (IOException e) {
 		System.out.println("Could not start process to read attached serial port.."+e);
 			e.printStackTrace();
@@ -136,7 +140,7 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
-			TopicListInterface tli = AsynchDemuxer.getInstance().getTopic(AsynchDemuxer.topicNames.ANALOGPIN.val());
+			TopicListInterface tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.ANALOGPIN.val());
 			MachineBridge mb = tli.getMachineBridge();
 			for(int i = 0; i < 2 ; i++) {
 			if( !mb.get().isEmpty() ) {
@@ -239,12 +243,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				//motorControlHost.moveRobotRelative(targetYaw, targetPitch, targetDist);
 	
 			Thread.sleep(10);
-		}
-			
+		}		
 	});
-	
-
-
 }
 
 class fileReader implements Runnable {
