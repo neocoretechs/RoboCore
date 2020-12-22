@@ -54,6 +54,17 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
  * the actual communications are centralized in the {@code MegaControl} class and its contained {@code ByteSerialDataPort} low level
  * access module.
  * 
+ * The command line parameters drive the process through the following:<p/>
+ * __mode:=startup<br/>
+ * Indicates that the M and G code file specified, default startup.gcode, read a set of initialization codes
+ * to be sent to the Marlinspike<p/>
+ * __pwm:=controller<br/>
+ * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
+ * initialized with a previous M-code<p/>
+ * __pwm:=direct<br/>
+ * Indicates that PWM directives sent as a service are to be directly applied as a set of values working
+ * on a PWM pin<p/>
+ * GPIO service invocation always works directly on a pin.<p/>  
  * In addition, control functions are 
  * As input from the attached board is received, the {@code AsynchDemuxer} decodes the header and prepares the data for publication
  * to the Ros bus. Publish various warnings over the 'robocore/status' topic.
@@ -68,7 +79,8 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
  * send them on to the attached controller. We have the standard cmd_vel which receives TWIST messages and an aux "absolute/cmd_vel"
  * that we use to send absolute motor control acceleration directives, such as from the PS3 controller.
  * We also subscribe to the cmd_pwm message, which allows us to issue a M45 PWM directive for a particular power level.
- * The cmd_gpio message is also processed activating a specific pin with a specific value.
+ * The cmd_gpio message is also processed activating a specific pin with a specific value as a service
+ * mentioned above.
  * 
  * Essentially this is the main interface to the attached Mega2560 and on to all GPIO
  * and high level motor control functions which are activated via a serial board TTL to RS-232 attached to Mega2560.
@@ -110,6 +122,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	// Queue for outgoing diagnostic messages
 	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
+	private boolean serviceActive = false; // if we are invoking a service for report status, we dont want the publishing loop grabbing it out from under us
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -210,7 +223,9 @@ public void onStart(final ConnectedNode connectedNode) {
 				@Override
 				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
 					try {
+						serviceActive = true;
 						response.setData(motorControlHost.reportAllControllerStatus());
+						serviceActive = false;
 					} catch (IOException e) {
 						System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA REPORT SERVICE");
 						e.printStackTrace();
@@ -586,6 +601,9 @@ public void onStart(final ConnectedNode connectedNode) {
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.TIME.val()+": "+statmsg.getMessage().toString());
 				}
 			
+			// in this case if we are activating the service to get the controller status report
+			// dont intercept it.
+			if(!serviceActive) {
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
 			//if( DEBUG) 
 			//	System.out.println("Topic "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+" "+tli);
@@ -605,6 +623,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+": "+statmsg.getMessage().toString());
 				}
+			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
 			//if( DEBUG) 
