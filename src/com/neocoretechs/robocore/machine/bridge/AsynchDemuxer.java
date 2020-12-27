@@ -44,6 +44,7 @@ public class AsynchDemuxer implements Runnable {
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
+	private static Object mutexWrite = new Object();
 
 	public enum topicNames {
 		STATUS("status"),
@@ -69,6 +70,11 @@ public class AsynchDemuxer implements Runnable {
 		NOLINECHECK("No Line Number with checksum, Last Line: "),
 		CHECKMISMATCH("checksum mismatch, Last Line: "),
 		LINESEQ("Line Number is not Last Line Number+1, Last Line: "),
+		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
+		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),
+		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M44("M44"),M45("M45"),M46("M46"),
+		M80("M80"),M81("M81"),M300("M300"),M301("M301"),M302("M302"),M303("M303"),M304("M304"),M305("M305"),M306("M306"),M444("M444"),
+		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M503("M503"),M799("M799"),
 		M115("FIRMWARE_NAME:Marlinspike RoboCore"); // followed by FIRMWARE_URL,PROTOCOL_VERSION,MACHINE_TYPE,MACHINE NAME,MACHINE_UUID
 		String name;
 		topicNames(String name) { this.name = name;}
@@ -80,7 +86,21 @@ public class AsynchDemuxer implements Runnable {
 	
 	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(256);
 	public void clearLineBuffer() { marlinLines.clear(); }
-	
+	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(256);
+	public void clearWriteBuffer() { toWrite.clear(); }
+	public static void addWrite(AsynchDemuxer ad, String req) { 
+		boolean overwrite = ad.toWrite.addLast(req);
+		if(overwrite)
+			System.out.println("WARNING - OUBOUND MARLINSPIKE QUEUE OVERWRITE!");
+	}
+	public String takeWrite() {
+		try {
+			return toWrite.takeFirst();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
 	public MachineBridge getMachineBridge(String group) {
 		return topics.get(group).getMachineBridge();
 	}
@@ -97,9 +117,12 @@ public class AsynchDemuxer implements Runnable {
 		String[] stopics = new String[xtopics.length];
 		for(int i = 0; i < xtopics.length; i++) stopics[i] = xtopics[i].val();
 		ThreadPoolManager.init(stopics);
+		//
+		// status - M700
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.STATUS.val());
-		topics.put(topicNames.STATUS.val(), new TopicList(topicNames.STATUS.val(),16) {
+		topics.put(topicNames.STATUS.val(), new TopicList(this, topicNames.STATUS.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.STATUS.val()+">";
@@ -126,16 +149,18 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
 				return mr.getReadingValString();
 			}
-		
 		});
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DATASET.val());
-		topics.put(topicNames.DATASET.val(), new TopicList(topicNames.DATASET.val(), 16) {
+		topics.put(topicNames.DATASET.val(), new TopicList(this, topicNames.DATASET.val(), 16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.DATASET.val()+">";
@@ -174,7 +199,7 @@ public class AsynchDemuxer implements Runnable {
 		});
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BATTERY.val());
-		topics.put(topicNames.BATTERY.val(),new TopicList(topicNames.BATTERY.val(),16) {
+		topics.put(topicNames.BATTERY.val(),new TopicList(this, topicNames.BATTERY.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.BATTERY.val()+">";
@@ -215,7 +240,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init "+topicNames.BATTERY.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORFAULT.val());
 		}
-		topics.put(topicNames.MOTORFAULT.val(), new TopicList(topicNames.MOTORFAULT.val(),16) {
+		topics.put(topicNames.MOTORFAULT.val(), new TopicList(this, topicNames.MOTORFAULT.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {		
 				String sMarker = "</"+topicNames.MOTORFAULT.val()+">";
@@ -259,7 +284,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init "+topicNames.MOTORFAULT.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONIC.val());
 		}
-		topics.put(topicNames.ULTRASONIC.val(), new TopicList(topicNames.ULTRASONIC.val(),16) {
+		topics.put(topicNames.ULTRASONIC.val(), new TopicList(this, topicNames.ULTRASONIC.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {	
 				int pin = 0, reading = 0, data = 0;
@@ -311,7 +336,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init "+topicNames.ULTRASONIC.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
 		}
-		topics.put(topicNames.ANALOGPIN.val(), new TopicList(topicNames.ANALOGPIN.val(),16) {
+		topics.put(topicNames.ANALOGPIN.val(), new TopicList(this, topicNames.ANALOGPIN.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				int pin = 0;
@@ -364,7 +389,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init "+topicNames.ANALOGPIN.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPIN.val());
 		}
-		topics.put(topicNames.DIGITALPIN.val(), new TopicList(topicNames.DIGITALPIN.val(),32) {
+		topics.put(topicNames.DIGITALPIN.val(), new TopicList(this, topicNames.DIGITALPIN.val(),32) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				int reading = 0, data = 0;
@@ -419,7 +444,7 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ASSIGNEDPINS.val());
-		topics.put(topicNames.ASSIGNEDPINS.val(), new TopicList(topicNames.ASSIGNEDPINS.val(),16) {
+		topics.put(topicNames.ASSIGNEDPINS.val(), new TopicList(this, topicNames.ASSIGNEDPINS.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {  
 				String sMarker = "</"+topicNames.ASSIGNEDPINS.val()+">";
@@ -454,7 +479,7 @@ public class AsynchDemuxer implements Runnable {
 		});
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORCONTROLSETTING.val());	
-		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList(topicNames.MOTORCONTROLSETTING.val(), 128) {
+		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList(this, topicNames.MOTORCONTROLSETTING.val(), 128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.MOTORCONTROLSETTING.val()+">";
@@ -488,7 +513,7 @@ public class AsynchDemuxer implements Runnable {
 		});
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMCONTROLSETTING.val());	
-		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList(topicNames.PWMCONTROLSETTING.val(),128) {
+		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList(this, topicNames.PWMCONTROLSETTING.val(),128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.PWMCONTROLSETTING.val()+">";
@@ -522,7 +547,7 @@ public class AsynchDemuxer implements Runnable {
 		});
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTATUS.val());			
-		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(topicNames.CONTROLLERSTATUS.val(),128) {
+		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(this, topicNames.CONTROLLERSTATUS.val(),128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.CONTROLLERSTATUS.val()+">";
@@ -558,7 +583,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.TIME.val());			
-		topics.put(topicNames.TIME.val(), new TopicList(topicNames.TIME.val(),16) {
+		topics.put(topicNames.TIME.val(), new TopicList(this, topicNames.TIME.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.TIME.val()+">";
@@ -594,7 +619,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTOPPED.val());			
-		topics.put(topicNames.CONTROLLERSTOPPED.val(), new TopicList(topicNames.CONTROLLERSTOPPED.val(),16) {
+		topics.put(topicNames.CONTROLLERSTOPPED.val(), new TopicList(this, topicNames.CONTROLLERSTOPPED.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.CONTROLLERSTOPPED.val()+">";
@@ -630,7 +655,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOMORGCODE.val());			
-		topics.put(topicNames.NOMORGCODE.val(), new TopicList(topicNames.NOMORGCODE.val(),16) {
+		topics.put(topicNames.NOMORGCODE.val(), new TopicList(this, topicNames.NOMORGCODE.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.NOMORGCODE.val()+">";
@@ -666,7 +691,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADMOTOR.val());			
-		topics.put(topicNames.BADMOTOR.val(), new TopicList(topicNames.BADMOTOR.val(),16) {
+		topics.put(topicNames.BADMOTOR.val(), new TopicList(this, topicNames.BADMOTOR.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.BADMOTOR.val()+">";
@@ -702,7 +727,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADPWM.val());			
-		topics.put(topicNames.BADPWM.val(), new TopicList(topicNames.BADPWM.val(),128) {
+		topics.put(topicNames.BADPWM.val(), new TopicList(this, topicNames.BADPWM.val(),128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.BADPWM.val()+">";
@@ -738,7 +763,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNG.val());			
-		topics.put(topicNames.UNKNOWNG.val(), new TopicList(topicNames.UNKNOWNG.val(),16) {
+		topics.put(topicNames.UNKNOWNG.val(), new TopicList(this, topicNames.UNKNOWNG.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.UNKNOWNG.val()+">";
@@ -774,7 +799,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNM.val());			
-		topics.put(topicNames.UNKNOWNM.val(), new TopicList(topicNames.UNKNOWNM.val(),16) {
+		topics.put(topicNames.UNKNOWNM.val(), new TopicList(this, topicNames.UNKNOWNM.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.UNKNOWNM.val()+">";
@@ -810,7 +835,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADCONTROL.val());			
-		topics.put(topicNames.BADCONTROL.val(), new TopicList(topicNames.BADCONTROL.val(),16) {
+		topics.put(topicNames.BADCONTROL.val(), new TopicList(this, topicNames.BADCONTROL.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.BADCONTROL.val()+">";
@@ -846,7 +871,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOCHECKSUM.val());			
-		topics.put(topicNames.NOCHECKSUM.val(), new TopicList(topicNames.NOCHECKSUM.val(),16) {
+		topics.put(topicNames.NOCHECKSUM.val(), new TopicList(this, topicNames.NOCHECKSUM.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.NOCHECKSUM.val()+">";
@@ -882,7 +907,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOLINECHECK.val());			
-		topics.put(topicNames.NOLINECHECK.val(), new TopicList(topicNames.NOLINECHECK.val(),16) {
+		topics.put(topicNames.NOLINECHECK.val(), new TopicList(this, topicNames.NOLINECHECK.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.NOLINECHECK.val()+">";
@@ -918,7 +943,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CHECKMISMATCH.val());			
-		topics.put(topicNames.CHECKMISMATCH.val(), new TopicList(topicNames.CHECKMISMATCH.val(),16) {
+		topics.put(topicNames.CHECKMISMATCH.val(), new TopicList(this, topicNames.CHECKMISMATCH.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.CHECKMISMATCH.val()+">";
@@ -954,7 +979,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.LINESEQ.val());			
-		topics.put(topicNames.LINESEQ.val(), new TopicList(topicNames.LINESEQ.val(),16) {
+		topics.put(topicNames.LINESEQ.val(), new TopicList(this, topicNames.LINESEQ.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.LINESEQ.val()+">";
@@ -990,7 +1015,7 @@ public class AsynchDemuxer implements Runnable {
 		
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M115.val());			
-		topics.put(topicNames.M115.val(), new TopicList(topicNames.M115.val(),16) {
+		topics.put(topicNames.M115.val(), new TopicList(this, topicNames.M115.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				String sMarker = "</"+topicNames.M115.val()+">";
@@ -1128,7 +1153,29 @@ public class AsynchDemuxer implements Runnable {
 	 */
 	@Override
 	public void run() {
-		// spin another worker thread to take lines from circular blocking deque and demux them
+		// spin another worker thread to take queued write requests and send them on to the Marlinspike
+		// Take requests from write queue and send them to the serial port of marlinspike. Wait for the same
+		// response as request to be ack from our corresponding retrieveData with a notifyAll on mutexWrite.
+		ThreadPoolManager.getInstance().spin(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					String writeReq = takeWrite();
+					ByteSerialDataPort.getInstance().writeLine(writeReq);
+					synchronized(AsynchDemuxer.mutexWrite) {
+						try {
+							AsynchDemuxer.mutexWrite.wait(500);
+						} catch (InterruptedException e) {
+							System.out.println("Timeout - No write response from Marlinspike for:"+writeReq);
+							e.printStackTrace();
+						}
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}	
+		});
+		// spin another worker thread to take Marlinspike lines from circular blocking deque and demux them
 		ThreadPoolManager.getInstance().spin(new Runnable() {
 			String line,fop;
 			char op;
@@ -1181,7 +1228,9 @@ public class AsynchDemuxer implements Runnable {
 		isRunning = true;
 		while(shouldRun) {
 			String line = dataPort.readLine();
-			marlinLines.add(line);
+			boolean overwrite = marlinLines.add(line);
+			if(overwrite)
+				System.out.println("WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
 			if(DEBUG)
 				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
 		} // shouldRun
@@ -1192,13 +1241,42 @@ public class AsynchDemuxer implements Runnable {
 		public void retrieveData(String line) throws InterruptedException;
 		public MachineBridge getMachineBridge();
 		public Object getResult(MachineReading mr);
+		/**
+		 * The request consists of the M code and the parameters, passed on to the abstract class method
+		 * @param req
+		 */
+		public void writeRequest(String req);
 	}
+	
 	private static abstract class TopicList implements TopicListInterface {
+		AsynchDemuxer demux;
 		MachineBridge mb;
-		TopicList(String groupName, int queueSize) {
+		TopicList(AsynchDemuxer demux, String groupName, int queueSize) {
+			this.demux = demux;
 			mb = new MachineBridge(groupName, queueSize);
 		}
+		@Override
 		public MachineBridge getMachineBridge() { return mb; }
+		/**
+		 * Issue a request which is queued to outbound Marlinspike write queue, then
+		 * wait an interval for a corresponding ACK response to come back which matches request.
+		 * If the response, which triggers a notifyAll in the corresponding retrieveData method, does
+		 * not match request or times out, toss an error.
+		 * @param ad
+		 * @param req
+		 */
+		@Override
+		public void writeRequest(String req) {
+			AsynchDemuxer.addWrite(demux, req);
+			synchronized(AsynchDemuxer.mutexWrite) {
+				try {
+					AsynchDemuxer.mutexWrite.wait(500);
+				} catch (InterruptedException e) {
+					System.out.println("Timeout - No write response from Marlinspike for:"+req);
+					e.printStackTrace();
+				}
+			}
+		}
 	}
 	
 	public static void main(String[] args) throws Exception {
@@ -1207,12 +1285,12 @@ public class AsynchDemuxer implements Runnable {
 		demuxer.connect(ByteSerialDataPort.getInstance());
 		// the L H and T values represent those to EXCLUDE
 		// So we are looking for state 0 on digital pin and value not between L and H analog
-		ByteSerialDataPort.getInstance().writeLine("M303 P54 L470 H510");
-		ByteSerialDataPort.getInstance().writeLine("M303 P55 L470 H510");
-		ByteSerialDataPort.getInstance().writeLine("M305 P30 T1");
-		ByteSerialDataPort.getInstance().writeLine("M305 P46 T1");
-		ByteSerialDataPort.getInstance().writeLine("M305 P47 T1");
-		ByteSerialDataPort.getInstance().writeLine("M305 P49 T1");
+		AsynchDemuxer.addWrite(demuxer, "M303 P54 L470 H510");
+		AsynchDemuxer.addWrite(demuxer,"M303 P55 L470 H510");
+		AsynchDemuxer.addWrite(demuxer,"M305 P30 T1");
+		AsynchDemuxer.addWrite(demuxer,"M305 P46 T1");
+		AsynchDemuxer.addWrite(demuxer,"M305 P47 T1");
+		AsynchDemuxer.addWrite(demuxer,"M305 P49 T1");
 	}
 
 }

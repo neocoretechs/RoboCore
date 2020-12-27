@@ -20,7 +20,7 @@ import diagnostic_msgs.KeyValue;
  */
 public class StatusAlertSubs extends AbstractNodeMain {
 	private static boolean DEBUG = false;
-	private static boolean speak = true;
+	private static boolean speak = false;
 	public static VoxHumana speaker = null;
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -35,32 +35,29 @@ public class StatusAlertSubs extends AbstractNodeMain {
 		Subscriber<diagnostic_msgs.DiagnosticStatus> subsbat = connectedNode.newSubscriber("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 	
 		subsbat.addMessageListener(new MessageListener<diagnostic_msgs.DiagnosticStatus>() {
-		@Override
-		public void onNewMessage(DiagnosticStatus message) {
-			try
-			{
+			@Override
+			public void onNewMessage(DiagnosticStatus message) {
 				System.out.println("Status "+message.getMessage());
-				if( speak ) {
-					StringBuilder sb = new StringBuilder();
-					sb.append(message.getMessage()+"\r\n");
-					List<KeyValue> diagMsgs = message.getValues();
-					if( diagMsgs != null ) {
+				StringBuilder sb = new StringBuilder();
+				sb.append(message.getMessage()+"\r\n");
+				List<KeyValue> diagMsgs = message.getValues();
+				if( diagMsgs != null ) {
 						for( KeyValue msg : diagMsgs) {
 							sb.append(msg.getKey()+"\r\n");
 							if( msg.getValue() != null ) {
 								sb.append(msg.getValue()+"\r\n");
 							}
 						}
-					}
-					speaker.doSpeak(sb.toString());
 				}
-			}
-			catch (Throwable e)
-			{
-				e.printStackTrace();
-			}
-		}
+				try {
+					if( speak ) {
+						speaker.doSpeak(sb.toString());
+					}
+				} catch(Throwable e) {			
+					e.printStackTrace();
+				}
 
+			}
 		});
 		
 	}

@@ -109,6 +109,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	private AuxGPIOControl auxGPIO = null;
 	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
+	private boolean isOperating = false;
 	private boolean shouldMove = true;
 	private int targetPitch;
 	private int targetDist;
@@ -404,8 +405,10 @@ public void onStart(final ConnectedNode connectedNode) {
 			int valch3 = valch[i+2];
 			try {
 				if(valch1 == -1) {
-					motorControlHost.commandStop();
-				} else {
+					isOperating = false;
+				} else {			
+					isOperating = true;
+					System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
 					((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
 				}
 			} catch (IOException e) {
