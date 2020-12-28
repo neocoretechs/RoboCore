@@ -45,6 +45,8 @@ public class AsynchDemuxer implements Runnable {
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
 	private static Object mutexWrite = new Object();
+	private final static String MSG_BEGIN = "<";
+	private final static String MSG_TERMINATE ="/>";
 
 	public enum topicNames {
 		STATUS("status"),
@@ -118,6 +120,291 @@ public class AsynchDemuxer implements Runnable {
 		for(int i = 0; i < xtopics.length; i++) stopics[i] = xtopics[i].val();
 		ThreadPoolManager.init(stopics);
 		//
+		// G4
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G4.val());
+		topics.put(topicNames.G4.val(), new TopicList(this, topicNames.G4.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.G4.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// G5
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G5.val());
+		topics.put(topicNames.G5.val(), new TopicList(this, topicNames.G5.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.G5.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// G99
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G99.val());
+		topics.put(topicNames.G99.val(), new TopicList(this, topicNames.G99.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.G99.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// G100
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G100.val());
+		topics.put(topicNames.G100.val(), new TopicList(this, topicNames.G100.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.G100.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M0
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M0.val());
+		topics.put(topicNames.M0.val(), new TopicList(this, topicNames.M0.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M0.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M1
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M1.val());
+		topics.put(topicNames.M1.val(), new TopicList(this, topicNames.M1.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M1.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M2
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M2.val());
+		topics.put(topicNames.M2.val(), new TopicList(this, topicNames.M2.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M2.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M3
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M3.val());
+		topics.put(topicNames.M3.val(), new TopicList(this, topicNames.M3.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M3.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M4
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M4.val());
+		topics.put(topicNames.M4.val(), new TopicList(this, topicNames.M4.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M4.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M5
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M5.val());
+		topics.put(topicNames.M5.val(), new TopicList(this, topicNames.M5.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M5.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M6
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M6.val());
+		topics.put(topicNames.M6.val(), new TopicList(this, topicNames.M6.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M6.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M7
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M7.val());
+		topics.put(topicNames.M7.val(), new TopicList(this, topicNames.M7.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M7.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M8
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M8.val());
+		topics.put(topicNames.M8.val(), new TopicList(this, topicNames.M8.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M8.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M9
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M9.val());
+		topics.put(topicNames.M9.val(), new TopicList(this, topicNames.M9.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M9.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M10
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M10.val());
+		topics.put(topicNames.M10.val(), new TopicList(this, topicNames.M10.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M10.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
 		// status - M700
 		//
 		if(DEBUG)
@@ -125,7 +412,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.STATUS.val(), new TopicList(this, topicNames.STATUS.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.STATUS.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.STATUS.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -163,7 +450,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.DATASET.val(), new TopicList(this, topicNames.DATASET.val(), 16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.DATASET.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.DATASET.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -191,6 +478,9 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -202,7 +492,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.BATTERY.val(),new TopicList(this, topicNames.BATTERY.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.BATTERY.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.BATTERY.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -230,6 +520,9 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -243,7 +536,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.MOTORFAULT.val(), new TopicList(this, topicNames.MOTORFAULT.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {		
-				String sMarker = "</"+topicNames.MOTORFAULT.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.MOTORFAULT.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -274,6 +567,9 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -288,7 +584,7 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {	
 				int pin = 0, reading = 0, data = 0;
-				String sMarker = "</"+topicNames.ULTRASONIC.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.ULTRASONIC.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -325,6 +621,9 @@ public class AsynchDemuxer implements Runnable {
 				if( DEBUG ) 
 					System.out.println(topicNames.ULTRASONIC.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -340,7 +639,7 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				int pin = 0;
-				String sMarker = "</"+topicNames.ANALOGPIN.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.ANALOGPIN.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -379,6 +678,9 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -394,7 +696,7 @@ public class AsynchDemuxer implements Runnable {
 			public void retrieveData(String readLine) throws InterruptedException {
 				int reading = 0, data = 0;
 				int pin = 0;
-				String sMarker = "</"+topicNames.DIGITALPIN.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.DIGITALPIN.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -430,6 +732,9 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -447,7 +752,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.ASSIGNEDPINS.val(), new TopicList(this, topicNames.ASSIGNEDPINS.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {  
-				String sMarker = "</"+topicNames.ASSIGNEDPINS.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.ASSIGNEDPINS.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -471,6 +776,9 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -482,7 +790,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList(this, topicNames.MOTORCONTROLSETTING.val(), 128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.MOTORCONTROLSETTING.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.MOTORCONTROLSETTING.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -505,6 +813,9 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -516,7 +827,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList(this, topicNames.PWMCONTROLSETTING.val(),128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.PWMCONTROLSETTING.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.PWMCONTROLSETTING.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -539,6 +850,9 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
@@ -550,7 +864,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(this, topicNames.CONTROLLERSTATUS.val(),128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.CONTROLLERSTATUS.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.CONTROLLERSTATUS.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -573,6 +887,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -586,7 +903,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.TIME.val(), new TopicList(this, topicNames.TIME.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.TIME.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.TIME.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -609,6 +926,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -622,7 +942,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.CONTROLLERSTOPPED.val(), new TopicList(this, topicNames.CONTROLLERSTOPPED.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.CONTROLLERSTOPPED.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.CONTROLLERSTOPPED.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -645,6 +965,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -658,7 +981,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.NOMORGCODE.val(), new TopicList(this, topicNames.NOMORGCODE.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.NOMORGCODE.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.NOMORGCODE.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -681,6 +1004,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -694,7 +1020,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.BADMOTOR.val(), new TopicList(this, topicNames.BADMOTOR.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.BADMOTOR.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.BADMOTOR.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -717,6 +1043,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -730,7 +1059,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.BADPWM.val(), new TopicList(this, topicNames.BADPWM.val(),128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.BADPWM.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.BADPWM.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -753,8 +1082,10 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
-
 			@Override
 			public Object getResult(MachineReading mr) {
 				return mr.getReadingValString();
@@ -766,7 +1097,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.UNKNOWNG.val(), new TopicList(this, topicNames.UNKNOWNG.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.UNKNOWNG.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.UNKNOWNG.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -789,6 +1120,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -802,7 +1136,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.UNKNOWNM.val(), new TopicList(this, topicNames.UNKNOWNM.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.UNKNOWNM.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.UNKNOWNM.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -825,6 +1159,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -838,7 +1175,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.BADCONTROL.val(), new TopicList(this, topicNames.BADCONTROL.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.BADCONTROL.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.BADCONTROL.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -861,6 +1198,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -874,7 +1214,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.NOCHECKSUM.val(), new TopicList(this, topicNames.NOCHECKSUM.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.NOCHECKSUM.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.NOCHECKSUM.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -897,6 +1237,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -910,7 +1253,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.NOLINECHECK.val(), new TopicList(this, topicNames.NOLINECHECK.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.NOLINECHECK.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.NOLINECHECK.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -933,6 +1276,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -946,7 +1292,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.CHECKMISMATCH.val(), new TopicList(this, topicNames.CHECKMISMATCH.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.CHECKMISMATCH.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.CHECKMISMATCH.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -969,6 +1315,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -982,7 +1331,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.LINESEQ.val(), new TopicList(this, topicNames.LINESEQ.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.LINESEQ.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.LINESEQ.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -1005,6 +1354,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -1018,7 +1370,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.M115.val(), new TopicList(this, topicNames.M115.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = "</"+topicNames.M115.val()+">";
+				String sMarker = MSG_BEGIN+topicNames.M115.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
 				if(readLine.length() > sMarker.length()) {
@@ -1041,6 +1393,9 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 			}
 
 			@Override
@@ -1129,18 +1484,12 @@ public class AsynchDemuxer implements Runnable {
 	 */
 	public synchronized void config() throws IOException {
 		// now read the startup G-code directives to initiate
-		try {
-			//ByteSerialDataPort bsdp = ByteSerialDataPort.getInstance();
-			//String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
-			List<String> starts = FileIOUtilities.getConfig();
-			for(String s : starts) {
-				System.out.println("Startup GCode:"+s);
-				dataPort.writeLine(s);
-				Thread.sleep(100);
-			}
-		} catch (IOException e) {
-			if( DEBUG) System.out.println("No startup.gcode file detected..");
-		} catch (InterruptedException e) {}
+		//String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
+		List<String> starts = FileIOUtilities.getConfig();
+		for(String s : starts) {
+			System.out.println("Startup GCode:"+s);
+			addWrite(this,s);
+		}
 	}
 	
 	
@@ -1160,14 +1509,16 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void run() {
 				try {
-					String writeReq = takeWrite();
-					ByteSerialDataPort.getInstance().writeLine(writeReq);
-					synchronized(AsynchDemuxer.mutexWrite) {
-						try {
-							AsynchDemuxer.mutexWrite.wait(500);
-						} catch (InterruptedException e) {
-							System.out.println("Timeout - No write response from Marlinspike for:"+writeReq);
-							e.printStackTrace();
+					while(shouldRun) {
+						String writeReq = takeWrite();
+						dataPort.writeLine(writeReq);
+						synchronized(AsynchDemuxer.mutexWrite) {
+							try {
+								AsynchDemuxer.mutexWrite.wait(500);
+							} catch (InterruptedException e) {
+								System.out.println("Timeout - No write response from Marlinspike for:"+writeReq);
+								e.printStackTrace();
+							}
 						}
 					}
 				} catch (IOException e) {
@@ -1285,7 +1636,7 @@ public class AsynchDemuxer implements Runnable {
 		demuxer.connect(ByteSerialDataPort.getInstance());
 		// the L H and T values represent those to EXCLUDE
 		// So we are looking for state 0 on digital pin and value not between L and H analog
-		AsynchDemuxer.addWrite(demuxer, "M303 P54 L470 H510");
+		AsynchDemuxer.addWrite(demuxer,"M303 P54 L470 H510");
 		AsynchDemuxer.addWrite(demuxer,"M303 P55 L470 H510");
 		AsynchDemuxer.addWrite(demuxer,"M305 P30 T1");
 		AsynchDemuxer.addWrite(demuxer,"M305 P46 T1");
