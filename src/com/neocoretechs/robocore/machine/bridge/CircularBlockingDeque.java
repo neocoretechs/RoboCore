@@ -74,7 +74,7 @@ public class CircularBlockingDeque<T> implements Iterable<T>, List<T> {
       }
       mutex.notify();
     }
-    return !overwrite;
+    return overwrite;
   }
 
   /**
@@ -100,7 +100,7 @@ public class CircularBlockingDeque<T> implements Iterable<T>, List<T> {
       }
       mutex.notify();
     }
-    return !overwrite;
+    return overwrite;
   }
 
   /**

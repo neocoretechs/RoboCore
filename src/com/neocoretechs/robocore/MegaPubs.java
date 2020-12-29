@@ -32,7 +32,7 @@ import rosgraph_msgs.Log;
 import sensor_msgs.Range;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.TopicListInterface;
+import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;

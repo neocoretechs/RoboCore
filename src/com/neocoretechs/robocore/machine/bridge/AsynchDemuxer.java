@@ -44,7 +44,7 @@ public class AsynchDemuxer implements Runnable {
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
-	private static Object mutexWrite = new Object();
+	static Object mutexWrite = new Object();
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
 
@@ -2008,11 +2008,11 @@ public class AsynchDemuxer implements Runnable {
     			try {
     				return new Double(rnum).doubleValue();
     			} catch(Exception e) {
-    				System.out.println("Cannot convert double value from:"+rnum);
+    				System.out.println("AsynchDemux Cannot convert double value from:"+rnum);
     			}
     		}
     	}
-    	System.out.println("Can't get valid Double value from:"+readLine);
+    	System.out.println("AsynchDemux Can't get valid Double value from:"+readLine);
     	return 0;
 	}
 	public synchronized int getReadingValueInt(String readLine) {
@@ -2023,11 +2023,11 @@ public class AsynchDemuxer implements Runnable {
       			try {
       				return new Integer(rnum).intValue();
       			} catch(Exception e) {
-      				System.out.println("Cannot convert integer value from:"+rnum);
+      				System.out.println("AsynchDemux Cannot convert integer value from:"+rnum);
       			}
       		}
       	}
-      	System.out.println("Can't get valid Integer value from:"+readLine);
+      	System.out.println("AsynchDemux Can't get valid Integer value from:"+readLine);
       	return 0;
 	}
       
@@ -2038,7 +2038,7 @@ public class AsynchDemuxer implements Runnable {
       			return readLine.substring(sindex+1);
       		}
       	}
-      	System.out.println("Can't get valid String from raw line:"+readLine);
+      	System.out.println("AsynchDemux Can't get valid String from raw line:"+readLine);
       	return null;
 	}
     /**
@@ -2055,11 +2055,11 @@ public class AsynchDemuxer implements Runnable {
       				try {
       					return new Integer(rnum).intValue();
       				} catch(Exception e) {
-      					System.out.println("Cannot convert Integer from:"+rnum);
+      					System.out.println("AsynchDemux Cannot convert Integer from:"+rnum);
       				}
       			}
 	       	}	
-	       	System.out.println("Can't get valid reading number from:"+readLine);
+	       	System.out.println("AsynchDemux Can't get valid reading number from:"+readLine);
 	       	return 0;
 	}
 
@@ -2102,7 +2102,7 @@ public class AsynchDemuxer implements Runnable {
 							try {
 								AsynchDemuxer.mutexWrite.wait(500);
 							} catch (InterruptedException e) {
-								System.out.println("Timeout - No write response from Marlinspike for:"+writeReq);
+								System.out.println("AsynchDemux Timeout - No write response from Marlinspike for:"+writeReq);
 								e.printStackTrace();
 							}
 						}
@@ -2119,46 +2119,59 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void run() {
 				while(shouldRun) {
+					int endDelim = -1;
 					try {
 						line = marlinLines.takeFirst();
 						if((op=line.charAt(0)) == '<' ) {
-							int endDelim = line.indexOf('>');
+							// has to equal one of > or />
+							endDelim = line.indexOf(MSG_TERMINATE);
+							if(endDelim == -1)
+								endDelim = line.indexOf('>');
 							if( endDelim == -1 ) {
-								System.out.println("Cannot demux received raw directive:"+op);
+								System.out.println("AsynchDemux Cannot demux received partial directive from line:"+line);
 								continue;
 							}
-							fop = line.substring(1, endDelim);
-							//if(DEBUG)
-							//	System.out.println("op:"+op);
-							TopicList tl = topics.get(fop);
-							if( tl != null ) {
-								tl.retrieveData(line);
-							} else {
-								// see if we have a directive with a partial match
-								Iterator<String> it = topics.keySet().iterator();
-								while(it.hasNext()) {
-									String directive = (String)it.next();
-									if(line.substring(1, directive.length()+1).startsWith(directive)) {
-										tl = topics.get(directive);
-										if( tl != null )
-											tl.retrieveData(line);
-										else
-											throw new RuntimeException("Malformed directive:"+directive+" for line:"+line);
-									}
-								}
-								System.out.println("Cannot retrieve topic "+fop+" from raw directive "+line);
-								continue;
-							}			
-						} else {
-							System.out.println("Expecting directive but instead found:"+line);
+						}  else {
+							System.out.println("AsynchDemux Expecting directive but instead found line:"+line);
 							continue;
 						}
+					} catch(InterruptedException e) {
+						shouldRun = false;
+						break;
 					} catch (IndexOutOfBoundsException ioob) {
-						System.out.println("AsynchDemux zero length directive, continuing..");
+						System.out.println("AsynchDemux Zero length line, expecting directive");
+						continue;
+					}
+					try {
+						fop = line.substring(1, endDelim);
+						//if(DEBUG)
+						//	System.out.println("op:"+op);
+						TopicList tl = topics.get(fop);
+						if( tl != null ) {
+							tl.retrieveData(line);
+						} else {
+							// see if we have a directive with a partial match
+							Iterator<String> it = topics.keySet().iterator();
+							while(it.hasNext()) {
+								String directive = (String)it.next();
+								if(line.substring(1, directive.length()+1).startsWith(directive)) {
+									tl = topics.get(directive);
+									if( tl != null )
+										tl.retrieveData(line);
+									else
+										throw new RuntimeException("AsynchDemux Malformed directive:"+directive+" for line:"+line);
+								}
+							}
+							System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);
+							continue;
+						}			
+					} catch(IndexOutOfBoundsException ioob) {
+						System.out.println("AsynchDemux Empty or malformed directive from line:"+line);
 						continue;
 					} catch (InterruptedException e) {
-						shouldRun = false;			
-					}		
+						shouldRun = false;
+						break;
+					}
 				}
 			}
 		});	
@@ -2167,55 +2180,14 @@ public class AsynchDemuxer implements Runnable {
 			String line = dataPort.readLine();
 			boolean overwrite = marlinLines.add(line);
 			if(overwrite)
-				System.out.println("WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
+				System.out.println("AsynchDemux WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
 			if(DEBUG)
 				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
 		} // shouldRun
 		isRunning = false;
 	}
 	
-	public static interface TopicListInterface {
-		public void retrieveData(String line) throws InterruptedException;
-		public MachineBridge getMachineBridge();
-		public Object getResult(MachineReading mr);
-		/**
-		 * The request consists of the M code and the parameters, passed on to the abstract class method
-		 * @param req
-		 */
-		public void writeRequest(String req);
-	}
-	
-	private static abstract class TopicList implements TopicListInterface {
-		AsynchDemuxer demux;
-		MachineBridge mb;
-		TopicList(AsynchDemuxer demux, String groupName, int queueSize) {
-			this.demux = demux;
-			mb = new MachineBridge(groupName, queueSize);
-		}
-		@Override
-		public MachineBridge getMachineBridge() { return mb; }
-		/**
-		 * Issue a request which is queued to outbound Marlinspike write queue, then
-		 * wait an interval for a corresponding ACK response to come back which matches request.
-		 * If the response, which triggers a notifyAll in the corresponding retrieveData method, does
-		 * not match request or times out, toss an error.
-		 * @param ad
-		 * @param req
-		 */
-		@Override
-		public void writeRequest(String req) {
-			AsynchDemuxer.addWrite(demux, req);
-			synchronized(AsynchDemuxer.mutexWrite) {
-				try {
-					AsynchDemuxer.mutexWrite.wait(500);
-				} catch (InterruptedException e) {
-					System.out.println("Timeout - No write response from Marlinspike for:"+req);
-					e.printStackTrace();
-				}
-			}
-		}
-	}
-	
+
 	public static void main(String[] args) throws Exception {
 		// start demux
 		AsynchDemuxer demuxer = new AsynchDemuxer();	
