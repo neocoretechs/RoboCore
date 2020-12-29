@@ -75,8 +75,8 @@ public class AsynchDemuxer implements Runnable {
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),
 		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M44("M44"),M45("M45"),M46("M46"),
-		M80("M80"),M81("M81"),M300("M300"),M301("M301"),M302("M302"),M303("M303"),M304("M304"),M305("M305"),M306("M306"),M444("M444"),
-		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M503("M503"),M799("M799"),
+		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),M444("M444"),
+		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M503("M503"),M799("M799"),M999("M999"),
 		M115("FIRMWARE_NAME:Marlinspike RoboCore"); // followed by FIRMWARE_URL,PROTOCOL_VERSION,MACHINE_TYPE,MACHINE NAME,MACHINE_UUID
 		String name;
 		topicNames(String name) { this.name = name;}
@@ -405,6 +405,538 @@ public class AsynchDemuxer implements Runnable {
 			}
 		});
 		//
+		// M101
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M11.val());
+		topics.put(topicNames.M11.val(), new TopicList(this, topicNames.M11.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M11.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M12
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M12.val());
+		topics.put(topicNames.M12.val(), new TopicList(this, topicNames.M12.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M12.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M33
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M33.val());
+		topics.put(topicNames.M33.val(), new TopicList(this, topicNames.M33.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M33.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M35
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M35.val());
+		topics.put(topicNames.M35.val(), new TopicList(this, topicNames.M35.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M35.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M36
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M36.val());
+		topics.put(topicNames.M36.val(), new TopicList(this, topicNames.M36.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M36.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M37
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M37.val());
+		topics.put(topicNames.M37.val(), new TopicList(this, topicNames.M37.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M37.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M38
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M38.val());
+		topics.put(topicNames.M38.val(), new TopicList(this, topicNames.M38.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M38.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M39
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M39.val());
+		topics.put(topicNames.M39.val(), new TopicList(this, topicNames.M39.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M39.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M10
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M40.val());
+		topics.put(topicNames.M40.val(), new TopicList(this, topicNames.M40.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M40.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M41
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M41.val());
+		topics.put(topicNames.M41.val(), new TopicList(this, topicNames.M41.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M41.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M42
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M42.val());
+		topics.put(topicNames.M42.val(), new TopicList(this, topicNames.M42.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M42.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M44
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M44.val());
+		topics.put(topicNames.M44.val(), new TopicList(this, topicNames.M44.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M44.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M45
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M45.val());
+		topics.put(topicNames.M45.val(), new TopicList(this, topicNames.M45.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M45.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M46
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M46.val());
+		topics.put(topicNames.M46.val(), new TopicList(this, topicNames.M46.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M46.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M80
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M80.val());
+		topics.put(topicNames.M80.val(), new TopicList(this, topicNames.M80.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M80.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M81
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M81.val());
+		topics.put(topicNames.M81.val(), new TopicList(this, topicNames.M81.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M81.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M301
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M301.val());
+		topics.put(topicNames.M301.val(), new TopicList(this, topicNames.M301.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M301.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M302
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M302.val());
+		topics.put(topicNames.M302.val(), new TopicList(this, topicNames.M302.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M302.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M304
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M304.val());
+		topics.put(topicNames.M304.val(), new TopicList(this, topicNames.M304.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M304.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M306
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M306.val());
+		topics.put(topicNames.M306.val(), new TopicList(this, topicNames.M306.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M306.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M444
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M444.val());
+		topics.put(topicNames.M444.val(), new TopicList(this, topicNames.M444.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M444.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M445
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M445.val());
+		topics.put(topicNames.M445.val(), new TopicList(this, topicNames.M445.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M445.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M500
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M500.val());
+		topics.put(topicNames.M500.val(), new TopicList(this, topicNames.M500.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M500.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M501
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M501.val());
+		topics.put(topicNames.M501.val(), new TopicList(this, topicNames.M501.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M501.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M502
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M502.val());
+		topics.put(topicNames.M502.val(), new TopicList(this, topicNames.M502.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M502.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M503
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M503.val());
+		topics.put(topicNames.M503.val(), new TopicList(this, topicNames.M503.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M503.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M799
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M799.val());
+		topics.put(topicNames.M799.val(), new TopicList(this, topicNames.M799.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M799.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
+		// M999
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M999.val());
+		topics.put(topicNames.M999.val(), new TopicList(this, topicNames.M999.val(),2) {
+			@Override
+			public void retrieveData(String readLine) throws InterruptedException {
+				String sMarker = MSG_BEGIN+topicNames.M999.val()+MSG_TERMINATE;
+				mb.add(MachineReading.EMPTYREADING);
+				synchronized(AsynchDemuxer.mutexWrite) {
+					AsynchDemuxer.mutexWrite.notifyAll();
+				}
+			}
+			@Override
+			public Object getResult(MachineReading mr) {
+				return mr.getReadingValString();
+			}
+		});
+		//
 		// status - M700
 		//
 		if(DEBUG)
@@ -445,6 +977,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}
 		});
+		//
+		// Dataset
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DATASET.val());
 		topics.put(topicNames.DATASET.val(), new TopicList(this, topicNames.DATASET.val(), 16) {
@@ -487,6 +1022,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.toString();
 			}	
 		});
+		//
+		// Battery
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BATTERY.val());
 		topics.put(topicNames.BATTERY.val(),new TopicList(this, topicNames.BATTERY.val(),16) {
@@ -529,6 +1067,9 @@ public class AsynchDemuxer implements Runnable {
 				return new Float(((float)mr.getReadingValInt())/10.0);
 			}
 		});
+		//
+		// Motorfault
+		//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.BATTERY.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORFAULT.val());
@@ -576,6 +1117,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}
 		});
+		//
+		// Ultrasonic
+		//
 		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.MOTORFAULT.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONIC.val());
@@ -631,6 +1175,9 @@ public class AsynchDemuxer implements Runnable {
 			}
 			
 		});
+		//
+		// Analogpin
+		//
 		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.ULTRASONIC.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
@@ -687,6 +1234,9 @@ public class AsynchDemuxer implements Runnable {
 				return new int[]{ mr.getRawSeq(), mr.getReadingValInt() };
 			}
 		});
+		//
+		// Digitalpin
+		//
 		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.ANALOGPIN.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPIN.val());
@@ -745,7 +1295,8 @@ public class AsynchDemuxer implements Runnable {
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init engaged "+topicNames.DIGITALPIN.val());
 		//
-		// reporting functions
+		// reporting functions...
+		// Assigned pins
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ASSIGNEDPINS.val());
@@ -785,6 +1336,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}
 		});
+		//
+		// Motorcontrol
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORCONTROLSETTING.val());	
 		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList(this, topicNames.MOTORCONTROLSETTING.val(), 128) {
@@ -822,6 +1376,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
+		//
+		// PWM control
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMCONTROLSETTING.val());	
 		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList(this, topicNames.PWMCONTROLSETTING.val(),128) {
@@ -859,6 +1416,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}		
 		});
+		//
+		// Controller status
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTATUS.val());			
 		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(this, topicNames.CONTROLLERSTATUS.val(),128) {
@@ -897,7 +1457,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// time
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.TIME.val());			
 		topics.put(topicNames.TIME.val(), new TopicList(this, topicNames.TIME.val(),16) {
@@ -936,7 +1498,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Controller stopped
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTOPPED.val());			
 		topics.put(topicNames.CONTROLLERSTOPPED.val(), new TopicList(this, topicNames.CONTROLLERSTOPPED.val(),16) {
@@ -975,7 +1539,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// No M or G code
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOMORGCODE.val());			
 		topics.put(topicNames.NOMORGCODE.val(), new TopicList(this, topicNames.NOMORGCODE.val(),16) {
@@ -1014,7 +1580,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Bad motor
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADMOTOR.val());			
 		topics.put(topicNames.BADMOTOR.val(), new TopicList(this, topicNames.BADMOTOR.val(),16) {
@@ -1053,7 +1621,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Bad PWM
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADPWM.val());			
 		topics.put(topicNames.BADPWM.val(), new TopicList(this, topicNames.BADPWM.val(),128) {
@@ -1091,7 +1661,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Unknown G code
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNG.val());			
 		topics.put(topicNames.UNKNOWNG.val(), new TopicList(this, topicNames.UNKNOWNG.val(),16) {
@@ -1130,7 +1702,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Unknown M code
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNM.val());			
 		topics.put(topicNames.UNKNOWNM.val(), new TopicList(this, topicNames.UNKNOWNM.val(),16) {
@@ -1169,7 +1743,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Bad Control
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADCONTROL.val());			
 		topics.put(topicNames.BADCONTROL.val(), new TopicList(this, topicNames.BADCONTROL.val(),16) {
@@ -1208,7 +1784,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// No checksum
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOCHECKSUM.val());			
 		topics.put(topicNames.NOCHECKSUM.val(), new TopicList(this, topicNames.NOCHECKSUM.val(),16) {
@@ -1247,7 +1825,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// No checksum
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOLINECHECK.val());			
 		topics.put(topicNames.NOLINECHECK.val(), new TopicList(this, topicNames.NOLINECHECK.val(),16) {
@@ -1286,7 +1866,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Checksum mismatch
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CHECKMISMATCH.val());			
 		topics.put(topicNames.CHECKMISMATCH.val(), new TopicList(this, topicNames.CHECKMISMATCH.val(),16) {
@@ -1325,7 +1907,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// Line sequence out of order
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.LINESEQ.val());			
 		topics.put(topicNames.LINESEQ.val(), new TopicList(this, topicNames.LINESEQ.val(),16) {
@@ -1364,7 +1948,9 @@ public class AsynchDemuxer implements Runnable {
 				return mr.getReadingValString();
 			}	
 		});
-		
+		//
+		// M115 report
+		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M115.val());			
 		topics.put(topicNames.M115.val(), new TopicList(this, topicNames.M115.val(),16) {
