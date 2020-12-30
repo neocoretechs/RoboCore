@@ -249,8 +249,7 @@ public Object[] toArray(Object[] a) {
 }
 @Override
 public boolean add(Object e) {
-	addLast((T) e);
-	return true;
+	return addLast((T) e);
 }
 @Override
 public boolean remove(Object o) {
@@ -301,13 +300,30 @@ public T remove(int index) {
 }
 @Override
 public int indexOf(Object o) {
-	// TODO Auto-generated method stub
-	return 0;
+	int j = 0;
+	int index = -1;
+	Iterator<?> it = iterator();
+	while(it.hasNext()) {
+		if(it.next().equals(o)) {
+			index = j;
+			break;
+		}
+		++j;
+	}
+	return index;
 }
 @Override
 public int lastIndexOf(Object o) {
-	// TODO Auto-generated method stub
-	return 0;
+	int j = 0;
+	int index = -1;
+	Iterator<?> it = iterator();
+	while(it.hasNext()) {
+		if(it.next().equals(o)) {
+			index = j;
+		}
+		++j;
+	}
+	return index;
 }
 @Override
 public ListIterator listIterator() {

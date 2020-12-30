@@ -486,6 +486,9 @@ public class MotionController extends AbstractNodeMain {
 				speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
 				speedVals.add((int)speedR);
 				velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {}
 				//-------------------
 				// Above cases handle all steering and motor control and button press for automated
 				// control of course following by button press.
@@ -505,15 +508,30 @@ public class MotionController extends AbstractNodeMain {
 				//-------------------
 				if(axes[Props.toInt("LEDCameraIlluminatorControl")] != -1 || LEDCamlightIsOn) {//|| axes[5] != -1) {
 					if(axes[Props.toInt("LEDCameraIlluminatorControl")] == -1) {
+						if(LEDCamlightIsOn) {
+							ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
+							triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
+							triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
+							triggerVals.add(0);
+							System.out.println("LEDCameraIlluminatorControl turning off LED");
+							trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
+							try {
+								Thread.sleep(1);
+							} catch (InterruptedException e) {}
+						}
 						LEDCamlightIsOn = false;
 					} else {
 						LEDCamlightIsOn = true;
+						ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
+						triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
+						triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
+						triggerVals.add(Integer.valueOf((int)axes[Props.toInt("LEDCameraIlluminatorControl")]));
+						System.out.printf("LEDCameraIlluminatorControl = %d\n",triggerVals.get(2));
+						trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
+						try {
+							Thread.sleep(1);
+						} catch (InterruptedException e) {}
 					}
-					ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
-					triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
-					triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
-					System.out.printf("LEDCameraIlluminatorControl = %d\n",axes[Props.toInt("LEDCameraIlluminatorControl")]);
-					trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
 				}
 			} // onMessage from Joystick controller, with all the axes[] and buttons[]
 			

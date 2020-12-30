@@ -228,7 +228,7 @@ public void onStart(final ConnectedNode connectedNode) {
 						response.setData(motorControlHost.reportAllControllerStatus());
 						serviceActive = false;
 					} catch (IOException e) {
-						System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA REPORT SERVICE");
+						System.out.println("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
 						e.printStackTrace();
 					}
 				}
@@ -355,6 +355,8 @@ public void onStart(final ConnectedNode connectedNode) {
 		//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		int[] valch = message.getData();
+		if(valch.length != 6)
+			return;
 		// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
 		for(int i = 0; i < valch.length; i+=6) {
 			int valch1 = valch[i]; // slot
@@ -393,22 +395,27 @@ public void onStart(final ConnectedNode connectedNode) {
 	 * related subsystem. this subsystem is composed of a software controller instance talking to a 
 	 * hardware driver such as an H-bridge or half bridge or even a simple switch.
 	 * the values here are <slot> <channel> <value>.
-	 * Alternately, we are sending a -1 as the channel value to invoke emergency stop. 
 	 */
 	substrigger.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 	@Override
 	public void onNewMessage(std_msgs.Int32MultiArray message) {
 		int[] valch = message.getData();
+		if( valch.length != 3 )
+			return;
 		for(int i = 0; i < valch.length; i+=3) {
 			int valch1 = valch[i];
 			int valch2 = valch[i+1];
 			int valch3 = valch[i+2];
 			try {
-				if(valch1 == -1) {
+				if(valch3 == 0) {
+					if(isOperating) {
+						((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, 0);
+					}
 					isOperating = false;
 				} else {			
 					isOperating = true;
-					System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
+					if(DEBUG)
+						System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
 					((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
 				}
 			} catch (IOException e) {
