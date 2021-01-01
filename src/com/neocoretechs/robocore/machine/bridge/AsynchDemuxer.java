@@ -1007,23 +1007,41 @@ public class AsynchDemuxer implements Runnable {
 		}
 		topics.put(topicNames.MOTORFAULT.val(), new TopicList(this, topicNames.MOTORFAULT.val(),16) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {		
-				while( !isLineTerminal(readLine) ) {
-					readLine = marlinLines.takeFirst();
-					if( readLine == null || readLine.length() == 0 ) {
-						//if(DEBUG)System.out.println("Empty line returned from readLine");
-						//continue;
-						break;
+			public void retrieveData(String readLine) throws InterruptedException {
+				MachineReading mr = null;
+				if(isLineTerminal(readLine)) {
+					String sload = extractPayload(readLine, topicNames.MOTORFAULT.val());
+					if(sload != null) {
+						int reading = getReadingNumber(sload);
+						String data =  getReadingValueString(sload);
+						mr = new MachineReading(1, reading, reading+1, data);
+					} else {
+						mr = new MachineReading(readLine);
 					}
-					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-					int reading = getReadingNumber( extractPayload(readLine, topicNames.MOTORFAULT.val()));
-					String data =  getReadingValueString( extractPayload(readLine, topicNames.MOTORFAULT.val()));
-					MachineReading mr = new MachineReading(1, reading, reading+1, data);
 					mb.add(mr);
+				} else {
+					while( !isLineTerminal(readLine) ) {
+						readLine = marlinLines.takeFirst();
+						if( readLine == null || readLine.length() == 0 ) {
+							//if(DEBUG)System.out.println("Empty line returned from readLine");
+							//continue;
+							break;
+						}
+						String sload = extractPayload(readLine, topicNames.MOTORFAULT.val());
+						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+						if(sload != null) {
+							int reading = getReadingNumber(sload);
+							String data =  getReadingValueString(sload);
+							mr = new MachineReading(1, reading, reading+1, data);
+						} else {
+							mr = new MachineReading(readLine);
+						}
+						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
 				synchronized(AsynchDemuxer.mutexWrite) {
 					AsynchDemuxer.mutexWrite.notifyAll();
+				}
 				}
 			}
 			@Override
@@ -2153,7 +2171,7 @@ public class AsynchDemuxer implements Runnable {
 				if( endDelim == -1 ) {
 					return null;
 				}	
-				fop = line.substring(1, endDelim-1);
+				fop = line.substring(1, endDelim);
 				if(fop.startsWith("/"))
 					fop = fop.substring(1);
 				if(fop.endsWith("/"))
@@ -2165,7 +2183,7 @@ public class AsynchDemuxer implements Runnable {
 						String directive = (String)it.next();
 						endDelim = fop.indexOf(directive);
 						if(endDelim != -1) {
-							fop = fop.substring(endDelim, endDelim+directive.length()-1);
+							fop = fop.substring(endDelim, endDelim+directive.length());
 							return fop;
 						}
 					}
@@ -2191,7 +2209,7 @@ public class AsynchDemuxer implements Runnable {
 				if( endDelim == -1 ) {
 					return null;
 				}	
-				fop = line.substring(1, endDelim-1);
+				fop = line.substring(1, endDelim);
 				if(fop.startsWith("/"))
 					fop = fop.substring(1);
 				if(fop.endsWith("/"))
