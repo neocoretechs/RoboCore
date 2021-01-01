@@ -961,30 +961,34 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.BATTERY.val(),new TopicList(this, topicNames.BATTERY.val(),16) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.BATTERY.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-					if( readLine == null || readLine.length() == 0 ) {
-							//if(DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-					}
-					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-					if(readLine.endsWith(sMarker)) {
-						int reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
-						int data =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
-						MachineReading mr = new MachineReading(1, reading, reading+1, data);
-						mb.add(mr);
-						break;
+				MachineReading mr = null;
+				if(isLineTerminal(readLine)) {
+					String sload = extractPayload(readLine, topicNames.BATTERY.val());
+					if(sload != null) {
+						int reading = getReadingNumber(sload);
+						int data =  getReadingValueInt(sload);
+						mr = new MachineReading(1, reading, reading+1, data);
 					} else {
-						int reading = getReadingNumber(readLine);
-						int data =  getReadingValueInt(readLine);
-						//if( DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(1, reading, reading+1, data);
+						mr = new MachineReading(readLine);
+					}
+					mb.add(mr);
+				} else {
+					while( !isLineTerminal(readLine) ) {
+						readLine = marlinLines.takeFirst();
+						if( readLine == null || readLine.length() == 0 ) {
+							//if(DEBUG)System.out.println("Empty line returned from readLine");
+							//continue;
+							break;
+						}
+						String sload = extractPayload(readLine, topicNames.BATTERY.val());
+						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+						if(sload != null) {
+							int reading = getReadingNumber(sload);
+							int data =  getReadingValueInt(sload);
+							mr = new MachineReading(1, reading, reading+1, data);
+						} else {
+							mr = new MachineReading(readLine);
+						}
 						mb.add(mr);
 					}
 				}
@@ -1058,8 +1062,49 @@ public class AsynchDemuxer implements Runnable {
 		}
 		topics.put(topicNames.ULTRASONIC.val(), new TopicList(this, topicNames.ULTRASONIC.val(),16) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {	
+			public void retrieveData(String readLine) throws InterruptedException {
 				int pin = 0, reading = 0, data = 0;
+				MachineReading mr = null;
+				if(isLineTerminal(readLine)) {
+					String sload = extractPayload(readLine, topicNames.ULTRASONIC.val());
+					if(sload != null) {
+						pin =  getReadingValueInt(sload);
+						reading = getReadingNumber(sload);
+						data = getReadingValueInt(sload);
+						mr = new MachineReading(1, pin, reading, data);
+					} else {
+						mr = new MachineReading(readLine);
+					}
+					mb.add(mr);
+				} else {
+					while( !isLineTerminal(readLine) ) {
+						readLine = marlinLines.takeFirst();
+						if( readLine == null || readLine.length() == 0 ) {
+							//if(DEBUG)System.out.println("Empty line returned from readLine");
+							//continue;
+							break;
+						}
+						String sload = extractPayload(readLine, topicNames.ULTRASONIC.val());
+						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
+						if(sload != null) {
+							reading = getReadingNumber(sload);
+							data =  getReadingValueInt(sload);
+							if(reading == 1) {
+								System.out.println("Malformed request for "+topicNames.ULTRASONIC.val()+" for "+readLine);
+								continue;
+							}
+							mr = new MachineReading(1, pin, reading, data);
+						} else {
+							reading = getReadingNumber(sload);
+							data = getReadingValueInt(sload);
+							if(reading == 1) {
+								pin = data;
+							}
+							mr = new MachineReading(1, pin, reading, data);
+						}
+						mb.add(mr);
+				}
+				/*
 				String sMarker = MSG_BEGIN+topicNames.ULTRASONIC.val()+MSG_TERMINATE;
 				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
 				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
@@ -1093,6 +1138,7 @@ public class AsynchDemuxer implements Runnable {
 							mb.add(mr);
 						}
 					}
+					*/
 				}
 				if( DEBUG ) 
 					System.out.println(topicNames.ULTRASONIC.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);

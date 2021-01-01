@@ -37,17 +37,19 @@ public class StatusAlertSubs extends AbstractNodeMain {
 		subsbat.addMessageListener(new MessageListener<diagnostic_msgs.DiagnosticStatus>() {
 			@Override
 			public void onNewMessage(DiagnosticStatus message) {
-				System.out.println("Status "+message.getMessage());
+				//System.out.println(message.getHardwareId()+" Status "+message.getMessage());
 				StringBuilder sb = new StringBuilder();
+				sb.append(message.getHardwareId()+" ");
 				sb.append(message.getMessage()+"\r\n");
 				List<KeyValue> diagMsgs = message.getValues();
 				if( diagMsgs != null ) {
 						for( KeyValue msg : diagMsgs) {
-							sb.append(msg.getKey()+"\r\n");
+							sb.append(msg.getKey()+" ");
 							if( msg.getValue() != null ) {
 								sb.append(msg.getValue()+"\r\n");
 							}
 						}
+						System.out.println(sb.toString());
 				}
 				try {
 					if( speak ) {
