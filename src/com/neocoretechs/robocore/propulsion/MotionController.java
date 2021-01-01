@@ -487,7 +487,7 @@ public class MotionController extends AbstractNodeMain {
 				speedVals.add((int)speedR);
 				velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
 				try {
-					Thread.sleep(1);
+					Thread.sleep(5);
 				} catch (InterruptedException e) {}
 				//-------------------
 				// Above cases handle all steering and motor control and button press for automated
@@ -516,7 +516,7 @@ public class MotionController extends AbstractNodeMain {
 							System.out.println("LEDCameraIlluminatorControl turning off LED");
 							trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
 							try {
-								Thread.sleep(1);
+								Thread.sleep(5);
 							} catch (InterruptedException e) {}
 						}
 						LEDCamlightIsOn = false;
@@ -529,7 +529,7 @@ public class MotionController extends AbstractNodeMain {
 						System.out.printf("LEDCameraIlluminatorControl = %d\n",triggerVals.get(2));
 						trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
 						try {
-							Thread.sleep(1);
+							Thread.sleep(5);
 						} catch (InterruptedException e) {}
 					}
 				}
