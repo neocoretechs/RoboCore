@@ -44,7 +44,7 @@ public class AsynchDemuxer implements Runnable {
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
-	static Object mutexWrite = new Object();
+	public Object mutexWrite = new Object();
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
 
@@ -112,7 +112,7 @@ public class AsynchDemuxer implements Runnable {
 		dataPort.connect(true);
 	}
 	
-	public DataPortInterface getDataPort() { return dataPort; }
+	private DataPortInterface getDataPort() { return dataPort; }
 	
 	public synchronized void init() {
 		topicNames[] xtopics = topicNames.values();
@@ -128,8 +128,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -146,8 +146,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -164,8 +164,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -182,8 +182,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -200,8 +200,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -218,8 +218,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -236,8 +236,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -254,8 +254,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -272,8 +272,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -290,8 +290,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -308,8 +308,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -326,8 +326,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -344,8 +344,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -362,8 +362,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -380,8 +380,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -398,8 +398,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -416,8 +416,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -434,8 +434,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -452,8 +452,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -470,8 +470,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -488,8 +488,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -506,8 +506,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -524,8 +524,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -542,8 +542,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -560,8 +560,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -578,8 +578,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -596,8 +596,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -614,8 +614,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -632,8 +632,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -650,8 +650,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -668,8 +668,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -686,8 +686,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -704,8 +704,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -722,8 +722,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -740,8 +740,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -758,8 +758,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -776,8 +776,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -794,8 +794,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -812,8 +812,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -830,8 +830,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -848,8 +848,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -866,8 +866,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -884,8 +884,8 @@ public class AsynchDemuxer implements Runnable {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -913,8 +913,8 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -944,8 +944,8 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);		
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -993,8 +993,8 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1043,8 +1043,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 				}
 			}
@@ -1143,8 +1143,8 @@ public class AsynchDemuxer implements Runnable {
 				if( DEBUG ) 
 					System.out.println(topicNames.ULTRASONIC.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1203,8 +1203,8 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1260,8 +1260,8 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1305,8 +1305,8 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1345,8 +1345,8 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1385,8 +1385,8 @@ public class AsynchDemuxer implements Runnable {
 					mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1425,8 +1425,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1466,8 +1466,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1507,8 +1507,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1548,8 +1548,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1589,8 +1589,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1630,8 +1630,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 			@Override
@@ -1670,8 +1670,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1711,8 +1711,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1752,8 +1752,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1793,8 +1793,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1834,8 +1834,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1875,8 +1875,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1916,8 +1916,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -1957,8 +1957,8 @@ public class AsynchDemuxer implements Runnable {
 						mb.add(mr);
 				}
 				mb.add(MachineReading.EMPTYREADING);
-				synchronized(AsynchDemuxer.mutexWrite) {
-					AsynchDemuxer.mutexWrite.notifyAll();
+				synchronized(demux.mutexWrite) {
+					demux.mutexWrite.notifyAll();
 				}
 			}
 
@@ -2076,9 +2076,9 @@ public class AsynchDemuxer implements Runnable {
 					while(shouldRun) {
 						String writeReq = takeWrite();
 						dataPort.writeLine(writeReq);
-						synchronized(AsynchDemuxer.mutexWrite) {
+						synchronized(mutexWrite) {
 							try {
-								AsynchDemuxer.mutexWrite.wait(500);
+								mutexWrite.wait(500);
 							} catch (InterruptedException e) {
 								System.out.println("AsynchDemux Timeout - No write response from Marlinspike for:"+writeReq);
 								e.printStackTrace();

@@ -4,7 +4,7 @@ public abstract class TopicList implements TopicListInterface {
 
 		AsynchDemuxer demux;
 		MachineBridge mb;
-		TopicList(AsynchDemuxer demux, String groupName, int queueSize) {
+		public TopicList(AsynchDemuxer demux, String groupName, int queueSize) {
 			this.demux = demux;
 			mb = new MachineBridge(groupName, queueSize);
 		}
@@ -21,9 +21,9 @@ public abstract class TopicList implements TopicListInterface {
 		@Override
 		public void writeRequest(String req) {
 			AsynchDemuxer.addWrite(demux, req);
-			synchronized(AsynchDemuxer.mutexWrite) {
+			synchronized(demux.mutexWrite) {
 				try {
-					AsynchDemuxer.mutexWrite.wait(500);
+					demux.mutexWrite.wait(500);
 				} catch (InterruptedException e) {
 					System.out.println("Timeout - No write response from Marlinspike for:"+req);
 					e.printStackTrace();
