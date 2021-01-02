@@ -51,21 +51,15 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	public MegaControl(AsynchDemuxer asynchDemuxer) { this.asynchDemuxer = asynchDemuxer; }
 	
 	public synchronized void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException {
-		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed BEGIN writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
-					"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
+		//if(DEBUG) 
+		//	System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed BEGIN writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
+		//			"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
 		String motorCommand1 = "G5 Z"+slot1+" C"+channel1+" P"+String.valueOf(leftWheelSpeed);
-		asynchDemuxer.getDataPort().writeLine(motorCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
 		String motorCommand2 = "G5 Z"+slot2+" C"+channel2+" P"+String.valueOf(rightWheelSpeed);
-		asynchDemuxer.getDataPort().writeLine(motorCommand2);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
+		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand1);
+		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand2);
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed END writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
+			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
 					"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
 	}
 	/**
@@ -148,10 +142,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
      */
     public synchronized String getSystemStatus() throws IOException {
 		String statCommand1 = "M700"; // report status
-		asynchDemuxer.getDataPort().writeLine(statCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}		
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);	
     	return getMachineReadingsFromBridge(topicNames.STATUS.val());
     }
     /**
@@ -161,10 +152,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
      */
     public synchronized String getAssignedPins() throws IOException {
 		String statCommand1 = "M706"; // report all pins in use
-		asynchDemuxer.getDataPort().writeLine(statCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}		
+		AsynchDemuxer.addWrite(asynchDemuxer,statCommand1);	
     	return getMachineReadingsFromBridge(topicNames.ASSIGNEDPINS.val());
     }
     /**
@@ -174,10 +162,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
      */
     public synchronized String getMotorControlSetting() throws IOException {
 		String statCommand1 = "M705"; // report all pins in use
-		asynchDemuxer.getDataPort().writeLine(statCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}		
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
     	return getMachineReadingsFromBridge(topicNames.MOTORCONTROLSETTING.val());
     }
     /**
@@ -190,10 +175,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
     	for(int i = 0; i < 10; i++) {
     		sb.append("\r\nPWM Controller in use in slot:"+i+"\r\n");
     		String statCommand1 = "M798 Z"+i+" X"; // report all pins in use
-    		asynchDemuxer.getDataPort().writeLine(statCommand1);
-    		try {
-    			Thread.sleep(100);
-    		} catch (InterruptedException e) {}
+    		AsynchDemuxer.addWrite(asynchDemuxer,statCommand1);
     		sb.append(getMachineReadingsFromBridge(topicNames.CONTROLLERSTATUS.val()));
     		sb.append("---");
     	}
@@ -211,10 +193,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 			if(DEBUG)
 				System.out.println(this.getClass().getName()+".reportAllControllerSatus controller in use in slot"+i);
     		String statCommand1 = "M798 Z"+i; // report all pins in use
-    		asynchDemuxer.getDataPort().writeLine(statCommand1);
-    		try {
-    			Thread.sleep(100);
-    		} catch (InterruptedException e) {}
+    		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
     		sb.append(getMachineReadingsFromBridge(topicNames.CONTROLLERSTATUS.val()));
     		sb.append("---");
     	}
@@ -222,35 +201,21 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
     }
 	public synchronized void setAbsolutePWMLevel(int slot, int channel, int pwmLevel) throws IOException {
 		String pwmCommand1 = "G5 Z"+slot+" C"+channel+" X"+pwmLevel;
-		asynchDemuxer.getDataPort().writeLine(pwmCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
+		AsynchDemuxer.addWrite(asynchDemuxer, pwmCommand1);
 	}
 	
 	@Override
 	public void commandStop() throws IOException {
 		String motorCommand1 = "M799";
-		asynchDemuxer.getDataPort().writeLine(motorCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
-		
+		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand1);	
 	}
 
 	@Override
 	public void setAbsolutePWMLevel(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException {
-		String motorCommand1 = "G5 Z"+slot1+" C"+channel1+" X"+String.valueOf(leftWheelSpeed);
-		asynchDemuxer.getDataPort().writeLine(motorCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
-		String motorCommand2 = "G5 Z"+slot2+" C"+channel2+" X"+String.valueOf(rightWheelSpeed);
-		asynchDemuxer.getDataPort().writeLine(motorCommand2);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
-		
+		String pwmCommand1 = "G5 Z"+slot1+" C"+channel1+" X"+String.valueOf(leftWheelSpeed);
+		String pwmCommand2 = "G5 Z"+slot2+" C"+channel2+" X"+String.valueOf(rightWheelSpeed);
+		AsynchDemuxer.addWrite(asynchDemuxer,pwmCommand1);
+		AsynchDemuxer.addWrite(asynchDemuxer,pwmCommand2);
 	}
 	public static void main(String[] args) throws Exception {
 		if( args.length < 1 ) {
