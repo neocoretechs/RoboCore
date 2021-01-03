@@ -127,7 +127,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 			}
 			return sb.toString();
 	}
-	   // 
+	  // 
     // Report methods. The sequence is to issue the M-code to the MarlinSpike. The returned data will
     // include the proper <headers> which are 'demuxxed' and the correct MachineReadings are created from
     // the retrieved data and added to the queues in each MachineBridge instance for that topic
@@ -136,6 +136,11 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
     // and call toString on them to build the proper output buffer for each topic, then do whatever with the String
     // payload.
     //
+	public synchronized String reportSystemId() throws IOException {
+		String statCommand1 = "M115"; // system id
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);	
+    	return getMachineReadingsFromBridge(topicNames.M115.val());
+	}
     /**
      * M700
      * @return A string payload of robot overall status

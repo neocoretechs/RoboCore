@@ -35,13 +35,17 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  * Publishes user constructed messages to the Marlinspike MegaPubs controller then onto Marlinspike MegaControl controller.
  * directives to generate the reporting 
  * function on cmd_report channel in the Marlinspike code on the Mega board.
+ * Commands for reports on status to be send to the Marlinspike via the reporting service 
+ * are formatted as followed on the command line:<p/>
+ * __command:=report __name:=id <br/>
+ * __command:=report __name:=status <br/>
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  */
 public class ControllerStatusReportClient extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
 	private String host;
 	private String command = "report";
-	private String rptName = "megastatus";
+	private String rptName = "status"; // default report name
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
@@ -129,7 +133,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
-			if( DEBUG) System.out.println("Sending report "+request.getData()+", results should appear on StatusAlertSubs console..");
+			if( DEBUG) 
+				System.out.println("Sending report "+request.getData()+", results should appear on StatusAlertSubs console..");
 			try {
 				rptsvc.connect(connectedNode.lookupServiceUri(GraphName.of("cmd_report")));
 			} catch (Exception e1) {

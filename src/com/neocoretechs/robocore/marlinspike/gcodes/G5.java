@@ -7,19 +7,19 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 
-public class G4 implements Runnable {
-	private boolean DEBUG = true;
+public class G5 implements Runnable {
+	private boolean DEBUG;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
 	//String data;
-	public G4(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
+	public G5(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
-		// G4
+		// G5
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.G4.val(), 2) {
+		this.topicList = new TopicList(asynchDemuxer, topicNames.G5.val(), 2) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				//data = readLine;
@@ -32,7 +32,7 @@ public class G4 implements Runnable {
 				return mr.getReadingValString();
 			}
 		};
-		topics.put(topicNames.G4.val(), topicList);
+		topics.put(topicNames.G5.val(), topicList);
 	}
 	@Override
 	public void run() {

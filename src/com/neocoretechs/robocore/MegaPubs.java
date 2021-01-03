@@ -227,7 +227,15 @@ public void onStart(final ConnectedNode connectedNode) {
 				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
 					try {
 						serviceActive = true;
-						response.setData(motorControlHost.reportAllControllerStatus());
+						switch(request.getData()) {
+							case "id":
+								response.setData(motorControlHost.reportSystemId());
+								break;
+							case "status":
+							default:
+								response.setData(motorControlHost.reportAllControllerStatus());
+								break;		
+						}
 						serviceActive = false;
 					} catch (IOException e) {
 						System.out.println("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
