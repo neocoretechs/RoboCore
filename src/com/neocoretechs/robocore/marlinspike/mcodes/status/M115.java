@@ -8,7 +8,7 @@ import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 
 public class M115 implements Runnable {
-	private boolean DEBUG;
+	private boolean DEBUG = true;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
@@ -43,15 +43,16 @@ public class M115 implements Runnable {
 					MachineReading mr = null;
 					String directive = asynchDemuxer.parseDirective(data);
 					while(directive != null && 
-						 !directive.equals(topicNames.M115.val()) &&
-						 !asynchDemuxer.isLineTerminal(data) ) {
+						 !(directive.equals(topicNames.M115.val()) && asynchDemuxer.isLineTerminal(data)) ) {
 							data = asynchDemuxer.getMarlinLines().takeFirst();
+							if(DEBUG)
+								System.out.println(this.getClass().getName()+":"+data);
 							if( data == null || data.length() == 0 ) {
 								//if(DEBUG)System.out.println("Empty line returned from readLine");
 								//continue;
 								break;
 							}
-							String sload = asynchDemuxer.extractPayload(data, topicNames.M115.val());
+							//String sload = asynchDemuxer.extractPayload(data, topicNames.M115.val());
 							// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
 							//if(sload != null) {
 								//int reading = asynchDemuxer.getReadingNumber(sload);
@@ -59,7 +60,7 @@ public class M115 implements Runnable {
 								//mr = new MachineReading(1, reading, reading+1, data);
 							//} else {
 								//mr = new MachineReading(data);
-								mr = new MachineReading(sload);
+								mr = new MachineReading(data);
 							//}
 							topicList.getMachineBridge().add(mr);
 					}	

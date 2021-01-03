@@ -145,13 +145,13 @@ public void onStart(final ConnectedNode connectedNode) {
 			      @Override
 			      public void onSuccess(ControllerStatusMessageResponse response) {
 			    	  System.out.println("Successful Response:"+response);
-			        System.out.println(response.getData());
-			        awaitStart.countDown();
+			    	  System.out.println(response.getData());
+			    	  awaitStart.countDown();
 			      }
 			      @Override
 			      public void onFailure(RemoteException e) {
 			    	  System.out.println("FAILURE Response:"+e);
-			        throw new RuntimeException(e);
+			    	  throw new RuntimeException(e);
 			      }
 			    });
 		}

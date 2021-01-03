@@ -14,8 +14,10 @@ import com.neocoretechs.robocore.marlinspike.gcodes.G5;
 import com.neocoretechs.robocore.marlinspike.gcodes.G99;
 import com.neocoretechs.robocore.marlinspike.mcodes.M0;
 import com.neocoretechs.robocore.marlinspike.mcodes.M1;
+import com.neocoretechs.robocore.marlinspike.mcodes.M10;
 import com.neocoretechs.robocore.marlinspike.mcodes.M2;
 import com.neocoretechs.robocore.marlinspike.mcodes.M3;
+import com.neocoretechs.robocore.marlinspike.mcodes.M9;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.M115;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
@@ -271,37 +273,13 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M9.val());
-		topics.put(topicNames.M9.val(), new TopicList(this, topicNames.M9.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M9(this, topics), topicNames.M9.val());
 		//
 		// M10
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M10.val());
-		topics.put(topicNames.M10.val(), new TopicList(this, topicNames.M10.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M10(this, topics), topicNames.M10.val());
 		//
 		// M101
 		//
@@ -1978,9 +1956,12 @@ public class AsynchDemuxer implements Runnable {
 				while(shouldRun) {
 					int endDelim = -1;
 					try {
-						line = marlinLines.takeFirst();
-						fop = parseDirective(line);
-						if( fop == null || fop.length() == 0 ) {
+						line = marlinLines.peekFirst();
+						if(line == null) {
+							Thread.sleep(1);
+							continue;
+						}
+						if( line.length() == 0 ) {
 							System.out.println("AsynchDemux Cannot demux directive from line:"+line);
 							continue;
 						}
@@ -1989,12 +1970,19 @@ public class AsynchDemuxer implements Runnable {
 						break;
 					}
 					try {
-						TopicList tl = topics.get(fop);
-						if( tl != null ) {
-							tl.retrieveData(line);
-						} else {
-							System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);
-							continue;
+						fop = parseDirective(line);
+						if(DEBUG)
+							System.out.println("AsynchDemux Parsed directive:"+fop);
+						if(fop != null) {
+							TopicList tl = topics.get(fop);
+							if( tl != null ) {
+								if(DEBUG)
+									System.out.println("AsynchDemux call out to topic:"+tl.mb.getGroup());
+								tl.retrieveData(line);
+							} else {
+								System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);
+								continue;
+							}
 						}			
 					} catch(IndexOutOfBoundsException ioob) {
 						System.out.println("AsynchDemux Empty or malformed directive from line:"+line);

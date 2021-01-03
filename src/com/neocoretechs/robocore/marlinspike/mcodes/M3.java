@@ -13,7 +13,7 @@ public class M3 implements Runnable {
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
-	//String data;
+	String data;
 	public M3(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
@@ -22,7 +22,7 @@ public class M3 implements Runnable {
 		this.topicList = new TopicList(asynchDemuxer, topicNames.M3.val(), 2) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				//data = readLine;
+				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
 					mutex.notify();
 				}

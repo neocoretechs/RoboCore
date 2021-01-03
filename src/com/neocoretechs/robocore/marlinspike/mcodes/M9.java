@@ -6,20 +6,24 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
-
-public class M2 implements Runnable {
+/**
+ * Its the responsibility of each consumer to consume initial passed line from demuxer.
+ * @author groff
+ *
+ */
+public class M9 implements Runnable {
 	private boolean DEBUG;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
 	String data;
-	public M2(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
+	public M9(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
-		// M2 - setup smart controller
+		// M9 - Activate PWM control
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.M2.val(), 2) {
+		this.topicList = new TopicList(asynchDemuxer, topicNames.M9.val(), 2) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -32,7 +36,7 @@ public class M2 implements Runnable {
 				return mr.getReadingValString();
 			}
 		};
-		topics.put(topicNames.M2.val(), topicList);
+		topics.put(topicNames.M9.val(), topicList);
 	}
 	@Override
 	public void run() {
