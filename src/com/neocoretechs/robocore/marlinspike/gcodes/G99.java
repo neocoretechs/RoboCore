@@ -6,7 +6,11 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
-
+/**
+ * G99 start watchdog timer. G99 T<time_in_millis> values are 15,30,60,120,250,500,1000,4000,8000 default 4000
+ * @author groff
+ *
+ */
 public class G99 implements Runnable {
 	private boolean DEBUG;
 	private boolean shouldRun = true;

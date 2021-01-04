@@ -7,29 +7,23 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
- * The responsibility of each of these consumers it to consume the first element
- * on the queue of lines read from the Marlinspike, be it the same as the passed
- * parameter 'peeked' into the retrieveData method, and continue to retrieve queue
- * elements until all elements relevant to this topic are thus consumed.<p/>
- * Many of these consumers follow the pattern of merely consuming the 'ack' from
- * a processed code.
- * M0 - realtime output off
+ * M36 - Clear all analog pins
  * @author groff
  *
  */
-public class M0 implements Runnable {
+public class M36 implements Runnable {
 	private boolean DEBUG;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
 	String data;
-	public M0(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
+	public M36(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
-		// M0 - realtime off
+		// M36
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.M0.val(), 2) {
+		this.topicList = new TopicList(asynchDemuxer, topicNames.M36.val(), 2) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -42,7 +36,7 @@ public class M0 implements Runnable {
 				return mr.getReadingValString();
 			}
 		};
-		topics.put(topicNames.M0.val(), topicList);
+		topics.put(topicNames.M36.val(), topicList);
 	}
 	@Override
 	public void run() {

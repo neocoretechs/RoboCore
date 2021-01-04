@@ -20,13 +20,24 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M12;
 import com.neocoretechs.robocore.marlinspike.mcodes.M2;
 import com.neocoretechs.robocore.marlinspike.mcodes.M3;
 import com.neocoretechs.robocore.marlinspike.mcodes.M33;
+import com.neocoretechs.robocore.marlinspike.mcodes.M35;
+import com.neocoretechs.robocore.marlinspike.mcodes.M36;
+import com.neocoretechs.robocore.marlinspike.mcodes.M37;
+import com.neocoretechs.robocore.marlinspike.mcodes.M38;
+import com.neocoretechs.robocore.marlinspike.mcodes.M39;
 import com.neocoretechs.robocore.marlinspike.mcodes.M4;
+import com.neocoretechs.robocore.marlinspike.mcodes.M40;
+import com.neocoretechs.robocore.marlinspike.mcodes.M41;
+import com.neocoretechs.robocore.marlinspike.mcodes.M42;
+import com.neocoretechs.robocore.marlinspike.mcodes.M45;
 import com.neocoretechs.robocore.marlinspike.mcodes.M5;
 import com.neocoretechs.robocore.marlinspike.mcodes.M6;
 import com.neocoretechs.robocore.marlinspike.mcodes.M7;
 import com.neocoretechs.robocore.marlinspike.mcodes.M8;
 import com.neocoretechs.robocore.marlinspike.mcodes.M9;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.M115;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.M44;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.M46;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
@@ -251,199 +262,67 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M35.val());
-		topics.put(topicNames.M35.val(), new TopicList(this, topicNames.M35.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M35(this, topics), topicNames.M35.val());
 		//
 		// M36
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M36.val());
-		topics.put(topicNames.M36.val(), new TopicList(this, topicNames.M36.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M36(this, topics), topicNames.M36.val());
 		//
 		// M37
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M37.val());
-		topics.put(topicNames.M37.val(), new TopicList(this, topicNames.M37.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M37(this, topics), topicNames.M37.val());
 		//
 		// M38
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M38.val());
-		topics.put(topicNames.M38.val(), new TopicList(this, topicNames.M38.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M38(this, topics), topicNames.M38.val());
 		//
 		// M39
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M39.val());
-		topics.put(topicNames.M39.val(), new TopicList(this, topicNames.M39.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M39(this, topics), topicNames.M39.val());
 		//
-		// M10
+		// M40
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M40.val());
-		topics.put(topicNames.M40.val(), new TopicList(this, topicNames.M40.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M40(this, topics), topicNames.M40.val());
 		//
 		// M41
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M41.val());
-		topics.put(topicNames.M41.val(), new TopicList(this, topicNames.M41.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M41(this, topics), topicNames.M41.val());
 		//
 		// M42
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M42.val());
-		topics.put(topicNames.M42.val(), new TopicList(this, topicNames.M42.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M42(this, topics), topicNames.M42.val());
 		//
 		// M44
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M44.val());
-		topics.put(topicNames.M44.val(), new TopicList(this, topicNames.M44.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M44(this, topics), topicNames.M44.val());
 		//
 		// M45
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M45.val());
-		topics.put(topicNames.M45.val(), new TopicList(this, topicNames.M45.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M45(this, topics), topicNames.M45.val());
 		//
 		// M46
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M46.val());
-		topics.put(topicNames.M46.val(), new TopicList(this, topicNames.M46.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M46(this, topics), topicNames.M46.val());
 		//
 		// M80
 		//

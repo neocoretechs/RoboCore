@@ -6,7 +6,11 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
-
+/**
+ * G5 - Absolute command motor [Z<controller>] C<Channel> [P<motor power -1000 to 1000>] [X<PWM power -1000 to 1000>(scaled 0-2000)]
+ * @author groff
+ *
+ */
 public class G5 implements Runnable {
 	private boolean DEBUG;
 	private boolean shouldRun = true;
