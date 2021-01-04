@@ -1,6 +1,5 @@
 package com.neocoretechs.robocore.machine.bridge;
 
-
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Iterator;
@@ -20,14 +19,12 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
  	 * a passive behavioral construct that acts in a thread safe manner in between two active threads; one
  	 * transmitting or placing the data, the other receiving or retrieving the data. After completion the
  	 * machineReadings ArrayList contains the data and can be accessed by other parts of the app in a thread safe manner.
- 	 * @author jg
- 	 * Copyright 2012,2017 NeoCoreTechs
+ 	 * @author Jonathan Groff (C) Copyright 2012,2017 NeoCoreTechs
  	 */
 	//@XmlRootElement @XmlType(factoryMethod="getInstance")
 	@XmlRootElement(name="MachineBridge")
 	@XmlAccessorType(XmlAccessType.FIELD)
-    public final class MachineBridge
-    {
+    public final class MachineBridge {
 		private static boolean DEBUG = true;
 		//@XmlElement(name="machineReadings", type=MachineReading.class)
 		@XmlJavaTypeAdapter(RawDataXmlAdapter.class)
@@ -46,7 +43,9 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
         public CircularBlockingDeque<MachineReading> get() { return machineReadings; }
 	
 		public void add(MachineReading entry) {
-				machineReadings.addLast(entry);
+			if(machineReadings.addLast(entry))
+				if(DEBUG)
+					System.out.println("WARNING: MachineBridge for "+group+" has overwritten its queue of size:"+machineReadings.length());
 		}
 		/**
 		 * Initialize the blocking queue to receive data for the associated topic.

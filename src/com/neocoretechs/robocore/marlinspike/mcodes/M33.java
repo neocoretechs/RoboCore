@@ -7,28 +7,24 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
- * Dynamically allocate a controller to a control slot. The slot parameter is used to refer
- * to the dynamically allocated controller in other M codes that relate to motor control functions.
- * The M10 code merely creates the instance of the proper controller and assigns the slot. Other M codes
- * refer to the slot and provide further configuration. when creating new type of controllers, this is the code
- * that can be expanded to instantiate those controllers
- * M10 Z<controller slot> T<controller type>
+ * M33 [Z<slot>] P<ultrasonic pin> D<min. distance in cm> [E<direction 1- forward facing, 0 - reverse facing sensor>] 
+ * link Motor controller to ultrasonic sensor, the sensor must exist via M301
  * @author groff
  *
  */
-public class M10 implements Runnable {
+public class M33 implements Runnable {
 	private boolean DEBUG;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
 	String data;
-	public M10(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
+	public M33(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
-		// M10 - setup bridge controller
+		// M33
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.M10.val(), 2) {
+		this.topicList = new TopicList(asynchDemuxer, topicNames.M33.val(), 2) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -41,7 +37,7 @@ public class M10 implements Runnable {
 				return mr.getReadingValString();
 			}
 		};
-		topics.put(topicNames.M10.val(), topicList);
+		topics.put(topicNames.M33.val(), topicList);
 	}
 	@Override
 	public void run() {

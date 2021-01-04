@@ -15,8 +15,16 @@ import com.neocoretechs.robocore.marlinspike.gcodes.G99;
 import com.neocoretechs.robocore.marlinspike.mcodes.M0;
 import com.neocoretechs.robocore.marlinspike.mcodes.M1;
 import com.neocoretechs.robocore.marlinspike.mcodes.M10;
+import com.neocoretechs.robocore.marlinspike.mcodes.M11;
+import com.neocoretechs.robocore.marlinspike.mcodes.M12;
 import com.neocoretechs.robocore.marlinspike.mcodes.M2;
 import com.neocoretechs.robocore.marlinspike.mcodes.M3;
+import com.neocoretechs.robocore.marlinspike.mcodes.M33;
+import com.neocoretechs.robocore.marlinspike.mcodes.M4;
+import com.neocoretechs.robocore.marlinspike.mcodes.M5;
+import com.neocoretechs.robocore.marlinspike.mcodes.M6;
+import com.neocoretechs.robocore.marlinspike.mcodes.M7;
+import com.neocoretechs.robocore.marlinspike.mcodes.M8;
 import com.neocoretechs.robocore.marlinspike.mcodes.M9;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.M115;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
@@ -25,29 +33,29 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
 /**
  * This class is the primary interface between real time data and the other subsystems.
  * Its primary function is to demultiplex the input stream coming from {@code DataPortInterface} 
- * data sources such as the attached microcontroller Mega2560 etc that implement the interface and 
+ * data sources such as the attached Marlinspike enabled microcontroller, I.e. Mega2560 etc, that implement the interface and 
  * utilize a protocol with '<header>',line number, data value.
  * Each 'topic' described by the demultiplexed header as it flows in with its associated data is expected to have:
- * OPTIONAL:
- * 1) A thread that services the final processing listener class and deque for the given topic '<header>'
- * 2) A listener class that is serviced by the above thread that takes raw MachineReadings and transforms them if necessary
- * MANDATORY:
- * 3) An instance of {@code DataPortInterface} to connect to.
- * 4) A 'TopicList' class in the hash table with its associated 'header'
- * 5) An instance of 'MachineBridge' that operates on the raw data for a given topic 'header'
- * The optional items are necessary for data streamed at high rates. Notice in the code that 'dataset' has no
- * associated listener since it is a low volume data item. In this case the item is retrieved from the MachineBridge deque itself
- * rather than the associated listener deque.
+ * OPTIONAL:<br/>
+ * 1) A thread that services the final processing listener class and deque for the given topic '<header>' <br/>
+ * 2) A listener class that is serviced by the above thread that takes raw MachineReadings and transforms them if necessary <br/>
+ * MANDATORY:<br/>
+ * 3) An instance of {@code DataPortInterface} to connect to. <br/>
+ * 4) A 'TopicList' class in the hash table with its associated 'header' <br/>
+ * 5) An instance of 'MachineBridge' that operates on the raw data for a given topic 'header' <br/>
+ * The optional items are necessary for data streamed at high rates.
  * As the various topics are demuxxed by the thread servicing this class, the 'retrieveData' for each 'TopicList' 
  * is invoked to place the 'MachineReading' element in the deque associated with the MachineBridge for that topic.
  * The listener waits for a take from that particular MachineBridge and massages the data to be placed in its own deque
  * in the format and with the proper additions and exclusions from the raw MachineReading.
  * When an element in the listener is present and ready for a 'take' from that deque the item is considered ready for use
- * in the system.
+ * in the system.<p/>
  * The size of each listener circular deque is determined during invocation of the 'init' method of the MachineBridge for that topic.
  * This demuxxer runs in its own thread as well such that it may operate unimpeded while the listeners can take their time
- * processing the data. In this way a near realtime response is preserved.
- * @author jg
+ * processing the data. In this way a near realtime response is preserved.<p/>
+ * This class is designed for horizontal scaling: multiple Marlinspike boards can be attached to different ports, and
+ * an instance of this class can be created for each {@see MegaControl}.
+ * @author Jonathan Groff (C) NeoCoreTechs 2019,2020,2021
  *
  */
 public class AsynchDemuxer implements Runnable {
@@ -183,91 +191,31 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M4.val());
-		topics.put(topicNames.M4.val(), new TopicList(this, topicNames.M4.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M4(this, topics), topicNames.M4.val());
 		//
 		// M5
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M5.val());
-		topics.put(topicNames.M5.val(), new TopicList(this, topicNames.M5.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M5(this, topics), topicNames.M5.val());
 		//
 		// M6
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M6.val());
-		topics.put(topicNames.M6.val(), new TopicList(this, topicNames.M6.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M6(this, topics), topicNames.M6.val());
 		//
 		// M7
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M7.val());
-		topics.put(topicNames.M7.val(), new TopicList(this, topicNames.M7.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M7(this, topics), topicNames.M7.val());
 		//
 		// M8
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M8.val());
-		topics.put(topicNames.M8.val(), new TopicList(this, topicNames.M8.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M8(this, topics), topicNames.M8.val());
 		//
 		// M9
 		//
@@ -285,55 +233,19 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M11.val());
-		topics.put(topicNames.M11.val(), new TopicList(this, topicNames.M11.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M11(this, topics), topicNames.M11.val());
 		//
 		// M12
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M12.val());
-		topics.put(topicNames.M12.val(), new TopicList(this, topicNames.M12.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M12(this, topics), topicNames.M12.val());
 		//
 		// M33
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M33.val());
-		topics.put(topicNames.M33.val(), new TopicList(this, topicNames.M33.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M33(this, topics), topicNames.M33.val());
 		//
 		// M35
 		//
@@ -1935,6 +1847,8 @@ public class AsynchDemuxer implements Runnable {
 						dataPort.writeLine(writeReq);
 						synchronized(mutexWrite) {
 							try {
+								// the Marlinspike is a single threaded harvard microcontroller, if it
+								// takes more than 500 ms to do something, its a major bottleneck to the whole system.
 								mutexWrite.wait(500);
 							} catch (InterruptedException e) {
 								System.out.println("AsynchDemux Timeout - No write response from Marlinspike for:"+writeReq);

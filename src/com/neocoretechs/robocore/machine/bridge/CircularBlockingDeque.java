@@ -60,7 +60,7 @@ public class CircularBlockingDeque<T> implements Iterable<T>, List<T> {
    * 
    * @param entry
    *          the entry to add
-   * @return {@code true} if entry did not overwrite
+   * @return {@code true} if entry overwrote
    */
   public boolean addLast(T entry) {
 	boolean overwrite = false;
@@ -83,7 +83,7 @@ public class CircularBlockingDeque<T> implements Iterable<T>, List<T> {
    * 
    * @param entry
    *          the entry to add
-   * @return {@code true} if entry did not overwrite
+   * @return {@code true} if entry overwrote
    */
   public boolean addFirst(T entry) {
 	boolean overwrite = false;
@@ -290,13 +290,42 @@ public Object set(int index, Object element) {
 }
 @Override
 public void add(int index, Object element) {
-	// TODO Auto-generated method stub
-	
+	  synchronized (mutex) {
+		  int l = ((start + length) % limit); 
+		  int i = ((start + index) % limit);
+		  while(l != i) {
+			  int j = ((l-1) % limit);
+			  deque[l] = deque[j];
+			  l = j;
+		  }
+		  deque[(start + index) % limit] = (T)element;
+		  if (length == limit) {
+		    start = (start + 1) % limit;
+		   } else {
+		     length++;
+		   }
+		   mutex.notify();
+	  }
 }
 @Override
 public T remove(int index) {
-	// TODO Auto-generated method stub
-	return null;
+	  synchronized (mutex) {
+		  int l = ((start + length) % limit); 
+		  int i = ((start + index) % limit);
+		  Object elem = deque[i];
+		  while(l != i) {
+			  int j = ((i+1) % limit);
+			  deque[i] = deque[j];
+			  i = j;
+		  }
+		  if (index == limit) {
+		    start = (start - 1) % limit;
+		   } else {
+		     length--;
+		   }
+		   mutex.notify();
+		   return (T)elem;
+	  }
 }
 @Override
 public int indexOf(Object o) {
