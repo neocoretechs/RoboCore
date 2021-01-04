@@ -40,9 +40,24 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M80;
 import com.neocoretechs.robocore.marlinspike.mcodes.M81;
 import com.neocoretechs.robocore.marlinspike.mcodes.M9;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.M115;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.PWMcontrolsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.lineseq;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.motorcontrolSetting;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.noMorG;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.nochecksum;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.nolinecheck;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.time;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.analogpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.badPWM;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.badcontrol;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.badmotor;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.checkmismatch;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStatus;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStopped;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonic;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownG;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownM;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
@@ -711,654 +726,99 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ASSIGNEDPINS.val());
-		topics.put(topicNames.ASSIGNEDPINS.val(), new TopicList(this, topicNames.ASSIGNEDPINS.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {  
-				String sMarker = MSG_BEGIN+topicNames.ASSIGNEDPINS.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-					if( readLine == null || readLine.length() == 0 ) {
-						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						break;
-					}
-					if(DEBUG) 
-						System.out.println("AssignedPins subretrieval:"+readLine);
-					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-					if(readLine.endsWith(sMarker)) {
-						MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-						mb.add(mr);
-						break;
-					}
-					MachineReading mr = new MachineReading(readLine);
-					mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new motorcontrolSetting(this, topics), topicNames.ASSIGNEDPINS.val());
 		//
 		// Motorcontrol
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORCONTROLSETTING.val());	
-		topics.put(topicNames.MOTORCONTROLSETTING.val(), new TopicList(this, topicNames.MOTORCONTROLSETTING.val(), 128) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.MOTORCONTROLSETTING.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-					if( readLine == null || readLine.length() == 0 ) {
-						//if(DEBUG)System.out.println("Empty line returned from readLine");
-						break;
-					}
-					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-					if(readLine.endsWith(sMarker)) {
-						MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-						mb.add(mr);
-						break;
-					}
-					//if( DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(readLine);
-					mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new motorcontrolSetting(this, topics), topicNames.MOTORCONTROLSETTING.val());
 		//
 		// PWM control
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMCONTROLSETTING.val());	
-		topics.put(topicNames.PWMCONTROLSETTING.val(), new TopicList(this, topicNames.PWMCONTROLSETTING.val(),128) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.PWMCONTROLSETTING.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-					if( readLine == null || readLine.length() == 0 ) {
-						//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-						break;
-					}
-					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-					if(readLine.endsWith(sMarker)) {
-						MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-						mb.add(mr);
-						break;
-					}
-					//if( DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(readLine);
-					mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}		
-		});
+		ThreadPoolManager.getInstance().spin(new PWMcontrolsetting(this, topics), topicNames.PWMCONTROLSETTING.val());
 		//
 		// Controller status
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTATUS.val());			
-		topics.put(topicNames.CONTROLLERSTATUS.val(), new TopicList(this, topicNames.CONTROLLERSTATUS.val(),128) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.CONTROLLERSTATUS.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new controllerStatus(this, topics), topicNames.CONTROLLERSTATUS.val());
 		//
 		// time
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.TIME.val());			
-		topics.put(topicNames.TIME.val(), new TopicList(this, topicNames.TIME.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.TIME.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new time(this, topics), topicNames.TIME.val());
 		//
 		// Controller stopped
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTOPPED.val());			
-		topics.put(topicNames.CONTROLLERSTOPPED.val(), new TopicList(this, topicNames.CONTROLLERSTOPPED.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.CONTROLLERSTOPPED.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new controllerStopped(this, topics), topicNames.CONTROLLERSTOPPED.val());
 		//
 		// No M or G code
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOMORGCODE.val());			
-		topics.put(topicNames.NOMORGCODE.val(), new TopicList(this, topicNames.NOMORGCODE.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.NOMORGCODE.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new noMorG(this, topics), topicNames.NOMORGCODE.val());
 		//
 		// Bad motor
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADMOTOR.val());			
-		topics.put(topicNames.BADMOTOR.val(), new TopicList(this, topicNames.BADMOTOR.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.BADMOTOR.val();
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new badmotor(this, topics), topicNames.BADMOTOR.val());
 		//
 		// Bad PWM
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADPWM.val());			
-		topics.put(topicNames.BADPWM.val(), new TopicList(this, topicNames.BADPWM.val(),128) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.BADPWM.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new badPWM(this, topics), topicNames.BADPWM.val());
 		//
 		// Unknown G code
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNG.val());			
-		topics.put(topicNames.UNKNOWNG.val(), new TopicList(this, topicNames.UNKNOWNG.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.UNKNOWNG.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new unknownG(this, topics), topicNames.UNKNOWNG.val());
 		//
 		// Unknown M code
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNM.val());			
-		topics.put(topicNames.UNKNOWNM.val(), new TopicList(this, topicNames.UNKNOWNM.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.UNKNOWNM.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new unknownM(this, topics), topicNames.UNKNOWNM.val());
 		//
 		// Bad Control
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADCONTROL.val());			
-		topics.put(topicNames.BADCONTROL.val(), new TopicList(this, topicNames.BADCONTROL.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.BADCONTROL.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new badcontrol(this, topics), topicNames.BADCONTROL.val());
 		//
 		// No checksum
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOCHECKSUM.val());			
-		topics.put(topicNames.NOCHECKSUM.val(), new TopicList(this, topicNames.NOCHECKSUM.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.NOCHECKSUM.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
+		ThreadPoolManager.getInstance().spin(new nochecksum(this, topics), topicNames.NOCHECKSUM.val());
 
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
 		//
-		// No checksum
+		// No line check
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOLINECHECK.val());			
-		topics.put(topicNames.NOLINECHECK.val(), new TopicList(this, topicNames.NOLINECHECK.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.NOLINECHECK.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
+		ThreadPoolManager.getInstance().spin(new nolinecheck(this, topics), topicNames.NOLINECHECK.val());
 
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
 		//
 		// Checksum mismatch
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CHECKMISMATCH.val());			
-		topics.put(topicNames.CHECKMISMATCH.val(), new TopicList(this, topicNames.CHECKMISMATCH.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.CHECKMISMATCH.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new checkmismatch(this, topics), topicNames.CHECKMISMATCH.val());
 		//
 		// Line sequence out of order
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.LINESEQ.val());			
-		topics.put(topicNames.LINESEQ.val(), new TopicList(this, topicNames.LINESEQ.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				String sMarker = MSG_BEGIN+topicNames.LINESEQ.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					MachineReading mr = new MachineReading(readLine.substring(sMarker.length(),readLine.length()));
-					mb.add(mr);
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(Props.DEBUG)System.out.println("Empty line returned from readLine");
-							break;
-						}
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(readLine.endsWith(sMarker)) {
-							MachineReading mr = new MachineReading(readLine.substring(0,readLine.length()-sMarker.length()));
-							mb.add(mr);
-							break;
-						}
-						//if( Props.DEBUG ) System.out.println(readLine);
-						MachineReading mr = new MachineReading(readLine);
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new lineseq(this, topics), topicNames.LINESEQ.val());
 		//
 		// M115 report
 		//
