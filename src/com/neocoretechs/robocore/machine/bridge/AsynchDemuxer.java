@@ -19,6 +19,8 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M11;
 import com.neocoretechs.robocore.marlinspike.mcodes.M12;
 import com.neocoretechs.robocore.marlinspike.mcodes.M2;
 import com.neocoretechs.robocore.marlinspike.mcodes.M3;
+import com.neocoretechs.robocore.marlinspike.mcodes.M301;
+import com.neocoretechs.robocore.marlinspike.mcodes.M302;
 import com.neocoretechs.robocore.marlinspike.mcodes.M33;
 import com.neocoretechs.robocore.marlinspike.mcodes.M35;
 import com.neocoretechs.robocore.marlinspike.mcodes.M36;
@@ -34,10 +36,13 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M5;
 import com.neocoretechs.robocore.marlinspike.mcodes.M6;
 import com.neocoretechs.robocore.marlinspike.mcodes.M7;
 import com.neocoretechs.robocore.marlinspike.mcodes.M8;
+import com.neocoretechs.robocore.marlinspike.mcodes.M80;
+import com.neocoretechs.robocore.marlinspike.mcodes.M81;
 import com.neocoretechs.robocore.marlinspike.mcodes.M9;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.M115;
-import com.neocoretechs.robocore.marlinspike.mcodes.status.M44;
-import com.neocoretechs.robocore.marlinspike.mcodes.status.M46;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.analogpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonic;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
@@ -104,7 +109,7 @@ public class AsynchDemuxer implements Runnable {
 		LINESEQ("Line Number is not Last Line Number+1, Last Line: "),
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),
-		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M44("M44"),M45("M45"),M46("M46"),
+		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),
 		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),M444("M444"),
 		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M503("M503"),M799("M799"),M999("M999"),
 		M115("FIRMWARE_NAME:Marlinspike RoboCore"); // followed by FIRMWARE_URL,PROTOCOL_VERSION,MACHINE_TYPE,MACHINE NAME,MACHINE_UUID
@@ -306,11 +311,11 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M42.val());
 		ThreadPoolManager.getInstance().spin(new M42(this, topics), topicNames.M42.val());
 		//
-		// M44
+		// M44 - report on digitalpin
 		//
 		if(DEBUG)
-			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M44.val());
-		ThreadPoolManager.getInstance().spin(new M44(this, topics), topicNames.M44.val());
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPIN.val());
+		ThreadPoolManager.getInstance().spin(new digitalpin(this, topics), topicNames.DIGITALPIN.val());
 		//
 		// M45
 		//
@@ -318,83 +323,36 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M45.val());
 		ThreadPoolManager.getInstance().spin(new M45(this, topics), topicNames.M45.val());
 		//
-		// M46
+		// M46 - report on analogpin
 		//
 		if(DEBUG)
-			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M46.val());
-		ThreadPoolManager.getInstance().spin(new M46(this, topics), topicNames.M46.val());
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
+		ThreadPoolManager.getInstance().spin(new analogpin(this, topics), topicNames.ANALOGPIN.val());
 		//
 		// M80
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M80.val());
-		topics.put(topicNames.M80.val(), new TopicList(this, topicNames.M80.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M80(this, topics), topicNames.M80.val());
+	
 		//
 		// M81
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M81.val());
-		topics.put(topicNames.M81.val(), new TopicList(this, topicNames.M81.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M81(this, topics), topicNames.M81.val());
 		//
 		// M301
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M301.val());
-		topics.put(topicNames.M301.val(), new TopicList(this, topicNames.M301.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M301(this, topics), topicNames.M301.val());
 		//
 		// M302
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M302.val());
-		topics.put(topicNames.M302.val(), new TopicList(this, topicNames.M302.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M302(this, topics), topicNames.M302.val());
 		//
 		// M304
 		//
@@ -742,218 +700,11 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init "+topicNames.MOTORFAULT.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONIC.val());
 		}
-		topics.put(topicNames.ULTRASONIC.val(), new TopicList(this, topicNames.ULTRASONIC.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				int pin = 0, reading = 0, data = 0;
-				MachineReading mr = null;
-				if(isLineTerminal(readLine)) {
-					String sload = extractPayload(readLine, topicNames.ULTRASONIC.val());
-					if(sload != null) {
-						pin =  getReadingValueInt(sload);
-						reading = getReadingNumber(sload);
-						data = getReadingValueInt(sload);
-						mr = new MachineReading(1, pin, reading, data);
-					} else {
-						mr = new MachineReading(readLine);
-					}
-					mb.add(mr);
-				} else {
-					while( !isLineTerminal(readLine) ) {
-						readLine = marlinLines.takeFirst();
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(DEBUG)System.out.println("Empty line returned from readLine");
-							//continue;
-							break;
-						}
-						String sload = extractPayload(readLine, topicNames.ULTRASONIC.val());
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(sload != null) {
-							reading = getReadingNumber(sload);
-							data =  getReadingValueInt(sload);
-							if(reading == 1) {
-								System.out.println("Malformed request for "+topicNames.ULTRASONIC.val()+" for "+readLine);
-								continue;
-							}
-							mr = new MachineReading(1, pin, reading, data);
-						} else {
-							reading = getReadingNumber(sload);
-							data = getReadingValueInt(sload);
-							if(reading == 1) {
-								pin = data;
-							}
-							mr = new MachineReading(1, pin, reading, data);
-						}
-						mb.add(mr);
-				}
-				/*
-				String sMarker = MSG_BEGIN+topicNames.ULTRASONIC.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					pin =  getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));                             
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-					if( readLine == null || readLine.length() == 0 ) {
-							if(DEBUG) System.out.println("Empty line returned from readLine of "+topicNames.ULTRASONIC.val());
-							break;
-					}
-					if(readLine.endsWith(sMarker)) {
-						reading = getReadingNumber(readLine.substring(sMarker.length(),readLine.length()));
-						data =  getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));
-						if(reading == 1) {
-							System.out.println("Malformed request for "+topicNames.ULTRASONIC.val()+":"+readLine);
-							continue;
-						}
-						MachineReading mr = new MachineReading(1, pin, reading, data);
-						mb.add(mr);
-						break;
-					} else {
-						//if( DEBUG ) 
-						//		System.out.println("Ultrasonic retrieveData pin:"+pin+"| converted:"+reading+" "+data);
-						reading = getReadingNumber(readLine);
-						data =  getReadingValueInt(readLine);
-						if(reading == 1) {
-							pin = data;
-						} else {
-							MachineReading mr = new MachineReading(1, pin, reading, data);
-							mb.add(mr);
-						}
-					}
-					*/
-				}
-				if( DEBUG ) 
-					System.out.println(topicNames.ULTRASONIC.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return new Integer(mr.getReadingValInt());
-			}
-			
-		});
-		//
-		// Analogpin
-		//
+		ThreadPoolManager.getInstance().spin(new ultrasonic(this, topics), topicNames.ULTRASONIC.val());
 		if(DEBUG) {
 			System.out.println("AsynchDemuxer.Init "+topicNames.ULTRASONIC.val()+" engaged");
-			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
 		}
-		topics.put(topicNames.ANALOGPIN.val(), new TopicList(this, topicNames.ANALOGPIN.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				int pin = 0;
-				String sMarker = MSG_BEGIN+topicNames.ANALOGPIN.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					pin = getReadingValueInt(readLine.substring(sMarker.length(),readLine.length()));
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-					if( readLine == null || readLine.length() == 0 ) {
-						System.out.println("Premature return retrieveData "+topicNames.ANALOGPIN.val());
-						break;
-					}
-					int reading = 0, data = 0;
-					//if( DEBUG ) 
-					//	System.out.println(topicNames.ANALOGPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
-					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-					if(readLine.endsWith(sMarker)) {
-						reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
-						data =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
-						if(reading == 1) {
-							System.out.println("Malformed request for "+topicNames.ANALOGPIN.val()+":"+readLine);
-							continue;
-						}
-						MachineReading mr = new MachineReading(1, pin, reading, data);
-						mb.add(mr);
-						break;
-					} else {
-						reading = getReadingNumber(readLine);
-						data =  getReadingValueInt(readLine);
-						if(reading == 1) {
-							pin = data;
-						} else {
-							MachineReading mr = new MachineReading(1, pin, reading, data);
-							mb.add(mr);
-						}
-						if( DEBUG ) 
-							System.out.println("analog pin retrieveData:"+readLine+"| converted:"+reading+" "+data);
-					}
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return new int[]{ mr.getRawSeq(), mr.getReadingValInt() };
-			}
-		});
-		//
-		// Digitalpin
-		//
-		if(DEBUG) {
-			System.out.println("AsynchDemuxer.Init "+topicNames.ANALOGPIN.val()+" engaged");
-			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPIN.val());
-		}
-		topics.put(topicNames.DIGITALPIN.val(), new TopicList(this, topicNames.DIGITALPIN.val(),32) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				int reading = 0, data = 0;
-				int pin = 0;
-				String sMarker = MSG_BEGIN+topicNames.DIGITALPIN.val()+MSG_TERMINATE;
-				// Account for payloads on one line, delimited by our markers, or multiple lines with our markers as prefix and suffix.
-				// If we are here, we know the line begins with our marker header, but is there additional data on the line?
-				if(readLine.length() > sMarker.length()) {
-					pin =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
-				}
-				while( !(readLine = marlinLines.takeFirst()).startsWith(sMarker) ) {
-					if( readLine == null || readLine.length() == 0 ) {
-						System.out.println("Premature return retrieveData pin # from empty line "+topicNames.DIGITALPIN.val());
-						break;
-					}
-					// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-					if(readLine.endsWith(sMarker)) {
-						reading = getReadingNumber( readLine.substring(0,readLine.length()-sMarker.length()));
-						data =  getReadingValueInt( readLine.substring(0,readLine.length()-sMarker.length()));
-						if(reading == 1) {
-							System.out.println("Malformed request for "+topicNames.DIGITALPIN.val()+":"+readLine);
-							continue;
-						}
-						MachineReading mr = new MachineReading(1, pin, reading, data);
-						mb.add(mr);
-						break;
-					} else {
-						reading = getReadingNumber(readLine);
-						data =  getReadingValueInt(readLine);
-						if( DEBUG ) 
-							System.out.println(topicNames.DIGITALPIN.val()+" retrieveData:"+readLine+"| converted:"+reading+" "+data);
-						if(reading == 1) {
-							pin = data;
-						} else {
-							MachineReading mr = new MachineReading(1, pin, reading, data);
-							mb.add(mr);
-						}
-					}
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return new int[]{ mr.getRawSeq(), mr.getReadingValInt() };
-			}
-		});
 
-		if(DEBUG)
-			System.out.println("AsynchDemuxer.Init engaged "+topicNames.DIGITALPIN.val());
 		//
 		// reporting functions...
 		// Assigned pins

@@ -7,34 +7,33 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
- * M44 P<pin> [U] - -Read digital pin with optional pullup
+ * M300
  * 		SERIAL_PGM(MSG_BEGIN);
- *			SERIAL_PGM(digitalPinHdr);
- *			SERIAL_PGMLN(MSG_DELIMIT);
- *			SERIAL_PGM("1 ");
- *			SERIAL_PORT.println(pin_number);
- *			SERIAL_PGM("2 ");
- *			SERIAL_PORT.println(res);
- *			SERIAL_PGM(MSG_BEGIN);
- *			SERIAL_PGM(digitalPinHdr);
- *			SERIAL_PGMLN(MSG_TERMINATE);
- *			SERIAL_PORT.flush();
+ *		SERIAL_PGM(sonicCntrlHdr);
+ *		SERIAL_PGMLN(MSG_DELIMIT);
+ *		SERIAL_PGM("1 "); // pin
+ *		SERIAL_PORT.println(pin_number);
+ *		SERIAL_PGM("2 "); // sequence
+ *		SERIAL_PORT.println(upin->getRange()); // range
+ *		SERIAL_PGM(MSG_BEGIN);
+ *		SERIAL_PGM(sonicCntrlHdr);
+ *		SERIAL_PGMLN(MSG_TERMINATE);
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *
  */
-public class M44 implements Runnable {
+public class ultrasonic implements Runnable {
 	private boolean DEBUG;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
 	String data;
-	public M44(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
+	public ultrasonic(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
-		// M44
+		// M46
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.M44.val(), 5) {
+		this.topicList = new TopicList(asynchDemuxer, topicNames.ULTRASONIC.val(), 7) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -47,7 +46,7 @@ public class M44 implements Runnable {
 				return mr.getReadingValString();
 			}
 		};
-		topics.put(topicNames.M44.val(), topicList);
+		topics.put(topicNames.ULTRASONIC.val(), topicList);
 	}
 	@Override
 	public void run() {
@@ -57,7 +56,7 @@ public class M44 implements Runnable {
 					mutex.wait();
 					MachineReading mr = null;
 					if(asynchDemuxer.isLineTerminal(data)) {
-							String sload = asynchDemuxer.extractPayload(data, topicNames.M44.val());
+							String sload = asynchDemuxer.extractPayload(data, topicNames.ULTRASONIC.val());
 							if(sload != null) {
 								int reading = asynchDemuxer.getReadingNumber(sload);
 								int data =  asynchDemuxer.getReadingValueInt(sload);
@@ -74,7 +73,7 @@ public class M44 implements Runnable {
 									//continue;
 									break;
 								}
-								String sload = asynchDemuxer.extractPayload(data, topicNames.M44.val());
+								String sload = asynchDemuxer.extractPayload(data, topicNames.ULTRASONIC.val());
 								// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
 								if(sload != null) {
 									int reading = asynchDemuxer.getReadingNumber(sload);
