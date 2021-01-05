@@ -271,7 +271,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							System.out.println("PWM direct");
 							if( auxPWM == null )
 								auxPWM = new AuxPWMControl();
-							auxPWM.activateAux(request.getData().getData());	
+							auxPWM.activateAux(asynchDemuxer, request.getData().getData());	
 							break;
 					}
 					response.setData("success");
@@ -300,7 +300,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					System.out.println("GPIO direct");
 					if( auxGPIO == null )
 						auxGPIO = new AuxGPIOControl();
-					auxGPIO.activateAux(request.getData().getData());
+					auxGPIO.activateAux(asynchDemuxer, request.getData().getData());
 					response.setData("success");
 				} catch (IOException e) {
 					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");

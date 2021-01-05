@@ -21,6 +21,8 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M2;
 import com.neocoretechs.robocore.marlinspike.mcodes.M3;
 import com.neocoretechs.robocore.marlinspike.mcodes.M301;
 import com.neocoretechs.robocore.marlinspike.mcodes.M302;
+import com.neocoretechs.robocore.marlinspike.mcodes.M304;
+import com.neocoretechs.robocore.marlinspike.mcodes.M306;
 import com.neocoretechs.robocore.marlinspike.mcodes.M33;
 import com.neocoretechs.robocore.marlinspike.mcodes.M35;
 import com.neocoretechs.robocore.marlinspike.mcodes.M36;
@@ -31,22 +33,33 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M4;
 import com.neocoretechs.robocore.marlinspike.mcodes.M40;
 import com.neocoretechs.robocore.marlinspike.mcodes.M41;
 import com.neocoretechs.robocore.marlinspike.mcodes.M42;
+import com.neocoretechs.robocore.marlinspike.mcodes.M444;
+import com.neocoretechs.robocore.marlinspike.mcodes.M445;
 import com.neocoretechs.robocore.marlinspike.mcodes.M45;
+import com.neocoretechs.robocore.marlinspike.mcodes.M47;
 import com.neocoretechs.robocore.marlinspike.mcodes.M5;
+import com.neocoretechs.robocore.marlinspike.mcodes.M500;
+import com.neocoretechs.robocore.marlinspike.mcodes.M501;
+import com.neocoretechs.robocore.marlinspike.mcodes.M502;
 import com.neocoretechs.robocore.marlinspike.mcodes.M6;
 import com.neocoretechs.robocore.marlinspike.mcodes.M7;
+import com.neocoretechs.robocore.marlinspike.mcodes.M799;
 import com.neocoretechs.robocore.marlinspike.mcodes.M8;
 import com.neocoretechs.robocore.marlinspike.mcodes.M80;
 import com.neocoretechs.robocore.marlinspike.mcodes.M81;
 import com.neocoretechs.robocore.marlinspike.mcodes.M9;
+import com.neocoretechs.robocore.marlinspike.mcodes.M999;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.M115;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.PWMcontrolsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.eeprom;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.lineseq;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.motorcontrolSetting;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.motorfault;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.noMorG;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.nochecksum;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.nolinecheck;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.status;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.time;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.analogpin;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.badPWM;
@@ -55,6 +68,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.badmotor;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.checkmismatch;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStatus;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStopped;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.dataset;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonic;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownG;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownM;
@@ -122,11 +136,12 @@ public class AsynchDemuxer implements Runnable {
 		NOLINECHECK("No Line Number with checksum, Last Line: "),
 		CHECKMISMATCH("checksum mismatch, Last Line: "),
 		LINESEQ("Line Number is not Last Line Number+1, Last Line: "),
+		EEPROM("eeprom"),
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),
-		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),
+		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),
 		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),M444("M444"),
-		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M503("M503"),M799("M799"),M999("M999"),
+		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M799("M799"),M999("M999"),
 		M115("FIRMWARE_NAME:Marlinspike RoboCore"); // followed by FIRMWARE_URL,PROTOCOL_VERSION,MACHINE_TYPE,MACHINE NAME,MACHINE_UUID
 		String name;
 		topicNames(String name) { this.name = name;}
@@ -344,6 +359,12 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
 		ThreadPoolManager.getInstance().spin(new analogpin(this, topics), topicNames.ANALOGPIN.val());
 		//
+		// M47
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M47.val());
+		ThreadPoolManager.getInstance().spin(new M47(this, topics), topicNames.M47.val());
+		//
 		// M80
 		//
 		if(DEBUG)
@@ -373,290 +394,81 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M304.val());
-		topics.put(topicNames.M304.val(), new TopicList(this, topicNames.M304.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M304(this, topics), topicNames.M304.val());
 		//
 		// M306
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M306.val());
-		topics.put(topicNames.M306.val(), new TopicList(this, topicNames.M306.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M306(this, topics), topicNames.M306.val());
+
 		//
 		// M444
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M444.val());
-		topics.put(topicNames.M444.val(), new TopicList(this, topicNames.M444.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M444(this, topics), topicNames.M444.val());
 		//
 		// M445
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M445.val());
-		topics.put(topicNames.M445.val(), new TopicList(this, topicNames.M445.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M445(this, topics), topicNames.M445.val());
 		//
 		// M500
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M500.val());
-		topics.put(topicNames.M500.val(), new TopicList(this, topicNames.M500.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M500(this, topics), topicNames.M500.val());
 		//
 		// M501
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M501.val());
-		topics.put(topicNames.M501.val(), new TopicList(this, topicNames.M501.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M501(this, topics), topicNames.M501.val());
 		//
 		// M502
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M502.val());
-		topics.put(topicNames.M502.val(), new TopicList(this, topicNames.M502.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M502(this, topics), topicNames.M502.val());
 		//
-		// M503
+		// EEPROM (M503 response)
 		//
 		if(DEBUG)
-			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M503.val());
-		topics.put(topicNames.M503.val(), new TopicList(this, topicNames.M503.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.EEPROM.val());
+		ThreadPoolManager.getInstance().spin(new eeprom(this, topics), topicNames.EEPROM.val());
 		//
 		// M799
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M799.val());
-		topics.put(topicNames.M799.val(), new TopicList(this, topicNames.M799.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M799(this, topics), topicNames.M799.val());
 		//
-		// M999
+		// M999 - reset Marlinspike, issue command, 15ms delay, then suicide
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M999.val());
-		topics.put(topicNames.M999.val(), new TopicList(this, topicNames.M999.val(),2) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new M999(this, topics), topicNames.M999.val());
 		//
 		// status - M700
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.STATUS.val());
-		topics.put(topicNames.STATUS.val(), new TopicList(this, topicNames.STATUS.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				while( !isLineTerminal(readLine) ) {
-					readLine = marlinLines.takeFirst();
-					if( readLine == null ||  readLine.length() == 0 ) {
-						if(DEBUG)System.out.println(this.getClass().getName()+".retrieveData: premature EOR");
-						break;
-					}
-					if( DEBUG ) 
-						System.out.println(this.getClass().getName()+".retrieveData:"+readLine);
-					MachineReading mr = new MachineReading(readLine);
-					mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new status(this, topics), topicNames.STATUS.val());
 		//
 		// Dataset
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DATASET.val());
-		topics.put(topicNames.DATASET.val(), new TopicList(this, topicNames.DATASET.val(), 16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				while( !isLineTerminal(readLine) ) {
-					readLine = marlinLines.takeFirst();
-					if( readLine == null ||  readLine.length() == 0 ) {
-						//if(DEBUG)System.out.println("Empty line returned from readLine");
-						break;
-					}
-					readLine = extractPayload(readLine, topicNames.DATASET.val());
-					int reading = getReadingNumber(readLine);
-					double data =  getReadingValueDouble(readLine);
-					//if( DEBUG ) System.out.println(readLine);
-					MachineReading mr = new MachineReading(1, reading, reading+1, data);
-					mb.add(mr);		
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.toString();
-			}	
-		});
+		ThreadPoolManager.getInstance().spin(new dataset(this, topics), topicNames.DATASET.val());
+
 		//
 		// Battery
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BATTERY.val());
-		topics.put(topicNames.BATTERY.val(),new TopicList(this, topicNames.BATTERY.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				MachineReading mr = null;
-				if(isLineTerminal(readLine)) {
-					String sload = extractPayload(readLine, topicNames.BATTERY.val());
-					if(sload != null) {
-						int reading = getReadingNumber(sload);
-						int data =  getReadingValueInt(sload);
-						mr = new MachineReading(1, reading, reading+1, data);
-					} else {
-						mr = new MachineReading(readLine);
-					}
-					mb.add(mr);
-				} else {
-					while( !isLineTerminal(readLine) ) {
-						readLine = marlinLines.takeFirst();
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(DEBUG)System.out.println("Empty line returned from readLine");
-							//continue;
-							break;
-						}
-						String sload = extractPayload(readLine, topicNames.BATTERY.val());
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(sload != null) {
-							int reading = getReadingNumber(sload);
-							int data =  getReadingValueInt(sload);
-							mr = new MachineReading(1, reading, reading+1, data);
-						} else {
-							mr = new MachineReading(readLine);
-						}
-						mb.add(mr);
-					}
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return new Float(((float)mr.getReadingValInt())/10.0);
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new dataset(this, topics), topicNames.BATTERY.val());
 		//
 		// Motorfault
 		//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
@@ -664,50 +476,7 @@ public class AsynchDemuxer implements Runnable {
 			System.out.println("AsynchDemuxer.Init "+topicNames.BATTERY.val()+" engaged");
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORFAULT.val());
 		}
-		topics.put(topicNames.MOTORFAULT.val(), new TopicList(this, topicNames.MOTORFAULT.val(),16) {
-			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				MachineReading mr = null;
-				if(isLineTerminal(readLine)) {
-					String sload = extractPayload(readLine, topicNames.MOTORFAULT.val());
-					if(sload != null) {
-						int reading = getReadingNumber(sload);
-						String data =  getReadingValueString(sload);
-						mr = new MachineReading(1, reading, reading+1, data);
-					} else {
-						mr = new MachineReading(readLine);
-					}
-					mb.add(mr);
-				} else {
-					while( !isLineTerminal(readLine) ) {
-						readLine = marlinLines.takeFirst();
-						if( readLine == null || readLine.length() == 0 ) {
-							//if(DEBUG)System.out.println("Empty line returned from readLine");
-							//continue;
-							break;
-						}
-						String sload = extractPayload(readLine, topicNames.MOTORFAULT.val());
-						// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-						if(sload != null) {
-							int reading = getReadingNumber(sload);
-							String data =  getReadingValueString(sload);
-							mr = new MachineReading(1, reading, reading+1, data);
-						} else {
-							mr = new MachineReading(readLine);
-						}
-						mb.add(mr);
-				}
-				mb.add(MachineReading.EMPTYREADING);
-				synchronized(demux.mutexWrite) {
-					demux.mutexWrite.notifyAll();
-				}
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		});
+		ThreadPoolManager.getInstance().spin(new motorfault(this, topics), topicNames.MOTORFAULT.val());
 		//
 		// Ultrasonic
 		//
