@@ -732,13 +732,13 @@ public class AsynchDemuxer implements Runnable {
 					}
 					try {
 						fop = parseDirective(line);
-						if(DEBUG)
-							System.out.println("AsynchDemux Parsed directive:"+fop);
+						//if(DEBUG)
+						//	System.out.println("AsynchDemux Parsed directive:"+fop);
 						if(fop != null) {
 							TopicList tl = topics.get(fop);
 							if( tl != null ) {
-								if(DEBUG)
-									System.out.println("AsynchDemux call out to topic:"+tl.mb.getGroup());
+								//if(DEBUG)
+								//	System.out.println("AsynchDemux call out to topic:"+tl.mb.getGroup());
 								tl.retrieveData(line);
 							} else {
 								System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);

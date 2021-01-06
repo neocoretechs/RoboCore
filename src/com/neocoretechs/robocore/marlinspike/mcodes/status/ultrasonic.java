@@ -33,7 +33,7 @@ public class ultrasonic implements Runnable {
 		//
 		// M46
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.ULTRASONIC.val(), 7) {
+		this.topicList = new TopicList(asynchDemuxer, topicNames.ULTRASONIC.val(), 8) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
 				data = asynchDemuxer.getMarlinLines().takeFirst();

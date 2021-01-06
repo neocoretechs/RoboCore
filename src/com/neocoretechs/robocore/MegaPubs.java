@@ -37,6 +37,7 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
+import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
@@ -100,7 +101,6 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
  */
 public class MegaPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
-	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;
@@ -535,23 +535,39 @@ public void onStart(final ConnectedNode connectedNode) {
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
 			sensor_msgs.Range rangemsg = null;
 			TopicListInterface tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BATTERY.val());
-			if(tli == null)
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BATTERY.val()+" "+tli);
+			if(tli == null) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BATTERY.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.BATTERY.val()+" programmatic initialization problem");
+			}
 			MachineBridge mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
-					Float batt = (Float) tli.getResult(mb.waitForNewReading());
-					volts = batt.floatValue();
+					int volts = (int) tli.getResult(mb.waitForNewReading());
 					statmsg = statpub.newMessage();
 					statmsg.setName(AsynchDemuxer.topicNames.BATTERY.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.BATTERY.val()+" voltage warning "+((int)volts)+" volts");
+					statmsg.setMessage(AsynchDemuxer.topicNames.BATTERY.val()+" voltage warning "+volts+" volts");
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(String.valueOf(mr2.getReadingValInt()));
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					outgoingDiagnostics.addFirst(statmsg); // push this top top for priority
 					//statpub.publish(statmsg);
@@ -561,11 +577,23 @@ public void onStart(final ConnectedNode connectedNode) {
 			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.ULTRASONIC.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.ULTRASONIC.val()+" "+tli);
+			if( tli == null ) { 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.ULTRASONIC.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.ULTRASONIC.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
-					Integer range = (Integer) tli.getResult(mb.waitForNewReading());
+				int messageSize = 0;
+				while(!mb.get().isEmpty()) {
+					MachineReading mr2 = mb.waitForNewReading();
+					// failsafe to limit consumption of message elements to max size of MachineBridge queue
+					// this theoretically gives us one message at a time to queue on the outbound message bus
+					// and keeps system from stalling on endless consumption of one incoming message stream
+					if(messageSize++ > mb.get().length())
+						break;
+					if(mr2.equals(MachineReading.EMPTYREADING))
+						continue;
+					Double range = mr2.getReadingValDouble();
 					ihead.setSeq(sequenceNumber);
 					Time tst = connectedNode.getCurrentTime();
 					ihead.setStamp(tst);
@@ -582,10 +610,13 @@ public void onStart(final ConnectedNode connectedNode) {
 					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange());
 					++sequenceNumber;
 				}
+			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.MOTORFAULT.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.MOTORFAULT.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.MOTORFAULT.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.MOTORFAULT.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -593,23 +624,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.MOTORFAULT.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.MOTORFAULT.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.MOTORFAULT.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.MOTORFAULT.val()+": "+statmsg.getMessage().toString());
-				}
+			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.TIME.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.TIME.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.TIME.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.TIME.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -624,18 +672,35 @@ public void onStart(final ConnectedNode connectedNode) {
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.TIME.val()+": "+statmsg.getMessage().toString());
-				}
+			}
 			
 			// in this case if we are activating the service to get the controller status report
 			// dont intercept it.
 			if(!serviceActive) {
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -650,6 +715,21 @@ public void onStart(final ConnectedNode connectedNode) {
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
@@ -659,14 +739,16 @@ public void onStart(final ConnectedNode connectedNode) {
 			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
 					statmsg = statpub.newMessage();
 					statmsg.setName(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
-					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
 					statmsg.setMessage(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+" warning "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
@@ -675,16 +757,33 @@ public void onStart(final ConnectedNode connectedNode) {
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+": "+statmsg.getMessage().toString());
-				}
+			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.NOMORGCODE.val());
-			if( tli == null) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOMORGCODE.val()+" "+tli);
+			if( tli == null) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOMORGCODE.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.NOMORGCODE.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -692,47 +791,72 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.NOMORGCODE.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.NOMORGCODE.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.NOMORGCODE.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.NOMORGCODE.val()+": "+statmsg.getMessage().toString());
-				}	
+			}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BADMOTOR.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADMOTOR.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADMOTOR.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.BADMOTOR.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
-			if( !mb.get().isEmpty() ) {
-					String mfd = (String) tli.getResult(mb.waitForNewReading());
-					statmsg = statpub.newMessage();
-					statmsg.setName(AsynchDemuxer.topicNames.BADMOTOR.val());
-					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
-					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.BADMOTOR.val()+" warning "+mfd);
-					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-					kv.setKey("Timestamp");
-					DateFormat d = DateFormat.getDateTimeInstance();
-					kv.setValue(d.format(new Date()));
-					li.add(kv);
-					statmsg.setValues(li);
-					//statpub.publish(statmsg);
-					outgoingDiagnostics.addLast(statmsg);
-					if( DEBUG) 
-						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BADMOTOR.val()+": "+statmsg.getMessage().toString());
+			if(!mb.get().isEmpty()) {
+				statmsg = statpub.newMessage();
+				statmsg.setName(AsynchDemuxer.topicNames.BADMOTOR.val());
+				statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
+				statmsg.setHardwareId(connectedNode.getUri().toString());
+				statmsg.setMessage(AsynchDemuxer.topicNames.BADMOTOR.val()+" error ");
+				diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+				List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+				kv.setKey("Timestamp");
+				DateFormat d = DateFormat.getDateTimeInstance();
+				kv.setValue(d.format(new Date()));
+				li.add(kv);
+				while( !mb.get().isEmpty() ) {
+					MachineReading mr = mb.waitForNewReading();
+					diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					kv2.setKey(String.valueOf(mr.getRawReadingNum()));
+					kv2.setValue(mr.getReadingValString());
+					li.add(kv2);
 				}
+				statmsg.setValues(li);
+				//statpub.publish(statmsg);
+				outgoingDiagnostics.addLast(statmsg);
+				if( DEBUG) 
+					System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BADMOTOR.val()+": "+statmsg.getMessage().toString());
+			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BADPWM.val());
-			if( tli == null ) 
+			if( tli == null ) {
 				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADPWM.val()+" "+tli);
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.BADPWM.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -740,23 +864,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.BADPWM.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.BADPWM.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.BADPWM.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BADPWM.val()+": "+statmsg.getMessage().toString());
-				}	
+			}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.UNKNOWNG.val());
-			if( tli == null) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNG.val()+" "+tli);
+			if( tli == null) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNG.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNG.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -764,23 +905,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.UNKNOWNG.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.UNKNOWNG.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.UNKNOWNG.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.UNKNOWNG.val()+": "+statmsg.getMessage().toString());
-				}	
+			}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.UNKNOWNM.val());
-			if( tli == null) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNM.val()+" "+tli);
+			if( tli == null) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNM.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNM.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -788,22 +946,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.UNKNOWNM.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.UNKNOWNM.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.UNKNOWNM.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.UNKNOWNM.val()+": "+statmsg.getMessage().toString());
-				}
+			}
+			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BADCONTROL.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADCONTROL.val()+" "+tli);
+			if( tli == null ) { 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADCONTROL.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.BADCONTROL.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -811,23 +987,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.BADCONTROL.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.BADCONTROL.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.BADCONTROL.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.BADCONTROL.val()+": "+statmsg.getMessage().toString());
-				}	
+			}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.NOCHECKSUM.val());
-			if( tli == null) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOCHECKSUM.val()+" "+tli);
+			if( tli == null) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOCHECKSUM.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.NOCHECKSUM.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -835,23 +1028,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.NOCHECKSUM.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.NOCHECKSUM.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.NOCHECKSUM.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.NOCHECKSUM.val()+": "+statmsg.getMessage().toString());
-				}	
+			}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.NOLINECHECK.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOLINECHECK.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOLINECHECK.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.NOLINECHECK.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -859,23 +1069,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.NOLINECHECK.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.NOLINECHECK.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.NOLINECHECK.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.NOLINECHECK.val()+": "+statmsg.getMessage().toString());
-				}
+			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CHECKMISMATCH.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CHECKMISMATCH.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CHECKMISMATCH.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.CHECKMISMATCH.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -883,23 +1110,40 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.CHECKMISMATCH.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.CHECKMISMATCH.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.CHECKMISMATCH.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.CHECKMISMATCH.val()+": "+statmsg.getMessage().toString());
-				}
+			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.LINESEQ.val());
-			if( tli == null ) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.LINESEQ.val()+" "+tli);
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.LINESEQ.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.LINESEQ.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -907,23 +1151,41 @@ public void onStart(final ConnectedNode connectedNode) {
 					statmsg.setName(AsynchDemuxer.topicNames.LINESEQ.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
 					statmsg.setHardwareId(connectedNode.getUri().toString());
-					statmsg.setMessage(AsynchDemuxer.topicNames.LINESEQ.val()+" warning "+mfd);
+					statmsg.setMessage(AsynchDemuxer.topicNames.LINESEQ.val()+" error "+mfd);
 					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.LINESEQ.val()+": "+statmsg.getMessage().toString());
-				}	
+			}
+			
 			// M115 firmware report
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.M115.val());
-			if( tli == null) 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.M115.val()+" "+tli);
+			if( tli == null) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.M115.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.M115.val()+" programmatic initialization problem");
+			}
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -938,12 +1200,27 @@ public void onStart(final ConnectedNode connectedNode) {
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(mr2.getRawReadingNum()));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
 					statmsg.setValues(li);
 					//statpub.publish(statmsg);
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.M115.val()+": "+statmsg.getMessage().toString());
-				}			
+			}			
 			//
 			// Poll the outgoing message array for diagnostics enqueued by al the above processing
 			//

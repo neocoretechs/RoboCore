@@ -8,7 +8,7 @@ import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 
 public class time implements Runnable {
-	private boolean DEBUG = true;
+	private boolean DEBUG = false;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
@@ -42,8 +42,7 @@ public class time implements Runnable {
 					mutex.wait();		
 					MachineReading mr = null;
 					String directive = asynchDemuxer.parseDirective(data);
-					while(directive != null && 
-						 !(directive.equals(topicNames.TIME.val()) && asynchDemuxer.isLineTerminal(data)) ) {
+					while(directive != null && !asynchDemuxer.isLineTerminal(data) ) {
 							data = asynchDemuxer.getMarlinLines().takeFirst();
 							if(DEBUG)
 								System.out.println(this.getClass().getName()+":"+data);

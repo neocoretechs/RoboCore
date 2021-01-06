@@ -40,9 +40,6 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 		NodeConfiguration nc = build();
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 	    nodeMainExecutor.execute(this, nc);
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
 	    
 	}
 	
@@ -50,9 +47,6 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 	    nodeMainExecutor.execute(this, cl.build());
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
 	}
 	
 	public AlarmShutdownPubs() {}
@@ -84,7 +78,10 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 	
 		final Publisher<std_msgs.Empty> alarmpub =
 				connectedNode.newPublisher("alarm/shutdown", std_msgs.Empty._TYPE);
-
+		
+		// tell the waiting constructors that we have registered publishers
+		awaitStart.countDown();
+		
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
 	
 			@Override
@@ -93,6 +90,9 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 
 			@Override
 			protected void loop() throws InterruptedException {
+			    try {
+					awaitStart.await();
+				} catch (InterruptedException e) {}
 				std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
 				alarmpub.publish(val);
 				cancel();

@@ -42,7 +42,7 @@ public class battery implements Runnable {
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
+				return mr.getReadingValInt();
 			}
 		};
 		topics.put(topicNames.BATTERY.val(), topicList);
@@ -59,11 +59,9 @@ public class battery implements Runnable {
 							if(sload != null) {
 								int reading = asynchDemuxer.getReadingNumber(sload);
 								int data =  asynchDemuxer.getReadingValueInt(sload);
-								mr = new MachineReading(1, reading, reading+1, data);
-							} else {
-								mr = new MachineReading(data);
+								mr = new MachineReading(1, reading, reading+1, data);		
+								topicList.getMachineBridge().add(mr);
 							}
-							topicList.getMachineBridge().add(mr);
 					} else {
 							while( !asynchDemuxer.isLineTerminal(data) ) {
 								data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -77,7 +75,7 @@ public class battery implements Runnable {
 								if(sload != null) {
 									int reading = asynchDemuxer.getReadingNumber(sload);
 									int data =  asynchDemuxer.getReadingValueInt(sload);
-									mr = new MachineReading(1, reading, reading+1, data);
+									mr = new MachineReading(1, reading, reading, data);
 								} else {
 									mr = new MachineReading(sload);
 								}

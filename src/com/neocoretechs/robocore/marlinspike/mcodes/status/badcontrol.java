@@ -29,7 +29,7 @@ public class badcontrol implements Runnable {
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
+				return mr;
 			}
 		};
 		topics.put(topicNames.BADCONTROL.val(), topicList);
