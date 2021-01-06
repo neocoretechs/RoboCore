@@ -132,20 +132,13 @@ public class MegaPubs extends AbstractNodeMain  {
 		this.master = master;
 		NodeConfiguration nc = build();
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
-	    
+	    nodeMainExecutor.execute(this, nc);   
 	}
 	
 	public MegaPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 	    nodeMainExecutor.execute(this, cl.build());
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
 	}
 	
 	public MegaPubs() {}
@@ -171,6 +164,16 @@ public NodeConfiguration build()  {
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
+	try {
+		asynchDemuxer.connect(ByteSerialDataPort.getInstance());
+		asynchDemuxer.init();
+		motorControlHost = new MegaControl(asynchDemuxer);
+	} catch (IOException e) {
+		System.out.println("Could not connect to Marlinspike.."+e);
+		e.printStackTrace();
+		return;
+	}
+	
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
@@ -179,13 +182,6 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Publisher<sensor_msgs.Range> rangepub = 
 		connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
-	try {
-		asynchDemuxer.connect(ByteSerialDataPort.getInstance());
-	} catch (IOException e) {
-		System.out.println("Could not connect to Marlinspike.."+e);
-		e.printStackTrace();
-		return;
-	}
 	
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
@@ -205,9 +201,6 @@ public void onStart(final ConnectedNode connectedNode) {
 	if( remaps.containsKey("__pwm") )
 		PWM_MODE = remaps.get("__pwm");
 
-	asynchDemuxer.init();
-
-	motorControlHost = new MegaControl(asynchDemuxer);
 	
 	final Subscriber<geometry_msgs.Twist> substwist = 
 			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
@@ -533,13 +526,17 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
+		    try {
+				awaitStart.await();
+			} catch (InterruptedException e) {}
+		    
 			std_msgs.Header ihead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
 			sensor_msgs.Range rangemsg = null;
 			TopicListInterface tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BATTERY.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.BATTERY.val()+" "+tli);
+			if(tli == null)
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BATTERY.val()+" "+tli);
 			MachineBridge mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					Float batt = (Float) tli.getResult(mb.waitForNewReading());
@@ -564,8 +561,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.ULTRASONIC.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.ULTRASONIC.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.ULTRASONIC.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					Integer range = (Integer) tli.getResult(mb.waitForNewReading());
@@ -587,8 +584,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.MOTORFAULT.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.MOTORFAULT.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.MOTORFAULT.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -611,8 +608,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.TIME.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.TIME.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.TIME.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -637,8 +634,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			// dont intercept it.
 			if(!serviceActive) {
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -662,8 +659,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -686,8 +683,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.NOMORGCODE.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.NOMORGCODE.val()+" "+tli);
+			if( tli == null) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOMORGCODE.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -710,8 +707,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BADMOTOR.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.BADMOTOR.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADMOTOR.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -734,8 +731,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BADPWM.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.BADPWM.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADPWM.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -758,8 +755,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.UNKNOWNG.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.UNKNOWNG.val()+" "+tli);
+			if( tli == null) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNG.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -782,8 +779,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.UNKNOWNM.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.UNKNOWNM.val()+" "+tli);
+			if( tli == null) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.UNKNOWNM.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -805,8 +802,8 @@ public void onStart(final ConnectedNode connectedNode) {
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.UNKNOWNM.val()+": "+statmsg.getMessage().toString());
 				}
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.BADCONTROL.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.BADCONTROL.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.BADCONTROL.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -829,8 +826,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.NOCHECKSUM.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.NOCHECKSUM.val()+" "+tli);
+			if( tli == null) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOCHECKSUM.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -853,8 +850,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}	
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.NOLINECHECK.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.NOLINECHECK.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.NOLINECHECK.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -877,8 +874,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CHECKMISMATCH.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.CHECKMISMATCH.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CHECKMISMATCH.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -901,8 +898,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.LINESEQ.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.LINESEQ.val()+" "+tli);
+			if( tli == null ) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.LINESEQ.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
@@ -925,8 +922,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}	
 			// M115 firmware report
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.M115.val());
-			//if( DEBUG) 
-			//	System.out.println("Topic "+AsynchDemuxer.topicNames.M115.val()+" "+tli);
+			if( tli == null) 
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.M115.val()+" "+tli);
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());

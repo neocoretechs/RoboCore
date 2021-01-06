@@ -30,7 +30,7 @@ public class battery implements Runnable {
 	public battery(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
-		// M46
+		// battery
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.BATTERY.val(), 5) {
 			@Override

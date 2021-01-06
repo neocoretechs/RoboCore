@@ -33,7 +33,6 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M4;
 import com.neocoretechs.robocore.marlinspike.mcodes.M40;
 import com.neocoretechs.robocore.marlinspike.mcodes.M41;
 import com.neocoretechs.robocore.marlinspike.mcodes.M42;
-import com.neocoretechs.robocore.marlinspike.mcodes.M444;
 import com.neocoretechs.robocore.marlinspike.mcodes.M445;
 import com.neocoretechs.robocore.marlinspike.mcodes.M45;
 import com.neocoretechs.robocore.marlinspike.mcodes.M47;
@@ -62,9 +61,11 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.nolinecheck;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.status;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.time;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.analogpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.assignedPins;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.badPWM;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.badcontrol;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.badmotor;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.battery;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.checkmismatch;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStatus;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStopped;
@@ -140,7 +141,7 @@ public class AsynchDemuxer implements Runnable {
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),
 		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),
-		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),M444("M444"),
+		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),
 		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M799("M799"),M999("M999"),
 		M115("FIRMWARE_NAME:Marlinspike RoboCore"); // followed by FIRMWARE_URL,PROTOCOL_VERSION,MACHINE_TYPE,MACHINE NAME,MACHINE_UUID
 		String name;
@@ -403,12 +404,6 @@ public class AsynchDemuxer implements Runnable {
 		ThreadPoolManager.getInstance().spin(new M306(this, topics), topicNames.M306.val());
 
 		//
-		// M444
-		//
-		if(DEBUG)
-			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M444.val());
-		ThreadPoolManager.getInstance().spin(new M444(this, topics), topicNames.M444.val());
-		//
 		// M445
 		//
 		if(DEBUG)
@@ -468,26 +463,19 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BATTERY.val());
-		ThreadPoolManager.getInstance().spin(new dataset(this, topics), topicNames.BATTERY.val());
+		ThreadPoolManager.getInstance().spin(new battery(this, topics), topicNames.BATTERY.val());
 		//
 		// Motorfault
 		//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
-		if(DEBUG) {
-			System.out.println("AsynchDemuxer.Init "+topicNames.BATTERY.val()+" engaged");
+		if(DEBUG) 
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORFAULT.val());
-		}
 		ThreadPoolManager.getInstance().spin(new motorfault(this, topics), topicNames.MOTORFAULT.val());
 		//
 		// Ultrasonic
 		//
-		if(DEBUG) {
-			System.out.println("AsynchDemuxer.Init "+topicNames.MOTORFAULT.val()+" engaged");
+		if(DEBUG) 
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONIC.val());
-		}
 		ThreadPoolManager.getInstance().spin(new ultrasonic(this, topics), topicNames.ULTRASONIC.val());
-		if(DEBUG) {
-			System.out.println("AsynchDemuxer.Init "+topicNames.ULTRASONIC.val()+" engaged");
-		}
 
 		//
 		// reporting functions...
@@ -495,7 +483,7 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ASSIGNEDPINS.val());
-		ThreadPoolManager.getInstance().spin(new motorcontrolSetting(this, topics), topicNames.ASSIGNEDPINS.val());
+		ThreadPoolManager.getInstance().spin(new assignedPins(this, topics), topicNames.ASSIGNEDPINS.val());
 		//
 		// Motorcontrol
 		//
