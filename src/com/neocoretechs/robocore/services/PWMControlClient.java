@@ -38,7 +38,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  */
 public class PWMControlClient extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	private String host;
 	private String command = "pwm";
 	private InetSocketAddress master;
@@ -48,8 +48,6 @@ public class PWMControlClient extends AbstractNodeMain  {
 	private String pin;
 	private String value;
 
-
-	
 	public PWMControlClient(String host, InetSocketAddress master) {
 		this.host = host;
 		this.master = master;

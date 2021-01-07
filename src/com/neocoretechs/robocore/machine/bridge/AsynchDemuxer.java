@@ -105,7 +105,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
@@ -152,9 +152,9 @@ public class AsynchDemuxer implements Runnable {
 	private Map<String, TopicList> topics = new ConcurrentHashMap<String, TopicList>(topicNames.values().length);
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
-	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(256);
+	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(1024);
 	public void clearLineBuffer() { marlinLines.clear(); }
-	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(256);
+	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(1024);
 	public void clearWriteBuffer() { toWrite.clear(); }
 	public static void addWrite(AsynchDemuxer ad, String req) { 
 		boolean overwrite = ad.toWrite.addLast(req);

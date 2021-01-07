@@ -157,13 +157,7 @@ public class MotionController extends AbstractNodeMain {
 	    nodeMainExecutor.execute(this, nc);
 	    if( DEBUG ) {
 	    	System.out.println("Bringing up MotionControl with host and master:"+host+" "+master);
-	    }
-	    try {
-			awaitStart.await();
-		    if( DEBUG )
-		    	System.out.println("Pub/subs registered..");
-		} catch (InterruptedException e) {}
-	    
+	    }   
 	}
 	
 	public MotionController(String[] args) {
@@ -173,17 +167,14 @@ public class MotionController extends AbstractNodeMain {
 	    if( DEBUG ) {
 	    	System.out.println("Bringing up MotionControl with args:"+args[0]+" "+args[1]+" "+args[2]);
 	    }
-	    try {
-			awaitStart.await();
-		    if( DEBUG )
-		    	System.out.println("Pub/subs registered..");
-		} catch (InterruptedException e) {}
 	}
 	
 	public MotionController() {
-		System.out.println("CTOR robot...");
+		if(DEBUG)
+			System.out.println("CTOR robot...");
 		robot = new Robot();
-		System.out.println("CTOR build robot"+robot);
+		if(DEBUG)
+			System.out.println("CTOR build robot"+robot);
 	}
 	
 	
@@ -263,7 +254,8 @@ public class MotionController extends AbstractNodeMain {
 			}
 		});
 		*/
-		System.out.println("PREPUBLISHING robot"+robot);
+		if(DEBUG)
+			System.out.println("PREPUBLISHING robot"+robot);
 		//
 		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
 		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
@@ -420,6 +412,7 @@ public class MotionController extends AbstractNodeMain {
 				// being crosstrack deviation.
 				//
 				if( holdBearing ) {
+					if(DEBUG)
 					System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
 					// In auto
 					if( Math.abs(robot.getMotionPIDController().getError()) <= TRIANGLE_THRESHOLD ) {
@@ -443,6 +436,7 @@ public class MotionController extends AbstractNodeMain {
 								robot.getMotionPIDController().setITerm(0);
 							}
 						}
+						if(DEBUG)
 						System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
 						// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
@@ -456,6 +450,7 @@ public class MotionController extends AbstractNodeMain {
 						else
 							if( robot.getMotionPIDController().getError() > 0.0f )
 								speedR *= (arcin/arcout);
+						if(DEBUG)
 						System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
@@ -471,9 +466,10 @@ public class MotionController extends AbstractNodeMain {
 							if( robot.getMotionPIDController().getError() > 0.0f )
 								speedR *= (arcin/arcout);
 					}
+					if(DEBUG)
 					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 				}
-	
+				if(DEBUG)
 				System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
 				//
 				// set it up to send down the publishing pipeline
@@ -513,6 +509,7 @@ public class MotionController extends AbstractNodeMain {
 							triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
 							triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
 							triggerVals.add(0);
+							if(DEBUG)
 							System.out.println("LEDCameraIlluminatorControl turning off LED");
 							trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
 							try {
@@ -526,6 +523,7 @@ public class MotionController extends AbstractNodeMain {
 						triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
 						triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
 						triggerVals.add(Integer.valueOf((int)axes[Props.toInt("LEDCameraIlluminatorControl")]));
+						if(DEBUG)
 						System.out.printf("LEDCameraIlluminatorControl = %d\n",triggerVals.get(2));
 						trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
 						try {
@@ -634,6 +632,7 @@ public class MotionController extends AbstractNodeMain {
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
+				if(DEBUG)
 				System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
 				speedL *= ((radius+(WHEELBASE/2))/hypot);
 			}
@@ -654,6 +653,7 @@ public class MotionController extends AbstractNodeMain {
 				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
+				if(DEBUG)
 				System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot),holdBearing);
 				speedR *= ((radius+(WHEELBASE/2))/hypot);
 			}
@@ -668,8 +668,10 @@ public class MotionController extends AbstractNodeMain {
 					orientation.setZ(message.getOrientation().getZ());
 					orientation.setW(message.getOrientation().getW());
 					eulers = message.getOrientationCovariance();
+					if(DEBUG) {
 					System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 					System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+					}
 					try {
 					if( message.getAngularVelocity().getX() != angular.getX() ||
 						message.getAngularVelocity().getY() != angular.getY() ||
@@ -695,8 +697,10 @@ public class MotionController extends AbstractNodeMain {
 									isOverShock = true;
 								}
 							}
+							if(DEBUG) {
 							System.out.printf("Nav:Angular X:%f | Angular Y:%f | Angular Z:%f",angular.getX(),angular.getY(),angular.getZ());
 							System.out.printf("Nav:Linear X:%f | Linear Y:%f | Linear Z:%f",linear.getX(),linear.getY(),linear.getZ());
+							}
 					} else
 						isNav = false;
 				} catch (Throwable e) {
@@ -765,6 +769,7 @@ public class MotionController extends AbstractNodeMain {
 					mag[1] = mag3.getY();
 					mag[2] = mag3.getZ();
 					isMag = true;
+					if(DEBUG)
 					System.out.println("Magnetic field:"+mag[0]+" "+mag[1]+" "+mag[2]);
 					if( MAG_THRESHOLD[0] != -1 ) {
 						if( mag[0] > MAG_THRESHOLD[0] && mag[1] > MAG_THRESHOLD[1] && mag[2] > MAG_THRESHOLD[2] ) {
@@ -784,6 +789,7 @@ public class MotionController extends AbstractNodeMain {
 					System.out.println("New temp msg:"+message);
 				if(temperature != message.getTemperature()) {
 					temperature = message.getTemperature();
+					if(DEBUG)
 					System.out.println(" Temp:"+temperature);
 					isTemperature = true;
 					if( temperature > TEMPERATURE_THRESHOLD )
@@ -810,7 +816,7 @@ public class MotionController extends AbstractNodeMain {
 				robot.getIMUSetpointInfo().setMaximum(TRIANGLE_THRESHOLD); // maximum degree windup
 				robot.getMotionPIDController().clearPID();
 				WHEELBASE = Props.toFloat("MaxSpeedValue");
-				System.out.println("POST setup robot"+robot);
+				System.out.println("POST setup robot:"+robot);
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
@@ -818,6 +824,11 @@ public class MotionController extends AbstractNodeMain {
 
 			@Override
 			protected void loop() throws InterruptedException {	
+			    try {
+					awaitStart.await();
+				    if( DEBUG )
+				    	System.out.println("Pub/subs registered..");
+				} catch (InterruptedException e) {}
 				/*
 				hasMoved = motorControlListener.move2DRelative(np.getGyros()[0] , courseOffset, linearMove
 						, np.getTimeVal(), np.getAccs(), np.getRanges());

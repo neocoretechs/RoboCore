@@ -100,7 +100,7 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
  * @author jg
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;
@@ -372,10 +372,10 @@ public void onStart(final ConnectedNode connectedNode) {
 				isMoving = false;
 			else
 				isMoving = true;
-			//if( DEBUG )
+			if( DEBUG ) {
 				System.out.println("Robot commanded to move Left wheel ABS slot "+valch1+" channel:"+valch2+ ":" + valch3);
 				System.out.println("Right wheel ABS slot "+valch4+" channel:"+valch5+ ":" + valch6);
-
+			}
 			try {
 				if( shouldMove ) {
 					//if(angularMode )

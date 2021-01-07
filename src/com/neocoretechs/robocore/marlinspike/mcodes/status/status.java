@@ -12,7 +12,7 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
  *
  */
 public class status implements Runnable {
-	private boolean DEBUG = true;
+	private boolean DEBUG = false;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;

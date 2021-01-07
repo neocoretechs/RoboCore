@@ -37,7 +37,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * @author jg
  */
 public class TwistPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
@@ -62,20 +62,13 @@ public class TwistPubs extends AbstractNodeMain  {
 		this.master = master;
 		NodeConfiguration nc = build();
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
-	    
+	    nodeMainExecutor.execute(this, nc);    
 	}
 	
 	public TwistPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 	    nodeMainExecutor.execute(this, cl.build());
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
 	}
 	
 	public TwistPubs() {}
@@ -126,9 +119,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			e.printStackTrace();
 			return;
 		}
-	//} else {
-	//	AsynchDemuxer.getInstance();	
-	//}
+		awaitStart.countDown();
 	// This CancellableLoop will be canceled automatically when the node shuts
 	// down.
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
@@ -140,6 +131,9 @@ public void onStart(final ConnectedNode connectedNode) {
 
 		@Override
 		protected void loop() throws InterruptedException {
+		    try {
+				awaitStart.await();
+			} catch (InterruptedException e) {}
 			TopicListInterface tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.ANALOGPIN.val());
 			MachineBridge mb = tli.getMachineBridge();
 			for(int i = 0; i < 2 ; i++) {

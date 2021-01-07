@@ -50,7 +50,7 @@ import org.ros.node.topic.Subscriber;
  */
 public class VideoListener extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
     private BufferedImage image = null;
@@ -287,6 +287,7 @@ public class VideoListener extends AbstractNodeMain
 				synchronized(navMutex) {
 					eulers = message.getOrientationCovariance();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
+					if(DEBUG)
 					System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 				}
 			}

@@ -26,7 +26,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  * @author jg
  */
 public class AlarmShutdownPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);

@@ -42,7 +42,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  */
 public class ControllerStatusReportClient extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	private String host;
 	private String command = "report";
 	private String rptName = "status"; // default report name
@@ -167,7 +167,6 @@ public void onStart(final ConnectedNode connectedNode) {
 } 
 
 }
-
 
 	/**
 	 * Get the hardware type, revision, and serial from /proc/cpuinfo (linux only of course).

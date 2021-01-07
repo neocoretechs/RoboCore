@@ -104,7 +104,8 @@ public class ByteSerialDataPort implements DataPortInterface {
 					try {
 						Thread.sleep(0,1);
 					} catch (InterruptedException e1) {}
-	            System.out.println("Took port ownership in "+(System.nanoTime()-portTime)+" .ns");
+	            if(DEBUG)
+	            	System.out.println("Took port ownership in "+(System.nanoTime()-portTime)+" .ns");
 	            //if (! (serialPort instanceof SerialPort) )
 	            //{
 	            //	err
@@ -421,7 +422,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 							if( inChar == 255 ) {
 								EOT = true;
 								inChar = -1;
-								if(DEBUG) 
+								if(PORTDEBUG) 
 									System.out.println("<EOT>");
 							} else {
 								EOT = false;

@@ -28,7 +28,7 @@ import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
  *
  */
 public class MegaControl implements MotorControlInterface2D, PWMControlInterface {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	//float yawIMURads; = twistInfo.imuTheta
 	int yawTargetDegrees;
 	int targetDistance;

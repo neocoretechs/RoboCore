@@ -114,7 +114,7 @@ import org.ros.internal.loader.CommandLineLoader;
  * @author jg Copyright (C) NeoCoreTechs 2017,2018
  */
 public class PS3CombinedPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	private static volatile boolean shouldRun = false; // main controller run method loop control
 	private String host;
 	private InetSocketAddress master;

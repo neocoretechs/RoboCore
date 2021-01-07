@@ -38,7 +38,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  */
 public class GPIOControlClient extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	private String host;
 	private String command = "gpio";
 	private InetSocketAddress master;
