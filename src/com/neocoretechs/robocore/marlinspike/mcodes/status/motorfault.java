@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
@@ -61,6 +62,14 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 *	SERIAL_PGM(MSG_BEGIN);
 *	SERIAL_PGM(motorFaultCntrlHdr);
 *	SERIAL_PGMLN(MSG_TERMINATE);
+* f1 = overheat
+* f2 = overvoltage
+* f3 = undervoltage
+* f4 = short circuit
+* f5 = emergency stop
+* f6 = Sepex excitation fault
+* f7 = MOSFET failure
+* f8 = startup configuration fault
 * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
 *
 */
@@ -103,7 +112,7 @@ public class motorfault implements Runnable {
 							if(sload != null) {
 								int reading = asynchDemuxer.getReadingNumber(sload);
 								String datax =  asynchDemuxer.getReadingValueString(sload);
-								mr = new MachineReading(1, reading, reading+1, datax);
+								mr = new MachineReading(1, reading, reading, datax);
 							} else {
 								mr = new MachineReading(data);
 							}
@@ -116,15 +125,9 @@ public class motorfault implements Runnable {
 									//continue;
 									break;
 								}
-								String sload = asynchDemuxer.extractPayload(data, topicNames.MOTORFAULT.val());
-								// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-								if(sload != null) {
-									int reading = asynchDemuxer.getReadingNumber(sload);
-									String datax =  asynchDemuxer.getReadingValueString(sload);
-									mr = new MachineReading(1, reading, reading+1, datax);
-								} else {
-									mr = new MachineReading(sload);
-								}
+								int reading = asynchDemuxer.getReadingNumber(data);
+								String datax =  asynchDemuxer.getReadingValueString(data);
+								mr = new MachineReading(1, reading, reading, datax);
 								topicList.getMachineBridge().add(mr);
 							}
 					}

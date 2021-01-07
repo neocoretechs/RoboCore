@@ -1,12 +1,30 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
 import java.util.Map;
+import java.util.HashMap;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
-
+/**
+ * 2 = HBridge driver enable pin not found
+ * 4 = SplitBridge driver enable pin not found 
+ * 6 = SwitchBridge driver enable pin not found
+ * 7 = Variable PWM driver enable pin not found
+ * 1 = Set Motor Shutdown / Set PWM Shutdown
+ * 0 = Set Motor run / Set PWM run
+ * 8 = Ultrasonic shutdown
+ * 10 = Encoder shutdown
+ * 81 = M81
+ * 799 = M799 Shutdown motor/PWM
+ * -1 = M799 shutdown ALL motor/PWM
+ * -2 = Kill method called
+ * -3 = Stop method called
+ * <Bad Motor command s c p/> status, channel, power
+ * @author groff
+ *
+ */
 public class badmotor implements Runnable {
 	private boolean DEBUG = true;
 	private boolean shouldRun = true;
@@ -14,8 +32,22 @@ public class badmotor implements Runnable {
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
 	String data;
+	private HashMap<String, String> faultCodes = new HashMap<String, String>();
 	public badmotor(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
+		faultCodes.put("2","HBridge driver enable pin not found");
+		faultCodes.put("4", "SplitBridge driver enable pin not found");
+		faultCodes.put("6", "SwitchBridge driver enable pin not found");
+		faultCodes.put("7", "Variable PWM driver enable pin not found");
+		faultCodes.put("1", "Set Motor Shutdown / Set PWM Shutdown");
+		faultCodes.put("0", "Set Motor run / Set PWM run");
+		faultCodes.put("8", "Ultrasonic shutdown");
+		faultCodes.put("10", "Encoder shutdown");
+		faultCodes.put("81", "M81");
+		faultCodes.put("799", "M799 Shutdown motor/PWM");
+		faultCodes.put("-1", "M799 shutdown ALL motor/PWM");
+		faultCodes.put("-2", "Kill method called");
+		faultCodes.put("-3", "Stop method called");
 		//
 		// BADMOTOR
 		//
@@ -45,9 +77,23 @@ public class badmotor implements Runnable {
 					if(asynchDemuxer.isLineTerminal(data)) {
 						String sload = asynchDemuxer.extractPayload(data, topicNames.BADMOTOR.val());
 						if(sload != null) {
-							int reading = asynchDemuxer.getReadingNumber(sload);
-							String datax =  asynchDemuxer.getReadingValueString(sload);
-							mr = new MachineReading(1, reading, reading+1, datax);
+							String[] sarray = sload.trim().split(" ");
+							StringBuilder sout = new StringBuilder();
+							if(sarray.length > 0) 
+								sout.append(faultCodes.get(sarray[0])); 
+							else
+								sout.append("FAULT");
+							sout.append(" channel ");
+							if(sarray.length > 1)
+								sout.append(sarray[1]);
+							else
+								sout.append("UNKNOWN");
+							sout.append(" power ");
+							if(sarray.length > 2)
+								sout.append(sarray[2]);
+							else
+								sout.append("UNKNOWN");
+							mr = new MachineReading(sout.toString());
 						} else {
 							mr = new MachineReading(data);
 						}
@@ -62,9 +108,7 @@ public class badmotor implements Runnable {
 								//continue;
 								break;
 							}
-							int reading = asynchDemuxer.getReadingNumber(data);
-							String datax =  asynchDemuxer.getReadingValueString(data);
-							mr = new MachineReading(1, iseq++, reading, datax);
+							mr = new MachineReading(data);
 							topicList.getMachineBridge().add(mr);
 						}
 					}
