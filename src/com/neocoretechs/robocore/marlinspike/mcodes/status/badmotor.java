@@ -54,7 +54,8 @@ public class badmotor implements Runnable {
 		this.topicList = new TopicList(asynchDemuxer, topicNames.BADMOTOR.val(), 8) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				data = readLine;
+				//data = readLine;
+				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
 					mutex.notify();
 				}

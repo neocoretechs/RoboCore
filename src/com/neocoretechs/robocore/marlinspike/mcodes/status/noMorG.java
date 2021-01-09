@@ -22,7 +22,8 @@ public class noMorG implements Runnable {
 		this.topicList = new TopicList(asynchDemuxer, topicNames.NOMORGCODE.val(), 2) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				data = readLine;
+				//data = readLine;
+				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
 					mutex.notify();
 				}

@@ -22,7 +22,8 @@ public class time implements Runnable {
 		this.topicList = new TopicList(asynchDemuxer, topicNames.TIME.val(), 4) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				data = readLine;
+				//data = readLine;
+				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
 					mutex.notify();
 				}

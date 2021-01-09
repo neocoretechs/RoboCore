@@ -29,13 +29,17 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
-public class PublishResponses {
+public class PublishResponses implements Runnable {
 	private static boolean DEBUG = true;
 	private AsynchDemuxer asynchDemuxer;
 	private ConnectedNode node;
 	private Publisher<DiagnosticStatus> statpub;
 	private diagnostic_msgs.DiagnosticStatus statmsg = null;
 	private CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics;
+	private boolean shouldRun = true;
+	private TopicListInterface tli = null;
+	private String topicName = null;
+	private byte dstatus;
 	/**
 	 * Constructor to build the per thread queuing for Marlinspike MachineBridge response payloads onto the
 	 * outgoing diagnostic status messaging bus.
@@ -50,46 +54,68 @@ public class PublishResponses {
 		this.statpub = statpub;	
 		this.outgoingDiagnostics = outgoingDiagnostics;
 	}
-
+	/**
+	 * Initialize the processing in preparation for threading.
+	 * @param topicName The topic which this class will service;
+	 * @param dstatus the DiagnosticStatus flag ERRROR, WARN, OK which will be propagated on the bus
+	 * @throws IllegalStateException If the topic cant be retrieved from the collection of established topics
+	 */
 	public void takeBridgeAndQueueMessage(String topicName, byte dstatus) throws IllegalStateException {
-		TopicListInterface tli = asynchDemuxer.getTopic(topicName);
+		this.topicName = topicName;
+		this.dstatus = dstatus;
+		this.tli = asynchDemuxer.getTopic(topicName);
 		if( tli == null ) {
 			System.out.println("Can't find Topic "+topicName);
 			throw new IllegalStateException("Can't find Topic "+topicName+" in MarlinSpike AsynchDemuxer "+asynchDemuxer+", possible programmatic initialization problem");
 		}
-		MachineBridge mb = tli.getMachineBridge();
-		if( !mb.get().isEmpty() ) {
-				String mfd = (String) tli.getResult(mb.waitForNewReading());
-				statmsg = statpub.newMessage();
-				statmsg.setName(topicName);
-				statmsg.setLevel(dstatus);
-				statmsg.setHardwareId(node.getUri().toString());
-				statmsg.setMessage(topicName+":"+mfd);
-				diagnostic_msgs.KeyValue kv = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-				List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-				kv.setKey("Timestamp");
-				DateFormat d = DateFormat.getDateTimeInstance();
-				kv.setValue(d.format(new Date()));
-				li.add(kv);
-				int messageSize = 0;
-				while(!mb.get().isEmpty()) {
-					MachineReading mr2 = mb.waitForNewReading();
-					// failsafe to limit consumption of message elements to max size of MachineBridge queue
-					// this theoretically gives us one message at a time to queue on the outbound message bus
-					// and keeps system from stalling on endless consumption of one incoming message stream
-					if(messageSize++ > mb.get().length())
-						break;
-					if(mr2.equals(MachineReading.EMPTYREADING))
-						continue;
-					diagnostic_msgs.KeyValue kv2 = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-					kv2.setKey(String.valueOf(messageSize));
-					kv2.setValue(String.valueOf(tli.getResult(mr2)));
-					li.add(kv2);
-				}
-				statmsg.setValues(li);
-				outgoingDiagnostics.addLast(statmsg);
-				if( DEBUG ) 
-					System.out.println("Queued "+topicName+": "+statmsg.getMessage().toString());
+	}
+
+	@Override
+	public void run() {
+		while(shouldRun ) {
+			MachineBridge mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					statmsg = statpub.newMessage();
+					statmsg.setName(topicName);
+					statmsg.setLevel(dstatus);
+					statmsg.setHardwareId(node.getUri().toString());
+					statmsg.setMessage(topicName+":"+mfd);
+					diagnostic_msgs.KeyValue kv = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					kv.setKey("Timestamp");
+					DateFormat d = DateFormat.getDateTimeInstance();
+					kv.setValue(d.format(new Date()));
+					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(messageSize)+")");
+						kv2.setValue(String.valueOf(tli.getResult(mr2)));
+						li.add(kv2);
+					}
+					statmsg.setValues(li);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG ) 
+						System.out.println("Queued "+topicName+": "+statmsg.getMessage().toString());
+			} else {
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {
+					shouldRun = false;
+					if(DEBUG)
+						System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" INTERRUPTED");
+				} // wait for possible payload
+			}
 		}
+		
 	}
 }

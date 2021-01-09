@@ -26,7 +26,8 @@ public class status implements Runnable {
 		this.topicList = new TopicList(asynchDemuxer, topicNames.STATUS.val(), 128) {
 			@Override
 			public void retrieveData(String readLine) throws InterruptedException {
-				data = readLine;
+				//data = readLine;
+				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
 					mutex.notify();
 				}
