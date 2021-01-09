@@ -18,6 +18,7 @@ public interface MotorControlInterface2D {
 	public String reportAllControllerStatus() throws IOException;
 	public String reportSystemId() throws IOException;
 	public void commandStop() throws IOException;
+	public String commandReset() throws IOException;
 	public void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int channel1Speed, int slot2, int channel2, int channel2Speed) throws IOException;
 	public void setAbsolutePWMLevel(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException;
 	public void setAbsolutePWMLevel(int slot, int channel, int pwmLevel)throws IOException;

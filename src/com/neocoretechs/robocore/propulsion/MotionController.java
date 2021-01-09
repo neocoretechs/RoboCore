@@ -225,8 +225,10 @@ public class MotionController extends AbstractNodeMain {
 				connectedNode.newPublisher("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
 		final Publisher<std_msgs.Int32MultiArray> trigpub =
 				connectedNode.newPublisher("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
+		final Publisher<geometry_msgs.Twist> twistpub = 
+				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		
-		//final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
+		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
 		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
@@ -288,6 +290,15 @@ public class MotionController extends AbstractNodeMain {
 				// check for emergency stop, on X or A or green or lower button
 				if( buttons[6] != 0 ) {
 					System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
+					angular.setX(-1);
+					angular.setY(-1);
+					angular.setZ(-1);
+					linear.setX(-1);
+					linear.setY(-1);
+					linear.setZ(-1);
+					twistmsg.setAngular(angular);
+					twistmsg.setLinear(linear);
+					twistpub.publish(twistmsg);
 					return;
 				}
 				// If the button square or circle is depressed, rotate in place at stick position Y speed

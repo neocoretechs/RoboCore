@@ -51,6 +51,7 @@ public class time implements Runnable {
 								//continue;
 								break;
 							}
+							directive = asynchDemuxer.parseDirective(data);
 							//String sload = asynchDemuxer.extractPayload(data, topicNames.M115.val());
 							// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
 							//if(sload != null) {

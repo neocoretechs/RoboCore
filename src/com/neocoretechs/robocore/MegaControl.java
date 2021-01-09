@@ -81,52 +81,17 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	 * applications.
 	 */
 	public synchronized String reportAllControllerStatus() throws IOException {
-		asynchDemuxer.clearLineBuffer();
+		getSystemStatus();
+		getAssignedPins();
+		getMotorControlSetting();
+		getControllerStatus();
+		getPWMControlSetting();
 		if(DEBUG)
-			System.out.println(this.getClass().getName()+".reportAllControllerStatus System status");
-		StringBuilder sb = new StringBuilder();
-		sb.append("System status:\r\n");
-		// <a> header returned from MarlinSpike
-		sb.append(getSystemStatus());
-		sb.append("\r\n");
-		if(DEBUG)
-			System.out.println(this.getClass().getName()+".reportAllControllerStatus pins in use");
-		//
-		sb.append("All pins in use:\r\n");
-		// <assignedpins> header returned from MarlinSpike
-		sb.append(getAssignedPins());
-		sb.append("\r\n");
-		//
-		if(DEBUG)
-			System.out.println(this.getClass().getName()+".reportAllControllerStatus controllers in use");
-		sb.append("\r\nAll controllers in use:\r\n");
-		// <motorcontrolsetting> header returned from MarlinSpike
-		sb.append(getMotorControlSetting());
-		sb.append("\r\n");
-		//
-		// <controllerstatus> header
-		sb.append(getControllerStatus());
-		//
-		sb.append("\r\nPWM controllers in use:\r\n");
-		// <pwmcontrolsetting>
-		sb.append(getPWMControlSetting()+"\r\n");
-		if(DEBUG)
-			System.out.println(this.getClass().getName()+".reportAllControllerStatus returning:\r\n"+sb.toString());
-		return sb.toString();
+			System.out.println(this.getClass().getName()+".reportAllControllerStatus");
+		return "Ok";
 	}
 	
-	public String getMachineReadingsFromBridge(String group) throws IOException {
-			MachineReading mr;
-			StringBuilder sb = new StringBuilder();
-			MachineBridge mb = asynchDemuxer.getMachineBridge(group);
-			while((mr = mb.waitForNewReading()) != MachineReading.EMPTYREADING) {
-				if(mr == null)
-					throw new IOException("PREMATURE END OF MACHINEREADINGS!");
-				sb.append(mr.toString());
-				sb.append("\r\n");
-			}
-			return sb.toString();
-	}
+
 	  // 
     // Report methods. The sequence is to issue the M-code to the MarlinSpike. The returned data will
     // include the proper <headers> which are 'demuxxed' and the correct MachineReadings are created from
@@ -138,72 +103,67 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
     //
 	public synchronized String reportSystemId() throws IOException {
 		String statCommand1 = "M115"; // system id
-		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);	
-    	return getMachineReadingsFromBridge(topicNames.M115.val());
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
+		return "Ok";
 	}
     /**
      * M700
-     * @return A string payload of robot overall status
      */
-    public synchronized String getSystemStatus() throws IOException {
+    public synchronized void getSystemStatus() throws IOException {
 		String statCommand1 = "M700"; // report status
-		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);	
-    	return getMachineReadingsFromBridge(topicNames.STATUS.val());
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
     }
     /**
      * M706
-     * @return A String payload of all assigned pins (if any), comma separated.
      * @throws IOException 
      */
-    public synchronized String getAssignedPins() throws IOException {
+    public synchronized void getAssignedPins() throws IOException {
 		String statCommand1 = "M706"; // report all pins in use
 		AsynchDemuxer.addWrite(asynchDemuxer,statCommand1);	
-    	return getMachineReadingsFromBridge(topicNames.ASSIGNEDPINS.val());
     }
     /**
      * M705
-     * @return A String payload of motor controller configurations (if any), each one a multiline report.
      * @throws IOException 
      */
-    public synchronized String getMotorControlSetting() throws IOException {
+    public synchronized void getMotorControlSetting() throws IOException {
 		String statCommand1 = "M705"; // report all pins in use
 		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
-    	return getMachineReadingsFromBridge(topicNames.MOTORCONTROLSETTING.val());
     }
     /**
      * M798 Z<slot> X
-     * @return A String payload of PWM controller status (if any), each one a multiline report.
      * @throws IOException 
      */
-    public synchronized String getPWMControlSetting() throws IOException {
-    	StringBuilder sb = new StringBuilder();
+    public synchronized void getPWMControlSetting() throws IOException {
     	for(int i = 0; i < 10; i++) {
-    		sb.append("\r\nPWM Controller in use in slot:"+i+"\r\n");
     		String statCommand1 = "M798 Z"+i+" X"; // report all pins in use
     		AsynchDemuxer.addWrite(asynchDemuxer,statCommand1);
-    		sb.append(getMachineReadingsFromBridge(topicNames.CONTROLLERSTATUS.val()));
-    		sb.append("---");
     	}
-    	return sb.toString();
+    }
+    /**
+     * M999 Reset MCU
+     * @throws IOException 
+     */
+    public synchronized String commandReset() throws IOException {
+    	for(int i = 0; i < 10; i++) {
+    		String statCommand1 = "M999"; // report all pins in use
+    		AsynchDemuxer.addWrite(asynchDemuxer,statCommand1);
+    	}
+    	return "Ok";
     }
     /**
      * M798 Z<slot>
      * @return A String payload of the status of each of the assigned motor controllers.
      * @throws IOException 
      */
-    public synchronized String getControllerStatus() throws IOException {
-       	StringBuilder sb = new StringBuilder();
+    public synchronized void getControllerStatus() throws IOException {
     	for(int i = 0; i < 10; i++) {
-    		sb.append("\r\nController in use in slot:"+i+"\r\n");
 			if(DEBUG)
 				System.out.println(this.getClass().getName()+".reportAllControllerSatus controller in use in slot"+i);
     		String statCommand1 = "M798 Z"+i; // report all pins in use
     		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
-    		sb.append(getMachineReadingsFromBridge(topicNames.CONTROLLERSTATUS.val()));
-    		sb.append("---");
     	}
-    	return sb.toString();
     }
+    
 	public synchronized void setAbsolutePWMLevel(int slot, int channel, int pwmLevel) throws IOException {
 		String pwmCommand1 = "G5 Z"+slot+" C"+channel+" X"+pwmLevel;
 		AsynchDemuxer.addWrite(asynchDemuxer, pwmCommand1);

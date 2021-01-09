@@ -12,7 +12,7 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
  *
  */
 public class status implements Runnable {
-	private boolean DEBUG = false;
+	private boolean DEBUG = true;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
@@ -45,9 +45,8 @@ public class status implements Runnable {
 				try {
 					mutex.wait();		
 					MachineReading mr = null;
-					String directive = asynchDemuxer.parseDirective(data);
-					while(directive != null && 
-						 !(directive.equals(topicNames.STATUS.val()) && asynchDemuxer.isLineTerminal(data)) ) {
+					String sload = asynchDemuxer.parseDirective(data);
+					while(!(asynchDemuxer.isLineTerminal(data) && (sload != null && sload.equals(topicNames.STATUS.val()))) ) {
 							data = asynchDemuxer.getMarlinLines().takeFirst();
 							if(DEBUG)
 								System.out.println(this.getClass().getName()+":"+data);
@@ -56,6 +55,7 @@ public class status implements Runnable {
 								//continue;
 								break;
 							}
+							sload = asynchDemuxer.parseDirective(data);
 							//String sload = asynchDemuxer.extractPayload(data, topicNames.M115.val());
 							// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
 							//if(sload != null) {

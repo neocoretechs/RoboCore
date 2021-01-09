@@ -35,6 +35,7 @@ import sensor_msgs.Range;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
@@ -100,7 +101,7 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
  * @author jg
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = false;
+	private static final boolean DEBUG = true;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;
@@ -125,7 +126,6 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	// Queue for outgoing diagnostic messages
 	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
-	private boolean serviceActive = false; // if we are invoking a service for report status, we dont want the publishing loop grabbing it out from under us
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -219,17 +219,18 @@ public void onStart(final ConnectedNode connectedNode) {
 				@Override
 				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
 					try {
-						serviceActive = true;
 						switch(request.getData()) {
 							case "id":
 								response.setData(motorControlHost.reportSystemId());
+								break;
+							case "reset":
+								response.setData(motorControlHost.commandReset());
 								break;
 							case "status":
 							default:
 								response.setData(motorControlHost.reportAllControllerStatus());
 								break;		
 						}
-						serviceActive = false;
 					} catch (IOException e) {
 						System.out.println("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
 						e.printStackTrace();
@@ -344,6 +345,15 @@ public void onStart(final ConnectedNode connectedNode) {
 			targetDist = (int) val.getY();
 			val = message.getAngular();
 			targetYaw = (float) val.getZ();
+			if( targetPitch == -1 && targetDist == -1 && targetYaw == -1) {
+				shouldMove = false;
+				try {
+					motorControlHost.commandStop();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+				
 		}
 	});
 	/**
@@ -368,16 +378,17 @@ public void onStart(final ConnectedNode connectedNode) {
 			int valch4 = valch[i+3]; // slot
 			int valch5 = valch[i+4]; // channel
 			int valch6 = valch[i+5]; // value
-			if( valch1 == 0.0 && valch2 == 0.0 )
+			if( valch1 == 0.0 && valch2 == 0.0 ) {
 				isMoving = false;
-			else
+			} else {
+				shouldMove = true;
 				isMoving = true;
-			if( DEBUG ) {
-				System.out.println("Robot commanded to move Left wheel ABS slot "+valch1+" channel:"+valch2+ ":" + valch3);
-				System.out.println("Right wheel ABS slot "+valch4+" channel:"+valch5+ ":" + valch6);
 			}
 			try {
 				if( shouldMove ) {
+					if( DEBUG ) {
+						System.out.println("Robot commanded to move Left wheel ABS slot "+valch1+" channel:"+valch2+ ":" + valch3+"\r\nRight wheel ABS slot "+valch4+" channel:"+valch5+ ":" + valch6);
+					}
 					//if(angularMode )
 					//	motorControlHost.setMotorArcSpeed(valch1, valch2, valch3, valch4, targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
 					//else
@@ -620,6 +631,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					if( DEBUG) 
+						System.out.println("Got "+AsynchDemuxer.topicNames.MOTORFAULT.val()+": "+mfd);
 					statmsg = statpub.newMessage();
 					statmsg.setName(AsynchDemuxer.topicNames.MOTORFAULT.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.ERROR);
@@ -693,9 +706,6 @@ public void onStart(final ConnectedNode connectedNode) {
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.TIME.val()+": "+statmsg.getMessage().toString());
 			}
 			
-			// in this case if we are activating the service to get the controller status report
-			// dont intercept it.
-			if(!serviceActive) {
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
 			if( tli == null ) {
 				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
@@ -704,6 +714,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			mb = tli.getMachineBridge();
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					if(DEBUG)
+						System.out.println(this.getClass().getName()+":"+mfd);
 					statmsg = statpub.newMessage();
 					statmsg.setName(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
 					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.OK);
@@ -718,6 +730,8 @@ public void onStart(final ConnectedNode connectedNode) {
 					int messageSize = 0;
 					while(!mb.get().isEmpty()) {
 						MachineReading mr2 = mb.waitForNewReading();
+						if(DEBUG)
+							System.out.println(this.getClass().getName()+":"+mr2);
 						// failsafe to limit consumption of message elements to max size of MachineBridge queue
 						// this theoretically gives us one message at a time to queue on the outbound message bus
 						// and keeps system from stalling on endless consumption of one incoming message stream
@@ -735,8 +749,53 @@ public void onStart(final ConnectedNode connectedNode) {
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG) 
 						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.CONTROLLERSTATUS.val()+": "+statmsg.getMessage().toString());
-				}
 			}
+			
+			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.STATUS.val());
+			if( tli == null ) {
+				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.STATUS.val());
+				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.STATUS.val()+" programmatic initialization problem");
+			}
+			mb = tli.getMachineBridge();
+			if( !mb.get().isEmpty() ) {
+					String mfd = (String) tli.getResult(mb.waitForNewReading());
+					if(DEBUG)
+						System.out.println(this.getClass().getName()+":"+mfd);
+					statmsg = statpub.newMessage();
+					statmsg.setName(AsynchDemuxer.topicNames.STATUS.val());
+					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.OK);
+					statmsg.setHardwareId(connectedNode.getUri().toString());
+					statmsg.setMessage(AsynchDemuxer.topicNames.STATUS.val()+" "+mfd);
+					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+					kv.setKey("Timestamp");
+					DateFormat d = DateFormat.getDateTimeInstance();
+					kv.setValue(d.format(new Date()));
+					li.add(kv);
+					int messageSize = 0;
+					while(!mb.get().isEmpty()) {
+						MachineReading mr2 = mb.waitForNewReading();
+						if(DEBUG)
+							System.out.println(this.getClass().getName()+":"+mr2);
+						// failsafe to limit consumption of message elements to max size of MachineBridge queue
+						// this theoretically gives us one message at a time to queue on the outbound message bus
+						// and keeps system from stalling on endless consumption of one incoming message stream
+						if(messageSize++ > mb.get().length())
+							break;
+						if(mr2.equals(MachineReading.EMPTYREADING))
+							continue;
+						diagnostic_msgs.KeyValue kv2 = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						kv2.setKey(String.valueOf(messageSize));
+						kv2.setValue(mr2.getReadingValString());
+						li.add(kv2);
+					}
+					statmsg.setValues(li);
+					//statpub.publish(statmsg);
+					outgoingDiagnostics.addLast(statmsg);
+					if( DEBUG) 
+						System.out.println("Queued seq#"+sequenceNumber+" "+AsynchDemuxer.topicNames.STATUS.val()+": "+statmsg.getMessage().toString());
+			}
+			
 			
 			tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
 			if( tli == null ) {
