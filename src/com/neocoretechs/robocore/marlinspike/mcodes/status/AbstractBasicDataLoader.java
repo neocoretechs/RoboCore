@@ -7,21 +7,29 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
-
-public class controllerStatus implements Runnable {
+/**
+ * Abstraction of Marlinspike topic result handler that loads the data without any
+ * special manipulation or consideration of special formats, merely line by line copy.
+ * @author groff
+ *
+ */
+public abstract class AbstractBasicDataLoader implements Runnable {
 	private boolean DEBUG = true;
 	private boolean shouldRun = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
 	ArrayList<String> datax;
-	public controllerStatus(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
+	String topicName;
+	int queueSize;
+	public AbstractBasicDataLoader(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics, String topicName, int queueSize) {
 		this.asynchDemuxer = asynchDemuxer;
+		this.topicName = topicName;
+		this.queueSize = queueSize;
 		//
 		// CONTROLLERSTATUS
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.CONTROLLERSTATUS.val(), 16) {
+		this.topicList = new TopicList(asynchDemuxer, topicName, queueSize) {
 			@Override
 			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				datax = readLine;
@@ -31,11 +39,27 @@ public class controllerStatus implements Runnable {
 			}
 			@Override
 			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
+				return getMachineReadingResult(mr);
 			}
 		};
-		topics.put(topicNames.CONTROLLERSTATUS.val(), topicList);
+		topics.put(topicName, topicList);
 	}
+	/**
+	 * Typically just returning the passed MachineReading as the String payload therein,
+	 * but may return the entire MachineReading if manipulation of the various sequence elements is necessary.
+	 * This is used at the endpoint to deliver the final formatted MachineReadings from the MachineBridge
+	 * to ultimate consumer.
+	 * @param mr
+	 * @return
+	 */
+	public abstract Object getMachineReadingResult(MachineReading mr); //return mr.getReadingValString();
+	/**
+	 * Format each element of the MachineReading to be added to MachineBridge from retrieved Marlinspike response lines.
+	 * @param sdata The line by line Marlinspike responses
+	 * @return the MachineReading formetted to spec
+	 */
+	public abstract MachineReading formatMachineReading(String sdata);
+	
 	@Override
 	public void run() {
 		while(shouldRun) {
@@ -47,15 +71,15 @@ public class controllerStatus implements Runnable {
 					synchronized(mb) {
 						for(String data: datax) {
 							String sload = asynchDemuxer.parseDirective(data);
-							if(sload != null && !(asynchDemuxer.isLineTerminal(data) && sload.equals(topicNames.CONTROLLERSTATUS.val()))) {
+							if(sload != null && !(asynchDemuxer.isLineTerminal(data) && sload.equals(topicName))) {
 								if(DEBUG)
 									System.out.println(this.getClass().getName()+":"+data);
 								if( data == null || data.length() == 0 ) {
 									//if(DEBUG)System.out.println("Empty line returned from readLine");
 									continue;
 								}
-								sload = asynchDemuxer.parseDirective(data);
-								mr = new MachineReading(data);
+								//mr = new MachineReading(data);
+								mr = formatMachineReading(data);
 								mb.add(mr);
 							}
 						}
