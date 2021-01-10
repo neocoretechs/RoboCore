@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
@@ -35,7 +36,7 @@ public class eeprom implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.EEPROM.val(), 16) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
 					mutex.notify();

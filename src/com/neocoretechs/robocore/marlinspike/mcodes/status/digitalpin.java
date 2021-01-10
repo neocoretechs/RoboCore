@@ -1,8 +1,10 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
@@ -36,7 +38,7 @@ public class digitalpin implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.DIGITALPIN.val(), 5) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
 					mutex.notify();
@@ -56,6 +58,8 @@ public class digitalpin implements Runnable {
 				try {
 					mutex.wait();
 					MachineReading mr = null;
+					MachineBridge mb = topicList.getMachineBridge();
+					synchronized(mb) {
 					if(asynchDemuxer.isLineTerminal(data)) {
 							String sload = asynchDemuxer.extractPayload(data, topicNames.DIGITALPIN.val());
 							if(sload != null) {
@@ -65,7 +69,7 @@ public class digitalpin implements Runnable {
 							} else {
 								mr = new MachineReading(data);
 							}
-							topicList.getMachineBridge().add(mr);
+							mb.add(mr);
 					} else {
 							while( !asynchDemuxer.isLineTerminal(data) ) {
 								data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -83,10 +87,11 @@ public class digitalpin implements Runnable {
 								} else {
 									mr = new MachineReading(sload);
 								}
-								topicList.getMachineBridge().add(mr);
+								mb.add(mr);
 							}
 					}
-					topicList.getMachineBridge().add(MachineReading.EMPTYREADING);
+					mb.add(MachineReading.EMPTYREADING);
+					}
 					synchronized(asynchDemuxer.mutexWrite) {
 						asynchDemuxer.mutexWrite.notifyAll();
 					}

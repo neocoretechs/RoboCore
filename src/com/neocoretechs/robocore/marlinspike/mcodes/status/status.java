@@ -1,8 +1,10 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
@@ -25,7 +27,7 @@ public class status implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.STATUS.val(), 128) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				//data = readLine;
 				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
@@ -46,6 +48,8 @@ public class status implements Runnable {
 				try {
 					mutex.wait();		
 					MachineReading mr = null;
+					MachineBridge mb = topicList.getMachineBridge();
+					synchronized(mb) {
 					String sload = asynchDemuxer.parseDirective(data);
 					while(!(asynchDemuxer.isLineTerminal(data) && (sload != null && sload.equals(topicNames.STATUS.val()))) ) {
 							data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -57,19 +61,11 @@ public class status implements Runnable {
 								break;
 							}
 							sload = asynchDemuxer.parseDirective(data);
-							//String sload = asynchDemuxer.extractPayload(data, topicNames.M115.val());
-							// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-							//if(sload != null) {
-								//int reading = asynchDemuxer.getReadingNumber(sload);
-								//String data =  asynchDemuxer.getReadingValueString(sload);
-								//mr = new MachineReading(1, reading, reading+1, data);
-							//} else {
-								//mr = new MachineReading(data);
-								mr = new MachineReading(data);
-							//}
-							topicList.getMachineBridge().add(mr);
-					}	
-					topicList.getMachineBridge().add(MachineReading.EMPTYREADING);
+							mr = new MachineReading(data);
+							mb.add(mr);
+					 }	
+					 mb.add(MachineReading.EMPTYREADING);
+					}
 					synchronized(asynchDemuxer.mutexWrite) {
 						asynchDemuxer.mutexWrite.notifyAll();
 					}

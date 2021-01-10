@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
@@ -23,7 +24,7 @@ public class M0 implements Runnable {
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
-	String data;
+	ArrayList<String> data;
 	public M0(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
@@ -31,8 +32,8 @@ public class M0 implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.M0.val(), 2) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				data = asynchDemuxer.getMarlinLines().takeFirst();
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
+				data = readLine;
 				synchronized(mutex) {
 					mutex.notify();
 				}

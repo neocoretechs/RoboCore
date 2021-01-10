@@ -74,6 +74,7 @@ public class PublishResponses implements Runnable {
 	public void run() {
 		while(shouldRun ) {
 			MachineBridge mb = tli.getMachineBridge();
+			synchronized(mb) {
 			if( !mb.get().isEmpty() ) {
 					String mfd = (String) tli.getResult(mb.waitForNewReading());
 					statmsg = statpub.newMessage();
@@ -83,7 +84,6 @@ public class PublishResponses implements Runnable {
 					statmsg.setMessage(topicName+":"+mfd);
 					diagnostic_msgs.KeyValue kv = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-					kv.setKey("Timestamp");
 					DateFormat d = DateFormat.getDateTimeInstance();
 					kv.setValue(d.format(new Date()));
 					li.add(kv);
@@ -114,6 +114,7 @@ public class PublishResponses implements Runnable {
 					if(DEBUG)
 						System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" INTERRUPTED");
 				} // wait for possible payload
+			}
 			}
 		}
 		

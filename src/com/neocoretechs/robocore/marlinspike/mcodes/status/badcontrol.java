@@ -1,11 +1,13 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 
 public class badcontrol implements Runnable {
 	private boolean DEBUG = false;
@@ -13,7 +15,7 @@ public class badcontrol implements Runnable {
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
-	String data;
+	ArrayList<String> datax;
 	public badcontrol(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
 		//
@@ -21,9 +23,8 @@ public class badcontrol implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.BADCONTROL.val(), 2) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				//data = readLine;
-				data = asynchDemuxer.getMarlinLines().takeFirst();
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
+				datax = readLine;
 				synchronized(mutex) {
 					mutex.notify();
 				}
@@ -40,33 +41,27 @@ public class badcontrol implements Runnable {
 		while(shouldRun) {
 			synchronized(mutex) {
 				try {
-					mutex.wait();		
+					mutex.wait();
+					MachineBridge mb = topicList.getMachineBridge();
 					MachineReading mr = null;
-					String directive = asynchDemuxer.parseDirective(data);
-					while(directive != null && 
+					synchronized(mb) {
+					for(String data: datax) {
+						String directive = asynchDemuxer.parseDirective(data);
+						if(directive != null && 
 						 !(directive.equals(topicNames.BADCONTROL.val()) && asynchDemuxer.isLineTerminal(data)) ) {
-							data = asynchDemuxer.getMarlinLines().takeFirst();
 							if(DEBUG)
 								System.out.println(this.getClass().getName()+":"+data);
 							if( data == null || data.length() == 0 ) {
 								//if(DEBUG)System.out.println("Empty line returned from readLine");
-								//continue;
-								break;
+								continue;
 							}
 							directive = asynchDemuxer.parseDirective(data);
-							//String sload = asynchDemuxer.extractPayload(data, topicNames.M115.val());
-							// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-							//if(sload != null) {
-								//int reading = asynchDemuxer.getReadingNumber(sload);
-								//String data =  asynchDemuxer.getReadingValueString(sload);
-								//mr = new MachineReading(1, reading, reading+1, data);
-							//} else {
-								//mr = new MachineReading(data);
-								mr = new MachineReading(data);
-							//}
-							topicList.getMachineBridge().add(mr);
-					}	
-					topicList.getMachineBridge().add(MachineReading.EMPTYREADING);
+							mr = new MachineReading(data);
+							mb.add(mr);
+						}
+					}
+					mb.add(MachineReading.EMPTYREADING);
+					}
 					synchronized(asynchDemuxer.mutexWrite) {
 						asynchDemuxer.mutexWrite.notifyAll();
 					}

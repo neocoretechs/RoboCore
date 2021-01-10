@@ -1,8 +1,10 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
@@ -21,7 +23,7 @@ public class controllerStatus implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.CONTROLLERSTATUS.val(), 16) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				//data = readLine;
 				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
@@ -40,10 +42,12 @@ public class controllerStatus implements Runnable {
 		while(shouldRun) {
 			synchronized(mutex) {
 				try {
-					mutex.wait();		
+					mutex.wait();
+					MachineBridge mb = topicList.getMachineBridge();
 					MachineReading mr = null;
 					if(DEBUG)
 						System.out.println(this.getClass().getName()+":"+data);
+					synchronized(mb) {
 					String sload = asynchDemuxer.parseDirective(data);
 					while(!(asynchDemuxer.isLineTerminal(data) && (sload != null && sload.equals(topicNames.CONTROLLERSTATUS.val())))) {
 							data = asynchDemuxer.getMarlinLines().takeFirst();
@@ -56,9 +60,10 @@ public class controllerStatus implements Runnable {
 							}
 							sload = asynchDemuxer.parseDirective(data);
 							mr = new MachineReading(data);
-							topicList.getMachineBridge().add(mr);
+							mb.add(mr);
 					}	
-					topicList.getMachineBridge().add(MachineReading.EMPTYREADING);
+					mb.add(MachineReading.EMPTYREADING);
+					}
 					synchronized(asynchDemuxer.mutexWrite) {
 						asynchDemuxer.mutexWrite.notifyAll();
 					}

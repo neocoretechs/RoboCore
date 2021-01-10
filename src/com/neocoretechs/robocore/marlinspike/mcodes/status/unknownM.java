@@ -1,11 +1,13 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 
 public class unknownM implements Runnable {
 	private boolean DEBUG = false;
@@ -21,7 +23,7 @@ public class unknownM implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.UNKNOWNM.val(), 2) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				//data = readLine;
 				data = asynchDemuxer.getMarlinLines().takeFirst();
 				synchronized(mutex) {
@@ -40,10 +42,12 @@ public class unknownM implements Runnable {
 		while(shouldRun) {
 			synchronized(mutex) {
 				try {
-					mutex.wait();		
-					MachineReading mr = null;
-					String directive = asynchDemuxer.parseDirective(data);
-					while(directive != null && 
+					mutex.wait();
+					MachineBridge mb = topicList.getMachineBridge();
+					synchronized(mb) {
+						MachineReading mr = null;
+						String directive = asynchDemuxer.parseDirective(data);
+						while(directive != null && 
 						 !(directive.equals(topicNames.UNKNOWNM.val()) && asynchDemuxer.isLineTerminal(data)) ) {
 							data = asynchDemuxer.getMarlinLines().takeFirst();
 							if(DEBUG)
@@ -54,19 +58,11 @@ public class unknownM implements Runnable {
 								break;
 							}
 							directive = asynchDemuxer.parseDirective(data);
-							//String sload = asynchDemuxer.extractPayload(data, topicNames.M115.val());
-							// Is our delimiting marker part of a one-line payload, or used at the end of a multiline payload?
-							//if(sload != null) {
-								//int reading = asynchDemuxer.getReadingNumber(sload);
-								//String data =  asynchDemuxer.getReadingValueString(sload);
-								//mr = new MachineReading(1, reading, reading+1, data);
-							//} else {
-								//mr = new MachineReading(data);
-								mr = new MachineReading(data);
-							//}
-							topicList.getMachineBridge().add(mr);
-					}	
-					topicList.getMachineBridge().add(MachineReading.EMPTYREADING);
+							mr = new MachineReading(data);
+							mb.add(mr);
+						}	
+						mb.add(MachineReading.EMPTYREADING);
+					}
 					synchronized(asynchDemuxer.mutexWrite) {
 						asynchDemuxer.mutexWrite.notifyAll();
 					}

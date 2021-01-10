@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.machine.bridge;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.gcodes.G100;
 import com.neocoretechs.robocore.marlinspike.gcodes.G4;
 import com.neocoretechs.robocore.marlinspike.gcodes.G5;
@@ -711,11 +713,9 @@ public class AsynchDemuxer implements Runnable {
 		// spin another worker thread to take Marlinspike lines from circular blocking deque and demux them
 		ThreadPoolManager.getInstance().spin(new Runnable() {
 			String line,fop;
-			char op;
 			@Override
 			public void run() {
 				while(shouldRun) {
-					int endDelim = -1;
 					try {
 						line = marlinLines.peekFirst();
 						if(line == null) {
@@ -735,11 +735,22 @@ public class AsynchDemuxer implements Runnable {
 						if(fop != null) {
 							if(DEBUG)
 								System.out.println("AsynchDemux Parsed directive:"+fop);
+							ArrayList<String> payload = new ArrayList<String>();
+							String data = marlinLines.takeFirst();
+							String sload = parseDirective(data);
+							payload.add(data);
+							while(sload != null && sload.length() > 0 && !(isLineTerminal(sload) && sload.equals(fop))) {
+								if(DEBUG)
+									System.out.println(this.getClass().getName()+":"+sload);
+								data = marlinLines.takeFirst();
+								sload = parseDirective(data);
+								payload.add(data);
+							}	
 							TopicList tl = topics.get(fop);
 							if( tl != null ) {
 								if(DEBUG)
 									System.out.println("AsynchDemux call out to topic:"+tl.mb.getGroup());
-								tl.retrieveData(line);
+								tl.retrieveData(payload);
 							} else {
 								System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);
 								continue;

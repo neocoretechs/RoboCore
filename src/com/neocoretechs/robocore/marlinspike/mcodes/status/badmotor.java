@@ -1,12 +1,14 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 /**
  * 2 = HBridge driver enable pin not found
  * 4 = SplitBridge driver enable pin not found 
@@ -31,7 +33,7 @@ public class badmotor implements Runnable {
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	private Object mutex = new Object();
-	String data;
+	ArrayList<String> datax;
 	private HashMap<String, String> faultCodes = new HashMap<String, String>();
 	public badmotor(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		this.asynchDemuxer = asynchDemuxer;
@@ -53,9 +55,8 @@ public class badmotor implements Runnable {
 		//
 		this.topicList = new TopicList(asynchDemuxer, topicNames.BADMOTOR.val(), 8) {
 			@Override
-			public void retrieveData(String readLine) throws InterruptedException {
-				//data = readLine;
-				data = asynchDemuxer.getMarlinLines().takeFirst();
+			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
+				datax = readLine;
 				synchronized(mutex) {
 					mutex.notify();
 				}
@@ -72,48 +73,51 @@ public class badmotor implements Runnable {
 		while(shouldRun) {
 			synchronized(mutex) {
 				try {
-					mutex.wait();		
+					mutex.wait();
+					MachineBridge mb = topicList.getMachineBridge();
 					MachineReading mr = null;
 					int iseq = 1;
-					if(asynchDemuxer.isLineTerminal(data)) {
-						String sload = asynchDemuxer.extractPayload(data, topicNames.BADMOTOR.val());
-						if(sload != null) {
-							String[] sarray = sload.trim().split(" ");
-							StringBuilder sout = new StringBuilder();
-							if(sarray.length > 0) 
-								sout.append(faultCodes.get(sarray[0])); 
-							else
-								sout.append("FAULT");
-							sout.append(" channel ");
-							if(sarray.length > 1)
-								sout.append(sarray[1]);
-							else
-								sout.append("UNKNOWN");
-							sout.append(" power ");
-							if(sarray.length > 2)
-								sout.append(sarray[2]);
-							else
-								sout.append("UNKNOWN");
-							mr = new MachineReading(sout.toString());
-						} else {
-							mr = new MachineReading(data);
-						}
-						topicList.getMachineBridge().add(mr);
-					} else {
-						while(data != null && !asynchDemuxer.isLineTerminal(data)) {
-							data = asynchDemuxer.getMarlinLines().takeFirst();
-							if(DEBUG)
-								System.out.println(this.getClass().getName()+":"+data);
-							if( data == null || data.length() == 0 ) {
-								//if(DEBUG)System.out.println("Empty line returned from readLine");
-								//continue;
-								break;
+					synchronized(mb) {
+						for(String data: datax) {
+							if(asynchDemuxer.isLineTerminal(data)) {
+							String sload = asynchDemuxer.extractPayload(data, topicNames.BADMOTOR.val());
+							if(sload != null) {
+								String[] sarray = sload.trim().split(" ");
+								StringBuilder sout = new StringBuilder();
+								if(sarray.length > 0) 
+									sout.append(faultCodes.get(sarray[0])); 
+								else
+									sout.append("FAULT");
+								sout.append(" channel ");
+								if(sarray.length > 1)
+									sout.append(sarray[1]);
+								else
+									sout.append("UNKNOWN");
+								sout.append(" power ");
+								if(sarray.length > 2)
+									sout.append(sarray[2]);
+								else
+									sout.append("UNKNOWN");
+								mr = new MachineReading(sout.toString());
+							} else {
+								mr = new MachineReading(data);
 							}
-							mr = new MachineReading(data);
-							topicList.getMachineBridge().add(mr);
+							mb.add(mr);
+						} else {
+							if(data != null && !asynchDemuxer.isLineTerminal(data)) {
+								if(DEBUG)
+									System.out.println(this.getClass().getName()+":"+data);
+								if( data == null || data.length() == 0 ) {
+									//if(DEBUG)System.out.println("Empty line returned from readLine");
+									continue;
+								}
+								mr = new MachineReading(data);
+								mb.add(mr);
+							}
 						}
+						}
+						mb.add(MachineReading.EMPTYREADING);
 					}
-					topicList.getMachineBridge().add(MachineReading.EMPTYREADING);
 					synchronized(asynchDemuxer.mutexWrite) {
 						asynchDemuxer.mutexWrite.notifyAll();
 					}
