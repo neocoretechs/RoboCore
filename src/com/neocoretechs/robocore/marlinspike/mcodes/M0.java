@@ -12,8 +12,8 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
  * elements until all elements relevant to this topic are thus consumed.<p/>
  * Many of these consumers follow the pattern of merely consuming the 'ack' from
  * a processed code.
- * M0 - realtime output off
- * @author groff
+ * M0 - Marlinspike realtime output off
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
 public class M0 extends AbstractBasicResponse {

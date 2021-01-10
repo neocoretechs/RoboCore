@@ -1,10 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
-import java.util.ArrayList;
 import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
@@ -12,50 +10,12 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
  * Prescale: 1,2,4,6,7,8,9 = none, 8, 64, 256, 1024, external falling, external rising
  * Use M445 to disable pin permanently or use timer more 0 to stop pulse without removing pin assignment
  * M45 - set up PWM P<pin> S<power val 0-255> [T<timer mode 0-3>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
- * @author groff
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
-public class M45 implements Runnable {
+public class M45 extends AbstractBasicResponse {
 	private boolean DEBUG;
-	private boolean shouldRun = true;
-	private TopicList topicList;
-	AsynchDemuxer asynchDemuxer;
-	private Object mutex = new Object();
 	public M45(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		this.asynchDemuxer = asynchDemuxer;
-		//
-		// M45
-		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.M45.val(), 2) {
-			@Override
-			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
-				synchronized(mutex) {
-					mutex.notify();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr.getReadingValString();
-			}
-		};
-		topics.put(topicNames.M45.val(), topicList);
+		super(asynchDemuxer, topics, topicNames.M45.val());
 	}
-	@Override
-	public void run() {
-		while(shouldRun) {
-			synchronized(mutex) {
-				try {
-					mutex.wait();
-					topicList.getMachineBridge().add(MachineReading.EMPTYREADING);
-					synchronized(asynchDemuxer.mutexWrite) {
-						asynchDemuxer.mutexWrite.notifyAll();
-					}
-				} catch (InterruptedException e) {
-					shouldRun = false;
-				}
-			}
-		}
-		
-	}
-
 }
