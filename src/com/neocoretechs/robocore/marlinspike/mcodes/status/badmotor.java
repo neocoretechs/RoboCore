@@ -8,7 +8,7 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
-import com.neocoretechs.robocore.machine.bridge.MachineBridge;
+
 /**
  * 2 = HBridge driver enable pin not found
  * 4 = SplitBridge driver enable pin not found 
@@ -24,19 +24,14 @@ import com.neocoretechs.robocore.machine.bridge.MachineBridge;
  * -2 = Kill method called
  * -3 = Stop method called
  * <Bad Motor command s c p/> status, channel, power
- * @author groff
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
-public class badmotor implements Runnable {
+public class badmotor extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;
-	private boolean shouldRun = true;
-	private TopicList topicList;
-	AsynchDemuxer asynchDemuxer;
-	private Object mutex = new Object();
-	ArrayList<String> datax;
 	private HashMap<String, String> faultCodes = new HashMap<String, String>();
 	public badmotor(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		this.asynchDemuxer = asynchDemuxer;
+		super(asynchDemuxer, topics, topicNames.BADMOTOR.val(), 8);
 		faultCodes.put("2","HBridge driver enable pin not found");
 		faultCodes.put("4", "SplitBridge driver enable pin not found");
 		faultCodes.put("6", "SwitchBridge driver enable pin not found");
@@ -53,78 +48,36 @@ public class badmotor implements Runnable {
 		//
 		// BADMOTOR
 		//
-		this.topicList = new TopicList(asynchDemuxer, topicNames.BADMOTOR.val(), 8) {
-			@Override
-			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
-				datax = readLine;
-				synchronized(mutex) {
-					mutex.notify();
-				}
-			}
-			@Override
-			public Object getResult(MachineReading mr) {
-				return mr;
-			}
-		};
-		topics.put(topicNames.BADMOTOR.val(), topicList);
+	}
+	
+	@Override
+	public Object getMachineReadingResult(MachineReading mr) {
+		return mr;
 	}
 	@Override
-	public void run() {
-		while(shouldRun) {
-			synchronized(mutex) {
-				try {
-					mutex.wait();
-					MachineBridge mb = topicList.getMachineBridge();
-					MachineReading mr = null;
-					int iseq = 1;
-					synchronized(mb) {
-						for(String data: datax) {
-							if(asynchDemuxer.isLineTerminal(data)) {
-							String sload = asynchDemuxer.extractPayload(data, topicNames.BADMOTOR.val());
-							if(sload != null) {
-								String[] sarray = sload.trim().split(" ");
-								StringBuilder sout = new StringBuilder();
-								if(sarray.length > 0) 
-									sout.append(faultCodes.get(sarray[0])); 
-								else
-									sout.append("FAULT");
-								sout.append(" channel ");
-								if(sarray.length > 1)
-									sout.append(sarray[1]);
-								else
-									sout.append("UNKNOWN");
-								sout.append(" power ");
-								if(sarray.length > 2)
-									sout.append(sarray[2]);
-								else
-									sout.append("UNKNOWN");
-								mr = new MachineReading(sout.toString());
-							} else {
-								mr = new MachineReading(data);
-							}
-							mb.add(mr);
-						} else {
-							if(data != null && !asynchDemuxer.isLineTerminal(data)) {
-								if(DEBUG)
-									System.out.println(this.getClass().getName()+":"+data);
-								if( data == null || data.length() == 0 ) {
-									//if(DEBUG)System.out.println("Empty line returned from readLine");
-									continue;
-								}
-								mr = new MachineReading(data);
-								mb.add(mr);
-							}
-						}
-						}
-						mb.add(MachineReading.EMPTYREADING);
-					}
-					synchronized(asynchDemuxer.mutexWrite) {
-						asynchDemuxer.mutexWrite.notifyAll();
-					}
-				} catch (InterruptedException e) {
-					shouldRun = false;
-				}
+	public MachineReading formatMachineReading(String sdata) {
+		if(asynchDemuxer.isLineTerminal(sdata)) {
+			String sload = asynchDemuxer.extractPayload(sdata, topicNames.BADMOTOR.val());
+			if(sload != null) {
+				String[] sarray = sload.trim().split(" ");
+				StringBuilder sout = new StringBuilder();
+				if(sarray.length > 0) 
+					sout.append(faultCodes.get(sarray[0])); 
+				else
+					sout.append("FAULT");
+				sout.append(" channel ");
+				if(sarray.length > 1)
+					sout.append(sarray[1]);
+				else
+					sout.append("UNKNOWN");
+				sout.append(" power ");
+				if(sarray.length > 2)
+					sout.append(sarray[2]);
+				else
+					sout.append("UNKNOWN");
+				return new MachineReading(sout.toString());
 			}
 		}
+		return new MachineReading(sdata);
 	}
 }
