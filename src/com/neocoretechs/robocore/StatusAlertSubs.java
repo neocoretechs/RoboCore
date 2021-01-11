@@ -40,7 +40,7 @@ public class StatusAlertSubs extends AbstractNodeMain {
 				//System.out.println(message.getHardwareId()+" Status "+message.getMessage());
 				StringBuilder sb = new StringBuilder();
 				sb.append(message.getMessage()+"\r\n");
-				sb.append(message.getHardwareId()+" ");
+				sb.append(message.getHardwareId()+"\r\n");
 				List<KeyValue> diagMsgs = message.getValues();
 				if( diagMsgs != null ) {
 						for( KeyValue msg : diagMsgs) {

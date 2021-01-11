@@ -81,7 +81,7 @@ public class PublishResponses implements Runnable {
 					statmsg.setLevel(dstatus);
 					statmsg.setHardwareId(node.getUri().toString());
 					DateFormat d = DateFormat.getDateTimeInstance();
-					statmsg.setMessage("Timestamp:"+ d.format(new Date()));
+					statmsg.setMessage(d.format(new Date()));
 					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					int messageSize = 0;
 					int queueLen = mb.get().length();
@@ -92,7 +92,7 @@ public class PublishResponses implements Runnable {
 						if(messageSize++ >= queueLen)
 							break;
 						MachineReading mr2 = mb.waitForNewReading();
-						if(mr2.equals(MachineReading.EMPTYREADING))
+						if(mr2.equals(MachineReading.EMPTYREADING) || tli.getResult(mr2) == null)
 							continue;
 						diagnostic_msgs.KeyValue kv2 = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
 						kv2.setKey(String.valueOf(messageSize)+".)");
