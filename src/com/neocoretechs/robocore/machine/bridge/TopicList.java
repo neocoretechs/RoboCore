@@ -7,5 +7,9 @@ public abstract class TopicList implements TopicListInterface {
 		}
 		@Override
 		public MachineBridge getMachineBridge() { return mb; }
+		@Override
+		public String toString() {
+			return this.getClass().getName()+" Topic:"+mb.getGroup()+" queue size:"+mb.get().length();
+		}
 
 }

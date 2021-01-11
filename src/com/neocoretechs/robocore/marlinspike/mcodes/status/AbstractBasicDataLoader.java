@@ -56,7 +56,7 @@ public abstract class AbstractBasicDataLoader implements Runnable {
 	/**
 	 * Format each element of the MachineReading to be added to MachineBridge from retrieved Marlinspike response lines.
 	 * @param sdata The line by line Marlinspike responses
-	 * @return the MachineReading formetted to spec
+	 * @return the MachineReading formatted to spec
 	 */
 	public abstract MachineReading formatMachineReading(String sdata);
 	
@@ -69,18 +69,18 @@ public abstract class AbstractBasicDataLoader implements Runnable {
 					MachineBridge mb = topicList.getMachineBridge();
 					MachineReading mr = null;
 					synchronized(mb) {
-						for(String data: datax) {
-							String sload = asynchDemuxer.parseDirective(data);
-							if(sload != null && !(asynchDemuxer.isLineTerminal(data) && sload.equals(topicName))) {
+						for(String data: datax) {		
+							if(data != null && data.length() > 0) {
 								if(DEBUG)
-									System.out.println(this.getClass().getName()+":"+data);
-								if( data == null || data.length() == 0 ) {
-									//if(DEBUG)System.out.println("Empty line returned from readLine");
-									continue;
+									System.out.println(this.getClass().getName()+" "+topicName+" machineBridge:"+data);
+								String sload = asynchDemuxer.parseDirective(data);
+								boolean isTopic = (sload != null && sload.equals(topicName));
+								if(sload != null && sload.length() > 0 && (asynchDemuxer.isLineTerminal(data) && isTopic)) 
+									break;
+								if( !isTopic ) {
+									mr = formatMachineReading(data);
+									mb.add(mr);
 								}
-								//mr = new MachineReading(data);
-								mr = formatMachineReading(data);
-								mb.add(mr);
 							}
 						}
 						mb.add(MachineReading.EMPTYREADING);

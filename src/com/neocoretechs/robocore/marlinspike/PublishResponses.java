@@ -76,29 +76,26 @@ public class PublishResponses implements Runnable {
 			MachineBridge mb = tli.getMachineBridge();
 			synchronized(mb) {
 			if( !mb.get().isEmpty() ) {
-					String mfd = (String) tli.getResult(mb.waitForNewReading());
 					statmsg = statpub.newMessage();
 					statmsg.setName(topicName);
 					statmsg.setLevel(dstatus);
 					statmsg.setHardwareId(node.getUri().toString());
-					statmsg.setMessage(topicName+":"+mfd);
-					diagnostic_msgs.KeyValue kv = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					DateFormat d = DateFormat.getDateTimeInstance();
-					kv.setValue(d.format(new Date()));
-					li.add(kv);
+					statmsg.setMessage("Timestamp:"+ d.format(new Date()));
+					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
 					int messageSize = 0;
+					int queueLen = mb.get().length();
 					while(!mb.get().isEmpty()) {
-						MachineReading mr2 = mb.waitForNewReading();
 						// failsafe to limit consumption of message elements to max size of MachineBridge queue
 						// this theoretically gives us one message at a time to queue on the outbound message bus
 						// and keeps system from stalling on endless consumption of one incoming message stream
-						if(messageSize++ > mb.get().length())
+						if(messageSize++ >= queueLen)
 							break;
+						MachineReading mr2 = mb.waitForNewReading();
 						if(mr2.equals(MachineReading.EMPTYREADING))
 							continue;
 						diagnostic_msgs.KeyValue kv2 = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-						kv2.setKey(String.valueOf(messageSize)+")");
+						kv2.setKey(String.valueOf(messageSize)+".)");
 						kv2.setValue(String.valueOf(tli.getResult(mr2)));
 						li.add(kv2);
 					}
@@ -106,16 +103,15 @@ public class PublishResponses implements Runnable {
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG ) 
 						System.out.println("Queued "+topicName+": "+statmsg.getMessage().toString());
-			} else {
-				try {
-					Thread.sleep(1);
-				} catch (InterruptedException e) {
-					shouldRun = false;
-					if(DEBUG)
-						System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" INTERRUPTED");
-				} // wait for possible payload
-			}
-			}
+			} // nothing in the MachineBridge
+			} // mutex MachineBridge
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {
+				shouldRun = false;
+				if(DEBUG)
+					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" INTERRUPTED");
+			} // wait for possible payload
 		}
 		
 	}

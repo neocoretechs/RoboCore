@@ -735,21 +735,23 @@ public class AsynchDemuxer implements Runnable {
 						if(fop != null) {
 							if(DEBUG)
 								System.out.println("AsynchDemux Parsed directive:"+fop);
-							ArrayList<String> payload = new ArrayList<String>();
-							String data = marlinLines.takeFirst();
-							String sload = parseDirective(data);
-							payload.add(data);
-							while(sload != null && sload.length() > 0 && !(isLineTerminal(sload) && sload.equals(fop))) {
-								if(DEBUG)
-									System.out.println(this.getClass().getName()+":"+sload);
-								data = marlinLines.takeFirst();
-								sload = parseDirective(data);
-								payload.add(data);
-							}	
 							TopicList tl = topics.get(fop);
 							if( tl != null ) {
 								if(DEBUG)
 									System.out.println("AsynchDemux call out to topic:"+tl.mb.getGroup());
+								ArrayList<String> payload = new ArrayList<String>();
+								line = marlinLines.takeFirst();
+								while(line != null) {
+									payload.add(line);
+									if(DEBUG)
+										System.out.println(this.getClass().getName()+" "+tl+" payload:"+line);
+									String sload = parseDirective(line);
+									if(sload != null && sload.length() > 0 && (isLineTerminal(line) && sload.equals(fop))) 
+										break;
+									line = marlinLines.takeFirst();
+								}
+								if(DEBUG)
+									System.out.println(this.getClass().getName()+" payload size:"+payload.size()+" retrieveData:"+tl);
 								tl.retrieveData(payload);
 							} else {
 								System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);

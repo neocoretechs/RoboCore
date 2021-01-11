@@ -23,7 +23,7 @@ public class lineseq extends AbstractBasicDataLoader {
 
 	@Override
 	public Object getMachineReadingResult(MachineReading mr) {
-		return mr;
+		return mr.getReadingValString();
 	}
 	@Override
 	public MachineReading formatMachineReading(String sdata) {

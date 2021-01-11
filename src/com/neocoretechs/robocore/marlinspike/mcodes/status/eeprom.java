@@ -32,8 +32,7 @@ public class eeprom extends AbstractBasicDataLoader {
 
 	@Override
 	public Object getMachineReadingResult(MachineReading mr) {
-		// TODO Auto-generated method stub
-		return null;
+		return mr;
 	}
 	@Override
 	public MachineReading formatMachineReading(String sdata) {
