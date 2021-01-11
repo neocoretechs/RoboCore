@@ -39,6 +39,10 @@ public class StatusAlertSubs extends AbstractNodeMain {
 			public void onNewMessage(DiagnosticStatus message) {
 				//System.out.println(message.getHardwareId()+" Status "+message.getMessage());
 				StringBuilder sb = new StringBuilder();
+				sb.append("MessageName:");
+				sb.append(message.getName());
+				sb.append("Level:");
+				sb.append(message.getLevel()+"\r\n");
 				sb.append(message.getMessage()+"\r\n");
 				sb.append(message.getHardwareId()+"\r\n");
 				List<KeyValue> diagMsgs = message.getValues();
