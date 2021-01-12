@@ -112,6 +112,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  */
 public class AsynchDemuxer implements Runnable {
 	private static boolean DEBUG = false;
+	private static boolean PORTDEBUG = true;
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
@@ -730,6 +731,8 @@ public class AsynchDemuxer implements Runnable {
 				try {
 					while(shouldRun) {
 						String writeReq = takeWrite();
+						if(DEBUG || PORTDEBUG)
+							System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" writeLine:"+writeReq);
 						dataPort.writeLine(writeReq);
 						synchronized(mutexWrite) {
 							try {
@@ -811,7 +814,7 @@ public class AsynchDemuxer implements Runnable {
 			boolean overwrite = marlinLines.add(line);
 			if(overwrite)
 				System.out.println("AsynchDemux WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
-			if(DEBUG)
+			if(DEBUG || PORTDEBUG)
 				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
 		} // shouldRun
 		isRunning = false;
