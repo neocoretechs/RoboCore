@@ -6,13 +6,17 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
-
+/**
+ * Response to M706 which responds with assignedpins header
+ * @author groff
+ *
+ */
 public class assignedPins extends AbstractBasicDataLoader  {
 	private boolean DEBUG = false;
 	public assignedPins(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		super(asynchDemuxer, topics, topicNames.ASSIGNEDPINS.val(), 16);
 		//
-		// ASSIGNEDPINS
+		// M706 - ASSIGNEDPINS
 		//
 	}
 	@Override

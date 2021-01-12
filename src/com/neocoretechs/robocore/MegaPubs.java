@@ -127,7 +127,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	// Queue for outgoing diagnostic messages
 	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
-	private int RESPONSES = 20;
+	private int RESPONSES = 24;
 	PublishResponses[] responses = new PublishResponses[RESPONSES];
 	
 	public MegaPubs(String host, InetSocketAddress master) {
@@ -545,6 +545,10 @@ public void onStart(final ConnectedNode connectedNode) {
 	responses[17].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ASSIGNEDPINS.val(),diagnostic_msgs.DiagnosticStatus.OK);
 	responses[18].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.MOTORCONTROLSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
 	responses[19].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.PWMCONTROLSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
+	responses[20].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.DIGITALPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
+	responses[21].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
+	responses[22].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
+	responses[23].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.PWMPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
 	// Start the collection of response handlers
 	ThreadPoolManager.getInstance().spin(responses[0], AsynchDemuxer.topicNames.BATTERY.val());
 	ThreadPoolManager.getInstance().spin(responses[1], AsynchDemuxer.topicNames.MOTORFAULT.val());
@@ -566,6 +570,10 @@ public void onStart(final ConnectedNode connectedNode) {
 	ThreadPoolManager.getInstance().spin(responses[17], AsynchDemuxer.topicNames.ASSIGNEDPINS.val());
 	ThreadPoolManager.getInstance().spin(responses[18], AsynchDemuxer.topicNames.MOTORCONTROLSETTING.val());
 	ThreadPoolManager.getInstance().spin(responses[19], AsynchDemuxer.topicNames.PWMCONTROLSETTING.val());
+	ThreadPoolManager.getInstance().spin(responses[20], AsynchDemuxer.topicNames.DIGITALPINSETTING.val());
+	ThreadPoolManager.getInstance().spin(responses[21], AsynchDemuxer.topicNames.ANALOGPINSETTING.val());
+	ThreadPoolManager.getInstance().spin(responses[22], AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val());
+	ThreadPoolManager.getInstance().spin(responses[23], AsynchDemuxer.topicNames.PWMPINSETTING.val());
 	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();

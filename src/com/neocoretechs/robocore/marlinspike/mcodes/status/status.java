@@ -8,7 +8,7 @@ import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
  * M700 - return controller status, this is the response
- * @author Jonathan Groff (C) NeoCoreTEchs 2020,2021
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
 public class status extends AbstractBasicDataLoader {

@@ -41,7 +41,7 @@ public class StatusAlertSubs extends AbstractNodeMain {
 				StringBuilder sb = new StringBuilder();
 				sb.append("MessageName:");
 				sb.append(message.getName());
-				sb.append("Level:");
+				sb.append(" Level:");
 				sb.append(message.getLevel()+"\r\n");
 				sb.append(message.getMessage()+"\r\n");
 				sb.append(message.getHardwareId()+"\r\n");

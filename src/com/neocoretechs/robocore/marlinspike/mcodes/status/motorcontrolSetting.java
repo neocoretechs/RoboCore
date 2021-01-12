@@ -7,7 +7,7 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
- * 
+ * Part of response to M705
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
@@ -16,7 +16,7 @@ public class motorcontrolSetting extends AbstractBasicDataLoader {
 	public motorcontrolSetting(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		super(asynchDemuxer, topics, topicNames.MOTORCONTROLSETTING.val(), 16);
 		//
-		// MOTORCONTROLSETTING
+		// M705 - MOTORCONTROLSETTING
 		//
 	}
 		@Override

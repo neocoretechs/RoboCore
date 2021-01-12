@@ -53,6 +53,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M999;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.M115;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.PWMcontrolsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpinsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.eeprom;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.lineseq;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.motorcontrolSetting;
@@ -60,9 +61,11 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.motorfault;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.noMorG;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.nochecksum;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.nolinecheck;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.pwmpinsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.status;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.time;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.analogpin;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.analogpinsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.assignedPins;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.badPWM;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.badcontrol;
@@ -73,6 +76,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStatus;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.controllerStopped;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.dataset;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonic;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonicpinsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownG;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownM;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
@@ -126,6 +130,10 @@ public class AsynchDemuxer implements Runnable {
 		ASSIGNEDPINS("assignedpins"),
 		MOTORCONTROLSETTING("motorcontrolsetting"),
 		PWMCONTROLSETTING("pwmcontrolsetting"),
+		DIGITALPINSETTING("digitalpinsetting"),
+		ANALOGPINSETTING("analogpinsetting"),
+		ULTRASONICPINSETTING("ultrasonicpinsetting"),
+		PWMPINSETTING("pwmpinsetting"),
 		TIME("time"),//time report: <time>,newline,"1 Imin Isec"</time>"
 		CONTROLLERSTATUS("controllerstatus"),
 		CONTROLLERSTOPPED("Controller stopped due to errors"),
@@ -141,7 +149,7 @@ public class AsynchDemuxer implements Runnable {
 		LINESEQ("Line Number is not Last Line Number+1, Last Line: "),
 		EEPROM("eeprom"),
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
-		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),
+		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),M13("M13"),
 		M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),
 		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),
 		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M799("M799"),M999("M999"),
@@ -289,6 +297,12 @@ public class AsynchDemuxer implements Runnable {
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M12.val());
 		ThreadPoolManager.getInstance().spin(new M12(this, topics), topicNames.M12.val());
+		//
+		// M13
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M13.val());
+		ThreadPoolManager.getInstance().spin(new M12(this, topics), topicNames.M13.val());
 		//
 		// M33
 		//
@@ -584,7 +598,30 @@ public class AsynchDemuxer implements Runnable {
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M115.val());
 		ThreadPoolManager.getInstance().spin(new M115(this, topics), topicNames.M115.val());
-	
+		//
+		// M701 report
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPINSETTING.val());
+		ThreadPoolManager.getInstance().spin(new digitalpinsetting(this, topics), topicNames.DIGITALPINSETTING.val());
+		//
+		// M702 report
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPINSETTING.val());
+		ThreadPoolManager.getInstance().spin(new analogpinsetting(this, topics), topicNames.ANALOGPINSETTING.val());
+		//
+		// M703 report
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONICPINSETTING.val());
+		ThreadPoolManager.getInstance().spin(new ultrasonicpinsetting(this, topics), topicNames.ULTRASONICPINSETTING.val());
+		//
+		// M704 report
+		//
+		if(DEBUG)
+			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMPINSETTING.val());
+		ThreadPoolManager.getInstance().spin(new pwmpinsetting(this, topics), topicNames.PWMPINSETTING.val());
 		
 		// spin the main loop to read lines from the Marlinspike and muxx them
 		ThreadPoolManager.getInstance().spin(this, "SYSTEM");

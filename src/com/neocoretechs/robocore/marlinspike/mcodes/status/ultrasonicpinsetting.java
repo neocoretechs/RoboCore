@@ -7,28 +7,24 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
- * Report PWM controller setting, part of response to M705
- * @author Jonathan Groff (C0 NeoCoreTechs 2020,2021
+ * Response to M703 which responds with ultrasonicpinsetting header
+ * @author groff
  *
  */
-public class PWMcontrolsetting extends AbstractBasicDataLoader {
+public class ultrasonicpinsetting extends AbstractBasicDataLoader  {
 	private boolean DEBUG = false;
-
-	public PWMcontrolsetting(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.PWMCONTROLSETTING.val(), 16);
+	public ultrasonicpinsetting(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
+		super(asynchDemuxer, topics, topicNames.ULTRASONICPINSETTING.val(), 16);
 		//
-		// M705 -  PWMCONTROLSETTING
+		// M703 - ULTRASONICPINSETTING
 		//
 	}
-
 	@Override
 	public Object getMachineReadingResult(MachineReading mr) {
 		return mr.getReadingValString();
 	}
-
 	@Override
 	public MachineReading formatMachineReading(String sdata) {
 		return new MachineReading(sdata);
 	}
-	
 }

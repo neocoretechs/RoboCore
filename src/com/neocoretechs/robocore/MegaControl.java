@@ -83,6 +83,10 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	public synchronized String reportAllControllerStatus() throws IOException {
 		getSystemStatus();
 		getAssignedPins();
+		getDigitalPinSetting();
+		getAnalogPinSetting();
+		getUltrasonicPinSetting();
+		getPWMPinSetting();
 		getMotorControlSetting();
 		getControllerStatus();
 		getPWMControlSetting();
@@ -91,7 +95,6 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		return "Ok";
 	}
 	
-
 	  // 
     // Report methods. The sequence is to issue the M-code to the MarlinSpike. The returned data will
     // include the proper <headers> which are 'demuxxed' and the correct MachineReadings are created from
@@ -111,6 +114,34 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
      */
     public synchronized void getSystemStatus() throws IOException {
 		String statCommand1 = "M700"; // report status
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
+    }
+    /**
+     * M701
+     */
+    public synchronized void getDigitalPinSetting() throws IOException {
+		String statCommand1 = "M701"; // report status
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
+    }
+    /**
+     * M702
+     */
+    public synchronized void getAnalogPinSetting() throws IOException {
+		String statCommand1 = "M702"; // report status
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
+    }
+    /**
+     * M703
+     */
+    public synchronized void getUltrasonicPinSetting() throws IOException {
+		String statCommand1 = "M703"; // report status
+		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
+    }
+    /**
+     * M704
+     */
+    public synchronized void getPWMPinSetting() throws IOException {
+		String statCommand1 = "M704"; // report status
 		AsynchDemuxer.addWrite(asynchDemuxer, statCommand1);
     }
     /**

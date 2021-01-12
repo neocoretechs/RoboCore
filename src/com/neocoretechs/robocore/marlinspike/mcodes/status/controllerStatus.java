@@ -8,7 +8,7 @@ import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
  * Get the status of controllers<p/>
- * @author Jonathan Groff (C) NeoCoreTechs 202,2021
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
 public class controllerStatus extends AbstractBasicDataLoader {
