@@ -12,7 +12,7 @@ import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
  *
  */
 public class status extends AbstractBasicDataLoader {
-	private boolean DEBUG = true;
+	private boolean DEBUG = false;
 	public status(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
 		super(asynchDemuxer, topics, topicNames.STATUS.val(), 64);
 		//

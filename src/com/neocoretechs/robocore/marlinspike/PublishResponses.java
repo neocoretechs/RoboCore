@@ -30,7 +30,7 @@ import diagnostic_msgs.DiagnosticStatus;
  *
  */
 public class PublishResponses implements Runnable {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private AsynchDemuxer asynchDemuxer;
 	private ConnectedNode node;
 	private Publisher<DiagnosticStatus> statpub;

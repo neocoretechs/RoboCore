@@ -102,7 +102,7 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
  * @author jg
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;

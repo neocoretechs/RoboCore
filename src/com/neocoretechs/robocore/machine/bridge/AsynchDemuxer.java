@@ -111,7 +111,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
