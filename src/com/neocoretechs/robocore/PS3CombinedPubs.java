@@ -144,20 +144,13 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 		this.master = master;
 		NodeConfiguration nc = build();
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
-	    
+	    nodeMainExecutor.execute(this, nc);  
 	}
 	
 	public PS3CombinedPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 	    nodeMainExecutor.execute(this, cl.build());
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
 	}
 	
 	public PS3CombinedPubs() {}
@@ -221,7 +214,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	System.out.println("Refresh rate is "+refresh+" ms.");
 	// Main controller creation and thread invocation
 	ControllerReader(pubdata, basedata, controllerName);
-
+	
+	awaitStart.countDown();
 	/**
 	 * Main loop. Populate array as follows in Joy to be published as sensor_msgs.Joy:
 	 * --float[] axis:--
@@ -264,6 +258,9 @@ public void onStart(final ConnectedNode connectedNode) {
 				this.cancel();
 				return;
 			}
+		    try {
+				awaitStart.await();
+			} catch (InterruptedException e) {}
 			// Basically, if its not a default controller Generic Xbox pad, we assume its USB Joystick type
 			Float data = null;
 			Float predata = null;

@@ -6,15 +6,22 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A deque that removes head or tail elements when the number of elements
  * exceeds the limit and blocks on {@link #takeFirst()} and {@link #takeLast()} when
- * there are no elements available.
- * 
- * @author jg
+ * there are no elements available.<p/>
+ * Why are we implementing BlockingQueue vs BlockingDeque? Primarily due to the fact that I wanted
+ * to indicate when the circular queue was being overwritten, and to return a boolean value indicating that
+ * condition on addFirst and addLast results in incompatible method signatures. So in a metaphysical computer
+ * science sense this circularblockingdeque is really a queue and not a deque, but this one also can act as a list,
+ * so its a creature from another realm anyway. A sort of circularblockinglistaqueue I suppose.<p/>
+ * The rationale behind the List interface is to make it presentable to UI components in the future.<p/>
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
-public class CircularBlockingDeque<T> implements Iterable<T>, List<T> {
+public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, List<T> {
 
   private final T[] deque;
   private final Object mutex;
@@ -222,20 +229,24 @@ public class CircularBlockingDeque<T> implements Iterable<T>, List<T> {
       }
     };
   }
+  
 @Override
 public int size() {
 	return deque.length;
 }
+
 @Override
 public boolean contains(Object o) {
 	for(Object o2 : deque)
 		if(o.equals((o2))) return true;
 	return false;
 }
+
 @Override
 public Object[] toArray() {
 	return deque;
 }
+
 @Override
 public Object[] toArray(Object[] a) {
 	Object n = Array.newInstance(a.getClass(), a.length);
@@ -247,39 +258,59 @@ public Object[] toArray(Object[] a) {
 	}
 	return (Object[]) n;	
 }
+
 @Override
 public boolean add(Object e) {
 	return addLast((T) e);
 }
+
 @Override
 public boolean remove(Object o) {
-	// TODO Auto-generated method stub
-	return false;
+	int i = indexOf(o);
+	if( i == -1 )
+		return false;
+	remove(i);
+	return true;
 }
+
 @Override
 public boolean containsAll(Collection c) {
-	// TODO Auto-generated method stub
-	return false;
+	boolean allContains = true;
+	for(Object o : c) {
+		if(!contains(o))
+			allContains = false;
+	}
+	return allContains;
 }
+
 @Override
 public boolean addAll(Collection c) {
-	// TODO Auto-generated method stub
-	return false;
+	if(c.isEmpty())
+		return false;
+	for(Object o: c) {
+		add(o);
+	}
+	return true;
 }
+
 @Override
 public boolean addAll(int index, Collection c) {
-	// TODO Auto-generated method stub
-	return false;
+	throw new RuntimeException(this.getClass().getName()+".addAll unimplemented");
 }
+
 @Override
 public boolean removeAll(Collection c) {
-	// TODO Auto-generated method stub
-	return false;
+	boolean hasRemoved = false;
+	for(Object o : c) {
+		if(remove(o))
+			hasRemoved = true;
+	}
+	return hasRemoved;
 }
+
 @Override
 public boolean retainAll(Collection c) {
-	// TODO Auto-generated method stub
-	return false;
+	throw new RuntimeException(this.getClass().getName()+".retainAll unimplemented");
 }
 
 @Override
@@ -288,6 +319,7 @@ public Object set(int index, Object element) {
 	deque[(start + index) % limit] = (T) element;
 	return o;
 }
+
 @Override
 public void add(int index, Object element) {
 	  synchronized (mutex) {
@@ -307,6 +339,7 @@ public void add(int index, Object element) {
 		   mutex.notify();
 	  }
 }
+
 @Override
 public T remove(int index) {
 	  synchronized (mutex) {
@@ -327,6 +360,7 @@ public T remove(int index) {
 		   return (T)elem;
 	  }
 }
+
 @Override
 public int indexOf(Object o) {
 	int j = 0;
@@ -341,6 +375,7 @@ public int indexOf(Object o) {
 	}
 	return index;
 }
+
 @Override
 public int lastIndexOf(Object o) {
 	int j = 0;
@@ -354,23 +389,132 @@ public int lastIndexOf(Object o) {
 	}
 	return index;
 }
+
 @Override
 public ListIterator listIterator() {
-	// TODO Auto-generated method stub
-	return null;
+	throw new RuntimeException(this.getClass().getName()+".listIterator unimplemented");
 }
+
 @Override
 public ListIterator listIterator(int index) {
-	// TODO Auto-generated method stub
-	return null;
+	throw new RuntimeException(this.getClass().getName()+".listIterator unimplemented");
 }
+
 @Override
 public List subList(int fromIndex, int toIndex) {
-	// TODO Auto-generated method stub
-	return null;
+	throw new RuntimeException(this.getClass().getName()+".subList unimplemented");
 }
+
 @Override
 public T get(int index) {
 	return deque[(start + index) % limit];
 }
+
+@Override
+public T remove() {
+	return remove(0);
+}
+
+@Override
+public T poll() {
+	try {
+		return takeFirst();
+	} catch (InterruptedException e) {
+		return null;
+	}
+}
+
+@Override
+public T element() {
+	T elem = peekFirst();
+	if(elem == null)
+		throw new NoSuchElementException();
+	return elem;
+}
+
+@Override
+public T peek() {
+	return peekFirst();
+}
+
+@Override
+public boolean offer(T e) {
+	if(length == limit)
+		return false;
+	return addLast(e);
+}
+
+@Override
+public void put(T e) throws InterruptedException {
+	while(length == limit) {
+		Thread.sleep(1);
+	}
+	synchronized(mutex) {
+		addLast(e);
+	}
+	
+}
+
+@Override
+public boolean offer(T e, long timeout, TimeUnit unit) throws InterruptedException {
+	long waited = 0;
+	if(e == null)
+		throw new NullPointerException();
+	while(length == limit) {
+		Thread.sleep(1);
+		if(waited++ == timeout)
+			return false;
+	}
+	addLast(e);
+	return true;
+}
+
+@Override
+public T take() throws InterruptedException {
+	return takeFirst();
+}
+
+@Override
+public T poll(long timeout, TimeUnit unit) throws InterruptedException {
+	long waited = 0;
+	while(length == 0) {
+		Thread.sleep(1);
+		if(waited++ == timeout)
+			return null;
+	}
+	return takeFirst();
+}
+
+@Override
+public int remainingCapacity() {
+	return length-limit;
+}
+
+@Override
+public int drainTo(Collection<? super T> c) {
+	int len = 0;
+	if(c == null)
+		throw new NullPointerException();
+	synchronized(mutex) {
+		len = length;
+		while(length > 0)
+			c.add(remove());
+	}
+	return len;
+}
+
+@Override
+public int drainTo(Collection<? super T> c, int maxElements) {
+	int len = 0;
+	if(c == null)
+		throw new NullPointerException();
+	synchronized(mutex) {
+		while(length > 0 && len < maxElements) {
+			c.add(remove());
+			++len;
+		}
+	}
+	return len;
+}
+
 }
