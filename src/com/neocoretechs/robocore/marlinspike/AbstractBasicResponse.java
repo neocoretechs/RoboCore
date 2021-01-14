@@ -23,8 +23,10 @@ public abstract class AbstractBasicResponse {
 	private boolean DEBUG;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
+	protected String topicName;
 	public AbstractBasicResponse(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics, String topicName) {
 		this.asynchDemuxer = asynchDemuxer;
+		this.topicName = topicName;
 		this.topicList = new TopicList(asynchDemuxer, topicName, 2) {
 			@Override
 			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
@@ -59,7 +61,14 @@ public abstract class AbstractBasicResponse {
 			mb.add(MachineReading.EMPTYREADING);
 			mb.notifyAll();
 		}
-		asynchDemuxer.mutexWrite.unlock();
+		synchronized(asynchDemuxer.mutexWrite) {
+			try {
+				asynchDemuxer.mutexWrite.unlock();
+			} catch(IllegalMonitorStateException ims) {
+				System.out.println(ims+" "+topicName);
+				ims.printStackTrace();
+			}
+		}
 	}
 
 }

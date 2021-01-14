@@ -722,11 +722,13 @@ public class AsynchDemuxer implements Runnable {
 			public void run() {
 				try {
 					while(shouldRun) {
-						mutexWrite.lock();
-						String writeReq = toWrite.takeFirst();
-						if(DEBUG || PORTDEBUG)
-							System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" writeLine:"+writeReq);
-						dataPort.writeLine(writeReq);
+						synchronized(mutexWrite) {
+							mutexWrite.lock();
+							String writeReq = toWrite.takeFirst();
+							if(DEBUG || PORTDEBUG)
+								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" writeLine:"+writeReq);
+							dataPort.writeLine(writeReq);
+						}
 					}
 				} catch (IOException | InterruptedException e) {
 					e.printStackTrace();
@@ -747,6 +749,8 @@ public class AsynchDemuxer implements Runnable {
 						}
 						if( line.length() == 0 ) {
 							System.out.println("AsynchDemux Cannot demux directive from line:"+line);
+							// consume line
+							marlinLines.takeFirst();
 							continue;
 						}
 					} catch(InterruptedException e) {
@@ -778,11 +782,17 @@ public class AsynchDemuxer implements Runnable {
 								tl.retrieveData(payload);
 							} else {
 								System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);
+								// consume line
+								marlinLines.takeFirst();
 								continue;
 							}
 						}			
 					} catch(IndexOutOfBoundsException ioob) {
 						System.out.println("AsynchDemux Empty or malformed directive from line:"+line);
+						// consume line
+						try {
+							marlinLines.takeFirst();
+						} catch (InterruptedException e) {}
 						continue;
 					} catch (InterruptedException e) {
 						shouldRun = false;

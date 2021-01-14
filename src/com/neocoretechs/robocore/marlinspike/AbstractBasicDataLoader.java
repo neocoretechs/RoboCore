@@ -18,7 +18,6 @@ public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 	private TopicList topicList;
 	protected AsynchDemuxer asynchDemuxer;
 	ArrayList<String> datax;
-	String topicName;
 	int queueSize;
 	public AbstractBasicDataLoader(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics, String topicName, int queueSize) {
 		super(asynchDemuxer, topics, topicName, queueSize);
@@ -62,6 +61,14 @@ public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 				mb.add(MachineReading.EMPTYREADING);
 				mb.notifyAll();
 			}
-			asynchDemuxer.mutexWrite.unlock();
+			synchronized(asynchDemuxer.mutexWrite) {
+				try {
+					asynchDemuxer.mutexWrite.unlock();
+				} catch(IllegalMonitorStateException ims) {
+					System.out.println(topicName);
+					System.out.println(ims);
+					ims.printStackTrace();
+				}
+			}
 	}
 }
