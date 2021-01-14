@@ -5,6 +5,7 @@ import java.util.Map;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 /**
  * PWM value between 0 and 255, default timer mode is 2; clear on match, default resolution is 8 bits, default prescale is 1
  * Prescale: 1,2,4,6,7,8,9 = none, 8, 64, 256, 1024, external falling, external rising

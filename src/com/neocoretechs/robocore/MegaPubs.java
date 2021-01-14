@@ -127,8 +127,56 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	// Queue for outgoing diagnostic messages
 	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
-	private int RESPONSES = 24;
-	PublishResponses[] responses = new PublishResponses[RESPONSES];
+	// Preload the collection of response handlers
+	String[] stopics = new String[] {AsynchDemuxer.topicNames.BATTERY.val(),
+	AsynchDemuxer.topicNames.MOTORFAULT.val(), 
+	AsynchDemuxer.topicNames.TIME.val(),
+	AsynchDemuxer.topicNames.CONTROLLERSTATUS.val(),
+	AsynchDemuxer.topicNames.STATUS.val(),
+	AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val(),
+	AsynchDemuxer.topicNames.NOMORGCODE.val(),
+	AsynchDemuxer.topicNames.BADMOTOR.val(),
+	AsynchDemuxer.topicNames.BADPWM.val(),
+	AsynchDemuxer.topicNames.UNKNOWNG.val(),
+	AsynchDemuxer.topicNames.UNKNOWNM.val(),
+	AsynchDemuxer.topicNames.BADCONTROL.val(),
+	AsynchDemuxer.topicNames.NOCHECKSUM.val(),
+	AsynchDemuxer.topicNames.NOLINECHECK.val(),
+	AsynchDemuxer.topicNames.CHECKMISMATCH.val(),
+	AsynchDemuxer.topicNames.LINESEQ.val(),
+	AsynchDemuxer.topicNames.M115.val(),
+	AsynchDemuxer.topicNames.ASSIGNEDPINS.val(),
+	AsynchDemuxer.topicNames.MOTORCONTROLSETTING.val(),
+	AsynchDemuxer.topicNames.PWMCONTROLSETTING.val(),
+	AsynchDemuxer.topicNames.DIGITALPINSETTING.val(),
+	AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),
+	AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),
+	AsynchDemuxer.topicNames.PWMPINSETTING.val()};
+	PublishResponses[] responses = new PublishResponses[stopics.length];
+	Byte[] publishStatus = new Byte[] {	 diagnostic_msgs.DiagnosticStatus.WARN,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.WARN,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK};
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -521,60 +569,15 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	*/
-	// Preload the collection of response handlers
-	for(int i = 0; i < RESPONSES; i++)
-		responses[i] = new PublishResponses(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
+
+	ThreadPoolManager.init(stopics);
 	// Initialize the collection of response handlers
-	responses[0].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.BATTERY.val(), diagnostic_msgs.DiagnosticStatus.WARN);
-	responses[1].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.MOTORFAULT.val(), diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[2].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.TIME.val(), diagnostic_msgs.DiagnosticStatus.OK);
-	responses[3].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[4].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.STATUS.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[5].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val(),diagnostic_msgs.DiagnosticStatus.WARN);
-	responses[6].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.NOMORGCODE.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[7].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.BADMOTOR.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[8].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.BADPWM.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[9].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.UNKNOWNG.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[10].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.UNKNOWNM.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[11].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.BADCONTROL.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[12].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.NOCHECKSUM.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[13].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.NOLINECHECK.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[14].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.CHECKMISMATCH.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[15].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.LINESEQ.val(),diagnostic_msgs.DiagnosticStatus.ERROR);
-	responses[16].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.M115.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[17].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ASSIGNEDPINS.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[18].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.MOTORCONTROLSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[19].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.PWMCONTROLSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[20].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.DIGITALPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[21].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[22].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	responses[23].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.PWMPINSETTING.val(),diagnostic_msgs.DiagnosticStatus.OK);
-	// Start the collection of response handlers
-	ThreadPoolManager.getInstance().spin(responses[0], AsynchDemuxer.topicNames.BATTERY.val());
-	ThreadPoolManager.getInstance().spin(responses[1], AsynchDemuxer.topicNames.MOTORFAULT.val());
-	ThreadPoolManager.getInstance().spin(responses[2], AsynchDemuxer.topicNames.TIME.val());
-	ThreadPoolManager.getInstance().spin(responses[3], AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
-	ThreadPoolManager.getInstance().spin(responses[4], AsynchDemuxer.topicNames.STATUS.val());
-	ThreadPoolManager.getInstance().spin(responses[5], AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val());
-	ThreadPoolManager.getInstance().spin(responses[6], AsynchDemuxer.topicNames.NOMORGCODE.val());
-	ThreadPoolManager.getInstance().spin(responses[7], AsynchDemuxer.topicNames.BADMOTOR.val());
-	ThreadPoolManager.getInstance().spin(responses[8], AsynchDemuxer.topicNames.BADPWM.val());
-	ThreadPoolManager.getInstance().spin(responses[9], AsynchDemuxer.topicNames.UNKNOWNG.val());
-	ThreadPoolManager.getInstance().spin(responses[10], AsynchDemuxer.topicNames.UNKNOWNM.val());
-	ThreadPoolManager.getInstance().spin(responses[11], AsynchDemuxer.topicNames.BADCONTROL.val());
-	ThreadPoolManager.getInstance().spin(responses[12], AsynchDemuxer.topicNames.NOCHECKSUM.val());
-	ThreadPoolManager.getInstance().spin(responses[13], AsynchDemuxer.topicNames.NOLINECHECK.val());
-	ThreadPoolManager.getInstance().spin(responses[14], AsynchDemuxer.topicNames.CHECKMISMATCH.val());
-	ThreadPoolManager.getInstance().spin(responses[15], AsynchDemuxer.topicNames.LINESEQ.val());
-	ThreadPoolManager.getInstance().spin(responses[16], AsynchDemuxer.topicNames.M115.val());
-	ThreadPoolManager.getInstance().spin(responses[17], AsynchDemuxer.topicNames.ASSIGNEDPINS.val());
-	ThreadPoolManager.getInstance().spin(responses[18], AsynchDemuxer.topicNames.MOTORCONTROLSETTING.val());
-	ThreadPoolManager.getInstance().spin(responses[19], AsynchDemuxer.topicNames.PWMCONTROLSETTING.val());
-	ThreadPoolManager.getInstance().spin(responses[20], AsynchDemuxer.topicNames.DIGITALPINSETTING.val());
-	ThreadPoolManager.getInstance().spin(responses[21], AsynchDemuxer.topicNames.ANALOGPINSETTING.val());
-	ThreadPoolManager.getInstance().spin(responses[22], AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val());
-	ThreadPoolManager.getInstance().spin(responses[23], AsynchDemuxer.topicNames.PWMPINSETTING.val());
-	
+	for(int i = 0; i < stopics.length; i++) {
+		responses[i] = new PublishResponses(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
+		responses[i].takeBridgeAndQueueMessage(stopics[i], publishStatus[i]);
+		ThreadPoolManager.getInstance().spin(responses[i], stopics[i]);
+	}
+
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
 

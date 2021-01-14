@@ -6,6 +6,7 @@ import java.util.Map;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 /**
  * Dynamically allocate a controller to a control slot. The slot parameter is used to refer
  * to the dynamically allocated controller in other M codes that relate to motor control functions.

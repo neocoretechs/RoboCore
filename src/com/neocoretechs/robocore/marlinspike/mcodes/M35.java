@@ -5,6 +5,7 @@ import java.util.Map;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 /**
  * M35 - Clear all digital pins
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021

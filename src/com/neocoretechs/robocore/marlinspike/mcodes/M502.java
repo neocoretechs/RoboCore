@@ -5,6 +5,7 @@ import java.util.Map;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 /**
  * M502 Revert to default settings read from EEPROM
  *

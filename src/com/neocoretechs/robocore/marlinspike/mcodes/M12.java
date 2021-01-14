@@ -5,6 +5,7 @@ import java.util.Map;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 /**
  * M12 [Z<slot>] C<channel> [P<offset>] [X<offset>]  set amount to add to G5 for min motor power, or X PWM level, If X, slot is PWM
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021

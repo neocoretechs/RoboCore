@@ -7,6 +7,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
@@ -116,7 +119,7 @@ public class AsynchDemuxer implements Runnable {
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
-	public Object mutexWrite = new Object();
+	public ReentrantLock mutexWrite = new ReentrantLock();
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
 
@@ -167,19 +170,12 @@ public class AsynchDemuxer implements Runnable {
 	public void clearLineBuffer() { marlinLines.clear(); }
 	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(1024);
 	public void clearWriteBuffer() { toWrite.clear(); }
-	public static void addWrite(AsynchDemuxer ad, String req) { 
+	public static void addWrite(AsynchDemuxer ad, String req) {
 		boolean overwrite = ad.toWrite.addLast(req);
 		if(overwrite)
 			System.out.println("WARNING - OUBOUND MARLINSPIKE QUEUE OVERWRITE!");
 	}
-	public String takeWrite() {
-		try {
-			return toWrite.takeFirst();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-			return null;
-		}
-	}
+
 	public MachineBridge getMachineBridge(String group) {
 		return topics.get(group).getMachineBridge();
 	}
@@ -192,307 +188,303 @@ public class AsynchDemuxer implements Runnable {
 	}
 	
 	public synchronized void init() {
-		topicNames[] xtopics = topicNames.values();
-		String[] stopics = new String[xtopics.length];
-		for(int i = 0; i < xtopics.length; i++) stopics[i] = xtopics[i].val();
-		ThreadPoolManager.init(stopics);
 		//
 		// G4
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G4.val());
-		ThreadPoolManager.getInstance().spin(new G4(this, topics), topicNames.G4.val());
+		topics.put(topicNames.G4.val(), new G4(this, topics).getTopicList());
 		//
 		// G5
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G5.val());
-		ThreadPoolManager.getInstance().spin(new G5(this, topics), topicNames.G5.val());
+		topics.put(topicNames.G5.val(),new G5(this, topics).getTopicList());
 		//
 		// G99
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G99.val());
-		ThreadPoolManager.getInstance().spin(new G99(this, topics), topicNames.G99.val());
+		topics.put(topicNames.G99.val(),new G99(this, topics).getTopicList());
 		//
 		// G100
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.G100.val());
-		ThreadPoolManager.getInstance().spin(new G100(this, topics), topicNames.G100.val());
+		topics.put(topicNames.G100.val(), new G100(this, topics).getTopicList());
 		//
 		// M0
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M0.val());
-		ThreadPoolManager.getInstance().spin(new M0(this, topics), topicNames.M0.val());
+		topics.put(topicNames.M0.val(), new M0(this, topics).getTopicList());
 		//
 		// M1
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M1.val());
-		ThreadPoolManager.getInstance().spin(new M1(this, topics), topicNames.M1.val());
+		topics.put(topicNames.M1.val(), new M1(this, topics).getTopicList());
 		//
 		// M2
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M2.val());
-		ThreadPoolManager.getInstance().spin(new M2(this, topics), topicNames.M2.val());
+		topics.put(topicNames.M2.val(), new M2(this, topics).getTopicList());
 		//
 		// M3
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M3.val());
-		ThreadPoolManager.getInstance().spin(new M3(this, topics), topicNames.M3.val());
+		topics.put(topicNames.M3.val(), new M3(this, topics).getTopicList());
 		//
 		// M4
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M4.val());
-		ThreadPoolManager.getInstance().spin(new M4(this, topics), topicNames.M4.val());
+		topics.put(topicNames.M4.val(), new M4(this, topics).getTopicList());
 		//
 		// M5
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M5.val());
-		ThreadPoolManager.getInstance().spin(new M5(this, topics), topicNames.M5.val());
+		topics.put(topicNames.M5.val(), new M4(this, topics).getTopicList());
 		//
 		// M6
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M6.val());
-		ThreadPoolManager.getInstance().spin(new M6(this, topics), topicNames.M6.val());
+		topics.put( topicNames.M6.val(), new M6(this, topics).getTopicList());
 		//
 		// M7
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M7.val());
-		ThreadPoolManager.getInstance().spin(new M7(this, topics), topicNames.M7.val());
+		topics.put(topicNames.M7.val(), new M7(this, topics).getTopicList());
 		//
 		// M8
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M8.val());
-		ThreadPoolManager.getInstance().spin(new M8(this, topics), topicNames.M8.val());
+		topics.put(topicNames.M8.val(), new M8(this, topics).getTopicList());
 		//
 		// M9
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M9.val());
-		ThreadPoolManager.getInstance().spin(new M9(this, topics), topicNames.M9.val());
+		topics.put(topicNames.M9.val(), new M9(this, topics).getTopicList());
 		//
 		// M10
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M10.val());
-		ThreadPoolManager.getInstance().spin(new M10(this, topics), topicNames.M10.val());
+		topics.put(topicNames.M10.val(), new M10(this, topics).getTopicList());
 		//
 		// M101
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M11.val());
-		ThreadPoolManager.getInstance().spin(new M11(this, topics), topicNames.M11.val());
+		topics.put(topicNames.M11.val(), new M11(this, topics).getTopicList());
 		//
 		// M12
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M12.val());
-		ThreadPoolManager.getInstance().spin(new M12(this, topics), topicNames.M12.val());
+		topics.put(topicNames.M12.val(), new M12(this, topics).getTopicList());
 		//
 		// M13
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M13.val());
-		ThreadPoolManager.getInstance().spin(new M12(this, topics), topicNames.M13.val());
+		topics.put(topicNames.M13.val(), new M12(this, topics).getTopicList());
 		//
 		// M33
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M33.val());
-		ThreadPoolManager.getInstance().spin(new M33(this, topics), topicNames.M33.val());
+		topics.put(topicNames.M33.val(), new M33(this, topics).getTopicList());
 		//
 		// M35
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M35.val());
-		ThreadPoolManager.getInstance().spin(new M35(this, topics), topicNames.M35.val());
+		topics.put(topicNames.M35.val(), new M35(this, topics).getTopicList());
 		//
 		// M36
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M36.val());
-		ThreadPoolManager.getInstance().spin(new M36(this, topics), topicNames.M36.val());
+		topics.put(topicNames.M36.val(), new M36(this, topics).getTopicList());
 		//
 		// M37
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M37.val());
-		ThreadPoolManager.getInstance().spin(new M37(this, topics), topicNames.M37.val());
+		topics.put(topicNames.M37.val(), new M37(this, topics).getTopicList());
 		//
 		// M38
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M38.val());
-		ThreadPoolManager.getInstance().spin(new M38(this, topics), topicNames.M38.val());
+		topics.put(topicNames.M38.val(), new M38(this, topics).getTopicList());
 		//
 		// M39
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M39.val());
-		ThreadPoolManager.getInstance().spin(new M39(this, topics), topicNames.M39.val());
+		topics.put(topicNames.M39.val(), new M39(this, topics).getTopicList());
 		//
 		// M40
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M40.val());
-		ThreadPoolManager.getInstance().spin(new M40(this, topics), topicNames.M40.val());
+		topics.put(topicNames.M40.val(), new M40(this, topics).getTopicList());
 		//
 		// M41
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M41.val());
-		ThreadPoolManager.getInstance().spin(new M41(this, topics), topicNames.M41.val());
+		topics.put(topicNames.M41.val(), new M41(this, topics).getTopicList());
 		//
 		// M42
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M42.val());
-		ThreadPoolManager.getInstance().spin(new M42(this, topics), topicNames.M42.val());
+		topics.put(topicNames.M42.val(), new M42(this, topics).getTopicList());
 		//
 		// M44 - report on digitalpin
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPIN.val());
-		ThreadPoolManager.getInstance().spin(new digitalpin(this, topics), topicNames.DIGITALPIN.val());
+		topics.put(topicNames.DIGITALPIN.val(), new digitalpin(this, topics).getTopicList());
 		//
 		// M45
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M45.val());
-		ThreadPoolManager.getInstance().spin(new M45(this, topics), topicNames.M45.val());
+		topics.put(topicNames.M45.val(), new M45(this, topics).getTopicList());
 		//
 		// M46 - report on analogpin
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPIN.val());
-		ThreadPoolManager.getInstance().spin(new analogpin(this, topics), topicNames.ANALOGPIN.val());
+		topics.put(topicNames.ANALOGPIN.val(), new analogpin(this, topics).getTopicList());
 		//
 		// M47
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M47.val());
-		ThreadPoolManager.getInstance().spin(new M47(this, topics), topicNames.M47.val());
+		topics.put(topicNames.M47.val(), new M47(this, topics).getTopicList());
 		//
 		// M80
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M80.val());
-		ThreadPoolManager.getInstance().spin(new M80(this, topics), topicNames.M80.val());
+		topics.put(topicNames.M80.val(), new M80(this, topics).getTopicList());
 	
 		//
 		// M81
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M81.val());
-		ThreadPoolManager.getInstance().spin(new M81(this, topics), topicNames.M81.val());
+		topics.put(topicNames.M81.val(), new M81(this, topics).getTopicList());
 		//
 		// M301
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M301.val());
-		ThreadPoolManager.getInstance().spin(new M301(this, topics), topicNames.M301.val());
+		topics.put(topicNames.M301.val(), new M301(this, topics).getTopicList());
 		//
 		// M302
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M302.val());
-		ThreadPoolManager.getInstance().spin(new M302(this, topics), topicNames.M302.val());
+		topics.put(topicNames.M302.val(), new M302(this, topics).getTopicList());
 		//
 		// M304
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M304.val());
-		ThreadPoolManager.getInstance().spin(new M304(this, topics), topicNames.M304.val());
+		topics.put(topicNames.M304.val(), new M304(this, topics).getTopicList());
 		//
 		// M306
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M306.val());
-		ThreadPoolManager.getInstance().spin(new M306(this, topics), topicNames.M306.val());
+		topics.put(topicNames.M306.val(), new M306(this, topics).getTopicList());
 
 		//
 		// M445
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M445.val());
-		ThreadPoolManager.getInstance().spin(new M445(this, topics), topicNames.M445.val());
+		topics.put(topicNames.M445.val(), new M445(this, topics).getTopicList());
 		//
 		// M500
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M500.val());
-		ThreadPoolManager.getInstance().spin(new M500(this, topics), topicNames.M500.val());
+		topics.put(topicNames.M500.val(), new M500(this, topics).getTopicList());
 		//
 		// M501
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M501.val());
-		ThreadPoolManager.getInstance().spin(new M501(this, topics), topicNames.M501.val());
+		topics.put(topicNames.M501.val(), new M501(this, topics).getTopicList() );
 		//
 		// M502
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M502.val());
-		ThreadPoolManager.getInstance().spin(new M502(this, topics), topicNames.M502.val());
+		topics.put(topicNames.M502.val(), new M502(this, topics).getTopicList());
 		//
 		// EEPROM (M503 response)
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.EEPROM.val());
-		ThreadPoolManager.getInstance().spin(new eeprom(this, topics), topicNames.EEPROM.val());
+		topics.put(topicNames.EEPROM.val(), new eeprom(this, topics).getTopicList());
 		//
 		// M799
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M799.val());
-		ThreadPoolManager.getInstance().spin(new M799(this, topics), topicNames.M799.val());
+		topics.put(topicNames.M799.val(), new M799(this, topics).getTopicList());
 		//
 		// M999 - reset Marlinspike, issue command, 15ms delay, then suicide
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M999.val());
-		ThreadPoolManager.getInstance().spin(new M999(this, topics), topicNames.M999.val());
+		topics.put(topicNames.M999.val(), new M999(this, topics).getTopicList());
 		//
 		// status - M700
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.STATUS.val());
-		ThreadPoolManager.getInstance().spin(new status(this, topics), topicNames.STATUS.val());
+		topics.put(topicNames.STATUS.val(), new status(this, topics).getTopicList());
 		//
 		// Dataset
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DATASET.val());
-		ThreadPoolManager.getInstance().spin(new dataset(this, topics), topicNames.DATASET.val());
+		topics.put(topicNames.DATASET.val(), new dataset(this, topics).getTopicList());
 
 		//
 		// Battery
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BATTERY.val());
-		ThreadPoolManager.getInstance().spin(new battery(this, topics), topicNames.BATTERY.val());
+		topics.put(topicNames.BATTERY.val(), new battery(this, topics).getTopicList());
 		//
 		// Motorfault
 		//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 		if(DEBUG) 
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORFAULT.val());
-		ThreadPoolManager.getInstance().spin(new motorfault(this, topics), topicNames.MOTORFAULT.val());
+		topics.put(topicNames.MOTORFAULT.val(), new motorfault(this, topics).getTopicList());
 		//
 		// Ultrasonic
 		//
 		if(DEBUG) 
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONIC.val());
-		ThreadPoolManager.getInstance().spin(new ultrasonic(this, topics), topicNames.ULTRASONIC.val());
+		topics.put(topicNames.ULTRASONIC.val(), new ultrasonic(this, topics).getTopicList());
 
 		//
 		// reporting functions...
@@ -500,129 +492,129 @@ public class AsynchDemuxer implements Runnable {
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ASSIGNEDPINS.val());
-		ThreadPoolManager.getInstance().spin(new assignedPins(this, topics), topicNames.ASSIGNEDPINS.val());
+		topics.put(topicNames.ASSIGNEDPINS.val(), new assignedPins(this, topics).getTopicList());
 		//
 		// Motorcontrol
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.MOTORCONTROLSETTING.val());	
-		ThreadPoolManager.getInstance().spin(new motorcontrolSetting(this, topics), topicNames.MOTORCONTROLSETTING.val());
+		topics.put(topicNames.MOTORCONTROLSETTING.val(), new motorcontrolSetting(this, topics).getTopicList());
 		//
 		// PWM control
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMCONTROLSETTING.val());	
-		ThreadPoolManager.getInstance().spin(new PWMcontrolsetting(this, topics), topicNames.PWMCONTROLSETTING.val());
+		topics.put(topicNames.PWMCONTROLSETTING.val(), new PWMcontrolsetting(this, topics).getTopicList());
 		//
 		// Controller status
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTATUS.val());			
-		ThreadPoolManager.getInstance().spin(new controllerStatus(this, topics), topicNames.CONTROLLERSTATUS.val());
+		topics.put(topicNames.CONTROLLERSTATUS.val(), new controllerStatus(this, topics).getTopicList());
 		//
 		// time
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.TIME.val());			
-		ThreadPoolManager.getInstance().spin(new time(this, topics), topicNames.TIME.val());
+		topics.put(topicNames.TIME.val(), new time(this, topics).getTopicList());
 		//
 		// Controller stopped
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CONTROLLERSTOPPED.val());			
-		ThreadPoolManager.getInstance().spin(new controllerStopped(this, topics), topicNames.CONTROLLERSTOPPED.val());
+		topics.put(topicNames.CONTROLLERSTOPPED.val(), new controllerStopped(this, topics).getTopicList());
 		//
 		// No M or G code
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOMORGCODE.val());			
-		ThreadPoolManager.getInstance().spin(new noMorG(this, topics), topicNames.NOMORGCODE.val());
+		topics.put(topicNames.NOMORGCODE.val(), new noMorG(this, topics).getTopicList());
 		//
 		// Bad motor
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADMOTOR.val());			
-		ThreadPoolManager.getInstance().spin(new badmotor(this, topics), topicNames.BADMOTOR.val());
+		topics.put(topicNames.BADMOTOR.val(), new badmotor(this, topics).getTopicList());
 		//
 		// Bad PWM
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADPWM.val());			
-		ThreadPoolManager.getInstance().spin(new badPWM(this, topics), topicNames.BADPWM.val());
+		topics.put(topicNames.BADPWM.val(), new badPWM(this, topics).getTopicList());
 		//
 		// Unknown G code
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNG.val());			
-		ThreadPoolManager.getInstance().spin(new unknownG(this, topics), topicNames.UNKNOWNG.val());
+		topics.put(topicNames.UNKNOWNG.val(), new unknownG(this, topics).getTopicList());
 		//
 		// Unknown M code
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.UNKNOWNM.val());			
-		ThreadPoolManager.getInstance().spin(new unknownM(this, topics), topicNames.UNKNOWNM.val());
+		topics.put(topicNames.UNKNOWNM.val(), new unknownM(this, topics).getTopicList());
 		//
 		// Bad Control
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.BADCONTROL.val());			
-		ThreadPoolManager.getInstance().spin(new badcontrol(this, topics), topicNames.BADCONTROL.val());
+		topics.put(topicNames.BADCONTROL.val(), new badcontrol(this, topics).getTopicList());
 		//
 		// No checksum
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOCHECKSUM.val());			
-		ThreadPoolManager.getInstance().spin(new nochecksum(this, topics), topicNames.NOCHECKSUM.val());
+		topics.put(topicNames.NOCHECKSUM.val(), new nochecksum(this, topics).getTopicList());
 
 		//
 		// No line check
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.NOLINECHECK.val());			
-		ThreadPoolManager.getInstance().spin(new nolinecheck(this, topics), topicNames.NOLINECHECK.val());
+		topics.put(topicNames.NOLINECHECK.val(), new nolinecheck(this, topics).getTopicList());
 
 		//
 		// Checksum mismatch
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.CHECKMISMATCH.val());			
-		ThreadPoolManager.getInstance().spin(new checkmismatch(this, topics), topicNames.CHECKMISMATCH.val());
+		topics.put(topicNames.CHECKMISMATCH.val(), new checkmismatch(this, topics).getTopicList());
 		//
 		// Line sequence out of order
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.LINESEQ.val());			
-		ThreadPoolManager.getInstance().spin(new lineseq(this, topics), topicNames.LINESEQ.val());
+		topics.put(topicNames.LINESEQ.val(), new lineseq(this, topics).getTopicList());
 		//
 		// M115 report
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.M115.val());
-		ThreadPoolManager.getInstance().spin(new M115(this, topics), topicNames.M115.val());
+		topics.put(topicNames.M115.val(), new M115(this, topics).getTopicList());
 		//
 		// M701 report
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.DIGITALPINSETTING.val());
-		ThreadPoolManager.getInstance().spin(new digitalpinsetting(this, topics), topicNames.DIGITALPINSETTING.val());
+		topics.put(topicNames.DIGITALPINSETTING.val(), new digitalpinsetting(this, topics).getTopicList());
 		//
 		// M702 report
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ANALOGPINSETTING.val());
-		ThreadPoolManager.getInstance().spin(new analogpinsetting(this, topics), topicNames.ANALOGPINSETTING.val());
+		topics.put(topicNames.ANALOGPINSETTING.val(), new analogpinsetting(this, topics).getTopicList());
 		//
 		// M703 report
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.ULTRASONICPINSETTING.val());
-		ThreadPoolManager.getInstance().spin(new ultrasonicpinsetting(this, topics), topicNames.ULTRASONICPINSETTING.val());
+		topics.put(topicNames.ULTRASONICPINSETTING.val(), new ultrasonicpinsetting(this, topics).getTopicList());
 		//
 		// M704 report
 		//
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMPINSETTING.val());
-		ThreadPoolManager.getInstance().spin(new pwmpinsetting(this, topics), topicNames.PWMPINSETTING.val());
+		topics.put(topicNames.PWMPINSETTING.val(), new pwmpinsetting(this, topics).getTopicList());
 		
 		// spin the main loop to read lines from the Marlinspike and muxx them
 		ThreadPoolManager.getInstance().spin(this, "SYSTEM");
@@ -730,22 +722,13 @@ public class AsynchDemuxer implements Runnable {
 			public void run() {
 				try {
 					while(shouldRun) {
-						String writeReq = takeWrite();
+						mutexWrite.lock();
+						String writeReq = toWrite.takeFirst();
 						if(DEBUG || PORTDEBUG)
 							System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" writeLine:"+writeReq);
 						dataPort.writeLine(writeReq);
-						synchronized(mutexWrite) {
-							try {
-								// the Marlinspike is a single threaded harvard microcontroller, if it
-								// takes more than 500 ms to do something, its a major bottleneck to the whole system.
-								mutexWrite.wait(500);
-							} catch (InterruptedException e) {
-								System.out.println("AsynchDemux Timeout - No write response from Marlinspike for:"+writeReq);
-								e.printStackTrace();
-							}
-						}
 					}
-				} catch (IOException e) {
+				} catch (IOException | InterruptedException e) {
 					e.printStackTrace();
 				}
 			}	

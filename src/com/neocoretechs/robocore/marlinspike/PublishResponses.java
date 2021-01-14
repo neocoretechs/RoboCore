@@ -73,9 +73,12 @@ public class PublishResponses implements Runnable {
 	@Override
 	public void run() {
 		while(shouldRun ) {
-			MachineBridge mb = tli.getMachineBridge();
-			synchronized(mb) {
-			if( !mb.get().isEmpty() ) {
+			try {
+				MachineBridge mb = tli.getMachineBridge();
+				synchronized(mb) {
+					if( mb.get().isEmpty() ) {
+						mb.wait();
+					}
 					statmsg = statpub.newMessage();
 					statmsg.setName(topicName);
 					statmsg.setLevel(dstatus);
@@ -103,10 +106,7 @@ public class PublishResponses implements Runnable {
 					outgoingDiagnostics.addLast(statmsg);
 					if( DEBUG ) 
 						System.out.println("Queued "+topicName+": "+statmsg.getMessage().toString());
-			} // nothing in the MachineBridge
-			} // mutex MachineBridge
-			try {
-				Thread.sleep(1);
+				} // mutex MachineBridge
 			} catch (InterruptedException e) {
 				shouldRun = false;
 				if(DEBUG)
