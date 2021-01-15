@@ -35,7 +35,10 @@ import sensor_msgs.Range;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
+import com.neocoretechs.robocore.marlinspike.DiagnosticResponse;
+import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
 import com.neocoretechs.robocore.marlinspike.PublishResponses;
+import com.neocoretechs.robocore.marlinspike.UltrasonicResponse;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
@@ -51,6 +54,8 @@ import com.neocoretechs.robocore.services.GPIOControlMessageResponse;
 import com.neocoretechs.robocore.services.PWMControlMessage;
 import com.neocoretechs.robocore.services.PWMControlMessageRequest;
 import com.neocoretechs.robocore.services.PWMControlMessageResponse;
+
+import diagnostic_msgs.DiagnosticStatus;
 
 /**
  * Process the serial interface data acquired from the Mega board. Real-time telemetry from the Marlinspike realtime subsystem
@@ -127,6 +132,8 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	// Queue for outgoing diagnostic messages
 	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
+	// Queue for outgoing range messages
+	CircularBlockingDeque<sensor_msgs.Range> outgoingRanges = new CircularBlockingDeque<sensor_msgs.Range>(256);
 	// Preload the collection of response handlers
 	String[] stopics = new String[] {AsynchDemuxer.topicNames.BATTERY.val(),
 	AsynchDemuxer.topicNames.MOTORFAULT.val(), 
@@ -152,7 +159,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),
 	AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),
 	AsynchDemuxer.topicNames.PWMPINSETTING.val()};
-	PublishResponses[] responses = new PublishResponses[stopics.length];
+	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses = new DiagnosticResponse[stopics.length];
 	Byte[] publishStatus = new Byte[] {	 diagnostic_msgs.DiagnosticStatus.WARN,
 	diagnostic_msgs.DiagnosticStatus.ERROR,
 	diagnostic_msgs.DiagnosticStatus.OK,
@@ -571,13 +578,17 @@ public void onStart(final ConnectedNode connectedNode) {
 	*/
 
 	ThreadPoolManager.init(stopics);
-	// Initialize the collection of response handlers
+	// Initialize the collection of DiagnosticStatus response handlers
 	for(int i = 0; i < stopics.length; i++) {
-		responses[i] = new PublishResponses(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
+		responses[i] = new DiagnosticResponse(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
 		responses[i].takeBridgeAndQueueMessage(stopics[i], publishStatus[i]);
 		ThreadPoolManager.getInstance().spin(responses[i], stopics[i]);
 	}
-
+	// spin individual responders or other groups of responders as necessary
+	PublishResponseInterface<sensor_msgs.Range> ultrasonic = new UltrasonicResponse(asynchDemuxer, connectedNode, rangepub, outgoingRanges);
+	ultrasonic.takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONIC.val(), DiagnosticStatus.OK);
+	ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
+	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
 
@@ -587,10 +598,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	 * under the DiagnosticStatus tops for any waiting subscribers to process and deal with.
 	 */
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
-		private int sequenceNumber;
 		@Override
 		protected void setup() {
-			sequenceNumber = 0;
 		}
 
 		@Override
@@ -598,59 +607,31 @@ public void onStart(final ConnectedNode connectedNode) {
 		    try {
 				awaitStart.await();
 			} catch (InterruptedException e) {}
-		    
-			std_msgs.Header ihead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
 			sensor_msgs.Range rangemsg = null;	
 	
-			TopicListInterface tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.ULTRASONIC.val());
-			if( tli == null ) { 
-				System.out.println("Can't find Topic "+AsynchDemuxer.topicNames.ULTRASONIC.val());
-				throw new RuntimeException("Can't find Topic "+AsynchDemuxer.topicNames.ULTRASONIC.val()+" programmatic initialization problem");
-			}
-			MachineBridge mb = tli.getMachineBridge();
-			if( !mb.get().isEmpty() ) {
-				int messageSize = 0;
-				while(!mb.get().isEmpty()) {
-					MachineReading mr2 = mb.waitForNewReading();
-					// failsafe to limit consumption of message elements to max size of MachineBridge queue
-					// this theoretically gives us one message at a time to queue on the outbound message bus
-					// and keeps system from stalling on endless consumption of one incoming message stream
-					if(messageSize++ > mb.get().length())
-						break;
-					if(mr2.equals(MachineReading.EMPTYREADING))
-						continue;
-					Double range = mr2.getReadingValDouble();
-					ihead.setSeq(sequenceNumber);
-					Time tst = connectedNode.getCurrentTime();
-					ihead.setStamp(tst);
-					ihead.setFrameId("0");
-					rangemsg = rangepub.newMessage();
-					rangemsg.setHeader(ihead);
-					rangemsg.setFieldOfView(30);
-					rangemsg.setMaxRange(600);
-					rangemsg.setMinRange(6);
-					rangemsg.setRadiationType(sensor_msgs.Range.ULTRASOUND);
-					rangemsg.setRange(range.floatValue());
-					rangepub.publish(rangemsg);
-					Thread.sleep(1);
-					if( DEBUG ) System.out.println("Published seq#"+sequenceNumber+" range: "+rangemsg.getRange());
-					++sequenceNumber;
-				}
-			}
 			//
-			// Poll the outgoing message array for diagnostics enqueued by al the above processing
+			// Poll the outgoing message array for diagnostics enqueued by the above processing
 			//
-			while(!outgoingDiagnostics.isEmpty()) {
+			if(!outgoingDiagnostics.isEmpty()) {
 				statmsg = outgoingDiagnostics.takeFirst();
 				statpub.publish(statmsg);
 				System.out.println("Published "+statmsg.getMessage());
-				++sequenceNumber;
 				Thread.sleep(1);
 			}
-				
-			Thread.sleep(10);
+			//
+			// Poll the outgoing message array for ranges enqueued by the above processing
+			// Ultrasonic messages SHOULD trigger the range message
+			//
+			if(!outgoingRanges.isEmpty()) {
+				rangemsg = outgoingRanges.takeFirst();
+				rangepub.publish(rangemsg);
+				System.out.println("Published "+rangemsg.getRange());
+				Thread.sleep(1);
+			}
+					
+			Thread.sleep(1);
 		}
 	});  
 

@@ -210,14 +210,14 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	public void setAbsolutePWMLevel(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException {
 		String pwmCommand1 = "G5 Z"+slot1+" C"+channel1+" X"+String.valueOf(leftWheelSpeed);
 		AsynchDemuxer.addWrite(asynchDemuxer,pwmCommand1);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
+		//try {
+		//	Thread.sleep(100);
+		//} catch (InterruptedException e) {}
 		String pwmCommand2 = "G5 Z"+slot2+" C"+channel2+" X"+String.valueOf(rightWheelSpeed);
 		AsynchDemuxer.addWrite(asynchDemuxer,pwmCommand2);
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {}
+		//try {
+		//	Thread.sleep(100);
+		//} catch (InterruptedException e) {}
 	}
 	public static void main(String[] args) throws Exception {
 		if( args.length < 1 ) {
