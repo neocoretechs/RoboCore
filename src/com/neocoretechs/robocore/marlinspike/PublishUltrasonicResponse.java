@@ -10,10 +10,10 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 
 import sensor_msgs.Range;
 
-public class UltrasonicResponse extends PublishResponses<Range> {
+public class PublishUltrasonicResponse extends PublishResponses<Range> {
 	private static int sequenceNumber = 0;
 
-	public UltrasonicResponse(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<Range> rangepub,
+	public PublishUltrasonicResponse(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<Range> rangepub,
 			CircularBlockingDeque<Range> outgoingRanges) {
 		super(asynchDemuxer, node, rangepub, outgoingRanges);
 	}

@@ -115,6 +115,10 @@ public final class MachineReading implements Serializable{
 	
 	@Override
 	public String toString() {
+		if(rawGroup == 0 && rawSeq == 0 && rawReadingNum == 0 && readingVal == 0 && readingValInt == 0 && readingValString == null)
+			return "NULL";
+		if(this.equals(EMPTYREADING))
+			return "EMPTY";
 		if(rawGroup == -1 && rawSeq == -1 && rawReadingNum == -1 )
 			return readingValString;
 		else

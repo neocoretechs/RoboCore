@@ -6,9 +6,13 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
@@ -114,12 +118,12 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static boolean PORTDEBUG = true;
 	private volatile boolean shouldRun = true;
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
-	public ReentrantLock mutexWrite = new ReentrantLock();
+	public CyclicBarrier mutexWrite = new CyclicBarrier(2);
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
 
@@ -720,17 +724,29 @@ public class AsynchDemuxer implements Runnable {
 		ThreadPoolManager.getInstance().spin(new Runnable() {
 			@Override
 			public void run() {
+				String writeReq = null;
 				try {
 					while(shouldRun) {
-						synchronized(mutexWrite) {
-							mutexWrite.lock();
-							String writeReq = toWrite.takeFirst();
+						try {
+							writeReq = toWrite.takeFirst();
 							if(DEBUG || PORTDEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" writeLine:"+writeReq);
+							if(writeReq == null || writeReq.isEmpty())
+								continue;
 							dataPort.writeLine(writeReq);
+							mutexWrite.await(750, TimeUnit.MILLISECONDS);
+							if(DEBUG || PORTDEBUG)
+								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+writeReq);
+						} catch (TimeoutException e) {
+							if(DEBUG || PORTDEBUG)
+								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" NO RESPONSE FROM HANDLER IN TIME FOR DIRECTIVE:"+writeReq);
+						} finally {
+							mutexWrite.reset();
+							if(DEBUG || PORTDEBUG)
+								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" reset");
 						}
 					}
-				} catch (IOException | InterruptedException e) {
+				} catch (IOException | BrokenBarrierException | InterruptedException e) {
 					e.printStackTrace();
 				}
 			}	
@@ -949,7 +965,9 @@ public class AsynchDemuxer implements Runnable {
 	
 	public static void main(String[] args) throws Exception {
 		// start demux
-		AsynchDemuxer demuxer = new AsynchDemuxer();	
+		
+		AsynchDemuxer demuxer = new AsynchDemuxer();
+		/*
 		demuxer.connect(ByteSerialDataPort.getInstance());
 		// the L H and T values represent those to EXCLUDE
 		// So we are looking for state 0 on digital pin and value not between L and H analog
@@ -959,6 +977,23 @@ public class AsynchDemuxer implements Runnable {
 		AsynchDemuxer.addWrite(demuxer,"M305 P46 T1");
 		AsynchDemuxer.addWrite(demuxer,"M305 P47 T1");
 		AsynchDemuxer.addWrite(demuxer,"M305 P49 T1");
+		*/
+		System.out.println(demuxer.parseDirective("<M0>\r\n"));
+		System.out.println(demuxer.parseDirective("<M1>\r\n\r\n"));
+		System.out.println(demuxer.parseDirective("<M11>\r"));
+		System.out.println(demuxer.parseDirective("<M111>\r\r"));
+		System.out.println(demuxer.parseDirective("<M9>\r\n"));
+		System.out.println(demuxer.parseDirective("<M99>\r\n"));
+		System.out.println(demuxer.parseDirective("<M999>\r\n"));
+		System.out.println(demuxer.parseDirective("<M100>"));
+		System.out.println(demuxer.parseDirective("<M0/>\r\n"));
+		System.out.println(demuxer.parseDirective("<M1/>\r\n\r\n"));
+		System.out.println(demuxer.parseDirective("<M11/>\r"));
+		System.out.println(demuxer.parseDirective("<M111/>\r\r"));
+		System.out.println(demuxer.parseDirective("<M9/>\r\n"));
+		System.out.println(demuxer.parseDirective("<M99/>\r\n"));
+		System.out.println(demuxer.parseDirective("<M999/>\r\n"));
+		System.out.println(demuxer.parseDirective("<M100/>"));
 	}
 
 }

@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.concurrent.BrokenBarrierException;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
@@ -14,10 +15,9 @@ import com.neocoretechs.robocore.machine.bridge.TopicList;
  *
  */
 public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
-	private boolean DEBUG = false;
+	private boolean DEBUG = true;
 	private TopicList topicList;
 	protected AsynchDemuxer asynchDemuxer;
-	ArrayList<String> datax;
 	int queueSize;
 	public AbstractBasicDataLoader(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics, String topicName, int queueSize) {
 		super(asynchDemuxer, topics, topicName, queueSize);
@@ -47,7 +47,7 @@ public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 				for(String data: datax) {		
 					if(data != null && data.length() > 0) {
 						if(DEBUG)
-							System.out.println(this.getClass().getName()+" "+topicName+" machineBridge:"+data);
+							System.out.println(this.getClass().getName()+" "+topicName+" machineBridge:"+mb+" data:"+data);
 						String sload = asynchDemuxer.parseDirective(data);
 						boolean isTopic = (sload != null && sload.equals(topicName));
 						if(sload != null && sload.length() > 0 && (asynchDemuxer.isLineTerminal(data) && isTopic)) 
@@ -58,17 +58,17 @@ public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 						}
 					}
 				}
-				mb.add(MachineReading.EMPTYREADING);
+				if(DEBUG)
+					System.out.println(this.getClass().getName()+" "+topicName+" machineBridge:"+mb);
+				//mb.add(MachineReading.EMPTYREADING);
 				mb.notifyAll();
 			}
-			synchronized(asynchDemuxer.mutexWrite) {
-				try {
-					asynchDemuxer.mutexWrite.unlock();
-				} catch(IllegalMonitorStateException ims) {
-					System.out.println(topicName);
-					System.out.println(ims);
+			try {
+				asynchDemuxer.mutexWrite.await();
+			} catch(IllegalMonitorStateException | InterruptedException | BrokenBarrierException ims) {
+					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" "+
+							ims+" "+topicName);
 					ims.printStackTrace();
-				}
-			}
+			} 
 	}
 }

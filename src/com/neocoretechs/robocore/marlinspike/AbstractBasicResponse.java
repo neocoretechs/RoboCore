@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.concurrent.BrokenBarrierException;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
@@ -20,16 +21,18 @@ import com.neocoretechs.robocore.machine.bridge.MachineBridge;
  *
  */
 public abstract class AbstractBasicResponse {
-	private boolean DEBUG;
+	private boolean DEBUG = true;
 	private TopicList topicList;
 	AsynchDemuxer asynchDemuxer;
 	protected String topicName;
+	ArrayList<String> datax;
 	public AbstractBasicResponse(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics, String topicName) {
 		this.asynchDemuxer = asynchDemuxer;
 		this.topicName = topicName;
 		this.topicList = new TopicList(asynchDemuxer, topicName, 2) {
 			@Override
 			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
+				datax = readLine;
 				run();
 			}
 			@Override
@@ -41,6 +44,7 @@ public abstract class AbstractBasicResponse {
 	}
 	public AbstractBasicResponse(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics, String topicName, int queueSize) {
 		this.asynchDemuxer = asynchDemuxer;
+		this.topicName = topicName;
 		this.topicList = new TopicList(asynchDemuxer, topicName, queueSize) {
 			@Override
 			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
@@ -58,16 +62,17 @@ public abstract class AbstractBasicResponse {
 	public void run() {
 		MachineBridge mb = topicList.getMachineBridge();
 		synchronized(mb) {
-			mb.add(MachineReading.EMPTYREADING);
+			if(DEBUG)
+				System.out.println(this.getClass().getName()+" "+topicName+" machineBridge:"+mb);
+			//mb.add(MachineReading.EMPTYREADING);
 			mb.notifyAll();
 		}
-		synchronized(asynchDemuxer.mutexWrite) {
-			try {
-				asynchDemuxer.mutexWrite.unlock();
-			} catch(IllegalMonitorStateException ims) {
-				System.out.println(ims+" "+topicName);
-				ims.printStackTrace();
-			}
+		try {
+			asynchDemuxer.mutexWrite.await();
+		} catch(IllegalMonitorStateException | InterruptedException | BrokenBarrierException ims) {
+			System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" "+
+					ims+" "+topicName);
+			ims.printStackTrace();
 		}
 	}
 

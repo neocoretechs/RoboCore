@@ -29,8 +29,8 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
-public class DiagnosticResponse extends PublishResponses<DiagnosticStatus> {
-	private static boolean DEBUG = false;
+public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus> {
+	private static boolean DEBUG = true;
 	List<diagnostic_msgs.KeyValue> li = null;	
 	/**
 	 * Constructor to build the per thread queuing for Marlinspike MachineBridge response payloads onto the
@@ -40,7 +40,7 @@ public class DiagnosticResponse extends PublishResponses<DiagnosticStatus> {
 	 * @param statpub The publisher of DiagnosticStatus messages topics connected to the ConnectedNode
 	 * @param outgoingDiagnostics The queue that will finally receive and manage the responses built from the demuxer bridge payloads here
 	 */
-	public DiagnosticResponse(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<DiagnosticStatus> statpub, CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics) {
+	public PublishDiagnosticResponse(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<DiagnosticStatus> statpub, CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics) {
 		super(asynchDemuxer, node, statpub, outgoingDiagnostics);
 	}
 

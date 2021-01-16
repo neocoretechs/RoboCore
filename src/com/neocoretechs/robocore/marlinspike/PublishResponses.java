@@ -89,7 +89,7 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 			try {
 				MachineBridge mb = getTopicList().getMachineBridge();
 				synchronized(mb) {
-					if( mb.get().isEmpty() ) {
+					while( mb.get().isEmpty() ) {
 						mb.wait();
 					}
 					setUp();
@@ -101,21 +101,24 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 						// and keeps system from stalling on endless consumption of one incoming message stream
 						if(messageSize++ >= queueLen) {
 							System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" message size "+messageSize+" exceeds queue length "+queueLen);
-							mb.get().clear();
+							publish();
+							messageSize = 0;
 							break;
 						}
 						MachineReading mr2 = mb.waitForNewReading();
 						if( getTopicList().getResult(mr2) == null)
 							continue;
 						// EMPTYREADING delineates messages within queue
-						if(mr2.equals(MachineReading.EMPTYREADING)) {
-							publish();
-							if( DEBUG ) 
-								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" Queued "+topicName+": "+displayMessage());
-							continue;
-						}
+						//if(mr2.equals(MachineReading.EMPTYREADING)) {
+							//publish();
+							//if( DEBUG ) 
+								//System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" Queued "+topicName+": "+displayMessage());
+							//continue;
+						//}
 						addTo(mr2);
 					}
+					if(messageSize > 0)
+						publish();
 				} // mutex MachineBridge
 			} catch (InterruptedException e) {
 				shouldRun = false;

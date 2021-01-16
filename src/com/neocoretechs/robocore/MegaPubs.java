@@ -35,10 +35,10 @@ import sensor_msgs.Range;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
-import com.neocoretechs.robocore.marlinspike.DiagnosticResponse;
+import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
 import com.neocoretechs.robocore.marlinspike.PublishResponses;
-import com.neocoretechs.robocore.marlinspike.UltrasonicResponse;
+import com.neocoretechs.robocore.marlinspike.PublishUltrasonicResponse;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
@@ -107,7 +107,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author jg
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = false;
+	private static final boolean DEBUG = true;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;
@@ -159,7 +159,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),
 	AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),
 	AsynchDemuxer.topicNames.PWMPINSETTING.val()};
-	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses = new DiagnosticResponse[stopics.length];
+	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses = new PublishDiagnosticResponse[stopics.length];
 	Byte[] publishStatus = new Byte[] {	 diagnostic_msgs.DiagnosticStatus.WARN,
 	diagnostic_msgs.DiagnosticStatus.ERROR,
 	diagnostic_msgs.DiagnosticStatus.OK,
@@ -580,12 +580,12 @@ public void onStart(final ConnectedNode connectedNode) {
 	ThreadPoolManager.init(stopics);
 	// Initialize the collection of DiagnosticStatus response handlers
 	for(int i = 0; i < stopics.length; i++) {
-		responses[i] = new DiagnosticResponse(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
+		responses[i] = new PublishDiagnosticResponse(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
 		responses[i].takeBridgeAndQueueMessage(stopics[i], publishStatus[i]);
 		ThreadPoolManager.getInstance().spin(responses[i], stopics[i]);
 	}
 	// spin individual responders or other groups of responders as necessary
-	PublishResponseInterface<sensor_msgs.Range> ultrasonic = new UltrasonicResponse(asynchDemuxer, connectedNode, rangepub, outgoingRanges);
+	PublishResponseInterface<sensor_msgs.Range> ultrasonic = new PublishUltrasonicResponse(asynchDemuxer, connectedNode, rangepub, outgoingRanges);
 	ultrasonic.takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONIC.val(), DiagnosticStatus.OK);
 	ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 	
