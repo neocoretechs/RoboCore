@@ -24,7 +24,7 @@ import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
  *
  */
 public abstract class PublishResponses<T> implements PublishResponseInterface<T> {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private AsynchDemuxer asynchDemuxer;
 	protected ConnectedNode node;
 	protected Publisher<T> publisher;

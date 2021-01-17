@@ -28,7 +28,7 @@ import diagnostic_msgs.DiagnosticStatus;
  *
  */
 public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus> {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	List<diagnostic_msgs.KeyValue> li = null;	
 	/**
 	 * Constructor to build the per thread queuing for Marlinspike MachineBridge response payloads onto the

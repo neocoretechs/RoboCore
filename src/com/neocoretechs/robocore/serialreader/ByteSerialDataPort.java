@@ -20,7 +20,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  *
  */
 public class ByteSerialDataPort implements DataPortInterface {
-		private static boolean DEBUG = true;
+		private static boolean DEBUG = false;
 		private static boolean PORTDEBUG = false;
 	    private SerialPort serialPort;
         CommPortIdentifier portId = null;

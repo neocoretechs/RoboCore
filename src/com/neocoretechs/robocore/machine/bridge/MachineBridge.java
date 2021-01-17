@@ -25,7 +25,7 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 	@XmlRootElement(name="MachineBridge")
 	@XmlAccessorType(XmlAccessType.FIELD)
     public final class MachineBridge {
-		private static boolean DEBUG = true;
+		private static boolean DEBUG = false;
 		//@XmlElement(name="machineReadings", type=MachineReading.class)
 		@XmlJavaTypeAdapter(RawDataXmlAdapter.class)
 		//@XmlElementWrapper()

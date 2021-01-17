@@ -21,7 +21,7 @@ import com.neocoretechs.robocore.machine.bridge.MachineBridge;
  *
  */
 public abstract class AbstractBasicResponse implements ResponseInterface {
-	private boolean DEBUG = true;
+	private boolean DEBUG = false;
 	protected TopicListInterface topicList;
 	protected AsynchDemuxer asynchDemuxer;
 	protected String topicName;
