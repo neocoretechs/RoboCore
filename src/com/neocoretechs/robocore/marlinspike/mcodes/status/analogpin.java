@@ -25,8 +25,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
  */
 public class analogpin extends AbstractBasicDataLoader {
 	private boolean DEBUG;
-	public analogpin(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.ANALOGPIN.val(), 5);
+	public analogpin(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.ANALOGPIN.val(), 5);
 	}
 	
 	@Override

@@ -1,13 +1,12 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.concurrent.BrokenBarrierException;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
+
 /**
  * Abstraction of Marlinspike topic result handler that loads the data without any
  * special manipulation or consideration of special formats, merely line by line copy.
@@ -16,11 +15,9 @@ import com.neocoretechs.robocore.machine.bridge.TopicList;
  */
 public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 	private boolean DEBUG = true;
-	private TopicList topicList;
-	protected AsynchDemuxer asynchDemuxer;
 	int queueSize;
-	public AbstractBasicDataLoader(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics, String topicName, int queueSize) {
-		super(asynchDemuxer, topics, topicName, queueSize);
+	public AbstractBasicDataLoader(AsynchDemuxer asynchDemuxer, String topicName, int queueSize) {
+		super(asynchDemuxer, topicName, queueSize);
 		this.queueSize = queueSize;
 	}
 	/**
@@ -40,11 +37,11 @@ public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 	public abstract MachineReading formatMachineReading(String sdata);
 	
 	@Override
-	public void run() {
+	public void run(ArrayList<String> readLine) {
 			MachineBridge mb = topicList.getMachineBridge();
 			MachineReading mr = null;
 			synchronized(mb) {
-				for(String data: datax) {		
+				for(String data: readLine) {
 					if(data != null && data.length() > 0) {
 						if(DEBUG)
 							System.out.println(this.getClass().getName()+" "+topicName+" machineBridge:"+mb+" data:"+data);

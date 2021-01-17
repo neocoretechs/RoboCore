@@ -13,7 +13,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
  */
 public class M11 extends AbstractBasicResponse {
 	private boolean DEBUG;
-	public M11(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.M11.val());
+	public M11(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.M11.val());
 	}
 }

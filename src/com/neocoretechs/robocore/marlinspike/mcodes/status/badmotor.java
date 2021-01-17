@@ -1,12 +1,9 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
-import java.util.ArrayList;
 import java.util.HashMap;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 
@@ -31,8 +28,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 public class badmotor extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;
 	private HashMap<String, String> faultCodes = new HashMap<String, String>();
-	public badmotor(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.BADMOTOR.val(), 8);
+	public badmotor(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer,topicNames.BADMOTOR.val(), 8);
 		faultCodes.put("2","HBridge driver enable pin not found");
 		faultCodes.put("4", "SplitBridge driver enable pin not found");
 		faultCodes.put("6", "SwitchBridge driver enable pin not found");

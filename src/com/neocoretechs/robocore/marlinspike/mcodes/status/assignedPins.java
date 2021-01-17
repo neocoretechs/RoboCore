@@ -14,8 +14,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
  */
 public class assignedPins extends AbstractBasicDataLoader  {
 	private boolean DEBUG = false;
-	public assignedPins(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.ASSIGNEDPINS.val(), 16);
+	public assignedPins(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.ASSIGNEDPINS.val(), 16);
 		//
 		// M706 - ASSIGNEDPINS
 		//

@@ -1,8 +1,10 @@
 package com.neocoretechs.robocore.machine.bridge;
 
+import java.util.ArrayList;
+
 public abstract class TopicList implements TopicListInterface {
 		MachineBridge mb;
-		public TopicList(AsynchDemuxer demux, String groupName, int queueSize) {
+		public TopicList(String groupName, int queueSize) {
 			mb = new MachineBridge(groupName, queueSize);
 		}
 		@Override
@@ -11,5 +13,7 @@ public abstract class TopicList implements TopicListInterface {
 		public String toString() {
 			return this.getClass().getName()+" Topic:"+mb.getGroup()+" queue size:"+mb.get().length();
 		}
+		@Override
+		public abstract void retrieveData(ArrayList<String> readLine) throws InterruptedException;
 
 }

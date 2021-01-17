@@ -76,21 +76,16 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 	@Override
 	public abstract void addTo(MachineReading mr);
 	
-	@Override
-	public void publish() {
-		outgoingQueue.addLast(msg);
-	}
-	
 	public abstract String displayMessage();
 	
 	@Override
-	public void run() {
-		while(shouldRun ) {
-			try {
+	public void publish() {
+		//while(shouldRun ) {
+			//try {
 				MachineBridge mb = getTopicList().getMachineBridge();
 				synchronized(mb) {
-					while( mb.get().isEmpty() ) {
-						mb.wait();
+					if( mb.get().isEmpty() ) {
+						return;
 					}
 					setUp();
 					messageSize = 0;
@@ -108,7 +103,7 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 						MachineReading mr2 = mb.waitForNewReading();
 						if( getTopicList().getResult(mr2) == null)
 							continue;
-						// EMPTYREADING delineates messages within queue
+						// EMPTYREADING delineates messages within queue	
 						//if(mr2.equals(MachineReading.EMPTYREADING)) {
 							//publish();
 							//if( DEBUG ) 
@@ -118,15 +113,15 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 						addTo(mr2);
 					}
 					if(messageSize > 0)
-						publish();
+						outgoingQueue.addLast(msg);
 				} // mutex MachineBridge
-			} catch (InterruptedException e) {
-				shouldRun = false;
-				if(DEBUG)
-					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" INTERRUPTED");
-			} 
+			//} catch (InterruptedException e) {
+				//shouldRun = false;
+				//if(DEBUG)
+				//	System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" INTERRUPTED");
+			//} 
 			// wait for possible payload
 		}
 		
-	}
+	//}
 }

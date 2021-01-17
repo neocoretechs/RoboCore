@@ -159,7 +159,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),
 	AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),
 	AsynchDemuxer.topicNames.PWMPINSETTING.val()};
-	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses = new PublishDiagnosticResponse[stopics.length];
+
 	Byte[] publishStatus = new Byte[] {	 diagnostic_msgs.DiagnosticStatus.WARN,
 	diagnostic_msgs.DiagnosticStatus.ERROR,
 	diagnostic_msgs.DiagnosticStatus.OK,
@@ -184,6 +184,10 @@ public class MegaPubs extends AbstractNodeMain  {
 	diagnostic_msgs.DiagnosticStatus.OK,
 	diagnostic_msgs.DiagnosticStatus.OK,
 	diagnostic_msgs.DiagnosticStatus.OK};
+	//
+	// Initialize various types of responses that will be published to the various outgoing message busses.
+	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses = new PublishDiagnosticResponse[stopics.length];
+	PublishResponseInterface<sensor_msgs.Range> ultrasonic;
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -577,17 +581,17 @@ public void onStart(final ConnectedNode connectedNode) {
 	});
 	*/
 
-	ThreadPoolManager.init(stopics);
+	//ThreadPoolManager.init(stopics);
 	// Initialize the collection of DiagnosticStatus response handlers
 	for(int i = 0; i < stopics.length; i++) {
 		responses[i] = new PublishDiagnosticResponse(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
 		responses[i].takeBridgeAndQueueMessage(stopics[i], publishStatus[i]);
-		ThreadPoolManager.getInstance().spin(responses[i], stopics[i]);
+		//ThreadPoolManager.getInstance().spin(responses[i], stopics[i]);
 	}
 	// spin individual responders or other groups of responders as necessary
-	PublishResponseInterface<sensor_msgs.Range> ultrasonic = new PublishUltrasonicResponse(asynchDemuxer, connectedNode, rangepub, outgoingRanges);
+	ultrasonic = new PublishUltrasonicResponse(asynchDemuxer, connectedNode, rangepub, outgoingRanges);
 	ultrasonic.takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONIC.val(), DiagnosticStatus.OK);
-	ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
+	//ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
@@ -610,11 +614,19 @@ public void onStart(final ConnectedNode connectedNode) {
 
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
 			sensor_msgs.Range rangemsg = null;	
-	
+			
+			//ThreadPoolManager.init(stopics);
+			// Invoke the collection of response handlers
+			for(int i = 0; i < stopics.length; i++) {
+				responses[i].publish();
+			}
+			// spin individual responders or other groups of responders as necessary
+			ultrasonic.publish();
+			//ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 			//
 			// Poll the outgoing message array for diagnostics enqueued by the above processing
 			//
-			if(!outgoingDiagnostics.isEmpty()) {
+			while(!outgoingDiagnostics.isEmpty()) {
 				statmsg = outgoingDiagnostics.takeFirst();
 				statpub.publish(statmsg);
 				System.out.println("Published "+statmsg.getMessage());
@@ -624,7 +636,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			// Poll the outgoing message array for ranges enqueued by the above processing
 			// Ultrasonic messages SHOULD trigger the range message
 			//
-			if(!outgoingRanges.isEmpty()) {
+			while(!outgoingRanges.isEmpty()) {
 				rangemsg = outgoingRanges.takeFirst();
 				rangepub.publish(rangemsg);
 				System.out.println("Published "+rangemsg.getRange());

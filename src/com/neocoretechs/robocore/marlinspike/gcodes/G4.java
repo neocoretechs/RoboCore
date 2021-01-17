@@ -1,9 +1,7 @@
 package com.neocoretechs.robocore.marlinspike.gcodes;
 
-import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 /**
@@ -21,8 +19,8 @@ public class G4 extends AbstractBasicResponse {
 	private boolean DEBUG = false;
 	AsynchDemuxer asynchDemuxer;
 	String data;
-	public G4(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.G4.val());
+	public G4(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.G4.val());
 		//
 		// G4
 		//

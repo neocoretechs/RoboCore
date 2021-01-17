@@ -1,10 +1,6 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
-
-import java.util.Map;
-
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 /**
@@ -19,8 +15,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
  */
 public class M10 extends AbstractBasicResponse {
 	private boolean DEBUG;
-	public M10(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.M10.val());
+	public M10(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.M10.val());
 	}
 
 }

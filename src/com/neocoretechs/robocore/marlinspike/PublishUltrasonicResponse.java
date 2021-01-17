@@ -17,6 +17,8 @@ public class PublishUltrasonicResponse extends PublishResponses<Range> {
 			CircularBlockingDeque<Range> outgoingRanges) {
 		super(asynchDemuxer, node, rangepub, outgoingRanges);
 	}
+	
+	@Override
 	public void setUp() {
 		std_msgs.Header ihead = node.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 		ihead.setSeq(sequenceNumber);
@@ -31,11 +33,11 @@ public class PublishUltrasonicResponse extends PublishResponses<Range> {
 		msg.setRadiationType(sensor_msgs.Range.ULTRASOUND);
 	}
 	
+	@Override
 	public void addTo(MachineReading mr) {
 		Double range = mr.getReadingValDouble();
 		msg.setRange(range.floatValue());
 	}
-	
 
 	@Override
 	public String displayMessage() {

@@ -1,10 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 /**
@@ -14,8 +12,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
  */
 public class status extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;
-	public status(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.STATUS.val(), 64);
+	public status(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.STATUS.val(), 64);
 		//
 		// M700
 		//

@@ -1,10 +1,7 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
-
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 /**
@@ -14,8 +11,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
  */
 public class controllerStatus extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;
-	public controllerStatus(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.CONTROLLERSTATUS.val(), 16);
+	public controllerStatus(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.CONTROLLERSTATUS.val(), 16);
 		//
 		// CONTROLLERSTATUS
 		//

@@ -1,10 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 /**
@@ -76,8 +74,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 public class motorfault extends AbstractBasicDataLoader {
 	private boolean DEBUG;
 
-	public motorfault(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.MOTORFAULT.val(), 16);
+	public motorfault(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.MOTORFAULT.val(), 16);
 		//
 		// M46
 		//

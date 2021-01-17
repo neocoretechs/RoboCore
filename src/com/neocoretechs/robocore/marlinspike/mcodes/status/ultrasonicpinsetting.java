@@ -1,10 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 /**
@@ -14,8 +12,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
  */
 public class ultrasonicpinsetting extends AbstractBasicDataLoader  {
 	private boolean DEBUG = false;
-	public ultrasonicpinsetting(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.ULTRASONICPINSETTING.val(), 16);
+	public ultrasonicpinsetting(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.ULTRASONICPINSETTING.val(), 16);
 		//
 		// M703 - ULTRASONICPINSETTING
 		//

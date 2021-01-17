@@ -1,17 +1,15 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 
 public class controllerStopped extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;
-	public controllerStopped(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.CONTROLLERSTOPPED.val(), 8);
+	public controllerStopped(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer,  topicNames.CONTROLLERSTOPPED.val(), 8);
 		//
 		// CONTROLLERSTOPPED error
 		//

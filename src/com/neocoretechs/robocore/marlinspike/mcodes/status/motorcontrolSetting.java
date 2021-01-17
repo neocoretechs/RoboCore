@@ -1,10 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 /**
@@ -14,8 +12,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
  */
 public class motorcontrolSetting extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;
-	public motorcontrolSetting(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.MOTORCONTROLSETTING.val(), 16);
+	public motorcontrolSetting(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer,  topicNames.MOTORCONTROLSETTING.val(), 16);
 		//
 		// M705 - MOTORCONTROLSETTING
 		//

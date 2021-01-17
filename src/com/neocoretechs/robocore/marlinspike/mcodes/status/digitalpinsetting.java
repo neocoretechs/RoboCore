@@ -1,10 +1,7 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
-import java.util.Map;
-
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 /**
@@ -14,8 +11,8 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
  */
 public class digitalpinsetting extends AbstractBasicDataLoader  {
 	private boolean DEBUG = false;
-	public digitalpinsetting(AsynchDemuxer asynchDemuxer, Map<String, TopicList> topics) {
-		super(asynchDemuxer, topics, topicNames.DIGITALPINSETTING.val(), 16);
+	public digitalpinsetting(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer,  topicNames.DIGITALPINSETTING.val(), 16);
 		//
 		// M701 - DIGITALPINSETTING
 		//
