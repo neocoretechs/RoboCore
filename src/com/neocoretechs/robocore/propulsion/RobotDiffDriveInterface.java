@@ -16,4 +16,7 @@ public interface RobotDiffDriveInterface {
 	public int getLeftWheelChannel();
 	public int getRightWheelChannel();
 	public int getControllerSlot();
+	public String getControllerAxisPropertyName();
+	public int getControllerAxisX(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
+	public int getControllerAxisY(); //derived by Props.toInt(getControllerAxisPropertyName()+"Y");
 }

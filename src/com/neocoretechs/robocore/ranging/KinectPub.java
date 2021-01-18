@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.ranging;
 
 import java.awt.image.BufferedImage;
 import java.io.File;

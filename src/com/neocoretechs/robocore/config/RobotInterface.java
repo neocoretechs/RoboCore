@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.config;
 
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
+import com.neocoretechs.robocore.affectors.AffectorInterface;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
 /**
@@ -30,4 +31,5 @@ public interface RobotInterface {
 	public SetpointInfoInterface getRightSpeedSetpointInfo(); // Maximum speeds and indoor/outdoor characteristics
 	public SetpointInfoInterface getLeftTickSetpointInfo(); // Ticks and odometry related to the differing diff drives
 	public SetpointInfoInterface getRightTickSetpointInfo(); // Ticks and odometry related to the differing diff drives
+	public AffectorInterface getAffectors();
 }

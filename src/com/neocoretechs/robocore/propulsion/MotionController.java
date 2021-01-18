@@ -301,12 +301,80 @@ public class MotionController extends AbstractNodeMain {
 					twistpub.publish(twistmsg);
 					return;
 				}
+				// Process the affectors and peripherals before the otion controles, this is mainly due to some of the logic
+				// In motion control returning from this method rather than try to implement more complex decision making.
+				// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
+				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
+				// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
+				// for the majority of downstream processing. In the case of PWM, we are going to scale this
+				// fr0m -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
+				// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
+				// sure to scale it to the positive range downstream. We are going to publish the scaled
+				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
+				// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
+				// hence the boolean checks.
+				// LEDCameraIlluminatorControl:4
+				// LEDCameraIlluminatorSlot:1
+				// LEDCameraIlluminatorChannel:1
+				//-------------------
+				if(axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()] != -1 || LEDCamlightIsOn) {//|| axes[5] != -1) {
+					if(axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()] == -1) {
+						if(LEDCamlightIsOn) {
+							ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
+							triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerSlot()); //controller slot
+							triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
+							triggerVals.add(0);
+							if(DEBUG)
+							System.out.println(robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()+" turning off LED");
+							trigpub.publish(setupPub(connectedNode, triggerVals,robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),
+														robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()));
+							try {
+								Thread.sleep(5);
+							} catch (InterruptedException e) {}
+						}
+						LEDCamlightIsOn = false;
+					} else {
+						LEDCamlightIsOn = true;
+						ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
+						triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerSlot()); //controller slot
+						triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
+						triggerVals.add(Integer.valueOf((int)axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()]));
+						if(DEBUG)
+						System.out.printf("%s= %d\n",robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),triggerVals.get(2));
+						trigpub.publish(setupPub(connectedNode, triggerVals, robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),
+														robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()));
+						try {
+							Thread.sleep(5);
+						} catch (InterruptedException e) {}
+					}
+				}
+				//---
+				// Process right stick (joystick axes [1] right stick x, [3] right stick y)
+				// axes[3] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
+				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
+				speedR = -axes[robot.getAffectors().getBoomActuatorInterface().getControllerAxisY()] * SPEEDSCALE;
+				speedL = axes[robot.getAffectors().getBoomActuatorInterface().getControllerAxisX()] * SPEEDSCALE;
+				//
+				// set it up to send down the publishing pipeline cmd_periph1 topic
+				//
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(4);
+				speedVals.add(robot.getAffectors().getBoomActuatorInterface().getControllerSlot()); //controller slot
+				speedVals.add(robot.getAffectors().getBoomActuatorInterface().getControllerChannel()); // controller slot channel
+				speedVals.add((int) speedL);
+				speedVals.add((int) speedR);
+				trigpub.publish(setupPub(connectedNode, speedVals,robot.getAffectors().getBoomActuatorInterface().getControllerAxisPropertyName(),
+																 robot.getAffectors().getBoomActuatorInterface().getControllerAxisPropertyName()));
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {}
+				//-----
+				// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
 				// If the button square or circle is depressed, rotate in place at stick position Y speed
 				if( buttons[7] != 0 ) { // left pivot
-					speedR = -axes[2] * SPEEDSCALE;
+					speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 					speedL = -speedR;
 					// set it up to send
-					ArrayList<Integer> speedVals = new ArrayList<Integer>(6);
+					speedVals = new ArrayList<Integer>(6);
 					speedVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
 					speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
 					speedVals.add((int)speedL);
@@ -318,10 +386,10 @@ public class MotionController extends AbstractNodeMain {
 					return;
 				} else {
 					if( buttons[5] != 0 ) { // right pivot
-						speedL = -axes[2] * SPEEDSCALE;
+						speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 						speedR = -speedL;
 						// set it up to send
-						ArrayList<Integer> speedVals = new ArrayList<Integer>(6);
+						speedVals = new ArrayList<Integer>(6);
 						speedVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
 						speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
 						speedVals.add((int)speedL);
@@ -334,7 +402,7 @@ public class MotionController extends AbstractNodeMain {
 					}
 				}
 				// get radian measure of left stick x,y
-				float radians = (float) Math.atan2(axes[2], axes[0]);
+				float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[0]);
 				float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 				// horizontal axis is 0 to -180 degrees, we want 0 at the top
 				stickDegrees += 90;
@@ -387,7 +455,7 @@ public class MotionController extends AbstractNodeMain {
 				// or on the computed derivation from desired course if a straight line course is set.
 				// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
 				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
-				speedR = -axes[2] * SPEEDSCALE;
+				speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 				speedL = speedR;
 				// PTerm has the positive or negative difference in degrees (left or right offset)
 				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
@@ -407,7 +475,7 @@ public class MotionController extends AbstractNodeMain {
 				// This assumes that at half speed we can still make a 90 degree turn.
 				// We use value of IMU vs desired course to turn left or right via
 				// a plus or minus value from the Compute method set in the variable called PTerm.
-				float radius = Math.abs(axes[2]) * SPEEDSCALE;
+				float radius = Math.abs(axes[robot.getDiffDrive().getControllerAxisY()]) * SPEEDSCALE;
 				float arcin, arcout;
 				//
 				// If holding an inertially guided course, check for the tolerance of error proportion
@@ -485,7 +553,7 @@ public class MotionController extends AbstractNodeMain {
 				//
 				// set it up to send down the publishing pipeline
 				//
-				ArrayList<Integer> speedVals = new ArrayList<Integer>(6);
+				speedVals = new ArrayList<Integer>(6);
 				speedVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
 				speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
 				speedVals.add((int)speedL);
@@ -499,49 +567,7 @@ public class MotionController extends AbstractNodeMain {
 				//-------------------
 				// Above cases handle all steering and motor control and button press for automated
 				// control of course following by button press.
-				// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
-				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
-				// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
-				// for the majority of downstream processing. In the case of PWM, we are going to scale this
-				// fr0m -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
-				// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
-				// sure to scale it to the positive range downstream. We are going to publish the scaled
-				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
-				// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
-				// hence the boolean checks.
-				// LEDCameraIlluminatorControl:4
-				// LEDCameraIlluminatorSlot:1
-				// LEDCameraIlluminatorChannel:1
-				//-------------------
-				if(axes[Props.toInt("LEDCameraIlluminatorControl")] != -1 || LEDCamlightIsOn) {//|| axes[5] != -1) {
-					if(axes[Props.toInt("LEDCameraIlluminatorControl")] == -1) {
-						if(LEDCamlightIsOn) {
-							ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
-							triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
-							triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
-							triggerVals.add(0);
-							if(DEBUG)
-							System.out.println("LEDCameraIlluminatorControl turning off LED");
-							trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
-							try {
-								Thread.sleep(5);
-							} catch (InterruptedException e) {}
-						}
-						LEDCamlightIsOn = false;
-					} else {
-						LEDCamlightIsOn = true;
-						ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
-						triggerVals.add(Props.toInt("LEDCameraIlluminatorSlot")); //controller slot
-						triggerVals.add(Props.toInt("LEDCameraIlluminatorChannel")); // controller slot channel
-						triggerVals.add(Integer.valueOf((int)axes[Props.toInt("LEDCameraIlluminatorControl")]));
-						if(DEBUG)
-						System.out.printf("LEDCameraIlluminatorControl = %d\n",triggerVals.get(2));
-						trigpub.publish(setupPub(connectedNode, triggerVals,"LEDCameraIlluminatorControl","LEDCameraIlluminatorControl"));
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					}
-				}
+	
 			} // onMessage from Joystick controller, with all the axes[] and buttons[]
 			
 			/**

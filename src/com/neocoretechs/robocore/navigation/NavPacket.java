@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.navigation;
 
 public class NavPacket {
 	float pitch = 0.0f;

@@ -20,7 +20,7 @@ public class RobotDiffDrive implements RobotDiffDriveInterface {
 	// it is variable based on desired speed.
 	private TwistInfo twistinfo = new TwistInfo();
 	public RobotDiffDrive() {
-		this.slot = Props.toInt("DriveControllerSlot");
+		this.slot = Props.toInt( getControllerAxisPropertyName()+"Slot");
 		this.leftChannel = Props.toInt("LeftWheelChannel");
 		this.rightChannel = Props.toInt("RightWheelChannel");
 		leftWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, Props.toFloat("MotorKp"), 
@@ -80,5 +80,17 @@ public class RobotDiffDrive implements RobotDiffDriveInterface {
 		return String.format("Controller Slot:%d Left Channel=%d Right Channel=%d Wheel Track=%f Indoor=%b\r\n"
 				+ "Left Wheel=%s\r\nRight Wheel=%s\r\n",slot, leftChannel, rightChannel, wheelTrack, indoor,
 				leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
+	}
+	@Override
+	public String getControllerAxisPropertyName() {
+		return "DriveController";
+	}
+	@Override
+	public int getControllerAxisX() {
+		 return Props.toInt(getControllerAxisPropertyName()+"X");
+	}
+	@Override
+	public int getControllerAxisY() {
+		 return Props.toInt(getControllerAxisPropertyName()+"Y");
 	}
 }

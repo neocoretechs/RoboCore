@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.ranging;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -16,6 +16,8 @@ import org.openkinect.DepthFormat;
 import org.openkinect.Device;
 import org.openkinect.Image;
 import org.openkinect.LEDStatus;
+
+import com.neocoretechs.robocore.ThreadPoolManager;
 /**
  * Start a thread which populates a blocking queue with successive kinect depth buffers
  * of ShortBuffer type. The intent is to decouple ROS publishing loop from kinect processing pipeline which seem

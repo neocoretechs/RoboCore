@@ -4,6 +4,7 @@ import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
+import com.neocoretechs.robocore.affectors.AffectorInterface;
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
@@ -90,6 +91,12 @@ public class Robot implements RobotInterface {
 	@Override
 	public String getName() {
 		return Props.toString("Name");
+	}
+
+	@Override
+	public AffectorInterface getAffectors() {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 }

@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.navigation;
 
 import java.io.File;
 import java.io.IOException;

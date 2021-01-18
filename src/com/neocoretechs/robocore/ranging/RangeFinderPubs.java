@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.ranging;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -11,6 +11,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
+import com.neocoretechs.robocore.ThreadPoolManager;
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalInput;

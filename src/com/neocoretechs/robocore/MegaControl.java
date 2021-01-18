@@ -3,9 +3,6 @@ package com.neocoretechs.robocore;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.MachineBridge;
-import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 
 
@@ -50,6 +47,24 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 
 	public MegaControl(AsynchDemuxer asynchDemuxer) { this.asynchDemuxer = asynchDemuxer; }
 	
+	/**
+	 * Single channel affector speed
+	 * @param slot1
+	 * @param channel1
+	 * @param affectorSpeed
+	 * @throws IOException
+	 */
+	public synchronized void setAffectorDriveSpeed(int slot1, int channel1, int affectorSpeed) throws IOException {
+		//if(DEBUG) 
+		//	System.out.println(this.getClass().getName()+".setAffectorDriveSpeed BEGIN writing slot:"+slot1+" channel:"+channel1+" affector spd:"+affectorSpeed);
+		String affectorCommand = "G5 Z"+slot1+" C"+channel1+" P"+String.valueOf(affectorSpeed);
+		AsynchDemuxer.addWrite(asynchDemuxer, affectorCommand);
+		if(DEBUG) 
+			System.out.println(this.getClass().getName()+".setAffectorDriveSpeed slot:"+slot1+" channel:"+channel1+" affector spd:"+affectorSpeed);
+	}
+	/**
+	 * Dual channel diff drive speed
+	 */
 	public synchronized void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException {
 		//if(DEBUG) 
 		//	System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed BEGIN writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+

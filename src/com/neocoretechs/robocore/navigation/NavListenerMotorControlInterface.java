@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.navigation;
 
 import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 
