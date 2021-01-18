@@ -5,6 +5,7 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
 import com.neocoretechs.robocore.affectors.AffectorInterface;
+import com.neocoretechs.robocore.affectors.Affectors;
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
@@ -12,6 +13,7 @@ public class Robot implements RobotInterface {
 	MotionPIDController motionPIDController;
 	RobotDiffDriveInterface robotDrive;
 	IMUSetpointInfo IMUSetpoint;
+	AffectorInterface affectors;
 	public Robot() {
 		robotDrive = new RobotDiffDrive();
 		//kp, ki, kd, ko, pidRate (hz)
@@ -23,6 +25,7 @@ public class Robot implements RobotInterface {
 		IMUSetpoint = new IMUSetpointInfo();
 		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
 		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
+		affectors = new Affectors();
 	}
 
 	@Override
@@ -81,11 +84,12 @@ public class Robot implements RobotInterface {
 	}
 	
 	public String toString() {
-		return String.format("Robot %s\r\nDrive: %s\r\nMotion Controller:%s\r\n IMU:%s",
+		return String.format("Robot %s\r\nDrive: %s\r\nMotion Controller:%s\r\n IMU:%s\r\nAffectors:%s",
 				getName(),
 				robotDrive == null ? "NULL" : robotDrive.toString(),
 				motionPIDController == null ? "NULL" : motionPIDController.toString(),
-					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString());
+					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString(),
+							affectors == null ? "NULL" : affectors.toString());
 	}
 
 	@Override
@@ -95,8 +99,7 @@ public class Robot implements RobotInterface {
 
 	@Override
 	public AffectorInterface getAffectors() {
-		// TODO Auto-generated method stub
-		return null;
+		return affectors;
 	}
 
 }

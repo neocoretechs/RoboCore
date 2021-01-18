@@ -120,7 +120,6 @@ public class MotionController extends AbstractNodeMain {
 	// and the arc describing the outer wheel has a radius equivalent to the wheelbase and the 
 	// outer wheel turns at the robot wheelbase through 90 degrees.
 	public static float WHEELBASE = 1000.0f;
-
 	
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
@@ -1210,7 +1209,6 @@ public class MotionController extends AbstractNodeMain {
 		return RosArrayUtilities.setupInt32Array(connectedNode, valBuf, label1, label2);
 	}
 	
-
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 
 	double yy = quat.y() * quat.y(); // 2 Uses below
@@ -1223,4 +1221,8 @@ public class MotionController extends AbstractNodeMain {
 	float pitchDeg = 57.2958 * pitch;
 	float yawDeg   = 57.2958 * yaw;
 	 */
+	public static void main(String[] args) {
+		Robot robot = new Robot();
+		System.out.println(robot);
+	}
 }

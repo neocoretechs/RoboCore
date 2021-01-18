@@ -3,8 +3,16 @@ package com.neocoretechs.robocore.affectors;
 import com.neocoretechs.robocore.config.Props;
 
 public class BoomActuator implements BoomActuatorInterface {
-
-	public BoomActuator() {}
+	int x;
+	int y;
+	int slot;
+	int channel;
+	public BoomActuator() {
+		x = Props.toInt(getControllerAxisPropertyName()+"X");
+		y = Props.toInt(getControllerAxisPropertyName()+"Y");
+		slot =  Props.toInt(getControllerAxisPropertyName()+"Slot");
+		channel = Props.toInt(getControllerAxisPropertyName()+"Channel");
+	}
 
 	@Override
 	public String getControllerAxisPropertyName() {
@@ -13,22 +21,27 @@ public class BoomActuator implements BoomActuatorInterface {
 
 	@Override
 	public int getControllerAxisX() {
-		return Props.toInt(getControllerAxisPropertyName()+"X");
+		return x;
 	}
 
 	@Override
 	public int getControllerAxisY() {
-		return Props.toInt(getControllerAxisPropertyName()+"Y");
+		return y;
 	}
 	
 	@Override
 	public int getControllerSlot() {
-		return Props.toInt(getControllerAxisPropertyName()+"Slot");
+		return slot;
 	}
 	
 	@Override
 	public int getControllerChannel() {
-		return Props.toInt(getControllerAxisPropertyName()+"Channel");
+		return channel;
+	}
+	
+	@Override
+	public String toString() {
+		return getControllerAxisPropertyName()+" x:"+x+" y:"+y+" slot:"+slot+" channel:"+channel;
 	}
 
 }
