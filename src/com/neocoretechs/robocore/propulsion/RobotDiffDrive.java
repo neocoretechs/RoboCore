@@ -4,7 +4,8 @@ import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
 /**
-* Configuration for generic robot differential drive
+* Configuration for generic robot differential drive.
+* @author Jonathan Groff (C) NeoCoreTechs 2020,2021
 */
 public class RobotDiffDrive implements RobotDiffDriveInterface {
 	int slot, leftChannel, rightChannel;
@@ -77,8 +78,8 @@ public class RobotDiffDrive implements RobotDiffDriveInterface {
 	}
 	
 	public String toString() {
-		return String.format("Controller Slot:%d Left Channel=%d Right Channel=%d Wheel Track=%f Indoor=%b\r\n"
-				+ "Left Wheel=%s\r\nRight Wheel=%s\r\n",slot, leftChannel, rightChannel, wheelTrack, indoor,
+		return String.format("Controller Slot=%d,Left Channel=%d,Right Channel=%d,Wheel Track=%f,Indoor=%b\r\nLeft Wheel: %s\r\nRight Wheel: %s",
+				slot, leftChannel, rightChannel, wheelTrack, indoor,
 				leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
 	}
 	@Override

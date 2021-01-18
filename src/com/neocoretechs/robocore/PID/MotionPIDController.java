@@ -1,5 +1,9 @@
 package com.neocoretechs.robocore.PID;
-
+/**
+ * PId controller maintaining a specified course using an established setpoint
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
+ *
+ */
 public class MotionPIDController extends AbstractPIDController {
 	/**
 	 * Construct with PID constants, integration rate, and maximum windup
@@ -75,7 +79,7 @@ public class MotionPIDController extends AbstractPIDController {
 	}
 	
 	public String toString() {
-		return String.format("Motion PID Error = %f, Output = %f | DTerm = %f | ITerm = %f | PTerm = %f | Motion PID Constants: %s",
+		return String.format("Motion PID Error=%f, Output=%f [DTerm=%f,ITerm=%f,PTerm=%f]. Motion PID Constants: %s",
 				error,output, DTerm, ITerm, PTerm,super.toString());
 	}
 

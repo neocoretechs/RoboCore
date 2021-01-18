@@ -25,6 +25,6 @@ public class TickSetpointInfo extends DistanceSetpointInfo {
 	}
 	
 	public String toString() {
-		return "Distance Max ticks="+getMaximum()+" min="+getMinimum()+" Wheel diameter="+wheelDiameter+" ticker per rev="+ticksPerRevolution+" err="+getPrevErr();
+		return "Distance Max ticks="+getMaximum()+",Min="+getMinimum()+",Wheel diameter="+wheelDiameter+",Ticks per rev="+ticksPerRevolution+",Error="+getPrevErr();
 	}
 }

@@ -23,7 +23,7 @@ M10 Z0 T4
 M9 Z0 P13 C1 D30
 ; Now Define SplitBridge lift actuator slot 2 to Type 2 split bridge driver in motor driver slot
 M10 Z2 T2
-; Config SplitBridge lift actuator slot 2, digital pins 2 and 3 for forward/reverse channel 1, direction pin 28, default dir 0
+; Config SplitBridge lift actuator slot 2, pwm pins 2 and 3 for forward/reverse channel 1, enable pin 32, default dir 0
 M4 Z2 P2 Q3 C1 D32 E0
 ;M301 P36
 ;M33 P36 D60 E1

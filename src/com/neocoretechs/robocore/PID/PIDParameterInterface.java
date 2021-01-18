@@ -1,7 +1,7 @@
 package com.neocoretechs.robocore.PID;
 /**
  * Manipulate the parameters necessary for PID processing.
- * @author groff
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
 public interface PIDParameterInterface {

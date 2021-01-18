@@ -18,6 +18,7 @@ public class RobotWheel implements DrivenWheelInterface {
 	private TickSetpointInfo tickSetpointInfo;
 	private SpeedSetpointInfo speedSetpointInfo;
 	private MotorPIDController motorPIDController;
+	private float x;
 	
 	public RobotWheel(float wheelDiameter, int ticksPerRevolution, float kp, float ki, float kd, float ko, int pidRate) {
 		speedSetpointInfo = new SpeedSetpointInfo();
@@ -27,8 +28,7 @@ public class RobotWheel implements DrivenWheelInterface {
 
 	@Override
 	public void setprevX(float t) {
-		// TODO Auto-generated method stub
-
+		x = t;
 	}
 
 	@Override
@@ -52,7 +52,7 @@ public class RobotWheel implements DrivenWheelInterface {
 	}
 	
 	public String toString() {
-		return String.format("Tick Setpoint %s\r\nSpeed Setpoint %s\r\nPID Control %s\r\n", 
+		return String.format("Tick Setpoint: %s\r\nSpeed Setpoint: %s\r\nPID Control: %s\r\n", 
 				tickSetpointInfo == null ? "NULL" : tickSetpointInfo.toString(),
 				speedSetpointInfo == null ? "NULL" : speedSetpointInfo.toString(),
 				motorPIDController == null ? "NULL" : motorPIDController.toString());

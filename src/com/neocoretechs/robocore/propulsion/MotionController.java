@@ -23,15 +23,14 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.robocore.MegaControl;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
-import com.neocoretechs.robocore.PID.MotorPIDController;
 import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 
+import net.java.games.input.Component;
 
 /**
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to affect
@@ -279,7 +278,8 @@ public class MotionController extends AbstractNodeMain {
 		// The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
 		// for the inner arc and the hypotenuse computed by the base and chord formed from course deviation and half wheelbase for the outer arc.
 		// The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
-		// us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.
+		// us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.<p/>
+		// axis[6] is POV, it has quantized values to represent its states.
 		//
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 			@Override
@@ -300,7 +300,7 @@ public class MotionController extends AbstractNodeMain {
 					twistpub.publish(twistmsg);
 					return;
 				}
-				// Process the affectors and peripherals before the otion controles, this is mainly due to some of the logic
+				// Process the affectors and peripherals before the motion controls, this is mainly due to some of the logic
 				// In motion control returning from this method rather than try to implement more complex decision making.
 				// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
 				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
@@ -366,6 +366,66 @@ public class MotionController extends AbstractNodeMain {
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
+				//----
+				// Map the POV values to actions
+				if(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()] == 
+						robot.getAffectors().getLiftActuatorInterface().getControllerComponentUp()) {
+					//
+					// set it up to send down the publishing pipeline cmd_periph1 topic
+					//
+					ArrayList<Integer> povVals = new ArrayList<Integer>(5);
+					povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerSlot()); //controller slot
+					povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerChannel()); // controller slot channel
+					povVals.add((int)(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()]*100));
+					povVals.add(1000);
+					povVals.add(0);
+					trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
+																	 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+				} else {
+					if(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()] == 
+							robot.getAffectors().getLiftActuatorInterface().getControllerComponentDown()) {
+						//
+						// set it up to send down the publishing pipeline cmd_periph1 topic
+						//
+						ArrayList<Integer> povVals = new ArrayList<Integer>(5);
+						povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerSlot()); //controller slot
+						povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerChannel()); // controller slot channel
+						povVals.add((int)(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()]*100));
+						povVals.add(-1000);
+						povVals.add(0);
+						trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
+																		 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+					}
+				}
+				/*	
+				 if (axes[6] == Component.POV.OFF) {
+					 if(DEBUG)System.out.println("POV OFF");
+				 } else 
+					 if ( axes[6] == Component.POV.UP) {
+						 if(DEBUG)System.out.println("POV Up");
+					 } else 
+						 if ( axes[6] == Component.POV.UP_RIGHT) {
+							 if(DEBUG)System.out.println("POV Up_Right");
+						 } else 
+							 if ( axes[6] == Component.POV.RIGHT) {
+								 if(DEBUG)System.out.println("POV Right");
+							 } else 
+								 if ( axes[6] == Component.POV.DOWN_RIGHT) {
+									 if(DEBUG)System.out.println("POV Down Right");
+								 } else 
+									 if ( axes[6] == Component.POV.DOWN) {
+										 if(DEBUG)System.out.println("POV Down");
+									 } else 
+										 if ( axes[6] == Component.POV.DOWN_LEFT) {
+											 if(DEBUG)System.out.println("POV Down left");
+										 } else 
+											 if ( axes[6] == Component.POV.LEFT) {
+												 if(DEBUG)System.out.println("POV Left");
+											 } else 
+												 if ( axes[6] == Component.POV.UP_LEFT) {
+													 
+												 }
+				*/
 				//-----
 				// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
 				// If the button square or circle is depressed, rotate in place at stick position Y speed

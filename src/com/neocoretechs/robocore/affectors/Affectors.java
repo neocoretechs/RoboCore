@@ -1,11 +1,18 @@
 package com.neocoretechs.robocore.affectors;
-
+/**
+ * Interface for peripheral affectors. Devices other than propulsion, typically motorized but
+ * also including LEDs and other PWM driven devices.
+ * @author Jonathan Groff (C) NeoCorTechs 2021
+ *
+ */
 public class Affectors implements AffectorInterface {
 	BoomActuatorInterface boomActuator;
 	LEDIlluminatorInterface LEDIlluminator;
+	LiftActuatorInterface liftActuator;
 	public Affectors() {
 		boomActuator = new BoomActuator();
 		LEDIlluminator = new LEDIlluminator();
+		liftActuator = new LiftActuator();
 	}
 
 	@Override
@@ -20,7 +27,12 @@ public class Affectors implements AffectorInterface {
 	
 	@Override
 	public String toString() {
-		return boomActuator+" "+LEDIlluminator;
+		return boomActuator+"\r\n"+LEDIlluminator+"\r\n"+liftActuator;
+	}
+
+	@Override
+	public LiftActuatorInterface getLiftActuatorInterface() {
+		return liftActuator;
 	}
 
 }

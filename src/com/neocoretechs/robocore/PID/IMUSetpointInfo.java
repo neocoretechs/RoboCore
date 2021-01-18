@@ -39,6 +39,6 @@ public class IMUSetpointInfo implements SetpointInfoInterface {
 	public float getMinimum() { return MINIMUM; }
 	
 	public String toString() {
-		return "IMU Max Angle="+ MAXIMUM+" Min ="+MINIMUM+" Yaw="+yawAngle+" target Yaw="+desiredYawAngle+" err="+prevErr;
+		return "IMU Max Angle="+ MAXIMUM+",Min="+MINIMUM+",Yaw="+yawAngle+",Target Yaw="+desiredYawAngle+",Error="+prevErr;
 	}
 }

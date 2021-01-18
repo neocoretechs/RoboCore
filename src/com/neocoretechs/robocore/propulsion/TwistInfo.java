@@ -1,5 +1,10 @@
 package com.neocoretechs.robocore.propulsion;
-
+/**
+ * Robot twist pose style positioning information.<p/>
+ * Representation of positioning orientation in the reference frame.
+ * @author Jonathan Groff (C) NeocoreTechs 2020,2021
+ *
+ */
 public class TwistInfo {
 	private float yawDegrees;
 	private float wheelTheta;// change in theta calculated from wheels 
@@ -51,8 +56,8 @@ public class TwistInfo {
 		Y = y;
 	}
 	public String toString() {
-		return "TWIST Yaw d:"+yawDegrees+" Yaw target:"+wheelTheta+
-	    		" IMU t:"+imuTheta+" Delta t:"+deltaTheta+" Robot t:"+robotTheta+" X:"+X+" Y:"+Y;
+		return "TWIST Yaw degrees="+yawDegrees+",Yaw target="+wheelTheta+
+	    		" IMU theta="+imuTheta+", Delta theta="+deltaTheta+",Robot theta"+robotTheta+",X="+X+",Y="+Y;
 	}
 	public TwistInfo() {}
 

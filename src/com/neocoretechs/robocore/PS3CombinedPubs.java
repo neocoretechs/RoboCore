@@ -42,7 +42,7 @@ import org.ros.internal.loader.CommandLineLoader;
  * The __refresh parameter dictates the minimum time between data publishing. If the data changes from the previous state
  * publishing takes place. If the data does not change, but the refresh interval is exceeded, check the current data
  * against the default values established at startup, and if there is deviation, publish the data.
- * We are using the standard ROS Joystick message, which bozes up the axis and buttons as arrays of floats for the axes
+ * We are using the standard ROS Joystick message, which boxes up the axis and buttons as arrays of floats for the axes
  * and another array of ints for buttons, so the full payload is sent each pub. Upon reception of payload, one can assume
  * the data has changed or the interval exceeded and a pulse of the previous data is incoming. The effort is to intuitively
  * provide the type of response expected, wherein if the stick is pressed, you keep getting data at some predefined rate.

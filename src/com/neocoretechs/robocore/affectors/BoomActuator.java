@@ -1,7 +1,12 @@
 package com.neocoretechs.robocore.affectors;
 
 import com.neocoretechs.robocore.config.Props;
-
+/**
+ * Implementation for peripheral affector config. In this case the linear actuator 
+ * driving a boom or robot arm or crane.
+ * @author Jonathan Groff (C) NeoCorTechs 2021
+ *
+ */
 public class BoomActuator implements BoomActuatorInterface {
 	int x;
 	int y;
@@ -41,7 +46,7 @@ public class BoomActuator implements BoomActuatorInterface {
 	
 	@Override
 	public String toString() {
-		return getControllerAxisPropertyName()+" x:"+x+" y:"+y+" slot:"+slot+" channel:"+channel;
+		return getControllerAxisPropertyName()+" x="+x+",y="+y+",slot="+slot+",channel="+channel;
 	}
 
 }

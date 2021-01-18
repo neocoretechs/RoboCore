@@ -50,6 +50,6 @@ public class SpeedSetpointInfo implements SetpointInfoInterface {
 	public float getMinimum() { return MINIMUM; }
 	
 	public String toString() {
-		return "Speed Max="+ MAXIMUM+" Min="+MINIMUM+" velocity="+velocity+" target velocity="+targetVelocity+" err="+prevErr;
+		return "Speed Max="+MAXIMUM+",Min="+MINIMUM+",Velocity="+velocity+",Target velocity="+targetVelocity+",Error="+prevErr;
 	}
 }

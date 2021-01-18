@@ -1,7 +1,10 @@
 package com.neocoretechs.robocore.PID;
-
+/**
+ * Abstraction of a PID controller.
+ * @author Jonathan Groff (C0 NeoCoreTechs 2020,2021
+ *
+ */
 public abstract class AbstractPIDController implements PIDParameterInterface {
-
 	float PTerm;
 	float output;
 	float ITerm;
@@ -88,7 +91,7 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	public abstract void Compute(SetpointInfoInterface ppi);
 	
 	public String toString() {
-		return "Kp="+String.valueOf(Kp)+" Kd="+String.valueOf(Kd)+" Ki="+String.valueOf(Ki)+" Ko="+String.valueOf(Ko)+" PID Rate="+String.valueOf(PID_RATE);
+		return "PID Kp="+String.valueOf(Kp)+",Kd="+String.valueOf(Kd)+",Ki="+String.valueOf(Ki)+",Ko="+String.valueOf(Ko)+",PID Rate="+String.valueOf(PID_RATE);
 	}
 
 }

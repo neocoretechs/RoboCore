@@ -119,7 +119,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	private AuxGPIOControl auxGPIO = null;
 	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
-	private boolean[] isOperating = {false,false};
+	private boolean[] isOperating = {false,false,false};
 	private boolean shouldMove = true;
 	private int targetPitch;
 	private int targetDist;
@@ -478,39 +478,58 @@ public void onStart(final ConnectedNode connectedNode) {
 	public void onNewMessage(std_msgs.Int32MultiArray message) {
 		int[] valch = message.getData();
 		try {
-			if( valch.length == 4 ) {
-				// boom
+			if( valch.length == 5 ) {
+				// lift
 				int valch1 = valch[0];
 				int valch2 = valch[1];
 				int affectorSpeed = valch[3];
 				// keep Marlinspike from getting bombed with zeroes
 				if(affectorSpeed == 0) {
-					if(isOperating[1]) {
+					if(isOperating[2]) {
 						motorControlHost.setAffectorDriveSpeed(valch1, valch2, 0);
 					}
-					isOperating[1] = false;
+					isOperating[2] = false;
 				} else {
-					isOperating[1] = true;
+					isOperating[2] = true;
 					if(DEBUG)
 						System.out.println("Subs trigger, recieved Affector directives slot:"+valch1+" channel:"+valch2+" value:"+affectorSpeed);
 					motorControlHost.setAffectorDriveSpeed(valch1, valch2, affectorSpeed);
 				}
 			} else {
-				if(valch.length == 3) {
-					// LED
+				if( valch.length == 4 ) {
+					// boom
 					int valch1 = valch[0];
 					int valch2 = valch[1];
-					int valch3 = valch[2];
-					if(valch3 == 0) {
+					int affectorSpeed = valch[3];
+					// keep Marlinspike from getting bombed with zeroes
+					if(affectorSpeed == 0) {
+						if(isOperating[1]) {
+							motorControlHost.setAffectorDriveSpeed(valch1, valch2, 0);
+						}
+						isOperating[1] = false;
+					} else {
+						isOperating[1] = true;
+						if(DEBUG)
+							System.out.println("Subs trigger, recieved Affector directives slot:"+valch1+" channel:"+valch2+" value:"+affectorSpeed);
+						motorControlHost.setAffectorDriveSpeed(valch1, valch2, affectorSpeed);
+					}
+				} else {
+					if(valch.length == 3) {
+						// LED
+						int valch1 = valch[0];
+						int valch2 = valch[1];
+						int valch3 = valch[2];
+						if(valch3 == 0) {
 							if(isOperating[0]) {
 								((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, 0);
 							}
 							isOperating[0] = false;
-					} else {			
+						} else {			
 							isOperating[0] = true;
 							if(DEBUG)
 								System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
 							((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
+						}
 					}
 				}
 			}

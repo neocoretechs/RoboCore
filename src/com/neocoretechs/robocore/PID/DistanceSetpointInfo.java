@@ -1,5 +1,9 @@
 package com.neocoretechs.robocore.PID;
-
+/**
+ * Set point information for PD control and other uses.
+ * @author Jonathan Groff (C0 NeoCoreTechs 2020,2021
+ *
+ */
 public class DistanceSetpointInfo implements SetpointInfoInterface {
 	private float MAXIMUM, MINIMUM;
 	private float distance, desiredDistance, prevErr;
@@ -25,8 +29,8 @@ public class DistanceSetpointInfo implements SetpointInfoInterface {
 	public void setMinimum(float min) { MINIMUM = min;}
 	@Override
 	public float getMinimum() { return MINIMUM; }
-	
+	@Override
 	public String toString() {
-		return "Distance Max="+MAXIMUM+" Min="+MINIMUM+" distance="+distance+" target distance="+desiredDistance+" err="+prevErr;
+		return "Distance Max="+MAXIMUM+",Min="+MINIMUM+",Actual="+distance+",Target distance="+desiredDistance+",Error="+prevErr;
 	}
 }
