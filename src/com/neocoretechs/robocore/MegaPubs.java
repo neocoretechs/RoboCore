@@ -119,7 +119,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	private AuxGPIOControl auxGPIO = null;
 	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
-	private boolean isOperating = false;
+	private boolean[] isOperating = {false,false};
 	private boolean shouldMove = true;
 	private int targetPitch;
 	private int targetDist;
@@ -477,28 +477,46 @@ public void onStart(final ConnectedNode connectedNode) {
 	@Override
 	public void onNewMessage(std_msgs.Int32MultiArray message) {
 		int[] valch = message.getData();
-		if( valch.length != 3 )
-			return;
-		for(int i = 0; i < valch.length; i+=3) {
-			int valch1 = valch[i];
-			int valch2 = valch[i+1];
-			int valch3 = valch[i+2];
-			try {
-				if(valch3 == 0) {
-					if(isOperating) {
-						((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, 0);
+		try {
+			if( valch.length == 4 ) {
+				// boom
+				int valch1 = valch[0];
+				int valch2 = valch[1];
+				int affectorSpeed = valch[3];
+				// keep Marlinspike from getting bombed with zeroes
+				if(affectorSpeed == 0) {
+					if(isOperating[1]) {
+						motorControlHost.setAffectorDriveSpeed(valch1, valch2, 0);
 					}
-					isOperating = false;
-				} else {			
-					isOperating = true;
+					isOperating[1] = false;
+				} else {
+					isOperating[1] = true;
 					if(DEBUG)
-						System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
-					((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
+						System.out.println("Subs trigger, recieved Affector directives slot:"+valch1+" channel:"+valch2+" value:"+affectorSpeed);
+					motorControlHost.setAffectorDriveSpeed(valch1, valch2, affectorSpeed);
 				}
-			} catch (IOException e) {
-				System.out.println("there was a problem communicating with motor controller:"+e);
-				e.printStackTrace();
+			} else {
+				if(valch.length == 3) {
+					// LED
+					int valch1 = valch[0];
+					int valch2 = valch[1];
+					int valch3 = valch[2];
+					if(valch3 == 0) {
+							if(isOperating[0]) {
+								((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, 0);
+							}
+							isOperating[0] = false;
+					} else {			
+							isOperating[0] = true;
+							if(DEBUG)
+								System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
+							((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
+					}
+				}
 			}
+		} catch (IOException e) {
+						System.out.println("there was a problem communicating with PWM controller:"+e);
+						e.printStackTrace();
 		}
 	}
 	});

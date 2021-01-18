@@ -22,4 +22,5 @@ public interface MotorControlInterface2D {
 	public void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int channel1Speed, int slot2, int channel2, int channel2Speed) throws IOException;
 	public void setAbsolutePWMLevel(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException;
 	public void setAbsolutePWMLevel(int slot, int channel, int pwmLevel)throws IOException;
+	public void setAffectorDriveSpeed(int slot1, int channel1, int affectorSpeed) throws IOException;
 }
