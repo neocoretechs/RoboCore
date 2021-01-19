@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.internal.loader.CommandLineLoader;
@@ -20,6 +21,9 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
+import org.ros.node.service.CountDownServiceServerListener;
+import org.ros.node.service.ServiceResponseBuilder;
+import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
@@ -29,6 +33,11 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
+import com.neocoretechs.robocore.services.ControllerStatusMessage;
+import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
+import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 
 import net.java.games.input.Component;
 
@@ -140,6 +149,8 @@ public class MotionController extends AbstractNodeMain {
 	Object magMutex = new Object();
 	
 	RobotInterface robot;
+	public String RPT_SERVICE = "robo_status";
+	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
@@ -168,8 +179,6 @@ public class MotionController extends AbstractNodeMain {
 	}
 	
 	public MotionController() {
-		if(DEBUG)
-			System.out.println("CTOR robot...");
 		robot = new Robot();
 		if(DEBUG)
 			System.out.println("CTOR build robot"+robot);
@@ -256,6 +265,26 @@ public class MotionController extends AbstractNodeMain {
 		*/
 		if(DEBUG)
 			System.out.println("PREPUBLISHING robot"+robot);
+		ArrayList<String> roboProps = new ArrayList<String>();
+		roboProps.add(robot.toString());
+		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
+		        CountDownServiceServerListener.newDefault();
+		final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE , ControllerStatusMessage._TYPE,
+		    new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
+				@Override
+				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
+					//switch(request.getData())
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Robot Properties", 
+							diagnostic_msgs.DiagnosticStatus.OK, roboProps);
+				}
+			});	
+		serviceServer.addListener(serviceServerListener);	      
+		try {
+			serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+		} catch (InterruptedException e1) {
+			System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
+			e1.printStackTrace();
+		}
 		//
 		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
 		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
@@ -912,7 +941,6 @@ public class MotionController extends AbstractNodeMain {
 				robot.getIMUSetpointInfo().setMaximum(TRIANGLE_THRESHOLD); // maximum degree windup
 				robot.getMotionPIDController().clearPID();
 				WHEELBASE = Props.toFloat("MaxSpeedValue");
-				System.out.println("POST setup robot:"+robot);
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
@@ -938,7 +966,6 @@ public class MotionController extends AbstractNodeMain {
 				}
 				synchronized(rngMutex2) {
 					if(isRangeLowerFront) {
-
 						isRangeLowerFront = false;
 					}
 				}
@@ -954,32 +981,24 @@ public class MotionController extends AbstractNodeMain {
 				
 				if( isOverMag ) {
 					isOverMag = false;
-					System.out.println("Mag EXCEEDS threshold..");
-					diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
-					statmsg.setName("magnetic");
-					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
-					statmsg.setMessage("Magnetic anomaly detected");
-					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-					li.add(kv);
-					statmsg.setValues(li);
-					statpub.publish(statmsg);
-					Thread.sleep(1);
+					if(DEBUG)
+						System.out.println("Mag EXCEEDS threshold..");
+					ArrayList<String> magVals = new ArrayList<String>(3);
+					magVals.add(String.valueOf(mag[0]));
+					magVals.add(String.valueOf(mag[1]));
+					magVals.add(String.valueOf(mag[2]));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Magnetic anomaly detected", 
+							diagnostic_msgs.DiagnosticStatus.WARN, magVals);
 				}
 				
 				if( isOverShock && !isMoving) {
-					System.out.println("OVERSHOCK!");
-					diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
-					isOverShock = false;
-					statmsg.setName("shock");
-					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
-					statmsg.setMessage("Accelerometer shock warning");
-					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-					li.add(kv);
-					statmsg.setValues(li);
-					statpub.publish(statmsg);
-					Thread.sleep(1);
+					if(DEBUG)
+						System.out.println("OVERSHOCK!");
+					ArrayList<String> shockVals = new ArrayList<String>(2);
+					shockVals.add(String.valueOf(angular));
+					shockVals.add(String.valueOf(linear));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Accelerometer shock warning", 
+							diagnostic_msgs.DiagnosticStatus.WARN, shockVals);
 				}
 				
 					
@@ -992,37 +1011,30 @@ public class MotionController extends AbstractNodeMain {
 							//return;
 							//}
 						isOverPressure = false;
-						statmsg.setName("pressure");
-						statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
-						statmsg.setMessage("Atmospheric pressure warning");
-						diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-						List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-						li.add(kv);
-						statmsg.setValues(li);
-						statpub.publish(statmsg);
-						Thread.sleep(1);
+						ArrayList<String> pressVals = new ArrayList<String>(1);
+						pressVals.add(String.valueOf(pressure));
+						new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Atmospheric pressure warning", 
+								diagnostic_msgs.DiagnosticStatus.WARN, pressVals);
 				}
 				
 				if(isOverTemp) {
 					if( DEBUG )
 						System.out.println("DANGER Temp:"+temperature);
-					diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
 					isOverTemp = false;
-					statmsg.setName("temperature");
-					statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
-					statmsg.setMessage("Temperature warning");
-					diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-					List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
-					li.add(kv);
-					statmsg.setValues(li);
-					statpub.publish(statmsg);
+					ArrayList<String> tempVals = new ArrayList<String>(1);
+					tempVals.add(String.valueOf(temperature));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Temperature warning", 
+							diagnostic_msgs.DiagnosticStatus.WARN, tempVals);
+				}
+				
+				while(!statusQueue.isEmpty()) {
+					statpub.publish(statusQueue.takeFirst());
+					++sequenceNumber;
+					if( DEBUG )
+						System.out.println("Sequence:"+sequenceNumber);
 					Thread.sleep(1);
 				}
-	
-				Thread.sleep(10);
-				++sequenceNumber;
-				if( DEBUG )
-					System.out.println("Sequence:"+sequenceNumber);
+				
 		}
 	}); // cancellable loop
 

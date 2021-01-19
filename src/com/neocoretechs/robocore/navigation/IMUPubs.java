@@ -33,7 +33,7 @@ import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
  * defined in IMUSerialDataPort. MAKE SURE TO DELETE FILE BEFORE CALIBRATION, as it is otherwise locked for update. 
  * Deleting file will reset CALIBRATION VALUES TO ZERO.. After successful calibration, IMU enters normal data publishing loop mode.
  * 
- * @author jg
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class IMUPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = false;

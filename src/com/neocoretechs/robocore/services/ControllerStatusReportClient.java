@@ -37,6 +37,10 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  * function on cmd_report channel in the Marlinspike code on the Mega board.
  * Commands for reports on status to be send to the Marlinspike via the reporting service 
  * are formatted as followed on the command line:<p/>
+ * _service_uri:=cmd_report <br/>
+ * _service_uri:=robo_status <br/>
+ * 
+ * for service_uri:=cmd_report
  * __command:=report __name:=id <br/>
  * __command:=report __name:=status <br/>
  * @author Jonathan Groff (C) NeoCoreTechs 2020
@@ -46,6 +50,7 @@ public class ControllerStatusReportClient extends AbstractNodeMain  {
 	private String host;
 	private String command = "report";
 	private String rptName = "status"; // default report name
+	private String service_uri = "cmd_report";
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
@@ -96,7 +101,10 @@ public NodeConfiguration build()  {
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {
-	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();	
+	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	if( remaps.containsKey("__service_uri") ) {
+		service_uri = remaps.get("__service_uri");
+	}
 	if( remaps.containsKey("__command") ) {
 		command = remaps.get("__command");
 	}
@@ -118,7 +126,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	ServiceClient<ControllerStatusMessageRequest, ControllerStatusMessageResponse> rptsvc = null;
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	try {
-		rptsvc = connectedNode.newServiceClient("cmd_report", ControllerStatusMessage._TYPE);
+		rptsvc = connectedNode.newServiceClient(service_uri, ControllerStatusMessage._TYPE);
 	} catch (Exception e) {
 		e.printStackTrace();
 	}
@@ -133,7 +141,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				if( DEBUG) 
 					System.out.println("Sending report "+request.getData()+", results should appear on StatusAlertSubs console..");
 				try {
-					rptsvc.connect(connectedNode.lookupServiceUri(GraphName.of("cmd_report")));
+					rptsvc.connect(connectedNode.lookupServiceUri(GraphName.of(service_uri)));
 				} catch (Exception e1) {
 					e1.printStackTrace();
 					break;

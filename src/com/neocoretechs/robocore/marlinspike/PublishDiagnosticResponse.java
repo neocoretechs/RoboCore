@@ -24,6 +24,8 @@ import diagnostic_msgs.DiagnosticStatus;
  * are XML compliant and can be used by JAXB and JQuery or other XML processing.<p/>
  * The class here disseminates those bridges and their waiting MachineReading response payloads to the diagnostic bus
  * for consumption by logging or other downstream processing.<p/>
+ * Class was then extended to allow generic diagnostic responses to be constructed for publishing to status alert
+ * consumer outside of the Marlinspike subsystem with the addition of monolithic constructor.<p/>
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
@@ -41,7 +43,29 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 	public PublishDiagnosticResponse(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<DiagnosticStatus> statpub, CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics) {
 		super(asynchDemuxer, node, statpub, outgoingDiagnostics);
 	}
-
+	/**
+	 * Generic method to format status message and publish to stated publisher outside of AsynchDemuxer.
+	 * @param node The node originating the status message
+	 * @param statpub The publisher to the status message bus
+	 * @param outgoingDiagnostics queue to stash response for future publishing
+	 * @param messages A list of string values to be formatted and published
+	 */
+	public PublishDiagnosticResponse(ConnectedNode node, Publisher<DiagnosticStatus> statpub, 
+										CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics, 
+										String topicName, byte dstatus, List<String> messages) {
+		super(null, node, statpub, outgoingDiagnostics);
+		this.topicName = topicName;
+		this.dstatus = dstatus;
+		setUp();
+		for(String s : messages) {
+			diagnostic_msgs.KeyValue kv2 = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+			kv2.setKey(String.valueOf(messageSize++)+".)");
+			kv2.setValue(s);
+			li.add(kv2);
+		}
+		outgoingDiagnostics.addLast(msg);
+	}
+	
 	@Override
 	public void setUp() {
 		messageSize = 0;

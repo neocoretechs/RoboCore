@@ -13,7 +13,7 @@ public class LiftActuator implements LiftActuatorInterface {
 		channel = Props.toInt(getControllerAxisPropertyName()+"Channel");
 		slot = Props.toInt(getControllerAxisPropertyName()+"Slot");
 		componentUp = Props.toFloat(getControllerAxisPropertyName()+"ComponentUp");
-		componentUp = Props.toFloat(getControllerAxisPropertyName()+"ComponentDown");
+		componentDown = Props.toFloat(getControllerAxisPropertyName()+"ComponentDown");
 	}
 	
 	@Override
