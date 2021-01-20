@@ -84,7 +84,7 @@ import net.java.games.input.Component;
  *
  */
 public class MotionController extends AbstractNodeMain {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
@@ -183,8 +183,7 @@ public class MotionController extends AbstractNodeMain {
 		if(DEBUG)
 			System.out.println("CTOR build robot"+robot);
 	}
-	
-	
+		
 	/**
 	 * Create NodeConfiguration.
 	 */
@@ -317,7 +316,8 @@ public class MotionController extends AbstractNodeMain {
 				int[] buttons = message.getButtons();
 				// check for emergency stop, on X or A or green or lower button
 				if( buttons[6] != 0 ) {
-					System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
+					if(DEBUG)
+						System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
 					angular.setX(-1);
 					angular.setY(-1);
 					angular.setZ(-1);
@@ -353,7 +353,7 @@ public class MotionController extends AbstractNodeMain {
 							triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
 							triggerVals.add(0);
 							if(DEBUG)
-							System.out.println(robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()+" turning off LED");
+								System.out.println(robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()+" turning off LED");
 							trigpub.publish(setupPub(connectedNode, triggerVals,robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),
 														robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()));
 							try {
@@ -368,7 +368,7 @@ public class MotionController extends AbstractNodeMain {
 						triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
 						triggerVals.add(Integer.valueOf((int)axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()]));
 						if(DEBUG)
-						System.out.printf("%s= %d\n",robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),triggerVals.get(2));
+							System.out.printf("%s= %d\n",robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),triggerVals.get(2));
 						trigpub.publish(setupPub(connectedNode, triggerVals, robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),
 														robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()));
 						try {
@@ -470,7 +470,8 @@ public class MotionController extends AbstractNodeMain {
 					speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
 					speedVals.add((int)speedR);
 					velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
-					System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
+					if(DEBUG)
+						System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 					return;
 				} else {
 					if( buttons[5] != 0 ) { // right pivot
@@ -485,7 +486,8 @@ public class MotionController extends AbstractNodeMain {
 						speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
 						speedVals.add((int)speedR);
 						velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
-						System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
+						if(DEBUG)
+							System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 						return;
 					}
 				}
@@ -525,7 +527,8 @@ public class MotionController extends AbstractNodeMain {
 						robot.getIMUSetpointInfo().setDesiredTarget((float) eulers[0]); // Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
 						robot.getMotionPIDController().clearPID();
 						wasPid = true; // start with PID control until we get out of tolerance
-						System.out.println("Stick absolute deg set:"+eulers[0]);	
+						if(DEBUG);
+							System.out.println("Stick absolute deg set:"+eulers[0]);	
 					}
 			    } else {
 			    	holdBearing = false;
@@ -580,7 +583,7 @@ public class MotionController extends AbstractNodeMain {
 				//
 				if( holdBearing ) {
 					if(DEBUG)
-					System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
+						System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
 					// In auto
 					if( Math.abs(robot.getMotionPIDController().getError()) <= TRIANGLE_THRESHOLD ) {
 						if( robot.getMotionPIDController().getError() < 0.0f ) { // decrease left wheel power goal
@@ -604,7 +607,7 @@ public class MotionController extends AbstractNodeMain {
 							}
 						}
 						if(DEBUG)
-						System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+							System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
 						// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
 						robot.getMotionPIDController().setITerm(0);//ITerm = 0;
@@ -618,7 +621,7 @@ public class MotionController extends AbstractNodeMain {
 							if( robot.getMotionPIDController().getError() > 0.0f )
 								speedR *= (arcin/arcout);
 						if(DEBUG)
-						System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+							System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
@@ -634,10 +637,10 @@ public class MotionController extends AbstractNodeMain {
 								speedR *= (arcin/arcout);
 					}
 					if(DEBUG)
-					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+						System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 				}
 				if(DEBUG)
-				System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
+					System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
 				//
 				// set it up to send down the publishing pipeline
 				//
@@ -758,7 +761,7 @@ public class MotionController extends AbstractNodeMain {
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
 				if(DEBUG)
-				System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
+					System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
 				speedL *= ((radius+(WHEELBASE/2))/hypot);
 			}
 			/**
@@ -779,7 +782,7 @@ public class MotionController extends AbstractNodeMain {
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
 				if(DEBUG)
-				System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot),holdBearing);
+					System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot),holdBearing);
 				speedR *= ((radius+(WHEELBASE/2))/hypot);
 			}
 		});
@@ -794,8 +797,8 @@ public class MotionController extends AbstractNodeMain {
 					orientation.setW(message.getOrientation().getW());
 					eulers = message.getOrientationCovariance();
 					if(DEBUG) {
-					System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
-					System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+						System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
+						System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 					}
 					try {
 					if( message.getAngularVelocity().getX() != angular.getX() ||
@@ -823,8 +826,8 @@ public class MotionController extends AbstractNodeMain {
 								}
 							}
 							if(DEBUG) {
-							System.out.printf("Nav:Angular X:%f | Angular Y:%f | Angular Z:%f",angular.getX(),angular.getY(),angular.getZ());
-							System.out.printf("Nav:Linear X:%f | Linear Y:%f | Linear Z:%f",linear.getX(),linear.getY(),linear.getZ());
+								System.out.printf("Nav:Angular X:%f | Angular Y:%f | Angular Z:%f",angular.getX(),angular.getY(),angular.getZ());
+								System.out.printf("Nav:Linear X:%f | Linear Y:%f | Linear Z:%f",linear.getX(),linear.getY(),linear.getZ());
 							}
 					} else
 						isNav = false;
@@ -950,8 +953,6 @@ public class MotionController extends AbstractNodeMain {
 			protected void loop() throws InterruptedException {	
 			    try {
 					awaitStart.await();
-				    if( DEBUG )
-				    	System.out.println("Pub/subs registered..");
 				} catch (InterruptedException e) {}
 				/*
 				hasMoved = motorControlListener.move2DRelative(np.getGyros()[0] , courseOffset, linearMove
@@ -1262,7 +1263,6 @@ public class MotionController extends AbstractNodeMain {
 						 (int) robot.getRightSpeedSetpointInfo().getTarget()};
 	}
 	
-
 	
 	/**
 	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.

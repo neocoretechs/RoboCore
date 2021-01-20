@@ -1,6 +1,9 @@
 package com.neocoretechs.robocore.navigation;
 
-public class NavPacket {
+import java.io.Serializable;
+
+public class NavPacket implements Serializable {
+	private static final long serialVersionUID = 1L;
 	float pitch = 0.0f;
 	float roll = 0.0f;
 	int targetYaw = 0;

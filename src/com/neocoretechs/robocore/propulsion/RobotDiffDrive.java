@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.propulsion;
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
@@ -7,7 +9,8 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 * Configuration for generic robot differential drive.
 * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
 */
-public class RobotDiffDrive implements RobotDiffDriveInterface {
+public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	int slot, leftChannel, rightChannel;
 	/* Define the robot parameters */
 	public static float wheelTrack = Props.toFloat("WheelTrackMM"); // millimeters

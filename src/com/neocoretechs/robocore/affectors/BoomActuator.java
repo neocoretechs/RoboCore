@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.affectors;
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.config.Props;
 /**
  * Implementation for peripheral affector config. In this case the linear actuator 
@@ -7,7 +9,8 @@ import com.neocoretechs.robocore.config.Props;
  * @author Jonathan Groff (C) NeoCorTechs 2021
  *
  */
-public class BoomActuator implements BoomActuatorInterface {
+public class BoomActuator implements BoomActuatorInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	int x;
 	int y;
 	int slot;

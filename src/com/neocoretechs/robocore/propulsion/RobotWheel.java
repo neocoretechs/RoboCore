@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.propulsion;
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.PID.AbstractPIDController;
 import com.neocoretechs.robocore.PID.MotorPIDController;
 import com.neocoretechs.robocore.PID.SpeedSetpointInfo;
@@ -11,7 +13,8 @@ import com.neocoretechs.robocore.PID.TickSetpointInfo;
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  *
  */
-public class RobotWheel implements DrivenWheelInterface {
+public class RobotWheel implements DrivenWheelInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	//public static int MAXOUTPUT = 50; // indoor
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.

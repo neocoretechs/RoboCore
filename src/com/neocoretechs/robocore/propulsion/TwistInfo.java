@@ -1,11 +1,15 @@
 package com.neocoretechs.robocore.propulsion;
+
+import java.io.Serializable;
+
 /**
  * Robot twist pose style positioning information.<p/>
  * Representation of positioning orientation in the reference frame.
  * @author Jonathan Groff (C) NeocoreTechs 2020,2021
  *
  */
-public class TwistInfo {
+public class TwistInfo implements Serializable {
+	private static final long serialVersionUID = 1L;
 	private float yawDegrees;
 	private float wheelTheta;// change in theta calculated from wheels 
 	private float imuTheta;  //global theta from IMU, 2 PI radians 

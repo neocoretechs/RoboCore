@@ -1,4 +1,7 @@
 package com.neocoretechs.robocore.PID;
+
+import java.io.Serializable;
+
 /**
  * Target is yaw angle from IMU. 
  * Setpoint - Input. 
@@ -6,7 +9,8 @@ package com.neocoretechs.robocore.PID;
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  *
  */
-public class IMUSetpointInfo implements SetpointInfoInterface {
+public class IMUSetpointInfo implements SetpointInfoInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	float MAXIMUM,MINIMUM;
 	float yawAngle, desiredYawAngle, prevErr;
 	@Override

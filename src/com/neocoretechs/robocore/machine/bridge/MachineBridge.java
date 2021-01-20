@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.machine.bridge;
 
+import java.io.Serializable;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Iterator;
@@ -24,7 +25,8 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 	//@XmlRootElement @XmlType(factoryMethod="getInstance")
 	@XmlRootElement(name="MachineBridge")
 	@XmlAccessorType(XmlAccessType.FIELD)
-    public final class MachineBridge {
+    public final class MachineBridge implements Serializable{
+		private static final long serialVersionUID = 1L;
 		private static boolean DEBUG = false;
 		//@XmlElement(name="machineReadings", type=MachineReading.class)
 		@XmlJavaTypeAdapter(RawDataXmlAdapter.class)

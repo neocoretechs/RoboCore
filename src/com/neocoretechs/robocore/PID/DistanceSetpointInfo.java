@@ -1,10 +1,14 @@
 package com.neocoretechs.robocore.PID;
+
+import java.io.Serializable;
+
 /**
  * Set point information for PD control and other uses.
  * @author Jonathan Groff (C0 NeoCoreTechs 2020,2021
  *
  */
-public class DistanceSetpointInfo implements SetpointInfoInterface {
+public class DistanceSetpointInfo implements SetpointInfoInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	private float MAXIMUM, MINIMUM;
 	private float distance, desiredDistance, prevErr;
 	@Override

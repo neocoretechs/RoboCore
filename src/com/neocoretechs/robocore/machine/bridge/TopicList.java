@@ -1,8 +1,10 @@
 package com.neocoretechs.robocore.machine.bridge;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public abstract class TopicList implements TopicListInterface {
+public abstract class TopicList implements TopicListInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 		MachineBridge mb;
 		public TopicList(String groupName, int queueSize) {
 			mb = new MachineBridge(groupName, queueSize);

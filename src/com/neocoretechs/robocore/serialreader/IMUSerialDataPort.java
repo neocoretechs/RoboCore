@@ -23,8 +23,7 @@ import com.neocoretechs.robocore.ThreadPoolManager;
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
  * The accelerometer, gyro, magnetometer, fused Euler angle data, and temperature.
- * Copyright NeoCoreTechs 2017
- * @author jg
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2018,2019,2020,2021
  *
  */
 public class IMUSerialDataPort implements DataPortInterface {
@@ -139,7 +138,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 		// precision for position readout, number of decimal places
 		private int IMU_TOL = 3;
 
-
 	    /**
 	     * Try to determine port, if we cant through cpuinfo, use default
 	     * @return An instance of IMUSerialDataPort, singleton for this class
@@ -249,8 +247,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	            while(!readThread.isRunning)
 					try {
 						Thread.sleep(1);
-					} catch (InterruptedException e) {}
-	            
+					} catch (InterruptedException e) {}           
 	            
 	            if( writeable) {
 	                outStream = serialPort.getOutputStream();
@@ -328,26 +325,21 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	write((byte) (data.length & 0xFF));
 	    	for(int i = 0; i < data.length; i++) {
 	    			write((byte) (data[i] & 0xFF));
-	    	}
-	    	
+	    	}	    	
 	    	byte resp;
 	    	resp = (byte)(read() & 0xFF);
 	    	if( resp != (byte)0xEE ) {
-	    			System.out.printf("Received unexpected response in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp);
-	    			return;
+	    			throw new IOException(String.format("Received unexpected response in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp));			
 	    	}
 	    	//if( DEBUG )
 	    	//	System.out.println("Found ack header");
 	    	// we always use ACK except for reset, but it seems to send back the ee
 	        if( !ack ) {
-		    		if( DEBUG )
-		    			System.out.println("return from write without ACK..");
-		    		return;
+		    		throw new IOException("return from write without ACK..");
 		    }
 	        resp = (byte)( read() & 0xFF);
 	    	if( resp != (byte)0x01 ) {
-	    				System.out.printf("Error from write ACK:%02x\r\n",resp);
-	    				return;
+	    			throw new IOException(String.format("Error from write ACK:%02x\r\n",resp));
 	    	}
 	    	//if( DEBUG ) {
 	    	//	System.out.println("ACK successful");
@@ -420,7 +412,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    //if( DEBUG )
 		    //	System.out.println("Did NOT receive expected 0xBB response in signalRead");
 		    if( resp != (byte)0xEE ) {
-		    	System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
+		    	if(DEBUG)
+		    		System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
 		    	return (byte)0x07; // lets call this bus overrun from chip
 		    } else {
 		    	resp = (byte)( read() & 0xFF);
@@ -429,7 +422,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 		    	//}
 		    }
 		    // should have the error code
-		    System.out.printf("Bad response from IMU: %02x\r\n",resp);
+		    if(DEBUG)
+		    	System.out.printf("Bad response from IMU: %02x\r\n",resp);
 		    return resp;
 	    }
 	        
@@ -461,7 +455,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 				} catch (InterruptedException e) {}
 	    	}
 	    	if( resp != 0 ) {
-	    		System.out.println("Bad response for signalRead after " + retry +" retries, exiting read with response:"+resp);
+	    		if(DEBUG)
+	    			System.out.println("Bad response for signalRead after " + retry +" retries, exiting read with response:"+resp);
 	    		return null;
 	    	}
 	    	// Returning with 0 from signalRead means we found 0xBB
@@ -472,8 +467,9 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	//	System.out.printf("Recovered length byte: %02x\r\n", blen);
 	        // Read the returned bytes.	
 	        if( blen == 0 || blen != length) {
+	        	if(DEBUG)
 	                System.out.printf("Received length byte: %d but read requested %d bytes.\r\n", blen, length);
-	                return null;
+	            return null;
 	        }
 	        byte[] bout = new byte[blen];
 	        for(int i = 0; i < blen; i++) {
@@ -557,7 +553,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        	System.out.printf("Read chip ID: %02x\r\n",bno_id[0]);
 	        }
 	        if(bno_id[0] != BNO055_ID) {
-	        	System.out.printf("Recovered chip Id did NOT match expected byte!:%02x\r\n",bno_id[0]);
+	        	if(DEBUG)
+	        		System.out.printf("Recovered chip Id did NOT match expected byte!:%02x\r\n",bno_id[0]);
 	        	close();
 	            throw new IOException("BNO055 chip id did not match expected value");
 	        }
@@ -778,7 +775,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 					byte[] cb = new byte[22];
 					for(int i = 0; i < cb.length; i++) {
 						cb[i] = Integer.valueOf(tokes[i].trim()).byteValue();
-						System.out.println("Calb "+i+":"+tokes[i].trim());
+						if(DEBUG)
+							System.out.println("Calb "+i+":"+tokes[i].trim());
 					}
 					return cb;
 		}
@@ -863,7 +861,50 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    		System.out.println("All sensors calibrated!");
 	    	return stat;
 	    }
-
+	    
+	    /**
+	     * Report the current calibration status.
+	     * @return the 4 byte array for system status, gyro, accel, mag 0-3
+	     * @throws IOException
+	     */
+	    public String formatCalibrationStatus() throws IOException {
+	    	StringBuilder sb = new StringBuilder();
+	    	byte[] stat = getCalibrationStatus();
+	    	// system, gyro, accel, mag
+	    	if( stat[0] != 3 ) {
+	    		sb.append("System status is less than full calibration at:");
+	    		sb.append(stat[0]);
+	    		sb.append(", results will be ");
+	    		sb.append(stat[0] == 0 ? "UNUSABLE" : stat[0] == 1 ? "INACCURATE" : stat[0] == 2 ? "MARGINAL" : "UNKNOWN");
+	    		sb.append("\r\n");
+	    	}
+	    	if( stat[1] != 3 ) {
+	    		sb.append("Gyro calibration less than optimal at:");
+	    		sb.append(stat[1]);
+	    		sb.append(", results will be ");
+	    		sb.append(stat[1] == 0 ? "UNUSABLE" : stat[1] == 1 ? "INACCURATE" : stat[1] == 2 ? "MARGINAL" : "UNKNOWN");
+	    		sb.append("\r\n");
+	    	}
+	    	if( stat[2] != 3 ) {
+	    		sb.append("Accelerometer calibration less than optimal at:");
+	    		sb.append(stat[2]);
+	    		sb.append(", results will be ");
+	    		sb.append(stat[2] == 0 ? "UNUSABLE" : stat[2] == 1 ? "INACCURATE" : stat[2] == 2 ? "MARGINAL" : "UNKNOWN");
+	    		sb.append("\r\n");
+	    	}
+	    	if( stat[3] != 3 ) {
+	    		sb.append("Magnetometer calibration less than optimal at:");
+	    		sb.append(stat[3]);
+	    		sb.append(", results will be ");
+	    		sb.append(stat[3] == 0 ? "UNUSABLE" : stat[3] == 1 ? "INACCURATE" : stat[3] == 2 ? "MARGINAL" : "UNKNOWN");
+	    		sb.append("\r\n");
+	    	}
+	    	if( stat[0] == 3 && stat[1] == 3 && stat[2] == 3 && stat[3] == 3) {
+	    		sb.append("All sensors calibrated!");
+	    		sb.append("\r\n");
+	    	}
+	    	return sb.toString();
+	    }
 	    /**
 	     * Perform interactive calibration. The steps are:
 	     * 1.) For gyro leave flat for a few seconds, this reading usually self corrects immediately
@@ -872,35 +913,51 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     * Once all elements reach 3 a write is performed storing a file for next reset and the method exits.
 	     * @throws IOException
 	     */
-	    public void calibrate() throws IOException {
+	    public String calibrate() throws IOException {
+	    	StringBuilder sb = new StringBuilder();
 	    	byte[] stat = reportCalibrationStatus();
-    		System.out.println("When status reaches target, the message:<< CALIBRATION ACHIEVED! >> and file "+CALIBRATION_FILE+" will appear and process is complete");
-    		System.out.println("1.) For gyro leave flat for a few seconds, this reading usually self corrects immediately.");
-    		System.out.println("2.) For accel, rotate the sensor through increments of 15 degrees. Roll from the flat position, pausing for a few seconds between each rotation.");
-    		System.out.println("3.) For mag, wave the sensor through a figure 8 rotation of 8 to 12 inches until stable.");
-    		System.out.println("Once all elements reach tolerance, a write is performed storing a file for next reset and the method exits!");
-	    	while( stat[0] != SYSTEM_CAL || stat[1] != GYRO_CAL || stat[2] != ACC_CAL || stat[3] != MAG_CAL ){
-	    		System.out.println("PERFORM CALIBRATION KATA NOW!");
-	      		System.out.println("When all status reaches target, message appears, file is written, and process completes");
-	    		System.out.println("1.) For gyro leave flat for a few seconds, reading self corrects");
-	    		System.out.println("2.) For accel, rotate the sensor through increments of 15 degrees from the flat position.");
-	    		System.out.println("3.) For mag, wave the sensor through a figure 8 rotation..");
-	    		System.out.println("-v-----v-----v-----v-----v-----v-----v-----v-----v-----v---");
-	    		System.out.println("!!! SYSTEM status target:"+SYSTEM_CAL+" CURRENT:"+stat[0]);
-	    		System.out.println("!!!1.) GYRO status target:"+GYRO_CAL+" CURRENT:"+stat[1]);
-	    		System.out.println("!!!2.) ACCEL status target:"+ACC_CAL+" CURRENT:"+stat[2]);
-	    		System.out.println("!!!3.) MAG status target:"+MAG_CAL+" CURRENT:"+stat[3]);
-	    		System.out.println("-^-----^-----^-----^-----^-----^-----^-----^-----^-----^---");
-	    		try {
-					Thread.sleep(100);
-				} catch (InterruptedException e) {}
-	    		stat = reportCalibrationStatus();
+    		sb.append("When status reaches target, the message:<< CALIBRATION ACHIEVED! >> and file "+CALIBRATION_FILE+" will appear and process is complete");
+    		sb.append("\r\n");
+    		sb.append("1.) For gyro leave flat for a few seconds, this reading usually self corrects immediately.");
+    		sb.append("\r\n");
+    		sb.append("2.) For accel, rotate the sensor through increments of 15 degrees. Roll from the flat position, pausing for a few seconds between each rotation.");
+    		sb.append("\r\n");
+    		sb.append("3.) For mag, wave the sensor through a figure 8 rotation of 8 to 12 inches until stable.");
+    		sb.append("\r\n");
+    		sb.append("Once all elements reach tolerance, a write is performed storing a file for next reset and the method exits!");
+    		sb.append("\r\n");
+	    	if( stat[0] != SYSTEM_CAL || stat[1] != GYRO_CAL || stat[2] != ACC_CAL || stat[3] != MAG_CAL ){
+	    		sb.append("PERFORM CALIBRATION KATA NOW!");
+	    		sb.append("\r\n");
+	    		sb.append("When all status reaches target, message appears, file is written, and process completes");
+	    		sb.append("\r\n");
+	    		sb.append("1.) For gyro leave flat for a few seconds, reading self corrects");
+	    		sb.append("\r\n");
+	    		sb.append("2.) For accel, rotate the sensor through increments of 15 degrees from the flat position.");
+	    		sb.append("\r\n");
+	    		sb.append("3.) For mag, wave the sensor through a figure 8 rotation..");
+	    		sb.append("\r\n");
+	    		sb.append("-v-----v-----v-----v-----v-----v-----v-----v-----v-----v---");
+	    		sb.append("\r\n");
+	    		sb.append("!!! SYSTEM status target:"+SYSTEM_CAL+" CURRENT:"+stat[0]);
+	    		sb.append("\r\n");
+	    		sb.append("!!!1.) GYRO status target:"+GYRO_CAL+" CURRENT:"+stat[1]);
+	    		sb.append("\r\n");
+	    		sb.append("!!!2.) ACCEL status target:"+ACC_CAL+" CURRENT:"+stat[2]);
+	    		sb.append("\r\n");
+	    		sb.append("!!!3.) MAG status target:"+MAG_CAL+" CURRENT:"+stat[3]);
+	    		sb.append("\r\n");
+	    		sb.append("-^-----^-----^-----^-----^-----^-----^-----^-----^-----^---");
+	    		sb.append("\r\n");
+	    	} else {
+	    		// loop exits when all status reaches 3, then we write after retrieving calibration bytes
+	    		sb.append("<< CALIBRATION ACHIEVED! >>");
+	    		sb.append("\r\n");
+	    		set_mode(OPERATION_MODE_CONFIG);
+	    		writeCalibration(getCalibration());
+	    		setNormalPowerNDOFMode();
 	    	}
-	    	// loop exits when all status reaches 3, then we write after retrieving calibration bytes
-	    	System.out.println("<< CALIBRATION ACHIEVED! >>");
-	    	set_mode(OPERATION_MODE_CONFIG);
-	    	writeCalibration(getCalibration());
-	    	setNormalPowerNDOFMode();
+	    	return sb.toString();
 	    }
 	    
 	    /**
@@ -1057,84 +1114,92 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     * Display status from test.
 	     * @param sysStat the 3 byte tuple from getSystemStatus()
 	     */
-	    public void displaySystemStatus(byte[] sysStat) {
-	    	System.out.print("System status:");
+	    public String displaySystemStatus(byte[] sysStat) {
+	    	StringBuilder sb = new StringBuilder("System status:");
 	    	switch(sysStat[0]) {
 	    	case(0): 
-	    		System.out.println("Idle");
+	    		sb.append("Idle\r\n");
 	    		break;
 	    	case(1):
-	    		System.out.println("System Error");
+	    		sb.append("System Error\r\n");
 	    		break;
 	    	case(2):
-	    		System.out.println("Initializing Peripherals");
+	    		sb.append("Initializing Peripherals\r\n");
 	    		break;       
 	    	case(3):
-	    		System.out.println("System Initialization");
+	    		sb.append("System Initialization\r\n");
 	    		break;
 	    	case(4):
-	    		System.out.println("Executing Self-Test");
+	    		sb.append("Executing Self-Test\r\n");
 	    		break;
 	    	case (5):
-	    		System.out.println("Sensor fusion algorithm running");
+	    		sb.append("Sensor fusion algorithm running\r\n");
 	    		break;
 	    	case (6):
-	    		System.out.println("System running without fusion algorithms");
+	    		sb.append("System running without fusion algorithms\r\n");
 	    		break;
 	    	default:
-	    		System.out.println("Unknown system status "+sysStat[0]);
+	    		sb.append("Unknown system status ");
+	    		sb.append(sysStat[0]);
+	    		sb.append("\r\n");
 	    		break;
 	    	}
 	    	// self test
-	    	System.out.print("Self test:");
+	    	sb.append("Self test:\r\n");
 	    	//Bit 0 = Accelerometer self test
-	    	System.out.print(" Accel:"+((sysStat[1] & (byte)0x01) > 0 ? "PASS" : "FAIL or not run"));
+	    	sb.append(" Accel:");
+	    	sb.append((sysStat[1] & (byte)0x01) > 0 ? "PASS" : "FAIL or not run");
 	    	//Bit 1 = Magnetometer self test
-	    	System.out.print(" Mag:"+((sysStat[1] & (byte)0x02) > 0 ? "PASS" : "FAIL or not run"));
+	    	sb.append(" Mag:"+((sysStat[1] & (byte)0x02) > 0 ? "PASS" : "FAIL or not run"));
 	    	//Bit 2 = Gyroscope self test
-	    	System.out.print(" Gyro:"+((sysStat[1] & (byte)0x04) > 0 ? "PASS" : "FAIL or not run"));
+	    	sb.append(" Gyro:"+((sysStat[1] & (byte)0x04) > 0 ? "PASS" : "FAIL or not run"));
 	    	//Bit 3 = MCU self test
-	    	System.out.println(" MCU:"+((sysStat[1] & (byte)0x08) > 0 ? "PASS" : "FAIL or not run"));
+	    	sb.append(" MCU:");
+	    	sb.append((sysStat[1] & (byte)0x08) > 0 ? "PASS" : "FAIL or not run");
+	    	sb.append("\r\n");
 	    	// system error
-	    	System.out.print("System error:");
+	    	sb.append("System error:");
 	    	switch(sysStat[2]) {
 	    	case(0): 
-	    		System.out.println("NO ERROR");
+	    		sb.append("NO ERROR\r\n");
 	    		break;
 	    	case(1):
-	    		System.out.println("Peripheral initialization error");
+	    		sb.append("Peripheral initialization error\r\n");
 	    		break;
 	    	case(2):
-	    		System.out.println("System initialization error");
+	    		sb.append("System initialization error\r\n");
 	    		break;       
 	    	case(3):
-	    		System.out.println("Self test result failed");
+	    		sb.append("Self test result failed\r\n");
 	    		break;
 	    	case(4):
-	    		System.out.println("Register map value out of range");
+	    		sb.append("Register map value out of range\r\n");
 	    		break;
 	    	case (5):
-	    		System.out.println("Register map address out of range");
+	    		sb.append("Register map address out of range\r\n");
 	    		break;
 	    	case (6):
-	    		System.out.println("Register map write error");
+	    		sb.append("Register map write error\r\n");
 	    		break;
 	    	case (7):
-	    		System.out.println("BNO low power mode not available for selected operation mode");
+	    		sb.append("BNO low power mode not available for selected operation mode\r\n");
 	    		break;
 	    	case (8):
-	    		System.out.println("Accelerometer power mode not available");
+	    		sb.append("Accelerometer power mode not available\r\n");
 	    		break;
 	    	case (9):
-	    		System.out.println("Fusion algorithm configuration error");
+	    		sb.append("Fusion algorithm configuration error\r\n");
 	    		break;
 	    	case (10):
-	    		System.out.println("Sensor configuration error");
+	    		sb.append("Sensor configuration error\r\n");
 	    		break;
 	    	default:
-	    		System.out.println("Unknown system error value "+sysStat[2]);
+	    		sb.append("Unknown system error value ");
+	    		sb.append(sysStat[2]);
+	    		sb.append("\r\n");
 	    		break;
 	    	}
+	    	return sb.toString();
 	    }
 	    /**
 	     *  Return a tuple with revision information about the BNO055 chip.  Will
@@ -1160,12 +1225,19 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        return new byte[]{sw, bl[0], accel[0], mag[0], gyro[0]};
 	    }
 	    
-	    public void displayRevision(byte[] revs) {
-	    	System.out.println("BNO055 Software rev.:"+Integer.valueOf(revs[0] & 0xff) +
-	    			" bootloader:"+Integer.valueOf(revs[1] & 0xff) +
-	    			" Accel Id:"+Integer.valueOf(revs[2] & 0xff) +
-	    			" Mag Id:"+Integer.valueOf(revs[3] & 0xff) +
-	    			" Gyro Id:"+Integer.valueOf(revs[4] & 0xff));
+	    public String displayRevision(byte[] revs) {
+	    	StringBuilder sb = new StringBuilder();
+	    	sb.append("BNO055 Software rev.:");
+	    	sb.append(Integer.valueOf(revs[0] & 0xff));
+	    	sb.append(" bootloader:");
+	    	sb.append(Integer.valueOf(revs[1] & 0xff));
+	    	sb.append(" Accel Id:");
+	    	sb.append(Integer.valueOf(revs[2] & 0xff));
+	    	sb.append(" Mag Id:");
+	    	sb.append(Integer.valueOf(revs[3] & 0xff));
+	    	sb.append(" Gyro Id:");
+	    	sb.append(Integer.valueOf(revs[4] & 0xff));
+	    	return sb.toString();
 	    }
         /**
          * Set if an external crystal is being used by passing True, otherwise
@@ -1227,18 +1299,28 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    /**
 	     * Data about machine and port settings
 	     */
-	    public String stringSettings()
-	    {
-		    String msg = "IMUSerialDataPort\n";
-		    msg = msg + "Port Name = " + getPortName() + "\n";
-		    msg = msg + "Port BaudRate = " + getBaudRate() + "\n";
-		    msg = msg + "Port Parity = " + getParity() + "\n";
-		    msg = msg + "Port DataBits = " + getDataBits() + "\n";
-		    msg = msg + "Port StopBits = " + getStopBits() + "\n";
-		    msg = msg + "Port ReadTimeout = 5500\n";
-		    msg = msg + "Port WriteTimeout = 5500\n";
-		    msg = msg + "Port Handshake = " + getHandshake();
-		    return msg;
+	    public String stringSettings() {
+	    	StringBuilder sb = new StringBuilder("IMUSerialDataPort\n");
+		    sb.append("Port Name = ");
+		    sb.append(getPortName());
+		    sb.append("\n");
+		    sb.append("Port BaudRate = ");
+		    sb.append(getBaudRate());
+		    sb.append("\n");
+		    sb.append("Port Parity = ");
+		    sb.append(getParity());
+		    sb.append("\n");
+		    sb.append("Port DataBits = ");
+		    sb.append(getDataBits());
+		    sb.append("\n");
+		    sb.append("Port StopBits = ");
+		    sb.append(getStopBits());
+		    sb.append("\n");
+		    sb.append("Port ReadTimeout = 5500\n");
+		    sb.append("Port WriteTimeout = 5500\n");
+		    sb.append("Port Handshake = ");
+		    sb.append(getHandshake());
+		    return sb.toString();
 	    }
 	    
 	    public static double round(double value, int places) {

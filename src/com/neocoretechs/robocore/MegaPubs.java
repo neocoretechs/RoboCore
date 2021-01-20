@@ -105,10 +105,10 @@ import diagnostic_msgs.DiagnosticStatus;
  * M45 P<pin> S<0-255> - start PWM on pin P with value S, many optional arguments for timer setup
  * M41 P<pin> - Set digital pin P high forward
  * M42 P<pin> - Set digital pin P low reverse
- * @author jg
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = false;
+	private static final boolean DEBUG = true;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;

@@ -3,6 +3,7 @@
  */
 package com.neocoretechs.robocore.machine.bridge;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,7 +20,8 @@ import javax.xml.bind.annotation.XmlRootElement;
  */
 @XmlRootElement(name="machineReadings")
 @XmlAccessorType(XmlAccessType.FIELD)
-public class RawDataSubset {
+public class RawDataSubset implements Serializable{
+	private static final long serialVersionUID = 1L;
 	//@XmlElementWrapper()
 	@XmlAnyElement(lax=true)
 	List<MachineReading> machineReadings = new ArrayList<MachineReading>();

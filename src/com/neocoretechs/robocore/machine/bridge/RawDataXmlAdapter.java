@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.machine.bridge;
 
+import java.io.Serializable;
 import java.util.List;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 
@@ -12,7 +13,8 @@ import javax.xml.bind.annotation.adapters.XmlAdapter;
  * @author jg
  *
  */
-public class RawDataXmlAdapter extends XmlAdapter<RawDataSubset,List<MachineReading>> {
+public class RawDataXmlAdapter extends XmlAdapter<RawDataSubset,List<MachineReading>> implements Serializable {
+	private static final long serialVersionUID = 1L;
 	private static int page = 1;
 	private static int numberPerPage = 20;
 	private static PageMode pageMode = PageMode.PAGE;

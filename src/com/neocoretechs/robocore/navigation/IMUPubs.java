@@ -20,8 +20,9 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
-
 
 /**
  * Takes readings from the IMU DataPort and packages them for publication on the ROS bus.
@@ -61,7 +62,9 @@ public class IMUPubs extends AbstractNodeMain  {
 	int last_temp = 0;
 	double[] last_imu = null;
 	
-
+	ArrayList<String> statPub = new ArrayList<String>();
+	
+	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 	long time1, startTime;
 	long time2;
@@ -79,26 +82,20 @@ public class IMUPubs extends AbstractNodeMain  {
 	boolean mag_changed = false;
 	boolean temp_changed = false;
 	boolean imu_changed = false;
+	boolean system_needs_calibrating = true; // if mode is calibration and its first time through
 	
 	public IMUPubs(String host, InetSocketAddress master) {
 		this.host = host;
 		this.master = master;
 		NodeConfiguration nc = build();
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
-	    
+	    nodeMainExecutor.execute(this, nc);    
 	}
 	
 	public IMUPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 	    nodeMainExecutor.execute(this, cl.build());
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
 	}
 	
 	public IMUPubs() {}
@@ -149,6 +146,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	if( remaps.containsKey("__imu_freq") )
 		IMU_FREQ = Integer.parseInt(remaps.get("__imu_freq"));// number of milliseconds between maximum publication times (should data remain constant)
 	
+	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
+			connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+	
 	// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
 	awaitStart.countDown();
 	// This CancellableLoop will be canceled automatically when the node shuts
@@ -169,27 +169,67 @@ public void onStart(final ConnectedNode connectedNode) {
 			imuPort.setGYRO_CAL(GYRO_CAL);
 			imuPort.setMAG_CAL(MAG_CAL);
 			imuPort.setIMU_TOL(IMU_TOL);
-			try {
-				imuPort.displayRevision(imuPort.getRevision());
-				if( mode.equals("calibrate")) {
-					imuPort.calibrate();
-				}
-				imuPort.displaySystemStatus(imuPort.getSystemStatus());
-			} catch (IOException e) {
-				System.out.println("Cannot achieve proper calibration of IMU due to "+e);
-				e.printStackTrace();
-			}
 		}
 
 		@Override
 		protected void loop() throws InterruptedException {
-
+		    try {
+				awaitStart.await();
+			} catch (InterruptedException e) {}
+		    // Publish status to message bus, then, begin calibration if necessary
+		    // with prompts and status to status bus
+			try {
+				statPub.clear();
+				statPub.add(imuPort.displayRevision(imuPort.getRevision()));
+				if( mode.equals("calibrate") && system_needs_calibrating) {
+					system_needs_calibrating = false; // assume optimistic success
+					String calibString = "<<BEGIN IMU CALIBRATION KATAS!>>";
+					do {
+						statPub.add(calibString);
+						new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU CALIBRATION", 
+								diagnostic_msgs.DiagnosticStatus.WARN, statPub);
+						while(!statusQueue.isEmpty()) {
+							statpub.publish(statusQueue.takeFirst());
+							++sequenceNumber;
+							if( DEBUG )
+								System.out.println("Sequence:"+sequenceNumber);
+							Thread.sleep(1);
+						}
+						statPub.clear();
+					} while( !(calibString = imuPort.calibrate()).contains("CALIBRATION ACHIEVED"));
+					statPub.add(calibString);
+		    		try {
+						Thread.sleep(1);
+					} catch (InterruptedException e) {}
+				}
+				// publish final result to status message bus
+				statPub.add(imuPort.displaySystemStatus(imuPort.getSystemStatus()));
+				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU CALIBRATION", 
+						diagnostic_msgs.DiagnosticStatus.WARN, statPub);
+				while(!statusQueue.isEmpty()) {
+					statpub.publish(statusQueue.takeFirst());
+					++sequenceNumber;
+					if( DEBUG )
+						System.out.println("Sequence:"+sequenceNumber);
+					Thread.sleep(1);
+				}
+			} catch (IOException e) {
+				if(DEBUG)
+					System.out.println("Cannot achieve proper calibration of IMU due to "+e);
+				statPub.clear();
+				statPub.add("Cannot achieve proper calibration of IMU due to:");
+				statPub.add(e.getMessage());
+				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU CALIBRATION ERROR", 
+						diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
+				statPub.clear();
+				e.printStackTrace();
+			}
 			try {
 				getIMU();
 				++sequenceNumber;
 				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
 					time1 = System.currentTimeMillis();
-					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber));
+					statPub.add("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
 					lastSequenceNumber = sequenceNumber;
 					byte[] stat = imuPort.reportCalibrationStatus();
 					// If overall system status falls below 1, attempt an on-the-fly recalibration
@@ -197,9 +237,10 @@ public void onStart(final ConnectedNode connectedNode) {
 				    	if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
 				    		startTime = time1; // start time is when we recalibrated last
 				    		imuPort.resetCalibration();
-				    		System.out.println("** SYSTEM RESET AND RECALIBRATED");
+				    		statPub.add("** SYSTEM RESET AND RECALIBRATED");
 				    	}
 				    }
+				    statPub.add(imuPort.formatCalibrationStatus());
 				}
 				if( hasDataChanged() ) {
 					//MotionController.updatePID((float)eulers[0],  0.0f);
@@ -221,7 +262,7 @@ public void onStart(final ConnectedNode connectedNode) {
 						val.setZ(accels[2]);
 						imumsg.setLinearAcceleration(val);
 					} else {
-						System.out.println("ACCEL ERROR");
+						statPub.add("ACCEL ERROR");
 					}
 	
 					if( gyros != null ) {
@@ -231,7 +272,7 @@ public void onStart(final ConnectedNode connectedNode) {
 						vala.setY(gyros[1]);
 						imumsg.setAngularVelocity(vala);
 					} else {
-						System.out.println("GYRO ERROR");
+						statPub.add("GYRO ERROR");
 					}
 
 					if( quats != null ) {
@@ -243,13 +284,13 @@ public void onStart(final ConnectedNode connectedNode) {
 						imumsg.setOrientation(valq);
 						imumsg.setOrientationCovariance(eulers); // we send the euler angles through the covariance matrix
 					} else {
-						System.out.println("QUAT ERROR");
+						statPub.add("QUAT ERROR");
 					}
 					if( accels != null && gyros != null && quats != null && imu_changed) {
 						if( DEBUG )
 							System.out.println("Publishing IMU:"+imumsg);
 						imupub.publish(imumsg);
-						Thread.sleep(10);
+						Thread.sleep(1);
 					}
 				
 					// Mag
@@ -260,12 +301,12 @@ public void onStart(final ConnectedNode connectedNode) {
 						valm.setY(mags[1]);
 						magmsg.setMagneticField(valm);
 						magpub.publish(magmsg);
-						Thread.sleep(10);
+						Thread.sleep(1);
 						if( DEBUG )
 							System.out.println("Publishing MAG:"+magmsg);
 					} else {
 						if(mags == null)
-							System.out.println("MAG ERROR");
+							statPub.add("MAG ERROR");
 					}
 					// Temp
 					if(temp_changed) {
@@ -279,10 +320,22 @@ public void onStart(final ConnectedNode connectedNode) {
 				
 			} catch (IOException e) {
 				System.out.println("IMU publishing loop malfuntion "+e.getMessage());
+				statPub.add("IMU publishing loop malfuntion:");
+				statPub.add(e.getMessage());
 				e.printStackTrace();
 			}
-	
-			Thread.sleep(10);
+			if(!statPub.isEmpty()) {
+				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU STATUS", 
+						diagnostic_msgs.DiagnosticStatus.WARN, statPub);
+			}
+			while(!statusQueue.isEmpty()) {
+				statpub.publish(statusQueue.takeFirst());
+				++sequenceNumber;
+				if( DEBUG )
+					System.out.println("Sequence:"+sequenceNumber);
+				Thread.sleep(1);
+			}
+			Thread.sleep(1);
 		}
 			
 	});

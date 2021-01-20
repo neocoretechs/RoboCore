@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.PID;
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
 
 /**
@@ -7,7 +9,8 @@ import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
  * @author Jonathan Groff (C) NeoCoreTechs 20202
  *
  */
-public class SpeedSetpointInfo implements SetpointInfoInterface {
+public class SpeedSetpointInfo implements SetpointInfoInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	float MAXIMUM = 1000.0f;
 	float MINIMUM = 0.0f;
 	float velocity, targetVelocity, prevErr;

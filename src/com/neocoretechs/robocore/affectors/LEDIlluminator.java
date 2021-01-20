@@ -1,8 +1,11 @@
 package com.neocoretechs.robocore.affectors;
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.config.Props;
 
-public class LEDIlluminator implements LEDIlluminatorInterface {
+public class LEDIlluminator implements LEDIlluminatorInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	int axis;
 	int channel;
 	int slot;

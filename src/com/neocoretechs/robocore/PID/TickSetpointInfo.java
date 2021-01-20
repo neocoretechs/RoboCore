@@ -1,4 +1,7 @@
 package com.neocoretechs.robocore.PID;
+
+import java.io.Serializable;
+
 /**
  * Target is TicksPerFrame, or TicksPerMeter. Depends on wheel diameter.
  * cpr = ticksPerRevolution
@@ -9,7 +12,8 @@ package com.neocoretechs.robocore.PID;
  * @author Jonathan Groff (C) NeoCoreTechs 2020
  *
  */
-public class TickSetpointInfo extends DistanceSetpointInfo {
+public class TickSetpointInfo extends DistanceSetpointInfo implements Serializable {
+	private static final long serialVersionUID = 1L;
 	float wheelDiameter, ticksPerRevolution;
 	public float getWheelDiameter() { return wheelDiameter; }
 	public void setWheelDiameter(float w) { wheelDiameter = w; }

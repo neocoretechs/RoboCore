@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.config;
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
@@ -9,7 +11,8 @@ import com.neocoretechs.robocore.affectors.Affectors;
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
-public class Robot implements RobotInterface {
+public class Robot implements RobotInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	MotionPIDController motionPIDController;
 	RobotDiffDriveInterface robotDrive;
 	IMUSetpointInfo IMUSetpoint;
