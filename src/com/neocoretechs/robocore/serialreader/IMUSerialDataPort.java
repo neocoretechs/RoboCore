@@ -30,8 +30,8 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort.SerialWriter;
  *
  */
 public class IMUSerialDataPort implements DataPortInterface {
-		private static boolean DEBUG = true;
-		private static boolean PORTDEBUG = true;
+		private static boolean DEBUG = false;
+		private static boolean PORTDEBUG = false;
 		private static boolean INFO = true;
 	    private SerialPort serialPort;
 	    private OutputStream outStream;
@@ -301,7 +301,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    		setCalibration(calData);
 	    	} catch(FileNotFoundException fnfe) {}
 	    	setNormalPowerNDOFMode();
-	    	reportCalibrationStatus();
+	    	//reportCalibrationStatus();
 	        if( PORTDEBUG ) 
 	        	System.out.println("Connected to "+portName+" and BNO055 IMU is ready!");
 	    }
@@ -345,14 +345,18 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	}
 	        if( ack ) {
 	        	byte resp;
-	        	resp = (byte)(read() & 0xFF);
-	        	if( resp != (byte)0xEE ) {
-	    			throw new IOException(String.format("Response header corrupted in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp));			
+	        	while((resp = (byte)(read() & 0xFF)) == (byte)0xEE) {
+	        		try {
+						Thread.sleep(1);
+					} catch (InterruptedException e) {}
 	        	}
+	        	//if( resp != (byte)0xEE ) {
+	    		//	throw new IOException(String.format("Response header corrupted in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp));			
+	        	//}
 	        	//if( DEBUG )
 	        	//	System.out.println("Found ack header");
 	        	// we always use ACK except for reset, but it seems to send back the ee
-	        	resp = (byte)( read() & 0xFF);
+	        	//resp = (byte)( read() & 0xFF);
 	        	if( resp != (byte)0x01 ) {
 	        		switch(resp) {
 	        		case ((byte)0x03): 
@@ -911,8 +915,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     * @return the 4 byte array for system status, gyro, accel, mag 0-3
 	     * @throws IOException
 	     */
-	    public byte[] reportCalibrationStatus() throws IOException {
-	    	byte[] stat = getCalibrationStatus();
+	    public byte[] reportCalibrationStatus(byte[] stat) throws IOException {
+	    	//byte[] stat = getCalibrationStatus();
 	    	// system, gyro, accel, mag
 	    	if( stat[0] != 3 )
 	    		System.out.println("System status is less than full calibration at:"+stat[0]+", results will be "+
@@ -936,9 +940,9 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     * @return the 4 byte array for system status, gyro, accel, mag 0-3
 	     * @throws IOException
 	     */
-	    public String formatCalibrationStatus() throws IOException {
+	    public String formatCalibrationStatus(byte[] stat) throws IOException {
 	    	StringBuilder sb = new StringBuilder();
-	    	byte[] stat = getCalibrationStatus();
+	    	//byte[] stat = getCalibrationStatus();
 	    	// system, gyro, accel, mag
 	    	if( stat[0] != 3 ) {
 	    		sb.append("System status is less than full calibration at:");
@@ -982,9 +986,9 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     * Once all elements reach 3 a write is performed storing a file for next reset and the method exits.
 	     * @throws IOException
 	     */
-	    public String calibrate() throws IOException {
+	    public String calibrate(byte[] stat) throws IOException {
 	    	StringBuilder sb = new StringBuilder();
-	    	byte[] stat = reportCalibrationStatus();
+	    	//byte[] stat = reportCalibrationStatus();
     		sb.append("When status reaches target, the message:<< CALIBRATION ACHIEVED! >> and file "+CALIBRATION_FILE+" will appear and process is complete");
     		sb.append("\r\n");
     		sb.append("1.) For gyro leave flat for a few seconds, this reading usually self corrects immediately.");

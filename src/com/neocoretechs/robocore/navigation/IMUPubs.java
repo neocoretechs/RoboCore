@@ -211,7 +211,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							Thread.sleep(1);
 						}
 						statPub.clear();
-					} while( !(calibString = imuPort.calibrate()).contains("CALIBRATION ACHIEVED"));
+					} while( !(calibString = imuPort.calibrate(imuPort.getCalibrationStatus())).contains("CALIBRATION ACHIEVED"));
 					statPub.add(calibString);
 		    		try {
 						Thread.sleep(1);
@@ -250,16 +250,17 @@ public void onStart(final ConnectedNode connectedNode) {
 					time1 = System.currentTimeMillis();
 					statPub.add("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
 					lastSequenceNumber = sequenceNumber;
-					byte[] stat = imuPort.reportCalibrationStatus();
+					byte[] stat = imuPort.getCalibrationStatus();
 					// If overall system status falls below 1, attempt an on-the-fly recalibration
 					if( stat == null || stat[0] <= 1 ) {
 						if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
 							startTime = time1; // start time is when we recalibrated last
 							imuPort.resetCalibration();
 							statPub.add("** SYSTEM RESET AND RECALIBRATED");
+							stat = imuPort.getCalibrationStatus();
 						}
 					}
-					statPub.add(imuPort.formatCalibrationStatus());
+					statPub.add(imuPort.formatCalibrationStatus(stat));
 				}
 				if( hasDataChanged() ) {
 					//MotionController.updatePID((float)eulers[0],  0.0f);
