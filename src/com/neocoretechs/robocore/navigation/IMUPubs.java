@@ -83,6 +83,7 @@ public class IMUPubs extends AbstractNodeMain  {
 	boolean temp_changed = false;
 	boolean imu_changed = false;
 	boolean system_needs_calibrating = true; // if mode is calibration and its first time through
+	boolean display_revision = true;
 	
 	public IMUPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -178,10 +179,24 @@ public void onStart(final ConnectedNode connectedNode) {
 			} catch (InterruptedException e) {}
 		    // Publish status to message bus, then, begin calibration if necessary
 		    // with prompts and status to status bus
-			try {
-				statPub.clear();
-				statPub.add(imuPort.displayRevision(imuPort.getRevision()));
-				if( mode.equals("calibrate") && system_needs_calibrating) {
+			statPub.clear();
+					/*
+					statPub.add(e.getMessage());
+					StackTraceElement[] se = e.getStackTrace();
+					for(StackTraceElement ste: se)
+						statPub.add(ste.getClassName()+","+ste.getMethodName()+","+ste.getFileName()+","+ste.getLineNumber());
+					System.out.println(e);
+					e.printStackTrace();
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU INITIALIZATION", 
+							diagnostic_msgs.DiagnosticStatus.WARN, statPub);
+					while(!statusQueue.isEmpty()) {
+						statpub.publish(statusQueue.takeFirst());
+						Thread.sleep(1);
+					}
+					Thread.sleep(1000);
+					*/
+			if( mode.equals("calibrate") && system_needs_calibrating) {
+				try {
 					system_needs_calibrating = false; // assume optimistic success
 					String calibString = "<<BEGIN IMU CALIBRATION KATAS!>>";
 					do {
@@ -201,30 +216,34 @@ public void onStart(final ConnectedNode connectedNode) {
 		    		try {
 						Thread.sleep(1);
 					} catch (InterruptedException e) {}
-				}
-				// publish final result to status message bus
-				statPub.add(imuPort.displaySystemStatus(imuPort.getSystemStatus()));
-				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU CALIBRATION", 
+		    		// publish final result to status message bus
+		    		statPub.add(imuPort.displaySystemStatus(imuPort.getSystemStatus()));
+		    		new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU CALIBRATION", 
 						diagnostic_msgs.DiagnosticStatus.WARN, statPub);
-				while(!statusQueue.isEmpty()) {
-					statpub.publish(statusQueue.takeFirst());
-					++sequenceNumber;
-					if( DEBUG )
-						System.out.println("Sequence:"+sequenceNumber);
-					Thread.sleep(1);
-				}
-			} catch (IOException e) {
-				if(DEBUG)
-					System.out.println("Cannot achieve proper calibration of IMU due to "+e);
-				statPub.clear();
-				statPub.add("Cannot achieve proper calibration of IMU due to:");
-				statPub.add(e.getMessage());
-				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU CALIBRATION ERROR", 
+		    		while(!statusQueue.isEmpty()) {
+		    			statpub.publish(statusQueue.takeFirst());
+		    			++sequenceNumber;
+		    			if( DEBUG )
+		    				System.out.println("Sequence:"+sequenceNumber);
+		    			Thread.sleep(1);
+		    		}
+				} catch (IOException e) {
+					if(DEBUG)
+						System.out.println("Cannot achieve proper calibration of IMU due to "+e);
+					statPub.clear();
+					statPub.add("Cannot achieve proper calibration of IMU due to:");
+					statPub.add(e.getMessage());
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU CALIBRATION ERROR", 
 						diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
-				statPub.clear();
-				e.printStackTrace();
+					statPub.clear();
+					e.printStackTrace();
+				}
 			}
 			try {
+				if(display_revision) {
+					display_revision = false;
+					statPub.add(imuPort.displayRevision(imuPort.getRevision()));
+				}
 				getIMU();
 				++sequenceNumber;
 				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
@@ -233,14 +252,14 @@ public void onStart(final ConnectedNode connectedNode) {
 					lastSequenceNumber = sequenceNumber;
 					byte[] stat = imuPort.reportCalibrationStatus();
 					// If overall system status falls below 1, attempt an on-the-fly recalibration
-				    if( stat == null || stat[0] <= 1 ) {
-				    	if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
-				    		startTime = time1; // start time is when we recalibrated last
-				    		imuPort.resetCalibration();
-				    		statPub.add("** SYSTEM RESET AND RECALIBRATED");
-				    	}
-				    }
-				    statPub.add(imuPort.formatCalibrationStatus());
+					if( stat == null || stat[0] <= 1 ) {
+						if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
+							startTime = time1; // start time is when we recalibrated last
+							imuPort.resetCalibration();
+							statPub.add("** SYSTEM RESET AND RECALIBRATED");
+						}
+					}
+					statPub.add(imuPort.formatCalibrationStatus());
 				}
 				if( hasDataChanged() ) {
 					//MotionController.updatePID((float)eulers[0],  0.0f);
@@ -341,7 +360,10 @@ public void onStart(final ConnectedNode connectedNode) {
 	});
 
 }
-
+/**
+ * Retrieve the data from the IMU
+ * @throws IOException
+ */
 public void getIMU() throws IOException{
 	if( DEBUG )
 		System.out.println("reading ACCEL");

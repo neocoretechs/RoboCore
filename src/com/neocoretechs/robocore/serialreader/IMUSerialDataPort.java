@@ -20,6 +20,9 @@ import java.math.RoundingMode;
 import java.util.Enumeration;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort.SerialOwnershipHandler;
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort.SerialReader;
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort.SerialWriter;
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
  * The accelerometer, gyro, magnetometer, fused Euler angle data, and temperature.
@@ -27,7 +30,8 @@ import com.neocoretechs.robocore.ThreadPoolManager;
  *
  */
 public class IMUSerialDataPort implements DataPortInterface {
-		private static boolean DEBUG = false;
+		private static boolean DEBUG = true;
+		private static boolean PORTDEBUG = true;
 		private static boolean INFO = true;
 	    private SerialPort serialPort;
 	    private OutputStream outStream;
@@ -56,7 +60,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    
 	    private static volatile IMUSerialDataPort instance = null;
 	    private static Object mutex = new Object();
-	    private boolean portOwned = false;
+	    private int portOwned = CommPortOwnershipListener.PORT_UNOWNED;
+	    private CommPortIdentifier portId = null;
 	    
 	    //BNO055
 	    //Page id register definition
@@ -206,28 +211,34 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public boolean isEOT() { return EOT; }
 	    
 	    public void connect(boolean writeable) throws IOException {
-	    	portOwned = false;
-	    	//if( Props.DEBUG ) System.out.println("Trying connect to serial port "+portName);
+	    	if(portOwned == CommPortOwnershipListener.PORT_OWNED) {
+	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port already owned by.."+portId.getCurrentOwner());
+	    	}
+	    	if(portOwned == CommPortOwnershipListener.PORT_OWNERSHIP_REQUESTED) {
+	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port whose ownership has already been requested by "+portId.getCurrentOwner());
+	    	}
 	        try {
 	            // Obtain a CommPortIdentifier object for the port you want to open
-	            CommPortIdentifier portId =
-	                    CommPortIdentifier.getPortIdentifier(portName);
+	        	portId = CommPortIdentifier.getPortIdentifier(portName);
 	            if( portId == null ) {
 	            	throw new IOException("Cant get CommPortIdentifier for "+portName);
 	            }
 	        	// Add ownership event listener
 	            portId.addPortOwnershipListener(new SerialOwnershipHandler());
-
+	        	if( PORTDEBUG ) 
+		    		System.out.println("Trying connect to serial port "+portName);
 	            serialPort =
 	                    (SerialPort) portId.open("", 5500);
 	            if( serialPort == null ) {
 	            	throw new IOException("Cant open SerialPort "+portName);
 	            }
-	            
-	            while(!portOwned)
+	            long portTime = System.nanoTime();
+	            while(portOwned != CommPortOwnershipListener.PORT_OWNED)
 					try {
-						Thread.sleep(1);
+						Thread.sleep(0,1);
 					} catch (InterruptedException e1) {}
+	            if(DEBUG)
+	            	System.out.println("Took port ownership in "+(System.nanoTime()-portTime)+" .ns");
 	            //if (! (serialPort instanceof SerialPort) )
 	            //{
 	            //	err
@@ -247,7 +258,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	            while(!readThread.isRunning)
 					try {
 						Thread.sleep(1);
-					} catch (InterruptedException e) {}           
+					} catch (InterruptedException e) {}
+	            
 	            
 	            if( writeable) {
 	                outStream = serialPort.getOutputStream();
@@ -274,7 +286,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        // set config mode
 	    	set_mode(OPERATION_MODE_CONFIG);
 	        // now read without kruft
-	        write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true);
+	        while(write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true)) {
+	        	try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {}
+	        }
 	        readChipId();
 	    	reset();
 	    	// obtain calibration data if we can
@@ -286,7 +302,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	} catch(FileNotFoundException fnfe) {}
 	    	setNormalPowerNDOFMode();
 	    	reportCalibrationStatus();
-	        if( DEBUG ) 
+	        if( PORTDEBUG ) 
 	        	System.out.println("Connected to "+portName+" and BNO055 IMU is ready!");
 	    }
 	    
@@ -303,20 +319,21 @@ public class IMUSerialDataPort implements DataPortInterface {
 		 * Byte 1 Byte 2
 		 * Response Header Status
 		 * 0xEE 0x01: WRITE_SUCCESS
-		 * 0x03: WRITE_FAIL
-		 * 0x04: REGMAP_INVALID_ADDRESS
-		 * 0x05: REGMAP_WRITE_DISABLED
-		 * 0x06: WRONG_START_BYTE
-		 * 0x07: BUS_OVER_RUN_ERROR
-		 * 0X08: MAX_LENGTH_ERROR
-		 * 0x09: MIN_LENGTH_ERROR
-		 * 0x0A: RECEIVE_CHARACTER_TIMEOUT
+		 * 0x03: WRITE_FAIL - check connection, protocol settings and operation mode
+		 * 0x04: REGMAP_INVALID_ADDRESS - check if the register is addressable
+		 * 0x05: REGMAP_WRITE_DISABLED - check register property, ie read only
+		 * 0x06: WRONG_START_BYTE - Check if first byte sent is 0xAA
+		 * 0x07: BUS_OVER_RUN_ERROR - resend the command
+		 * 0X08: MAX_LENGTH_ERROR - split command so single frame < 128 bytes
+		 * 0x09: MIN_LENGTH_ERROR - send a valid frame
+		 * 0x0A: RECEIVE_CHARACTER_TIMEOUT - decrease waiting time between sending of 2 bytes of 1 frame
 	     * @param address
 	     * @param data
 	     * @param ack
+	     * @return true if a command retry is necessary due to buffer overrun
 	     * @throws IOException
 	     */
-	    public void write(byte address, byte[] data, boolean ack) throws IOException {
+	    public boolean write(byte address, byte[] data, boolean ack) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("write "+c);
 	    	// Build and send serial register write command.
 	    	write((byte) 0xAA); // Start byte
@@ -325,25 +342,45 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	write((byte) (data.length & 0xFF));
 	    	for(int i = 0; i < data.length; i++) {
 	    			write((byte) (data[i] & 0xFF));
-	    	}	    	
-	    	byte resp;
-	    	resp = (byte)(read() & 0xFF);
-	    	if( resp != (byte)0xEE ) {
-	    			throw new IOException(String.format("Received unexpected response in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp));			
 	    	}
-	    	//if( DEBUG )
-	    	//	System.out.println("Found ack header");
-	    	// we always use ACK except for reset, but it seems to send back the ee
-	        if( !ack ) {
-		    		throw new IOException("return from write without ACK..");
-		    }
-	        resp = (byte)( read() & 0xFF);
-	    	if( resp != (byte)0x01 ) {
-	    			throw new IOException(String.format("Error from write ACK:%02x\r\n",resp));
-	    	}
-	    	//if( DEBUG ) {
-	    	//	System.out.println("ACK successful");
-	    	//}
+	        if( ack ) {
+	        	byte resp;
+	        	resp = (byte)(read() & 0xFF);
+	        	if( resp != (byte)0xEE ) {
+	    			throw new IOException(String.format("Response header corrupted in write ACK: %02x while looking for ACK byte 'ee'\r\n", resp));			
+	        	}
+	        	//if( DEBUG )
+	        	//	System.out.println("Found ack header");
+	        	// we always use ACK except for reset, but it seems to send back the ee
+	        	resp = (byte)( read() & 0xFF);
+	        	if( resp != (byte)0x01 ) {
+	        		switch(resp) {
+	        		case ((byte)0x03): 
+	        			throw new IOException(String.format("Error from write ACK:%02x WRITE_FAIL - check connection, protocol settings and operation mode\r\n",resp));
+	        		case((byte)0x04):
+	        			throw new IOException(String.format("Error from write ACK:%02x REGMAP_INVALID_ADDRESS - check if the register is addressable\r\n",resp));
+	        		case((byte)0x05): 
+	        			throw new IOException(String.format("Error from write ACK:%02x REGMAP_WRITE_DISABLED - check register property, ie read only\r\n",resp));
+	        		case((byte)0x06): 
+	        			throw new IOException(String.format("Error from write ACK:%02x WRONG_START_BYTE - Check if first byte sent is 0xAA\r\n",resp));
+	        		case((byte)0x07):
+	        			//System.out.println(String.format("Error from write ACK:%02x BUS_OVER_RUN_ERROR - resend the command\r\n",resp));
+	        			return true;
+	        		case((byte)0X08):
+	        			throw new IOException(String.format("Error from write ACK:%02x MAX_LENGTH_ERROR - split command so single frame < 128 bytes\r\n",resp));
+	        		case((byte)0x09): 
+	        			throw new IOException(String.format("Error from write ACK:%02x MIN_LENGTH_ERROR - send a valid frame\r\n",resp));
+	        		case((byte)0x0A):
+	        			throw new IOException(String.format("Error from write ACK:%02x RECEIVE_CHARACTER_TIMEOUT - decrease waiting time between sending of 2 bytes of 1 frame\r\n",resp));
+	        		default:
+	    			throw new IOException(String.format("UnknownError from write ACK:%02x\r\n",resp));
+	        		}
+	        	}
+	        }
+	        if( DEBUG ) {
+        		System.out.println("ACK successful");
+	        }
+	        return false;
 	    }
 	    
 		@Override
@@ -436,13 +473,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 		 * Byte 1 Byte 2
 		 * Response Header Status
 		 * 0xEE 0x02: READ_FAIL
-		 * 0x04: REGMAP_INVALID_ADDRESS
-		 * 0x05: REGMAP_WRITE_DISABLED
-		 * 0x06: WRONG_START_BYTE
-		 * 0x07: BUS_OVER_RUN_ERROR
-		 * 0X08: MAX_LENGTH_ERROR
-		 * 0x09: MIN_LENGTH_ERROR
-		 * 0x0A: RECEIVE_CHARACTER_TIMEOUT
+		 * 0x03 : WRITE_FAIL - check connection protocol setting and operation of BNO
+		 * 0x04 : REGMAP_INVALID_ADDRESS - Check that register is addressable
+		 * 0x06 : START BYTE IS NOT 0xAA - Check that the start byte is 0xAA
+		 * 0x07 : BUS_OVER_RUN_ERROR - BNO was not able to clear buffer, re-send command
+		 * 0x08 : MAX_LENGTH_ERR - Max length of data is > 128 0x80 split frame
+		 * 0x09 : MIN_LENGTH_ERR - Min length of data is < 1, send valid frame
+		 * 0x0A : RECIEVE_CHARACTER_TIMEOUT - If next character does not arrive within 100ms, decrease wait time between bytes
 	     */
 	    public byte[] read(byte address, byte length) throws IOException {
 	    	//if( Props.DEBUG ) System.out.println("read");
@@ -451,13 +488,28 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	byte resp;
 	    	while( (resp = signalRead(address, length)) == (byte)0x07 && retry++ < 10) {
 	    		try {
-					Thread.sleep(5);
+					Thread.sleep(100);
 				} catch (InterruptedException e) {}
 	    	}
 	    	if( resp != 0 ) {
-	    		if(DEBUG)
-	    			System.out.println("Bad response for signalRead after " + retry +" retries, exiting read with response:"+resp);
-	    		return null;
+	       		switch(resp) {
+        		case ((byte)0x03): 
+        			throw new IOException(String.format("Error from write ACK:%02x WRITE_FAIL - check connection, protocol settings and operation mode\r\n",resp));
+        		case((byte)0x04):
+        			throw new IOException(String.format("Error from write ACK:%02x REGMAP_INVALID_ADDRESS - check if the register is addressable\r\n",resp));
+        		case((byte)0x06): 
+        			throw new IOException(String.format("Error from write ACK:%02x WRONG_START_BYTE - Check if first byte sent is 0xAA\r\n",resp));
+        		case((byte)0x07):
+        			throw new IOException(String.format("Error from write ACK:%02x BUS_OVER_RUN_ERROR - resend the command\r\n",resp));
+        		case((byte)0X08):
+        			throw new IOException(String.format("Error from write ACK:%02x MAX_LENGTH_ERROR - split command so single frame < 128 bytes\r\n",resp));
+        		case((byte)0x09): 
+        			throw new IOException(String.format("Error from write ACK:%02x MIN_LENGTH_ERROR - send a valid frame\r\n",resp));
+        		case((byte)0x0A):
+        			throw new IOException(String.format("Error from write ACK:%02x RECEIVE_CHARACTER_TIMEOUT - decrease waiting time between sending of 2 bytes of 1 frame to < 100ms\r\n",resp));
+        		default:
+        			throw new IOException("Bad response for signalRead after " + retry +" retries, exiting read with response:"+resp);
+	       		}
 	    	}
 	    	// Returning with 0 from signalRead means we found 0xBB
 	    	// next byte is length, then data 1..n
@@ -467,16 +519,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	//	System.out.printf("Recovered length byte: %02x\r\n", blen);
 	        // Read the returned bytes.	
 	        if( blen == 0 || blen != length) {
-	        	if(DEBUG)
-	                System.out.printf("Received length byte: %d but read requested %d bytes.\r\n", blen, length);
-	            return null;
+	                throw new IOException(String.format("Received length byte: %d but read requested %d bytes.\r\n", blen, length));
 	        }
 	        byte[] bout = new byte[blen];
 	        for(int i = 0; i < blen; i++) {
 	            	bout[i] = (byte)( read() & 0xFF);
-	         }
-	         return bout;
-
+	        }
+	        return bout;
 	    }
 	    
 	    /**
@@ -509,7 +558,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	       //table 3-3 and 3-5 of the datasheet:
 	       // http://www.adafruit.com/datasheets/BST_BNO055_DS000_12.pdf
 	       // 
-	       write(BNO055_OPR_MODE_ADDR, new byte[]{(byte)(mode & (byte)0xFF)}, true);
+	       while(write(BNO055_OPR_MODE_ADDR, new byte[]{(byte)(mode & (byte)0xFF)}, true)) {
+	         	 try {
+						Thread.sleep(100);
+				} catch (InterruptedException e) {}
+	       }
 	       // Delay for 30 milliseconds (datasheet recommends 19ms, but a little more
 	       // can't hurt and the kernel is going to spend some unknown amount of time too).
 	       try {
@@ -537,9 +590,17 @@ public class IMUSerialDataPort implements DataPortInterface {
 	     */
 	    private void setNormalPowerNDOFMode() throws IOException {
 	         // Set to normal power mode.
-	         write(BNO055_PWR_MODE_ADDR, new byte[]{(byte)POWER_MODE_NORMAL}, true);
+	         while(write(BNO055_PWR_MODE_ADDR, new byte[]{(byte)POWER_MODE_NORMAL}, true)) {
+	        	 try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {}
+	         }
 	         // Default to internal oscillator.
-	         write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x0}, true);
+	         while(write(BNO055_SYS_TRIGGER_ADDR, new byte[]{(byte)0x0}, true)) {
+	           	 try {
+						Thread.sleep(100);
+				 } catch (InterruptedException e) {}
+	         }
 	         // Enter normal operation mode.
 	         set_mode(OPERATION_MODE_NDOF);
 	    }
@@ -591,7 +652,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        // set config mode
 	    	set_mode(OPERATION_MODE_CONFIG);
 	        // now read without kruft
-	        write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true);
+	        while(write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true)) {
+	          	try {
+						Thread.sleep(100);
+				} catch (InterruptedException e) {}
+	        }
 	        readChipId();
 	    	reset();
 	    	// obtain calibration data if we can
@@ -833,7 +898,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        //Switch to configuration mode, as mentioned in section 3.10.4 of datasheet.
 	        //self._config_mode()
 	        // Set the 22 bytes of calibration data.
-	        write(ACCEL_OFFSET_X_LSB_ADDR, data, true);
+	        while(write(ACCEL_OFFSET_X_LSB_ADDR, data, true)) {
+	          	 try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {}
+	        }
 	        // Go back to normal operation mode.
 	        //self._operation_mode()
 	    }
@@ -1020,13 +1089,21 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        map_config |= (z & (byte)0x03) << 4;
 	        map_config |= (y & (byte)0x03) << 2;
 	        map_config |= x & (byte)0x03;
-	        write(BNO055_AXIS_MAP_CONFIG_ADDR,new byte[]{ map_config}, true);
+	        while(write(BNO055_AXIS_MAP_CONFIG_ADDR,new byte[]{ map_config}, true)) {
+	          	 try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {}
+	        }
 	        // Set the axis remap sign register value.
 	        byte sign_config = (byte)0x00;
 	        sign_config |= (x_sign & (byte)0x01) << 2;
 	        sign_config |= (y_sign & (byte)0x01) << 1;
 	        sign_config |= z_sign & (byte)0x01;
-	        write(BNO055_AXIS_MAP_SIGN_ADDR, new byte[]{sign_config}, true);
+	        while(write(BNO055_AXIS_MAP_SIGN_ADDR, new byte[]{sign_config}, true)) {
+	          	 try {
+						Thread.sleep(10);
+				} catch (InterruptedException e) {}
+	        }
 	        // Go back to normal operation mode.
 	        setNormalPowerNDOFMode();
 	     }
@@ -1093,7 +1170,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	            // Perform a self test.
 	            byte[] sysTrigger = read(BNO055_SYS_TRIGGER_ADDR, (byte)1);
 	            sysTrigger[0] |= (byte)0x1;
-	            write(BNO055_SYS_TRIGGER_ADDR, sysTrigger, true);
+	            while(write(BNO055_SYS_TRIGGER_ADDR, sysTrigger, true)) {
+	            	try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {}
+	            }
 	            // Wait for self test to finish.
 	            try {
 					Thread.sleep(1000);
@@ -1201,6 +1282,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    	}
 	    	return sb.toString();
 	    }
+	    
 	    /**
 	     *  Return a tuple with revision information about the BNO055 chip.  Will
 	     *   return 5 values:
@@ -1429,22 +1511,19 @@ public class IMUSerialDataPort implements DataPortInterface {
 	        class SerialOwnershipHandler implements CommPortOwnershipListener
 	        {
 	            public void ownershipChange(int type) {
+	            	portOwned = type;
+	            	/*
 	                switch (type) {
-	                    case CommPortOwnershipListener.PORT_OWNED:
+	                    case CommPortOwnershipListener.PORT_OWNED:1
 	                        //System.out.println("We got the port");
-	                    	portOwned = true;
-	                        break;
-	                    case CommPortOwnershipListener.PORT_UNOWNED:
+	                    case CommPortOwnershipListener.PORT_UNOWNED:2
 	                        //System.out.println("We've just lost our port ownership");
-	                    	portOwned = false;
-	                        break;
-	                    case CommPortOwnershipListener.PORT_OWNERSHIP_REQUESTED:
+	                    case CommPortOwnershipListener.PORT_OWNERSHIP_REQUESTED:3
 	                        //System.out.println("Someone is asking our port's ownership");
-	                        break;
 	                }
+	                */
 	            }
 	        }
-
 
 			@Override
 			public String readLine() {
