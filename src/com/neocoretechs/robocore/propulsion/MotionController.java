@@ -426,6 +426,9 @@ public class MotionController extends AbstractNodeMain {
 																		 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
 					}
 				}
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {}
 				/*	
 				 if (axes[6] == Component.POV.OFF) {
 					 if(DEBUG)System.out.println("POV OFF");
