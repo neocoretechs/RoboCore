@@ -84,7 +84,7 @@ import net.java.games.input.Component;
  *
  */
 public class MotionController extends AbstractNodeMain {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
@@ -141,7 +141,8 @@ public class MotionController extends AbstractNodeMain {
 	static boolean inAuto = false;
 	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
 	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
-	static boolean LEDCamlightIsOn = false;
+	static boolean LEDCamlightIsOn = true; // to send initial turn off
+	static boolean LiftActuatorIsOn = true;
 	
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
@@ -410,6 +411,7 @@ public class MotionController extends AbstractNodeMain {
 					povVals.add(0);
 					trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
 																	 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+					LiftActuatorIsOn = true;
 				} else {
 					if(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()] == 
 							robot.getAffectors().getLiftActuatorInterface().getControllerComponentDown()) {
@@ -424,6 +426,19 @@ public class MotionController extends AbstractNodeMain {
 						povVals.add(0);
 						trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
 																		 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+						LiftActuatorIsOn = true;
+					} else {
+						if(LiftActuatorIsOn) {
+							LiftActuatorIsOn = false;
+							ArrayList<Integer> povVals = new ArrayList<Integer>(5);
+							povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerSlot()); //controller slot
+							povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerChannel()); // controller slot channel
+							povVals.add(0);
+							povVals.add(0);
+							povVals.add(0);
+							trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
+																			 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+						}
 					}
 				}
 				try {
