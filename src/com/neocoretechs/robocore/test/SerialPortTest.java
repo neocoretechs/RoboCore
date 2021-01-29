@@ -1,6 +1,9 @@
 package com.neocoretechs.robocore.test;
 
+import java.util.List;
+
 import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class SerialPortTest {
@@ -8,6 +11,11 @@ public class SerialPortTest {
 	private static int THRESHOLD = 50;
 	public static void main(String[] args) throws Exception {	
 		ByteSerialDataPort.getInstance().connect(true);
+		List<String> starts = FileIOUtilities.getConfig();
+		for(String s : starts) {
+			System.out.println("Startup GCode:"+s);
+			command(s);
+		}
 		command("M115");
 		command("M700");
 		command("M701");
