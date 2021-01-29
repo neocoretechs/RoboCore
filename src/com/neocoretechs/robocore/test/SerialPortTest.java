@@ -1,37 +1,37 @@
 package com.neocoretechs.robocore.test;
 
+import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class SerialPortTest {
-	public static void main(String[] args) throws Exception {
-		String motorCommand = "M700";		
+	static AsynchDemuxer ad = new AsynchDemuxer();
+	private static int THRESHOLD = 50;
+	public static void main(String[] args) throws Exception {	
 		ByteSerialDataPort.getInstance().connect(true);
-		for(int i = 0 ; i < 5000; i++) {
-			ByteSerialDataPort.getInstance().writeLine(motorCommand);
-			System.out.println("wrote "+i);
-			String in1 = ByteSerialDataPort.getInstance().readLine();
-			System.out.println(in1);
-			while( !in1.startsWith("<status>")) {// soak up status headers
-				System.out.println("POSSIBLE ERROR skipping:"+in1);
-				in1 = ByteSerialDataPort.getInstance().readLine();
+		command("M115");
+		command("M700");
+		command("M701");
+		command("M702");
+		command("M703");
+		command("M704");
+		command("M705");
+		command("M706");
+	}
+	
+	public static void command(String code)throws Exception{
+		ByteSerialDataPort.getInstance().writeLine(code);
+		System.out.println("wrote "+code);
+		Thread.sleep(1);
+		int lines = 0;
+		String line = null;
+		while(!ad.isLineTerminal((line=ByteSerialDataPort.getInstance().readLine()))) {
+			System.out.println(lines+".) "+line);
+			++lines;
+			if(lines > THRESHOLD ) {
+				System.out.println("TOO MANY LINES RETURNED FOR"+code);
+				break;
 			}
-			// got status header, soak up variable lines, look for markers
-			boolean compiled = false;
-			boolean me = false;
-			while( in1.charAt(0) == '<') {
-				in1 = ByteSerialDataPort.getInstance().readLine();
-				if(in1.contains("Compiled")) {
-					compiled = true;
-				}
-				if( in1.contains("Groff")) {
-					me = true;
-				}
-				System.out.println(in1);
-				if( in1.startsWith("</status>")) break;
-			}
-			if( !compiled || !me )
-				System.out.println("ERROR AT "+i);
-			//Thread.sleep(15);
 		}
+		System.out.println(lines+" lines returned for "+code);
 	}
 }
