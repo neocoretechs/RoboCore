@@ -24,6 +24,9 @@ public class SerialPortTest {
 		command("M704");
 		command("M705");
 		command("M706");
+		for(int i = 0; i < 10; i++) {
+			command("M798 Z"+i); //motor controller status per channel
+		}
 	}
 	
 	public static void command(String code)throws Exception{
@@ -32,14 +35,15 @@ public class SerialPortTest {
 		Thread.sleep(1);
 		int lines = 0;
 		String line = null;
+		long tim0 = System.currentTimeMillis();
 		while(!ad.isLineTerminal((line=ByteSerialDataPort.getInstance().readLine()))) {
 			System.out.println(lines+".) "+line);
 			++lines;
 			if(lines > THRESHOLD ) {
-				System.out.println("TOO MANY LINES RETURNED FOR"+code);
+				System.out.println("TOO MANY LINES RETURNED FOR "+code);
 				break;
 			}
 		}
-		System.out.println(lines+" lines returned for "+code);
+		System.out.println(lines+" lines returned for "+code+" in "+(System.currentTimeMillis()-tim0)+" .ms");
 	}
 }
