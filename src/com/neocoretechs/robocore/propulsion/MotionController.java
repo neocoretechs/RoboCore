@@ -45,7 +45,66 @@ import net.java.games.input.Component;
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to affect
  * propulsion and issue status updates based on IMU data edge conditions that may indicate problems.
  * Subscribing to:
- * sensor_msgs/Joy (joystick information boxed as an array of buttons and axis values common to standard controllers)
+ * sensor_msgs/Joy (joystick information boxed as an array of buttons and axis values common to standard controllers):
+ * * NYCO CORE CONTROLLER:
+ * Identifies as : USB Joystick
+ *Axis x		Left stick (left/right)
+ *Axis y		Left stick (up/down)
+ *Axis rx		N/A	 
+ *Axis ry		N/A	 
+ *Axis z	 	Right stick (left/right)
+ *Axis rz		Right stick (up/down)
+ *Button 0	x  - Thumb 2
+ *Button 1	circle - Thumb
+ *Button 2	square - Top
+ *Button 3	triangle - Trigger
+ *Button 4	Left Bumper	- Top2
+ *Button 5	Right Bumper - Pinkie
+ *Button 6	Select - Base3
+ *Button 7	Start - Base4
+ *Button 8	Left Stick Press - Base5
+ *Button 9	Right Stick Press - Base6
+ *
+ * AFTERGLOW CONTROLLER:
+ * Identifies as : Generic X-Box Pad (right, even though its a PS3!)
+ *Axis x		Left stick (left/right)
+ *Axis y		Left stick (up/down)
+ *Axis z	 	Left trigger
+ *Axis rx(rx)	Right stick (left/right)	 
+ *Axis ry(ry)	Right stick (up/down) 
+ *Axis rz		Right trigger
+ *Button B(B) - circle
+ *Button X(X) - square
+ *Button A(A) - X
+ *Button Y(Y) - triangle
+ *Button Left Thumb - left bumper
+ *Button Right Thumb - right bumper
+ *Button Left Thumb 3 - left stick press
+ *Button Right Thumb 3 - right stick press
+ *Button Select - Select
+ *Button Mode - Mode
+ *Button Unknown - Home
+ *
+ * LOGITECH, INC F310 GAMEPAD
+ * Identifies as : Generic X-box pad (Controls are the same as AfterGlow) or Logitech Gamepad F310
+ *Axis x		Left stick (left/right)
+ *Axis y		Left stick (up/down)
+ *Axis z	 	Left trigger
+ *Axis rx(rx)	Right stick (left/right)	 
+ *Axis ry(ry)	Right stick (up/down) 
+ *Axis rz		Right trigger
+ *Button B(B) - circle
+ *Button X(X) - square
+ *Button A(A) - X
+ *Button Y(Y) - triangle
+ *Button Left Thumb - left bumper
+ *Button Right Thumb - right bumper
+ *Button Left Thumb 3 - left stick press
+ *Button Right Thumb 3 - right stick press
+ *Button Select - Select
+ *Button Mode - Mode
+ *Button Unknown - Home
+ *
  * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)
  * sensor_msgs/Temperature (most likely from IMU)
  * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)
@@ -84,7 +143,7 @@ import net.java.games.input.Component;
  *
  */
 public class MotionController extends AbstractNodeMain {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
@@ -210,7 +269,9 @@ public class MotionController extends AbstractNodeMain {
 		//System.out.println("onStart build robot...");
 		//System.out.println("onStart robot"+robot);
 		//final Log log = connectedNode.getLog();
-		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();	
+		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		if(remaps.containsKey("__debug"))
+			DEBUG = true;
 		if( remaps.containsKey("__speedlimit") ) {
 			robot.getLeftSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
 			robot.getRightSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));

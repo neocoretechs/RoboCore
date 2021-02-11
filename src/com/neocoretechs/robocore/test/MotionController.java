@@ -34,8 +34,6 @@ public class MotionController extends AbstractNodeMain {
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	private int sequenceNumber;
 
-
-
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -51,11 +49,6 @@ public class MotionController extends AbstractNodeMain {
 	    if( DEBUG ) {
 	    	System.out.println("Bringing up MotionControl with host and master:"+host+" "+master);
 	    }
-	    try {
-			awaitStart.await();
-		    if( DEBUG )
-		    	System.out.println("Pub/subs registered..");
-		} catch (InterruptedException e) {}
 	    
 	}
 	
@@ -66,11 +59,6 @@ public class MotionController extends AbstractNodeMain {
 	    if( DEBUG ) {
 	    	System.out.println("Bringing up MotionControl with args:"+args[0]+" "+args[1]+" "+args[2]);
 	    }
-	    try {
-			awaitStart.await();
-		    if( DEBUG )
-		    	System.out.println("Pub/subs registered..");
-		} catch (InterruptedException e) {}
 	}
 	
 	public MotionController() { }
@@ -126,6 +114,11 @@ public class MotionController extends AbstractNodeMain {
 
 			@Override
 			protected void loop() throws InterruptedException {
+			    try {
+					awaitStart.await();
+				    if( DEBUG )
+				    	System.out.println("Pub/subs registered..");
+				} catch (InterruptedException e) {}
 				Thread.sleep(100);
 		}
 	}); // cancellable loop

@@ -17,6 +17,7 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.util.Iterator;
 import java.util.Map;
@@ -106,39 +107,15 @@ public class VideoPlaybackStereo  {
 			        displayPanel2.paintPanel();
 			    }
 			});
-			ThreadPoolManager.getInstance().spin(new Runnable() {
-				@Override
-				public void run() {
-					if(DEBUG)
-						System.out.println("Entering display loop");
-			        while(true) {
-			        	//java.awt.Image dimage=null;
-						//try {
-							//dimage = queue.takeFirst();
-						//} catch (InterruptedException e) {
-							//e.printStackTrace();
-						//}
-			        	if( imagel == null || imager == null) {
-							try {
-								Thread.sleep(1);
-							} catch (InterruptedException e) {}
-			        	} else {
-			        		synchronized(mutex) {
-			        			displayPanel1.setLastFrame((java.awt.Image)imagel);
-			        			displayPanel2.setLastFrame((java.awt.Image)imager);
-			        			displayPanel1.setComputedValues(0,0,0                                                                                                                                             ); // values from db for time, yaw
-			        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
-			        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
-			        			displayPanel1.invalidate();
-			        			displayPanel2.invalidate();
-			        			displayPanel1.updateUI();
-			        			displayPanel2.updateUI();
-			        		}
-			        	}
-			        }
-				}
-			}, "SYSTEM");
+			
+			while(displayPanel1 == null || displayPanel2 == null ||
+					displayPanel2.aField == null || displayPanel2.yField == null || displayPanel2.xField == null ||
+					displayPanel1.aField == null || displayPanel1.yField == null || displayPanel1.xField == null)
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {}
 		}
+		
 		try {
 			long timdiff = 0;
 			long timlast = 0;
@@ -156,11 +133,6 @@ public class VideoPlaybackStereo  {
 						samplesPer = (timdiff+samplesPer)/2;
 						timlast = tim;
 					}
-					while(displayPanel2.aField == null || displayPanel2.yField == null || displayPanel2.xField == null)
-						try {
-							Thread.sleep(1);
-						} catch (InterruptedException e) {}
-					displayPanel2.setComputedValues(yaw, tim, 0);
 					StereoscopicImageBytes<?> sib = (StereoscopicImageBytes<?>) c[2];
 					synchronized(mutex) {
 						bufferl = sib.getLeft(); // 3 byte BGR
@@ -187,6 +159,16 @@ public class VideoPlaybackStereo  {
 								bqueue = new byte[][]{bufferl, bufferr};
 							} 
 						}
+	        			displayPanel1.setLastFrame((java.awt.Image)imagel);
+	        			displayPanel2.setLastFrame((java.awt.Image)imager);
+	    				displayPanel2.setComputedValues(yaw, tim, 0);
+	        			displayPanel1.setComputedValues(yaw, tim, 0); // values from db for time, yaw
+	        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
+	        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
+	        			displayPanel1.invalidate();
+	        			displayPanel2.invalidate();
+	        			displayPanel1.updateUI();
+	        			displayPanel2.updateUI();
 					}
 					++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 				}
@@ -400,7 +382,7 @@ public class VideoPlaybackStereo  {
 		    * Create formatters for the coordinates and time (2 decimal places)
 		    * and the angles (1 decimal place, and the degrees symbol).
 		    */
-		        df = new DecimalFormat("##################0");
+		        df = DateFormat.getTimeInstance();
 		        dfs = new DecimalFormat("+####0.00;-####0.00");
 		        da = new DecimalFormat("####0.0\u00b0");
 		        das = new DecimalFormat("+####0.0\u00b0;-####0.0\u00b0");
@@ -439,8 +421,8 @@ public class VideoPlaybackStereo  {
 
 		    }
 
-		    /** Formatter for the coordinates and time (2 decimal places). */
-		    DecimalFormat df;
+		    /** Formatter for the time. */
+		    DateFormat df;
 
 		    /** Formatter for the errors (2 decimal places, allows shows + or -). */
 		    DecimalFormat dfs;

@@ -31,6 +31,7 @@ import diagnostic_msgs.DiagnosticStatus;
  */
 public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus> {
 	private static boolean DEBUG = false;
+	private static int MAXMESSAGESIZE = 1024; // upper bound to keep endless loops from hanging status
 	List<diagnostic_msgs.KeyValue> li = null;	
 	/**
 	 * Constructor to build the per thread queuing for Marlinspike MachineBridge response payloads onto the
@@ -54,6 +55,10 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 										CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics, 
 										String topicName, byte dstatus, List<String> messages) {
 		super(null, node, statpub, outgoingDiagnostics);
+		if(messages.size() > MAXMESSAGESIZE || outgoingDiagnostics.length() > MAXMESSAGESIZE)
+			throw new RuntimeException("GLOBAL MAXIMUM MESSAGE SIZE OF "+MAXMESSAGESIZE+
+					" EXCEEDED BY EITHER NEW MESSAGE BUFFER AT:"+messages.size()+" OR "+
+					" OUTGOING MESSAGE QUEUE AT:"+outgoingDiagnostics.length());
 		this.topicName = topicName;
 		this.dstatus = dstatus;
 		setUp();

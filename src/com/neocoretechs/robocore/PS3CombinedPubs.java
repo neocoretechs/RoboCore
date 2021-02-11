@@ -114,7 +114,7 @@ import org.ros.internal.loader.CommandLineLoader;
  * @author jg Copyright (C) NeoCoreTechs 2017,2018
  */
 public class PS3CombinedPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = false;
+	private static boolean DEBUG = false;
 	private static volatile boolean shouldRun = false; // main controller run method loop control
 	private String host;
 	private InetSocketAddress master;
@@ -212,6 +212,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	if( remaps.containsKey("__refresh") )
 		refresh = Integer.parseInt(remaps.get("__refresh"));
 	System.out.println("Refresh rate is "+refresh+" ms.");
+	if( remaps.containsKey("__debug") )
+		DEBUG = true;
 	// Main controller creation and thread invocation
 	ControllerReader(pubdata, basedata, controllerName);
 	
@@ -845,12 +847,12 @@ private static class DigitalAxis extends Axis {
 
 	protected void renderData(){
 		if( pubdata2.containsKey(getAxis().getIdentifier())) {
-			//if( DEBUG )
-			//	System.out.println("DigitalAxis replacing "+getAxis().getIdentifier());
+			if( DEBUG )
+				System.out.println("DigitalAxis:"+getAxis().getIdentifier()+" replacing data:"+data);
 			pubdata2.replace(getAxis().getIdentifier(), data);
 		} else {
 			if( DEBUG )
-				System.out.println("DigitalAxis putting "+getAxis().getIdentifier());
+				System.out.println("DigitalAxis:"+getAxis().getIdentifier()+" putting data:"+data);
 			pubdata2.put(getAxis().getIdentifier(), data);
 			basedata2.put(getAxis().getIdentifier(), data);
 		}
@@ -892,12 +894,12 @@ private static class DigitalHat extends Axis {
 		*/
 
 		if( pubdata2.containsKey(getAxis().getIdentifier())) {
-			//if( DEBUG )
-			//	System.out.println("DigitalHat replacing "+getAxis().getIdentifier());
+			if( DEBUG )
+				System.out.println("DigitalHat:"+getAxis().getIdentifier()+" replacing data:"+data);
 			pubdata2.replace(getAxis().getIdentifier(), data);
 		} else {
 			if( DEBUG )
-				System.out.println("DigitalHat putting "+getAxis().getIdentifier());
+				System.out.println("DigitalHat:"+getAxis().getIdentifier()+" putting data:"+data);
 			pubdata2.put(getAxis().getIdentifier(), data);
 			basedata2.put(getAxis().getIdentifier(), data);
 		}
@@ -920,12 +922,12 @@ private static class AnalogAxis extends Axis {
 			data = 0;
 		}
 		if( pubdata2.containsKey(getAxis().getIdentifier())) {
-			//if( DEBUG )
-			//	System.out.println("AnalogAxis replacing "+getAxis().getIdentifier());
+			if( DEBUG )
+				System.out.println("AnalogAxis:"+getAxis().getIdentifier()+" replacing data:"+data);
 			pubdata2.replace(getAxis().getIdentifier(), data);
 		} else {
 			if( DEBUG )
-				System.out.println("AnalogAxis putting "+getAxis().getIdentifier());
+				System.out.println("AnalogAxis:"+getAxis().getIdentifier()+" putting data:"+data);
 			pubdata2.put(getAxis().getIdentifier(), data);
 			basedata2.put(getAxis().getIdentifier(), data);
 		}
@@ -1027,7 +1029,7 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Conc
 	Controller[] ca = ce.getControllers();
 	for(int i =0;i<ca.length;i++){
 		if( DEBUG )
-			System.out.println("Found Controller:"+ca[i].getName());
+			System.out.println("Found Controller:"+ca[i].getName()+" while looking for name that contains:"+cotype);
 		if( ca[i].getName().contains(cotype)) { //i.e. "USB Joystick"
 			makeController(pubdata2, basedata2, ca[i]);
 			shouldRun = true;
@@ -1070,6 +1072,8 @@ private void makeController(ConcurrentHashMap<Identifier, Float> pubdata2, 	Conc
 }
 
 private void createController(ConcurrentHashMap<Identifier, Float> pubdata2, ConcurrentHashMap<Identifier,Float> basedata2, Controller c){
+	if(DEBUG)
+		System.out.println(this.getClass().getName()+".createController adding controller:"+c.getName()+" port:"+c.getPortNumber()+" to controller collection");
 	controllers.add(new ControllerManager(pubdata2, basedata2, c));
 }   
 

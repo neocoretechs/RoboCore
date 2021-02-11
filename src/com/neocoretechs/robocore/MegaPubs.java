@@ -108,7 +108,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = false;
+	private static boolean DEBUG = false;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;
@@ -189,6 +189,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	// Initialize various types of responses that will be published to the various outgoing message busses.
 	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses = new PublishDiagnosticResponse[stopics.length];
 	PublishResponseInterface<sensor_msgs.Range> ultrasonic;
+	private List<String> statPub = new ArrayList<String>();
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
@@ -226,6 +227,24 @@ public NodeConfiguration build()  {
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {
+	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
+	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	// determine debugging directives __debug:=publisher,demuxer,marlinspike
+	if( remaps.containsKey("__debug") ) {
+		String debug = remaps.get("__debug");
+		String[] debugs = debug.split(",");
+		for(String debugx : debugs) {
+			if(debugx.equals("publisher"))
+				DEBUG = true;
+			if(debugx.equals("demuxer"))
+				AsynchDemuxer.DEBUG = true;
+			if(debugx.equals("marlinspike"))
+				MegaControl.DEBUG = true;
+		}
+	}
+	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
+			connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+
 	final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 	try {
 		asynchDemuxer.connect(ByteSerialDataPort.getInstance());
@@ -234,21 +253,25 @@ public void onStart(final ConnectedNode connectedNode) {
 	} catch (IOException e) {
 		System.out.println("Could not connect to Marlinspike.."+e);
 		e.printStackTrace();
+		statPub.add("Could not connect to Marlinspike.."+e);
+		new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE CONNECTION", 
+			diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+		while(!outgoingDiagnostics.isEmpty()) {
+			try {
+				statpub.publish(outgoingDiagnostics.takeFirst());
+				Thread.sleep(1);
+			} catch (InterruptedException e1) {}
+		}
 		return;
 	}
 	
 	//final RosoutLogger log = (Log) connectedNode.getLog();
-
-	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
-		connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 
 	final Publisher<sensor_msgs.Range> rangepub = 
 		connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
 	
 	// Start reading from serial port
-	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
-	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 	String mode="";
 	if( remaps.containsKey("__mode") )
 		mode = remaps.get("__mode");
@@ -258,6 +281,15 @@ public void onStart(final ConnectedNode connectedNode) {
 		} catch (IOException e) {
 			System.out.println("Could not issue configuration commands to Marlinspike.."+e);
 			e.printStackTrace();
+    		statPub.add("Could not issue configuration commands to Marlinspike.."+e);
+    		new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE CONFIGURATION", 
+				diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+    		while(!outgoingDiagnostics.isEmpty()) {
+    			try {
+    				statpub.publish(outgoingDiagnostics.takeFirst());
+					Thread.sleep(1);
+				} catch (InterruptedException e1) {}
+    		}
 			return;
 		}
 	}
@@ -297,6 +329,15 @@ public void onStart(final ConnectedNode connectedNode) {
 					} catch (IOException e) {
 						System.out.println("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
 						e.printStackTrace();
+			    		statPub.add("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
+			    		new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE STATUS", 
+							diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+			    		while(!outgoingDiagnostics.isEmpty()) {
+			    			try {
+			    				statpub.publish(outgoingDiagnostics.takeFirst());
+								Thread.sleep(1);
+							} catch (InterruptedException e1) {}
+			    		}
 					}
 				}
 			});	
@@ -336,6 +377,15 @@ public void onStart(final ConnectedNode connectedNode) {
 					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE");
 					e.printStackTrace();
 					response.setData("fail");
+		    		statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE:"+e);
+		    		new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE PWM ACTIVATION", 
+						diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+		    		while(!outgoingDiagnostics.isEmpty()) {
+		    			try {
+		    				statpub.publish(outgoingDiagnostics.takeFirst());
+							Thread.sleep(1);
+						} catch (InterruptedException e1) {}
+		    		}
 				}
 			}
 		});	
@@ -363,6 +413,15 @@ public void onStart(final ConnectedNode connectedNode) {
 					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
 					e.printStackTrace();
 					response.setData("fail");
+		    		statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE:"+e);
+		    		new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE GPIO ACTIVATION", 
+						diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+		    		while(!outgoingDiagnostics.isEmpty()) {
+		    			try {
+		    				statpub.publish(outgoingDiagnostics.takeFirst());
+							Thread.sleep(1);
+						} catch (InterruptedException e1) {}
+		    		}
 				}
 			}
 		});	
@@ -456,12 +515,20 @@ public void onStart(final ConnectedNode connectedNode) {
 					//	motorControlHost.setMotorArcSpeed(valch1, valch2, valch3, valch4, targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
 					//else
 					motorControlHost.setAbsoluteDiffDriveSpeed(valch1, valch2, valch3, valch4, valch5, valch6);
-				} else
-					System.out.println("Emergency stop directive in effect, no motor power slot:"+valch1+
+				} else {
+					//System.out.println("Emergency stop directive in effect, no motor power slot:"+valch1+
+					//		" channel:"+valch2+" slot:"+valch4+" channel:"+valch5);
+					statPub.add("Emergency stop directive in effect, no motor power slot:"+valch1+
 							" channel:"+valch2+" slot:"+valch4+" channel:"+valch5);
+					new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "VELOCITY PUBLISH", 
+					diagnostic_msgs.DiagnosticStatus.WARN, statPub );
+				}
 			} catch (IOException e) {
-				System.out.println("there was a problem communicating with motor controller:"+e);
+				System.out.println("There was a problem communicating with motor controller:"+e);
 				e.printStackTrace();
+				statPub.add("There was a problem communicating with motor controller:"+e);
+				new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "VELOCITY PUBLISH", 
+				diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
 			}
 		}
 	}
@@ -534,8 +601,11 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 			}
 		} catch (IOException e) {
-						System.out.println("there was a problem communicating with PWM controller:"+e);
-						e.printStackTrace();
+			System.out.println("there was a problem communicating with PWM controller:"+e);
+			e.printStackTrace();
+			statPub.add("There was a problem communicating with PWM controller:"+e);
+			new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "TRIGGER PUBLISH", 
+			diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
 		}
 	}
 	});
@@ -667,7 +737,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			while(!outgoingDiagnostics.isEmpty()) {
 				statmsg = outgoingDiagnostics.takeFirst();
 				statpub.publish(statmsg);
-				System.out.println("Published "+statmsg.getMessage());
+				if(DEBUG)
+					System.out.println("Published "+statmsg.getMessage());
 				Thread.sleep(1);
 			}
 			//
@@ -677,7 +748,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			while(!outgoingRanges.isEmpty()) {
 				rangemsg = outgoingRanges.takeFirst();
 				rangepub.publish(rangemsg);
-				System.out.println("Published "+rangemsg.getRange());
+				if(DEBUG)
+					System.out.println("Published "+rangemsg.getRange());
 				Thread.sleep(1);
 			}
 					
