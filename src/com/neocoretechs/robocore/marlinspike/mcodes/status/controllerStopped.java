@@ -1,10 +1,10 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 
 public class controllerStopped extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;

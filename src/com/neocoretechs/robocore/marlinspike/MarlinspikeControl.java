@@ -1,9 +1,6 @@
-package com.neocoretechs.robocore;
+package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
-
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 
 
 /**
@@ -24,7 +21,7 @@ import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2020
  *
  */
-public class MegaControl implements MotorControlInterface2D, PWMControlInterface {
+public class MarlinspikeControl implements MarlinspikeControlInterface {
 	public static boolean DEBUG = false;
 	//float yawIMURads; = twistInfo.imuTheta
 	int yawTargetDegrees;
@@ -45,7 +42,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 	
 	protected static boolean moving = false; // is the base in motion?
 
-	public MegaControl(AsynchDemuxer asynchDemuxer) { this.asynchDemuxer = asynchDemuxer; }
+	public MarlinspikeControl(AsynchDemuxer asynchDemuxer) { this.asynchDemuxer = asynchDemuxer; }
 	
 	/**
 	 * Single channel affector speed
@@ -240,7 +237,7 @@ public class MegaControl implements MotorControlInterface2D, PWMControlInterface
 		}
 		AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 		asynchDemuxer.connect(com.neocoretechs.robocore.serialreader.ByteSerialDataPort.getInstance());
-		MegaControl mc = new MegaControl(asynchDemuxer);
+		MarlinspikeControl mc = new MarlinspikeControl(asynchDemuxer);
 		// set the absolute speed of the diff drive controller in slot 0 to 100 on channel 1 and 
 		// 1 on channel 2
 		mc.setAbsoluteDiffDriveSpeed(0, 1, 100, 0, 2, 1);

@@ -33,18 +33,19 @@ import org.ros.message.Time;
 import rosgraph_msgs.Log;
 import sensor_msgs.Range;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControl;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
 import com.neocoretechs.robocore.marlinspike.PublishResponses;
 import com.neocoretechs.robocore.marlinspike.PublishUltrasonicResponse;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.propulsion.MotorControlInterface2D;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
 import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
@@ -114,7 +115,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
-	private MotorControlInterface2D motorControlHost;
+	private MarlinspikeControlInterface motorControlHost;
 	NavListenerMotorControlInterface navListener = null;
 	private AuxGPIOControl auxGPIO = null;
 	private AuxPWMControl auxPWM = null;
@@ -239,7 +240,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			if(debugx.equals("demuxer"))
 				AsynchDemuxer.DEBUG = true;
 			if(debugx.equals("marlinspike"))
-				MegaControl.DEBUG = true;
+				MarlinspikeControl.DEBUG = true;
 		}
 	}
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
@@ -249,7 +250,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	try {
 		asynchDemuxer.connect(ByteSerialDataPort.getInstance());
 		asynchDemuxer.init();
-		motorControlHost = new MegaControl(asynchDemuxer);
+		motorControlHost = new MarlinspikeControl(asynchDemuxer);
 	} catch (IOException e) {
 		System.out.println("Could not connect to Marlinspike.."+e);
 		e.printStackTrace();
@@ -588,14 +589,14 @@ public void onStart(final ConnectedNode connectedNode) {
 						int valch3 = valch[2];
 						if(valch3 == 0) {
 							if(isOperating[0]) {
-								((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, 0);
+								motorControlHost.setAbsolutePWMLevel(valch1, valch2, 0);
 							}
 							isOperating[0] = false;
 						} else {			
 							isOperating[0] = true;
 							if(DEBUG)
 								System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
-							((PWMControlInterface)motorControlHost).setAbsolutePWMLevel(valch1, valch2, valch3);
+							motorControlHost.setAbsolutePWMLevel(valch1, valch2, valch3);
 						}
 					}
 				}

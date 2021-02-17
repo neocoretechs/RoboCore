@@ -1,8 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
  * Dynamically allocate a controller to a control slot. The slot parameter is used to refer
  * to the dynamically allocated controller in other M codes that relate to motor control functions.

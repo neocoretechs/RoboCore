@@ -1,9 +1,9 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
  * M445 P<pin> - Turn off pulsed write pin - disable PWM
  *

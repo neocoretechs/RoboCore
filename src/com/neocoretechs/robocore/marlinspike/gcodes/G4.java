@@ -1,9 +1,9 @@
 package com.neocoretechs.robocore.marlinspike.gcodes;
 
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
  * The responsibility of each of these consumers it to consume the first element
  * on the queue of lines read from the Marlinspike, be it the same as the passed

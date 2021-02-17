@@ -8,7 +8,6 @@ import java.util.List;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 

@@ -2,10 +2,10 @@ package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
 import java.util.HashMap;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 
 /**
  * 2 = HBridge driver enable pin not found

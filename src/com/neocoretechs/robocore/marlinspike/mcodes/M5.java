@@ -1,8 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
  * Switch bridge or 2 digital motor controller.<p/>
  * Takes 2 inputs: one digital pin for forward,called P, one for backward,called Q, then motor channel,

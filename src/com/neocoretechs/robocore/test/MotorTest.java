@@ -1,6 +1,6 @@
 package com.neocoretechs.robocore.test;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class MotorTest {

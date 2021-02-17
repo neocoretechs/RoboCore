@@ -20,9 +20,7 @@ import java.math.RoundingMode;
 import java.util.Enumeration;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
-import com.neocoretechs.robocore.serialreader.ByteSerialDataPort.SerialOwnershipHandler;
-import com.neocoretechs.robocore.serialreader.ByteSerialDataPort.SerialReader;
-import com.neocoretechs.robocore.serialreader.ByteSerialDataPort.SerialWriter;
+
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
  * The accelerometer, gyro, magnetometer, fused Euler angle data, and temperature.

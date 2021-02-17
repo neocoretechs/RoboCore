@@ -2,8 +2,8 @@ package com.neocoretechs.robocore.test;
 
 import java.util.List;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class SerialPortTest {

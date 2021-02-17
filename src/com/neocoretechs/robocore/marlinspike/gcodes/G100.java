@@ -1,9 +1,9 @@
 package com.neocoretechs.robocore.marlinspike.gcodes;
 
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 
 public class G100 extends AbstractBasicResponse {
 	private boolean DEBUG;

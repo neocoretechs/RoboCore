@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore.machine.bridge;
+package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -16,7 +16,12 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
+import com.neocoretechs.robocore.machine.bridge.MachineBridge;
+import com.neocoretechs.robocore.machine.bridge.TopicList;
+import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.gcodes.G100;
 import com.neocoretechs.robocore.marlinspike.gcodes.G4;
 import com.neocoretechs.robocore.marlinspike.gcodes.G5;

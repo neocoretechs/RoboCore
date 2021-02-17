@@ -2,7 +2,7 @@ package com.neocoretechs.robocore;
 
 import java.io.IOException;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 /**
  * Create a persistent GPIO pin set high (M41) or low (M42) by writing the directive to the 

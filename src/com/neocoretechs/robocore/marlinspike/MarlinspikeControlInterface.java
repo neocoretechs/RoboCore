@@ -1,10 +1,11 @@
-package com.neocoretechs.robocore.propulsion;
+package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 
 /**
- * This interface could be the cut between land/sea/space robots. 
- * The method params represent sensor fusion of IMU, range, and other sensors to determine baseline safe movement.
+ * This interface defines the object model to access the Marlinspike hardware controller.<p/>
+ * It defines the contract between the callable methods and the M and G codes sent to the Marlispike controllers.<p/>
+ * A logical unit consists of an AsynchDemuxer, a MarlinspikeControl, and a DataPortInterface<p/> 
  * Multiple motor controllers occupy virtual 'slots' that correspond to hardware such as bridges.
  * Each controller 'slot' can accommodate several motor control channels.
  * Each channel receives a value representing a power level.
@@ -14,7 +15,7 @@ import java.io.IOException;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2018,2020
  *
  */
-public interface MotorControlInterface2D {
+public interface MarlinspikeControlInterface {
 	public String reportAllControllerStatus() throws IOException;
 	public String reportSystemId() throws IOException;
 	public void commandStop() throws IOException;

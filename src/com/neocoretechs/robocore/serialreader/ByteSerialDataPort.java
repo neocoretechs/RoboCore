@@ -53,19 +53,24 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    public static ByteSerialDataPort getInstance() {
 	    	if( instance == null ) {
 	    		synchronized(ByteSerialDataPort.class) { 
-	    			try {
-	    				instance = new ByteSerialDataPort(portName, baud, datab, stopb, parityb);											 
-	    			} catch (IOException e) {
-	    				System.out.println("Could not initialize ByteSerialDataPort:"+e);
-	    				e.printStackTrace();
-	    				throw new RuntimeException(e);
-	    			}
+	    				instance = new ByteSerialDataPort();
 	    		}
 	    	}
 	    	return instance;
 	    }
 	    
-	    private ByteSerialDataPort(String tportName, int tbaud, int tdatab, int tstopb, int tparityb) throws IOException {
+	    public ByteSerialDataPort()  {
+	    	if( DEBUG ) 
+	    		System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
+	    }
+	    
+	    public ByteSerialDataPort(String tportName) {
+	    	portName = tportName;
+	    	if( DEBUG ) 
+	    		System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
+	    }
+	    
+	    public ByteSerialDataPort(String tportName, int tbaud, int tdatab, int tstopb, int tparityb) {
 	    	portName = tportName;
 	    	baud = tbaud;
 	    	datab = tdatab;

@@ -3,7 +3,6 @@ package com.neocoretechs.robocore.marlinspike;
 import java.util.ArrayList;
 import java.util.concurrent.BrokenBarrierException;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 

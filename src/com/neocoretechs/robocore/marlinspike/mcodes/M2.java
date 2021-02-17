@@ -1,8 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
  * M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] <p/> 
  * Set smart controller (default) with optional encoder pin per channel, can be issued multiple times.

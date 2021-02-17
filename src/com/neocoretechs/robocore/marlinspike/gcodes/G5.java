@@ -1,9 +1,9 @@
 package com.neocoretechs.robocore.marlinspike.gcodes;
 
 
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
-import com.neocoretechs.robocore.machine.bridge.AsynchDemuxer.topicNames;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
  * G5 - Absolute command motor [Z<controller>] C<Channel> [P<motor power -1000 to 1000>] [X<PWM power -1000 to 1000>(scaled 0-2000)]
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
