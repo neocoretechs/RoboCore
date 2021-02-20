@@ -1,8 +1,10 @@
 package com.neocoretechs.robocore.propulsion;
 
 import java.io.Serializable;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.neocoretechs.robocore.config.Props;
+import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
 /**
@@ -11,7 +13,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 */
 public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	private static final long serialVersionUID = 1L;
-	int slot, leftChannel, rightChannel;
+	int leftSlot, rightSlot, leftChannel, rightChannel, controllerAxisX, controllerAxisY;
 	/* Define the robot parameters */
 	public static float wheelTrack = Props.toFloat("WheelTrackMM"); // millimeters
 	public static boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
@@ -23,20 +25,17 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.
 	private TwistInfo twistinfo = new TwistInfo();
-	public RobotDiffDrive() {
-		this.slot = Props.toInt( getControllerAxisPropertyName()+"Slot");
-		this.leftChannel = Props.toInt("LeftWheelChannel");
-		this.rightChannel = Props.toInt("RightWheelChannel");
-		leftWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, Props.toFloat("MotorKp"), 
-				Props.toFloat("MotorKd"), 
-				Props.toFloat("MotorKi"), 
-				Props.toFloat("MotorKo"), 
-				Props.toInt("MotorPIDRate"));
-		rightWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, Props.toFloat("MotorKp"), 
-				Props.toFloat("MotorKd"), 
-				Props.toFloat("MotorKi"), 
-				Props.toFloat("MotorKo"), 
-				Props.toInt("MotorPIDRate"));
+	public RobotDiffDrive(int slotLeft, int leftChannel, int slotRight, int rightChannel, int controllerAxisX, int controllerAxisY, 
+			int motorKp, int motorKd, int motorKi, int motorKo, int motorPIDRate) {
+		this.leftSlot = slotLeft;
+		this.leftChannel = leftChannel;
+		this.rightSlot = slotRight;
+		this.rightChannel = rightChannel;
+		leftWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, motorKp, motorKd, motorKi, motorKo, motorPIDRate);
+		rightWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, motorKp, motorKd, motorKi, motorKo, motorPIDRate); 
+	}
+	public RobotDiffDrive(TypedWrapper[] lUN, TypedWrapper[] aXIS, TypedWrapper[] pID) {
+		// TODO Auto-generated constructor stub
 	}
 	@Override
 	public DrivenWheelInterface getLeftWheel() {
@@ -47,7 +46,6 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	public DrivenWheelInterface getRightWheel() {
 		return rightWheel;
 	}
-
 
 	@Override
 	public int getLeftWheelChannel() {
@@ -60,10 +58,15 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 
 	@Override
-	public int getControllerSlot() {
-		return slot;
+	public int getControllerLeftSlot() {
+		return leftSlot;
 	}
 
+	@Override
+	public int getControllerRightSlot() {
+		return rightSlot;
+	}
+	
 	@Override
 	public void setDriveWheels(DrivenWheelInterface leftWheel, DrivenWheelInterface rightWheel) {
 		this.leftWheel = leftWheel;
@@ -81,20 +84,19 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 	
 	public String toString() {
-		return String.format("Controller Slot=%d,Left Channel=%d,Right Channel=%d,Wheel Track=%f,Indoor=%b\r\nLeft Wheel: %s\r\nRight Wheel: %s",
-				slot, leftChannel, rightChannel, wheelTrack, indoor,
+		return String.format("Controller LeftSlot=%d,Left Channel=%d,RightSlot=%dRight Channel=%d,Wheel Track=%f,Indoor=%b\r\nLeft Wheel: %s\r\nRight Wheel: %s",
+				leftSlot, leftChannel, rightSlot, rightChannel, wheelTrack, indoor,
 				leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
 	}
-	@Override
-	public String getControllerAxisPropertyName() {
-		return "DriveController";
-	}
+	
 	@Override
 	public int getControllerAxisX() {
-		 return Props.toInt(getControllerAxisPropertyName()+"X");
+		 return controllerAxisX;
 	}
+	
 	@Override
 	public int getControllerAxisY() {
-		 return Props.toInt(getControllerAxisPropertyName()+"Y");
+		 return controllerAxisY;
 	}
+
 }

@@ -397,7 +397,7 @@ public class MotionController extends AbstractNodeMain {
 				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
 				// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
 				// for the majority of downstream processing. In the case of PWM, we are going to scale this
-				// fr0m -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
+				// from -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
 				// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
 				// sure to scale it to the positive range downstream. We are going to publish the scaled
 				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
@@ -542,10 +542,10 @@ public class MotionController extends AbstractNodeMain {
 					speedL = -speedR;
 					// set it up to send
 					speedVals = new ArrayList<Integer>(6);
-					speedVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
+					speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
 					speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
 					speedVals.add((int)speedL);
-					speedVals.add(robot.getDiffDrive().getControllerSlot()); // controller slot
+					speedVals.add(robot.getDiffDrive().getControllerRightSlot()); // controller slot
 					speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
 					speedVals.add((int)speedR);
 					velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
@@ -558,10 +558,10 @@ public class MotionController extends AbstractNodeMain {
 						speedR = -speedL;
 						// set it up to send
 						speedVals = new ArrayList<Integer>(6);
-						speedVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
+						speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
 						speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
 						speedVals.add((int)speedL);
-						speedVals.add(robot.getDiffDrive().getControllerSlot()); // controller slot
+						speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); // controller slot
 						speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
 						speedVals.add((int)speedR);
 						velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
@@ -724,10 +724,10 @@ public class MotionController extends AbstractNodeMain {
 				// set it up to send down the publishing pipeline
 				//
 				speedVals = new ArrayList<Integer>(6);
-				speedVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
+				speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
 				speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
 				speedVals.add((int)speedL);
-				speedVals.add(robot.getDiffDrive().getControllerSlot()); //controller slot
+				speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
 				speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
 				speedVals.add((int)speedR);
 				velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));

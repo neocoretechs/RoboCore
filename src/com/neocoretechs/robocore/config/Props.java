@@ -1,7 +1,17 @@
 package com.neocoretechs.robocore.config;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collection;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 /*
 * Copyright (c) 2003, NeoCoreTechs
 * All rights reserved.
@@ -30,30 +40,6 @@ import java.io.InputStream;
  * We assume the the properties file is in RoboCore.Properties which we try
  * to locate through system.getProperty("RoboCore.properties") and barring that,
  * attempt to load from the system resource stream.
- * Name:Mr.Roboto
- * DriveControllerSlot:0
- * LeftWheelChannel:1
- * RightWheelChannel:2
- * WheelTrackMM:
- * IsIndoor:
- * WheelDiameterMM:
- * TicksPerRevolution:500
- * CrosstrackKp:
- * CrosstrackKd:
- * CrosstrackKi:
- * CrosstrackKo:
- * CrosstrackPIDRate:30
- * MaxIMUDeviationDegrees:90
- * MinIMUDeviationDegrees:-90
- * MinSpeedValue:-1000
- * MaxSpeedValue:1000
- * MotorKp:
- * MotorKd:
- * MotorKi:
- * motorKo:
- * MotorPIDRate:
- * MotorMaxOutput:
- * TemperatureThreshold:
  * Copyright NeoCoreTechs (C) 2020
  * @author Jonathan Groff
  */
@@ -199,6 +185,111 @@ public class Props {
 					+ " for property "
 					+ prop
 					+ " (expected floating point)");
+		}
+	}
+	/**
+	 * Build collection of array parameters in the properties file.<p/>
+	 * Three maps are used to build the eventual final structure.
+	 * mainMap = ConcurrentHashMap<String, Map<Integer, Map<String, Object>>>
+	 * subMap = ConcurrentHashMap<Integer, Map<String,Object>>
+	 * propMap = ConcurrentHashMap<String,Object>
+	 * formed from the properties:
+	 * LUN[0].Channel:1
+	 * LUN[1].Slot:0
+	 * LUN[0].Controller:/dev/ttyACM0
+	 * LUN[0].Slot:0
+	 * LUN[1].Channel:1
+	 * LUN[1].Controller:/dev/ttyACM1
+	 * So mainMap has:
+	 * <LUN, <0, <Channel, 1>>>
+	 * <LUN, <1, <Channel, 1>>>
+	 * <LUN, <0, <Slot, 0>>>
+	 * <LUN, <1, <Slot, 0>>>
+	 * <LUN, <0, <Controller, /dev/ttyACM0>>>
+	 * <LUN, <1, <Controller, /dev/ttyACM1>>>
+	 * @return
+	 * @throws IllegalAccessException
+	 */
+	public static Map<String, Map<Integer, Map<String, Object>>> collectivizeProps() throws IllegalAccessException {
+		Enumeration<Object> keys = System.getProperties().keys();
+		Collection<Object> values = System.getProperties().values();
+		Iterator<Object> vit = values.iterator();
+		ConcurrentHashMap<String, Map<Integer, Map<String,Object>>> mainMap = new ConcurrentHashMap<String, Map<Integer, Map<String,Object>>>();
+		while(keys.hasMoreElements()) {
+			Object key = keys.nextElement();
+			Object value = vit.next();
+			int aindex = key.toString().indexOf("[");
+			if(aindex != -1) {
+				int bindex = key.toString().indexOf("]");
+				if(bindex == -1)
+					throw new IllegalAccessException("Bad array configuration on line:"+key+":"+value);
+				// extract numerical value of collection element
+				int xindex = Integer.parseInt(key.toString().substring(aindex+1,bindex));
+				// extract name of collection mainMap param
+				String pname = key.toString().substring(0,aindex);
+				ConcurrentHashMap<Integer, Map<String,Object>> subMap = (ConcurrentHashMap<Integer, Map<String, Object>>) mainMap.get(pname);
+				if(subMap == null) {
+						subMap = new ConcurrentHashMap<Integer, Map<String,Object>>();
+						mainMap.put((String) key, subMap);
+				}
+				// extract name of collection element param
+				String pename = key.toString().substring(bindex+2);
+				if(DEBUG)
+					System.out.println(pname+"["+xindex+"]."+pename+":"+value);
+				Map<String,Object> propMap = subMap.get(xindex);
+				if(propMap == null) {
+					propMap = new ConcurrentHashMap<String,Object>();
+					subMap.put(xindex, propMap);
+				}
+				propMap.put(pename,  value);
+			}
+		}
+		return mainMap;
+	}
+	
+	public static void main(String[] args) {
+		FileOutputStream fos;
+		StringBuilder sb = new StringBuilder("<<MarlinSpike Configs>>\r\n");
+		try {
+			fos = new FileOutputStream(dataDirectory+"XML"+propsFile);
+			System.getProperties().storeToXML(fos, "MarlinSpike Configs");
+			try {
+				Map<String, Map<Integer, Map<String, Object>>> globalConfigs = Props.collectivizeProps();
+				Set<Entry<String, Map<Integer, Map<String, Object>>>> props = globalConfigs.entrySet();
+				for(Entry<String, Map<Integer, Map<String, Object>>> e : props ) {
+					sb.append(e.getKey());
+					sb.append("\r\n");
+					Map<Integer, Map<String, Object>> prop1 = e.getValue();
+					Set<Integer> iset = prop1.keySet();
+					Set<Entry<Integer, Map<String, Object>>> jset = prop1.entrySet();
+					Iterator<Entry<Integer, Map<String, Object>>> it = jset.iterator();
+					for(Integer i: iset) {
+						sb.append("[");
+						sb.append(i);
+						sb.append("].");
+						Entry<Integer, Map<String, Object>> elem = it.next();
+						Map<String,Object> o = elem.getValue();
+						Set<String> s = o.keySet();
+						Collection<Object> c = o.values();
+						Iterator<String> its = s.iterator();
+						Iterator<Object> ito = c.iterator();
+						while(its.hasNext()) {
+							sb.append(its.next());
+							sb.append(":");
+							sb.append(ito.next());
+							sb.append("\r\n");
+						}
+					}
+						
+				}
+			} catch (IllegalAccessException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			System.out.println(sb.toString());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 

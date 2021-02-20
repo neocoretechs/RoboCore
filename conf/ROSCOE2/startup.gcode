@@ -17,7 +17,7 @@ M3 Z0 P10 C2 D22 E0 W69
 M10 Z1 T1
 ; config H-bridge actuator slot 1, PWM pin 9 channel 1, Dir pin 26, default dir 0
 M3 Z1 P9 C1 D26 E0
-; Define PWM LED driver Type 4 control in slot 0, Type 4 is a PWM driver in seperate slots from motor drivers
+; Define PWM LED driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers
 M10 Z0 T4
 ; Now config LED driver slot 0 to PWM pin 13 on channel 1 enable pin 30
 M9 Z0 P13 C1 D30
