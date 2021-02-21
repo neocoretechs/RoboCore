@@ -3,6 +3,7 @@ package com.neocoretechs.robocore.affectors;
 import java.io.Serializable;
 
 import com.neocoretechs.robocore.config.Props;
+import com.neocoretechs.robocore.config.TypedWrapper;
 
 public class LiftActuator implements LiftActuatorInterface, Serializable {
 	private static final long serialVersionUID = 1L;
@@ -11,18 +12,14 @@ public class LiftActuator implements LiftActuatorInterface, Serializable {
 	int slot;
 	float componentUp;
 	float componentDown;
-	public LiftActuator() {
-		axis = Props.toInt(getControllerAxisPropertyName());
-		channel = Props.toInt(getControllerAxisPropertyName()+"Channel");
-		slot = Props.toInt(getControllerAxisPropertyName()+"Slot");
-		componentUp = Props.toFloat(getControllerAxisPropertyName()+"ComponentUp");
-		componentDown = Props.toFloat(getControllerAxisPropertyName()+"ComponentDown");
+	public LiftActuator(TypedWrapper[] lUN, TypedWrapper[] aXIS2, TypedWrapper[] pID) {
+		//axis = Props.toInt(getControllerAxisPropertyName());
+		//channel = Props.toInt(getControllerAxisPropertyName()+"Channel");
+		//slot = Props.toInt(getControllerAxisPropertyName()+"Slot");
+		//componentUp = Props.toFloat(getControllerAxisPropertyName()+"ComponentUp");
+		//componentDown = Props.toFloat(getControllerAxisPropertyName()+"ComponentDown");
 	}
 	
-	@Override
-	public String getControllerAxisPropertyName() {
-		return "LiftActuatorControl";
-	}
 
 	@Override
 	public int getControllerAxis() {
@@ -51,7 +48,7 @@ public class LiftActuator implements LiftActuatorInterface, Serializable {
 	
 	@Override
 	public String toString() {
-		return getControllerAxisPropertyName()+" Up="+componentUp+",Down="+componentDown+",slot="+slot+",channel="+channel;
+		return " Up="+componentUp+",Down="+componentDown+",slot="+slot+",channel="+channel;
 	}
 
 }

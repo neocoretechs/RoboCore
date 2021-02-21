@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentHashMap.KeySetView;
 
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
@@ -45,6 +46,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public class Robot implements RobotInterface, Serializable {
+	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
 	MotionPIDController motionPIDController;
 	RobotDiffDriveInterface robotDrive;
@@ -54,6 +56,7 @@ public class Robot implements RobotInterface, Serializable {
 	private TypedWrapper[] LUN;
 	private TypedWrapper[] PID;
 	private TypedWrapper[] AXIS;
+	private TypedWrapper[] BUTTON;
 	private Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 	public Robot() {
 		try {
@@ -64,6 +67,7 @@ public class Robot implements RobotInterface, Serializable {
 		extractLUN();
 		extractPID();
 		extractAXIS();
+		extractBUTTON();
 		robotDrive = new RobotDiffDrive(LUN, AXIS, PID);
 		//kp, ki, kd, ko, pidRate (hz)
 		motionPIDController = new MotionPIDController(Props.toFloat("CrosstrackKp"), 
@@ -74,18 +78,51 @@ public class Robot implements RobotInterface, Serializable {
 		IMUSetpoint = new IMUSetpointInfo();
 		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
 		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
-		affectors = new Affectors();
+		affectors = new Affectors(LUN, AXIS, PID);
 	}
-
+	
+	private void extractBUTTON() {
+		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
+		 Map<Integer, Map<String, Object>> button = globalConfigs.get("BUTTON");
+		 if(button == null) {
+			 BUTTON = new TypedWrapper[0];
+			 return;
+		 }
+		 if(DEBUG)
+			 System.out.println("BUTTON size:"+button.size());
+		 BUTTON = new TypedWrapper[button.size()];
+		 Set<Integer> buttonChannels = button.keySet();
+		 if(DEBUG)
+			 System.out.println("BUTTONs channels:"+buttonChannels.size());
+		 Object[] buttonOChannels = buttonChannels.toArray();
+		 Arrays.sort(buttonOChannels); // make sure of order
+		 if(DEBUG)
+			 System.out.println("ButtonOChannels sorted size:"+buttonOChannels.length);
+		 for(Object buttonAChannels: buttonOChannels) {
+			 Map<String, Object> sortedButtonProp = button.get(buttonAChannels); //buttonAChannels sorted integer channels of LUNs/AXIS/BUTTON
+			 if(DEBUG)
+				 System.out.println(buttonAChannels+" index of number of SortedButtonProp:"+sortedButtonProp.size());
+			 BUTTON[(int)buttonAChannels] = new TypedWrapper(sortedButtonProp);
+		 }	
+	}
+	
 	private void extractAXIS() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> axis = globalConfigs.get("AXIS");
+		 if(DEBUG)
+			 System.out.println("AXIS size:"+axis.size());
 		 AXIS = new TypedWrapper[axis.size()];
 		 Set<Integer> axisChannels = axis.keySet();
+		 if(DEBUG)
+			 System.out.println("AXISs channels:"+axisChannels.size());
 		 Object[] axisOChannels = axisChannels.toArray();
 		 Arrays.sort(axisOChannels); // make sure of order
+		 if(DEBUG)
+			 System.out.println("AxisOChannels sorted size:"+axisOChannels.length);
 		 for(Object axisAChannels: axisOChannels) {
-			 Map<String, Object> sortedAxisProp = axis.get(axisAChannels); //lunsAChannels sorted integer channels of LUNs
+			 Map<String, Object> sortedAxisProp = axis.get(axisAChannels); //axisAChannels sorted integer channels of LUNs
+			 if(DEBUG)
+				 System.out.println(axisAChannels+" index of number of SortedAxisProp:"+sortedAxisProp.size());
 			 AXIS[(int)axisAChannels] = new TypedWrapper(sortedAxisProp);
 		 }	
 	}
@@ -108,12 +145,20 @@ public class Robot implements RobotInterface, Serializable {
 	private void extractLUN() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> luns = globalConfigs.get("LUN");
+		 if(DEBUG)
+			 System.out.println("LUN size:"+luns.size());
 		 LUN = new TypedWrapper[luns.size()];
 		 Set<Integer> lunsChannels = luns.keySet();
+		 if(DEBUG)
+			 System.out.println("LUNs channels:"+lunsChannels.size());
 		 Object[] lunsOChannels = lunsChannels.toArray();
 		 Arrays.sort(lunsOChannels); // make sure of order
+		 if(DEBUG)
+			 System.out.println("lunsOChannels sorted size:"+lunsOChannels.length);
 		 for(Object lunsAChannels: lunsOChannels) {
 			 Map<String, Object> sortedLunProp = luns.get(lunsAChannels); //lunsAChannels sorted integer channels of LUNs
+			 if(DEBUG)
+				 System.out.println(lunsAChannels+" of number of SortedLunProp:"+sortedLunProp.size());
 			 LUN[(int)lunsAChannels] = new TypedWrapper(sortedLunProp);
 		 }
 	}
@@ -181,32 +226,49 @@ public class Robot implements RobotInterface, Serializable {
 				motionPIDController == null ? "NULL" : motionPIDController.toString(),
 					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString(),
 							affectors == null ? "NULL" : affectors.toString()));
-		Set<Entry<String, Map<Integer, Map<String, Object>>>> props = globalConfigs.entrySet();
-		for(Entry<String, Map<Integer, Map<String, Object>>> e : props ) {
-			sb.append(e.getKey());
-			sb.append("\r\n");
-			Map<Integer, Map<String, Object>> prop1 = e.getValue();
-			Set<Integer> iset = prop1.keySet();
-			Set<Entry<Integer, Map<String, Object>>> jset = prop1.entrySet();
-			Iterator<Entry<Integer, Map<String, Object>>> it = jset.iterator();
-			for(Integer i: iset) {
-				sb.append("[");
-				sb.append(i);
-				sb.append("].");
-				Entry<Integer, Map<String, Object>> elem = it.next();
-				Map<String,Object> o = elem.getValue();
-				Set<String> s = o.keySet();
-				Collection<Object> c = o.values();
-				Iterator<String> its = s.iterator();
-				Iterator<Object> ito = c.iterator();
-				while(its.hasNext()) {
-					sb.append(its.next());
-					sb.append(":");
-					sb.append(ito.next());
-					sb.append("\r\n");
-				}
+		for(int i = 0; i < LUN.length; i++) {
+			Set<Entry<String, Object>> x = LUN[i].entrySet();
+			Iterator<Entry<String, Object>> it = x.iterator();
+			while(it.hasNext()) {
+				Entry<String, Object> e = it.next();
+				sb.append(e.getKey());
+				sb.append(":");
+				sb.append(e.getValue());
+				sb.append("\r\n");
 			}
-				
+		}
+		for(int i = 0; i < PID.length; i++) {
+			Set<Entry<String, Object>> x = PID[i].entrySet();
+			Iterator<Entry<String, Object>> it = x.iterator();
+			while(it.hasNext()) {
+				Entry<String, Object> e = it.next();
+				sb.append(e.getKey());
+				sb.append(":");
+				sb.append(e.getValue());
+				sb.append("\r\n");
+			}
+		}
+		for(int i = 0; i < AXIS.length; i++) {
+			Set<Entry<String, Object>> x = AXIS[i].entrySet();
+			Iterator<Entry<String, Object>> it = x.iterator();
+			while(it.hasNext()) {
+				Entry<String, Object> e = it.next();
+				sb.append(e.getKey());
+				sb.append(":");
+				sb.append(e.getValue());
+				sb.append("\r\n");
+			}
+		}
+		for(int i = 0; i < BUTTON.length; i++) {
+			Set<Entry<String, Object>> x = BUTTON[i].entrySet();
+			Iterator<Entry<String, Object>> it = x.iterator();
+			while(it.hasNext()) {
+				Entry<String, Object> e = it.next();
+				sb.append(e.getKey());
+				sb.append(":");
+				sb.append(e.getValue());
+				sb.append("\r\n");
+			}
 		}
 		return sb.toString();
 	}

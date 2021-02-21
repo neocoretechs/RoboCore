@@ -228,12 +228,12 @@ public class Props {
 				// extract name of collection mainMap param
 				String pname = key.toString().substring(0,aindex);
 				ConcurrentHashMap<Integer, Map<String,Object>> subMap = (ConcurrentHashMap<Integer, Map<String, Object>>) mainMap.get(pname);
-				if(subMap == null) {
-						subMap = new ConcurrentHashMap<Integer, Map<String,Object>>();
-						mainMap.put((String) key, subMap);
-				}
 				// extract name of collection element param
 				String pename = key.toString().substring(bindex+2);
+				if(subMap == null) {
+						subMap = new ConcurrentHashMap<Integer, Map<String,Object>>();
+						mainMap.put(pname, subMap);
+				}
 				if(DEBUG)
 					System.out.println(pname+"["+xindex+"]."+pename+":"+value);
 				Map<String,Object> propMap = subMap.get(xindex);
@@ -242,6 +242,9 @@ public class Props {
 					subMap.put(xindex, propMap);
 				}
 				propMap.put(pename,  value);
+			} else {
+				if(DEBUG)
+					System.out.println("didnt find [ in "+key+" class:"+key.getClass().getName());
 			}
 		}
 		return mainMap;
@@ -291,6 +294,9 @@ public class Props {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		Robot r = new Robot();
+		System.out.println(r.getName());
+		System.out.println(r.toString());
 	}
 
 }

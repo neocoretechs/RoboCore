@@ -30,6 +30,9 @@ import org.ros.node.topic.Subscriber;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
+import com.neocoretechs.robocore.affectors.BoomActuatorInterface;
+import com.neocoretechs.robocore.affectors.LEDIlluminatorInterface;
+import com.neocoretechs.robocore.affectors.LiftActuatorInterface;
 import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
@@ -40,6 +43,7 @@ import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
 import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 
 import net.java.games.input.Component;
+import std_msgs.Int32MultiArray;
 
 /**
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to affect
@@ -415,9 +419,9 @@ public class MotionController extends AbstractNodeMain {
 							triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
 							triggerVals.add(0);
 							if(DEBUG)
-								System.out.println(robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()+" turning off LED");
-							trigpub.publish(setupPub(connectedNode, triggerVals,robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),
-														robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()));
+								System.out.println(robot.getAffectors().getLEDIlluminatorInterface()+" turning off LED");
+							trigpub.publish(setupPub(connectedNode, triggerVals,robot.getAffectors().getLEDIlluminatorInterface(),
+														robot.getAffectors().getLEDIlluminatorInterface()));
 							try {
 								Thread.sleep(5);
 							} catch (InterruptedException e) {}
@@ -430,9 +434,9 @@ public class MotionController extends AbstractNodeMain {
 						triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
 						triggerVals.add(Integer.valueOf((int)axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()]));
 						if(DEBUG)
-							System.out.printf("%s= %d\n",robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),triggerVals.get(2));
-						trigpub.publish(setupPub(connectedNode, triggerVals, robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName(),
-														robot.getAffectors().getLEDIlluminatorInterface().getControllerAxisPropertyName()));
+							System.out.printf("%s= %d\n",robot.getAffectors().getLEDIlluminatorInterface().getClass(),triggerVals.get(2));
+						trigpub.publish(setupPub(connectedNode, triggerVals, robot.getAffectors().getLEDIlluminatorInterface(),
+														robot.getAffectors().getLEDIlluminatorInterface()));
 						try {
 							Thread.sleep(5);
 						} catch (InterruptedException e) {}
@@ -452,8 +456,8 @@ public class MotionController extends AbstractNodeMain {
 				speedVals.add(robot.getAffectors().getBoomActuatorInterface().getControllerChannel()); // controller slot channel
 				speedVals.add((int) speedL);
 				speedVals.add((int) speedR);
-				trigpub.publish(setupPub(connectedNode, speedVals,robot.getAffectors().getBoomActuatorInterface().getControllerAxisPropertyName(),
-																 robot.getAffectors().getBoomActuatorInterface().getControllerAxisPropertyName()));
+				trigpub.publish(setupPub(connectedNode, speedVals,robot.getAffectors().getBoomActuatorInterface(),
+																 robot.getAffectors().getBoomActuatorInterface()));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
@@ -470,8 +474,8 @@ public class MotionController extends AbstractNodeMain {
 					povVals.add((int)(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()]*100));
 					povVals.add(1000);
 					povVals.add(0);
-					trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
-																	 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+					trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface(),
+																	 robot.getAffectors().getLiftActuatorInterface()));
 					LiftActuatorIsOn = true;
 				} else {
 					if(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()] == 
@@ -485,8 +489,8 @@ public class MotionController extends AbstractNodeMain {
 						povVals.add((int)(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()]*100));
 						povVals.add(-1000);
 						povVals.add(0);
-						trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
-																		 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+						trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface(),
+																		 robot.getAffectors().getLiftActuatorInterface()));
 						LiftActuatorIsOn = true;
 					} else {
 						if(LiftActuatorIsOn) {
@@ -497,8 +501,8 @@ public class MotionController extends AbstractNodeMain {
 							povVals.add(0);
 							povVals.add(0);
 							povVals.add(0);
-							trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName(),
-																			 robot.getAffectors().getLiftActuatorInterface().getControllerAxisPropertyName()));
+							trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface(),
+																			 robot.getAffectors().getLiftActuatorInterface()));
 						}
 					}
 				}
@@ -740,6 +744,36 @@ public class MotionController extends AbstractNodeMain {
 	
 			} // onMessage from Joystick controller, with all the axes[] and buttons[]
 			
+			/**
+			 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
+			 * We will be sending [<slot> <channel> <value>]
+			 * We use a Int32MultiArray type of 2 dimensions, row of each value times column of all values.
+		 	 * Our setup is 10 possible slots for either motor or peripheral controllers
+		 	 * 10 possible channels per controller
+		 	 * 1 value per slot and channel.
+			 * @param connectedNode Our node transceiver info
+			 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
+			 * @param ledIlluminatorInterface1 The label for dimension 1 of the array
+			 * @param ledIlluminatorInterface2 The label for dimension 2 of the array
+			 * @return The multi array we create
+			 */
+			private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf, LEDIlluminatorInterface ledIlluminatorInterface1, LEDIlluminatorInterface ledIlluminatorInterface2) {
+				return RosArrayUtilities.setupInt32Array(connectedNode, valBuf, ledIlluminatorInterface1.getClass().getName(), ledIlluminatorInterface2.getClass().getName());
+			}
+			
+			private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf, BoomActuatorInterface boomActuatorInterface1, BoomActuatorInterface boomActuatorInterface2) {
+				return RosArrayUtilities.setupInt32Array(connectedNode, valBuf, boomActuatorInterface1.getClass().getName(), boomActuatorInterface2.getClass().getName());
+			}
+
+			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> povVals,
+					LiftActuatorInterface liftActuatorInterface, LiftActuatorInterface liftActuatorInterface2) {
+				return RosArrayUtilities.setupInt32Array(connectedNode, povVals, liftActuatorInterface.getClass().getName(), liftActuatorInterface2.getClass().getName());
+			}
+			
+			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> speedVals, String string,
+					String string2) {
+				return RosArrayUtilities.setupInt32Array(connectedNode, speedVals, string, string2);
+			}
 			/**
 			 * Increase power of right wheel based on PID results
 			 * If we hit max we are going to decrease power to left wheel by splitting the difference
@@ -1343,22 +1377,6 @@ public class MotionController extends AbstractNodeMain {
 	}
 	
 	
-	/**
-	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
-	 * We will be sending [<slot> <channel> <value>]
-	 * We use a Int32MultiArray type of 2 dimensions, row of each value times column of all values.
- 	 * Our setup is 10 possible slots for either motor or peripheral controllers
- 	 * 10 possible channels per controller
- 	 * 1 value per slot and channel.
-	 * @param connectedNode Our node transceiver info
-	 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
-	 * @param label1 The label for dimension 1 of the array
-	 * @param label2 The label for dimension 2 of the array
-	 * @return The multi array we create
-	 */
-	private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf, String label1, String label2) {
-		return RosArrayUtilities.setupInt32Array(connectedNode, valBuf, label1, label2);
-	}
 	
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 

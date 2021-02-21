@@ -2,6 +2,8 @@ package com.neocoretechs.robocore.affectors;
 
 import java.io.Serializable;
 
+import com.neocoretechs.robocore.config.TypedWrapper;
+
 /**
  * Interface for peripheral affectors. Devices other than propulsion, typically motorized but
  * also including LEDs and other PWM driven devices.
@@ -13,10 +15,10 @@ public class Affectors implements AffectorInterface, Serializable {
 	BoomActuatorInterface boomActuator;
 	LEDIlluminatorInterface LEDIlluminator;
 	LiftActuatorInterface liftActuator;
-	public Affectors() {
-		boomActuator = new BoomActuator();
-		LEDIlluminator = new LEDIlluminator();
-		liftActuator = new LiftActuator();
+	public Affectors(TypedWrapper[] lUN, TypedWrapper[] aXIS, TypedWrapper[] pID) {
+		boomActuator = new BoomActuator(lUN, aXIS, pID);
+		LEDIlluminator = new LEDIlluminator(lUN, aXIS, pID);
+		liftActuator = new LiftActuator(lUN, aXIS, pID);
 	}
 
 	@Override

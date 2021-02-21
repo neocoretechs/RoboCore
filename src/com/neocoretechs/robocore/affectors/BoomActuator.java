@@ -3,6 +3,7 @@ package com.neocoretechs.robocore.affectors;
 import java.io.Serializable;
 
 import com.neocoretechs.robocore.config.Props;
+import com.neocoretechs.robocore.config.TypedWrapper;
 /**
  * Implementation for peripheral affector config. In this case the linear actuator 
  * driving a boom or robot arm or crane.
@@ -15,16 +16,11 @@ public class BoomActuator implements BoomActuatorInterface, Serializable {
 	int y;
 	int slot;
 	int channel;
-	public BoomActuator() {
-		x = Props.toInt(getControllerAxisPropertyName()+"X");
-		y = Props.toInt(getControllerAxisPropertyName()+"Y");
-		slot =  Props.toInt(getControllerAxisPropertyName()+"Slot");
-		channel = Props.toInt(getControllerAxisPropertyName()+"Channel");
-	}
-
-	@Override
-	public String getControllerAxisPropertyName() {
-		return "BoomActuatorControl";
+	public BoomActuator(TypedWrapper[] lUN, TypedWrapper[] aXIS, TypedWrapper[] pID) {
+		//x = Props.toInt(getControllerAxisPropertyName()+"X");
+		//y = Props.toInt(getControllerAxisPropertyName()+"Y");
+		//slot =  Props.toInt(getControllerAxisPropertyName()+"Slot");
+		//channel = Props.toInt(getControllerAxisPropertyName()+"Channel");
 	}
 
 	@Override
@@ -49,7 +45,7 @@ public class BoomActuator implements BoomActuatorInterface, Serializable {
 	
 	@Override
 	public String toString() {
-		return getControllerAxisPropertyName()+" x="+x+",y="+y+",slot="+slot+",channel="+channel;
+		return " x="+x+",y="+y+",slot="+slot+",channel="+channel;
 	}
 
 }
