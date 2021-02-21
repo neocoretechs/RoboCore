@@ -1,8 +1,6 @@
 package com.neocoretechs.robocore.config;
 
 import java.io.Serializable;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
