@@ -32,4 +32,5 @@ public interface RobotInterface {
 	public SetpointInfoInterface getLeftTickSetpointInfo(); // Ticks and odometry related to the differing diff drives
 	public SetpointInfoInterface getRightTickSetpointInfo(); // Ticks and odometry related to the differing diff drives
 	public AffectorInterface getAffectors();
+	public boolean isIndoor();
 }

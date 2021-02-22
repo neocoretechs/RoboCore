@@ -18,6 +18,7 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
 	TypedWrapper[] LUN;
+	TypedWrapper[] WHEEL;
 	TypedWrapper[] AXIS;
 	TypedWrapper[] PID;
 	int leftWheelLun = -1;
@@ -29,10 +30,6 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	int rightSlot = -1;
 	int rightChannel = -1;
 	/* Define the robot parameters */
-	public static float wheelTrack = Props.toFloat("WheelTrackMM"); // millimeters
-	public static boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
-	private float wheelDiameter = Props.toFloat("WheelDiameterMM"); // millimeters, 16"
-	public int ticksPerRevolution = Props.toInt("TicksPerRevolution"); // ticks per revolution, if IMU reports .5 m/s as 500 mm/s then 500, else we have to dynamically change based on speed
 	DrivenWheelInterface leftWheel;
 	DrivenWheelInterface rightWheel;
 	//public static int MAXOUTPUT = 50; // indoor
@@ -40,8 +37,9 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	// it is variable based on desired speed.
 	private TwistInfo twistinfo = new TwistInfo();
 	
-	public RobotDiffDrive(TypedWrapper[] lUN, TypedWrapper[] aXIS, TypedWrapper[] pID) {
+	public RobotDiffDrive(TypedWrapper[] lUN, TypedWrapper[] wHEEL, TypedWrapper[] aXIS, TypedWrapper[] pID) {
 		this.LUN = lUN;
+		this.WHEEL = wHEEL;
 		this.AXIS = aXIS;
 		this.PID = pID;
 		// extract the wheel definitions from the logical units in config
@@ -60,6 +58,12 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 	
 	private void setDrive() {
+		Optional<Float> leftWheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
+		Optional<Float> leftWheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
+		Optional<Integer> leftTicksPerRevolution = Optional.empty();
+		Optional<Float> rightWheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
+		Optional<Float> rightWheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
+		Optional<Integer> rightTicksPerRevolution = Optional.empty(); 
 		Optional<Float> motorKpL = Optional.empty();
 		Optional<Float> motorKdL = Optional.empty();
 		Optional<Float> motorKiL = Optional.empty();
@@ -70,11 +74,32 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		Optional<Float> motorKiR = Optional.empty();
 		Optional<Float> motorKoR = Optional.empty();
 		Optional<Integer> motorPIDRateR = Optional.empty();
-
+		Optional<Integer> minSpeedL = Optional.empty();
+		Optional<Integer> maxSpeedL = Optional.empty();
+		Optional<Integer> minSpeedR = Optional.empty();
+		Optional<Integer> maxSpeedR = Optional.empty();
+		minSpeedL = Optional.ofNullable(LUN[leftWheelLun].get("MinValue")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+		maxSpeedL = Optional.ofNullable(LUN[leftWheelLun].get("MaxValue")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+		minSpeedR = Optional.ofNullable(LUN[rightWheelLun].get("MinValue")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+		maxSpeedR = Optional.ofNullable(LUN[rightWheelLun].get("MaxValue")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));		
+		leftWheelTrack = Optional.ofNullable(WHEEL[leftWheelLun].get("WheelTrackMM")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		leftWheelDiameter = Optional.ofNullable(WHEEL[leftWheelLun].get("WheelDiameterMM")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		leftTicksPerRevolution = Optional.ofNullable(WHEEL[leftWheelLun].get("TicksPerRevolution")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+		rightWheelTrack = Optional.ofNullable(WHEEL[rightWheelLun].get("WheelTrackMM")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		rightWheelDiameter = Optional.ofNullable(WHEEL[rightWheelLun].get("WheelDiameterMM")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		rightTicksPerRevolution = Optional.ofNullable(WHEEL[rightWheelLun].get("TicksPerRevolution")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
 		motorKpL = Optional.ofNullable(PID[leftWheelLun].get("MotorKp")).filter(String.class::isInstance)
 				.map(e -> Float.parseFloat((String) e));
-		if(DEBUG)
-			System.out.println("MotorKpL:"+motorKpL);
 		motorKdL = Optional.ofNullable(PID[leftWheelLun].get("MotorKd")).filter(String.class::isInstance)
 				.map(e -> Float.parseFloat((String) e));
 		motorKiL = Optional.ofNullable(PID[leftWheelLun].get("MotorKi")).filter(String.class::isInstance)
@@ -94,7 +119,7 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		motorPIDRateR = Optional.ofNullable(PID[rightWheelLun].get("MotorPIDRate")).filter(String.class::isInstance)
 		        .map(e -> Integer.parseInt((String) e));
 		try {
-			leftWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, motorKpL.get(), motorKdL.get(), motorKiL.get(), motorKoL.get(), motorPIDRateL.get());
+			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), leftWheelDiameter.get(), leftWheelTrack.get(), minSpeedL.get(), maxSpeedL.get(), leftTicksPerRevolution.get(), motorKpL.get(), motorKdL.get(), motorKiL.get(), motorKoL.get(), motorPIDRateL.get());
 		} catch(NoSuchElementException nse) {
 			System.out.println("<<WARNING; USING PID DEFAULTS leftWheelLun: "+leftWheelLun+" PID[leftWheelLun]: "+
 					(leftWheelLun < PID.length ? 
@@ -102,10 +127,10 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 					(PID[leftWheelLun].get("MotorKp")+","+PID[leftWheelLun].get("MotorKd")+","+PID[leftWheelLun].get("MotorKi")+","+PID[leftWheelLun].get("MotorKo")+","+PID[leftWheelLun].get("MotorPIDRate")):
 						" COLLECTION NULL ")) :
 						" PID ARRAY LEN BAD:"+PID.length));
-			leftWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, 1.0f, 1.0f, 1.0f, 1.0f, 1);
+			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), leftWheelDiameter.get(), leftWheelTrack.get(), minSpeedL.get(), maxSpeedL.get(), leftTicksPerRevolution.get(), 1.0f, 1.0f, 1.0f, 1.0f, 1);
 		}
 		try {
-			rightWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, motorKpR.get(), motorKdR.get(), motorKiR.get(), motorKoR.get(), motorPIDRateR.get());
+			rightWheel = new RobotWheel((String)LUN[rightWheelLun].get("Name"), rightWheelDiameter.get(), rightWheelTrack.get(), minSpeedR.get(), maxSpeedR.get(), rightTicksPerRevolution.get(), motorKpR.get(), motorKdR.get(), motorKiR.get(), motorKoR.get(), motorPIDRateR.get());
 		} catch(NoSuchElementException nse) {
 			System.out.println("<<WARNING USING PID DEFAULTS rightWheelLun: "+rightWheelLun+" PID[rightWheelLun]: "+
 					(rightWheelLun < PID.length ? 
@@ -113,7 +138,7 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 					(PID[rightWheelLun].get("MotorKp")+","+PID[rightWheelLun].get("MotorKd")+","+PID[rightWheelLun].get("MotorKi")+","+PID[rightWheelLun].get("MotorKo")+","+PID[rightWheelLun].get("MotorPIDRate") ):
 						" COLLECTION NULL ")) :
 						" PID ARRAY LEN BAD:"+PID.length));
-			rightWheel = new RobotWheel(wheelDiameter, ticksPerRevolution, 1.0f, 1.0f, 1.0f, 1.0f, 1);
+			rightWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), rightWheelDiameter.get(), rightWheelTrack.get(), minSpeedR.get(), maxSpeedR.get(), rightTicksPerRevolution.get(), 1.0f, 1.0f, 1.0f, 1.0f, 1);
 		}
 	}
 	
@@ -153,19 +178,9 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		this.rightWheel = rightWheel;	
 	}
 
-	@Override
-	public float getWheelTrack() {
-		return wheelTrack;
-	}
-	
-	@Override
-	public boolean isIndoor() {
-		return indoor;
-	}
-	
 	public String toString() {
-		return String.format("Controller LeftSlot=%d,Left Channel=%d,RightSlot=%dRight Channel=%d,Wheel Track=%f,Indoor=%b\r\nLeft Wheel: %s\r\nRight Wheel: %s",
-				leftSlot, leftChannel, rightSlot, rightChannel, wheelTrack, indoor,
+		return String.format("Controller LeftSlot=%d, Left Channel=%d, RightSlot=%d Right Channel=%d\r\n%s\r\n%s",
+				leftSlot, leftChannel, rightSlot, rightChannel,
 				leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
 	}
 	

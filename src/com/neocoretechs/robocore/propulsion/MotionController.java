@@ -286,7 +286,7 @@ public class MotionController extends AbstractNodeMain {
 			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
-		if(robot.getDiffDrive().isIndoor())
+		if(robot.isIndoor())
 			SPEEDSCALE = 100.0f;
 		else
 			SPEEDSCALE = 1000.0f;
@@ -895,7 +895,7 @@ public class MotionController extends AbstractNodeMain {
 				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 				// travel the length of base and the other needs to travel length of hypotenuse
 				if(DEBUG)
-					System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getWheelTrack()/2))/hypot),holdBearing);
+					System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().getWheelTrack()/2))/hypot),holdBearing);
 				speedR *= ((radius+(WHEELBASE/2))/hypot);
 			}
 		});
@@ -1340,7 +1340,7 @@ public class MotionController extends AbstractNodeMain {
 
 		// Calculate final mix of Drive and Pivot
 		// Set the target speeds in wheel rotation command units -1000, 1000 and if indoor mode div by ten
-		if(robot.getDiffDrive().isIndoor()) {
+		if(robot.isIndoor()) {
 			robot.getLeftSpeedSetpointInfo().setTarget(spd_left/10);
 			robot.getRightSpeedSetpointInfo().setTarget(spd_left/10);
 		} else {

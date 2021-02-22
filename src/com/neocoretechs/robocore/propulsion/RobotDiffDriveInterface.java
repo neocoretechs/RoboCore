@@ -14,8 +14,6 @@ public interface RobotDiffDriveInterface {
 	public DrivenWheelInterface getLeftWheel();
 	public DrivenWheelInterface getRightWheel();
 	public void setDriveWheels(DrivenWheelInterface leftWheels, DrivenWheelInterface rightWheel);
-	public float getWheelTrack();
-	public boolean isIndoor(); // determines whether power should be reduced for safe operation
 	public int getLeftWheelChannel();
 	public int getRightWheelChannel();
 	public int getControllerLeftSlot();

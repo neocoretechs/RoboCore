@@ -18,13 +18,15 @@ public class RobotWheel implements DrivenWheelInterface, Serializable {
 	//public static int MAXOUTPUT = 50; // indoor
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.
+	private String name;
 	private TickSetpointInfo tickSetpointInfo;
 	private SpeedSetpointInfo speedSetpointInfo;
 	private MotorPIDController motorPIDController;
 	private float x;
 	
-	public RobotWheel(float wheelDiameter, int ticksPerRevolution, float kp, float ki, float kd, float ko, int pidRate) {
-		speedSetpointInfo = new SpeedSetpointInfo();
+	public RobotWheel(String name, float wheelDiameter, float wheelTrack, int minimumSpeed, int maximumSpeed, int ticksPerRevolution, float kp, float ki, float kd, float ko, int pidRate) {
+		this.name = name;
+		speedSetpointInfo = new SpeedSetpointInfo(wheelTrack, minimumSpeed, maximumSpeed);
 		tickSetpointInfo = new TickSetpointInfo(wheelDiameter, ticksPerRevolution);
 		motorPIDController = new MotorPIDController(kp, ki, kd, ko, pidRate);
 	}
@@ -55,7 +57,8 @@ public class RobotWheel implements DrivenWheelInterface, Serializable {
 	}
 	
 	public String toString() {
-		return String.format("Tick Setpoint: %s\r\nSpeed Setpoint: %s\r\nPID Control: %s\r\n", 
+		return String.format("%s Tick Setpoint: %s\r\nSpeed Setpoint: %s\r\nPID Control: %s\r\n",
+				name,
 				tickSetpointInfo == null ? "NULL" : tickSetpointInfo.toString(),
 				speedSetpointInfo == null ? "NULL" : speedSetpointInfo.toString(),
 				motorPIDController == null ? "NULL" : motorPIDController.toString());

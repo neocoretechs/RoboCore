@@ -37,4 +37,5 @@ public class DistanceSetpointInfo implements SetpointInfoInterface, Serializable
 	public String toString() {
 		return "Distance Max="+MAXIMUM+",Min="+MINIMUM+",Actual="+distance+",Target distance="+desiredDistance+",Error="+prevErr;
 	}
+
 }

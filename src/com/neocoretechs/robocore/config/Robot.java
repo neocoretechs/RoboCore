@@ -40,18 +40,27 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * AXIS[0].AxisType:Stick <br/>
  * AXIS[0].AxisX:0 <br/>
  * AXIS[0].AxisY:2 <br/>
- * @author groff
+ * Also, BUTTON, WHEEL, etc as needed.<p/>
+ * It may seem odd that values are redundant. For instance, wheel track would seem absolute, as would wheel diameter.
+ * However, its possible that in a 4 wheel vehicle, diameter can vary slightly as in, say, the drive wheels of a tracked vehicle
+ * and if the tracks are driven by 4 motors with 2 sets of cogs differing in size front to back the rotation rates wil
+ * have to by synchronized despite the differing 'wheel' sizes. So to may the track vary slightly, and other instances I cant yet forsee.<p/>
+ * With that in mind the parameters that would seem to warrant global status have been repeated so as to appear from the
+ * perspective of each individual component, and if necessary, appear in aggregate as global. 
+ * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
 public class Robot implements RobotInterface, Serializable {
 	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
+	private static boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
 	MotionPIDController motionPIDController;
 	RobotDiffDriveInterface robotDrive;
 	IMUSetpointInfo IMUSetpoint;
 	AffectorInterface affectors;
 	// These arrays are by 'channel'
 	private TypedWrapper[] LUN;
+	private TypedWrapper[] WHEEL;
 	private TypedWrapper[] PID;
 	private TypedWrapper[] AXIS;
 	private TypedWrapper[] BUTTON;
@@ -63,10 +72,11 @@ public class Robot implements RobotInterface, Serializable {
 			throw new RuntimeException(e);
 		}
 		extractLUN();
+		extractWHEEL();
 		extractPID();
 		extractAXIS();
 		extractBUTTON();
-		robotDrive = new RobotDiffDrive(LUN, AXIS, PID);
+		robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
 		//kp, ki, kd, ko, pidRate (hz)
 		motionPIDController = new MotionPIDController(Props.toFloat("CrosstrackKp"), 
 														Props.toFloat("CrosstrackKd"), 
@@ -135,6 +145,19 @@ public class Robot implements RobotInterface, Serializable {
 		 for(Object pidsAChannels: pidsOChannels) {
 			 Map<String, Object> sortedPidProp = pids.get(pidsAChannels); //lunsAChannels sorted integer channels of LUNs
 			 PID[(int)pidsAChannels] = new TypedWrapper(sortedPidProp);
+		 }	
+	}
+	
+	private void extractWHEEL() {
+		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
+		 Map<Integer, Map<String, Object>> wheels = globalConfigs.get("WHEEL");
+		 WHEEL = new TypedWrapper[wheels.size()];
+		 Set<Integer> wheelsChannels = wheels.keySet();
+		 Object[] wheelsOChannels = wheelsChannels.toArray();
+		 Arrays.sort(wheelsOChannels); // make sure of order
+		 for(Object wheelsAChannels: wheelsOChannels) {
+			 Map<String, Object> sortedWheelProp = wheels.get(wheelsAChannels); //wheelsAChannels sorted
+			 WHEEL[(int)wheelsAChannels] = new TypedWrapper(sortedWheelProp);
 		 }	
 	}
 	/**
@@ -216,16 +239,33 @@ public class Robot implements RobotInterface, Serializable {
 		return robotDrive.getRightWheel().getTickSetpointInfo();
 	}
 	
+	@Override
+	public boolean isIndoor() {
+		return indoor;
+	}
+	
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("Robot %s\r\nDrive: %s\r\nMotion Controller:%s\r\n IMU:%s\r\nAffectors:%s",
+		sb.append(String.format("Robot %s\r\nIndoor=%b Drive: %s\r\nMotion Controller:%s\r\n IMU:%s\r\nAffectors:%s",
 				getName(),
+				indoor,
 				robotDrive == null ? "NULL" : robotDrive.toString(),
 				motionPIDController == null ? "NULL" : motionPIDController.toString(),
 					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString(),
 							affectors == null ? "NULL" : affectors.toString()));
 		for(int i = 0; i < LUN.length; i++) {
 			Set<Entry<String, Object>> x = LUN[i].entrySet();
+			Iterator<Entry<String, Object>> it = x.iterator();
+			while(it.hasNext()) {
+				Entry<String, Object> e = it.next();
+				sb.append(e.getKey());
+				sb.append(":");
+				sb.append(e.getValue());
+				sb.append("\r\n");
+			}
+		}
+		for(int i = 0; i < WHEEL.length; i++) {
+			Set<Entry<String, Object>> x = WHEEL[i].entrySet();
 			Iterator<Entry<String, Object>> it = x.iterator();
 			while(it.hasNext()) {
 				Entry<String, Object> e = it.next();

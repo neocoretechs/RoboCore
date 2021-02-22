@@ -14,6 +14,12 @@ public class SpeedSetpointInfo implements SetpointInfoInterface, Serializable {
 	float MAXIMUM = 1000.0f;
 	float MINIMUM = 0.0f;
 	float velocity, targetVelocity, prevErr;
+	float wheelTrack;
+	public SpeedSetpointInfo(float wheelTrack, int minimumSpeed, int maximumSpeed) {
+		this.wheelTrack = wheelTrack;
+		this.MINIMUM = minimumSpeed;
+		this.MAXIMUM = maximumSpeed;
+	}
 	/**
 	 * Convert meters per second to ticks per time frame.
 	 * cpr = ticksPerRevolution
@@ -51,8 +57,10 @@ public class SpeedSetpointInfo implements SetpointInfoInterface, Serializable {
 	public void setMinimum(float min) { MINIMUM = min; }
 	@Override
 	public float getMinimum() { return MINIMUM; }
+
+	public float getWheelTrack() { return wheelTrack; }
 	
 	public String toString() {
-		return "Speed Max="+MAXIMUM+",Min="+MINIMUM+",Velocity="+velocity+",Target velocity="+targetVelocity+",Error="+prevErr;
+		return String.format("Speed Setpoint Info: Speed Max=%f, Min=%f, Velocity=%f, Target velocity=%f, WheelTrack=%f, Error=%f", MAXIMUM, MINIMUM, velocity, targetVelocity, wheelTrack,  prevErr);
 	}
 }
