@@ -1,6 +1,5 @@
 package com.neocoretechs.robocore.propulsion;
 
-//import org.apache.commons.logging.Log;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -33,7 +32,6 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.affectors.BoomActuatorInterface;
 import com.neocoretechs.robocore.affectors.LEDIlluminatorInterface;
 import com.neocoretechs.robocore.affectors.LiftActuatorInterface;
-import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -42,7 +40,6 @@ import com.neocoretechs.robocore.services.ControllerStatusMessage;
 import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
 import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 
-import net.java.games.input.Component;
 import std_msgs.Int32MultiArray;
 
 /**
@@ -175,7 +172,6 @@ public class MotionController extends AbstractNodeMain {
 	public static boolean isOverPressure = false;
 	public static boolean isPressure = false;
 	public static long lastPressureNotification = 0; // time so we dont just keep yapping about the weather
-	public static int TEMPERATURE_THRESHOLD = Props.toInt("TemperatureThreshold");//40 C 104 F
 	public static boolean isTemperature = false;
 	public static boolean isOverTemp = false;
 	public static boolean isMoving = false;
@@ -183,8 +179,6 @@ public class MotionController extends AbstractNodeMain {
 	public static boolean isRangeUpperFront = false;
 	public static boolean isRangeLowerFront = false;
 	public static boolean isVision = false; // machine vision recognition event
-	public static final float TRIANGLE_THRESHOLD = Props.toFloat("MaxIMUDeviationDegrees"); // Point at which geometric solution begins/disengages
-	public static final float PID_THRESHOLD  = TRIANGLE_THRESHOLD/2; // point at which PID engages/disengages
 	// If we call the wheelbase 1000, it implies that at maximum speed of 1000 it take 2 robot radii to turn 90 degrees
 	// This is because the radius of the inner wheel is from speed 0 to speed max, and the outer is from speed 0 to speed max plus wheelbase.
 	// Correspondingly at speed 1 the arc describing the inner wheel is 1 and the inner wheel turns at 1, or in place 
@@ -668,7 +662,9 @@ public class MotionController extends AbstractNodeMain {
 					if(DEBUG)
 						System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
 					// In auto
-					if( Math.abs(robot.getMotionPIDController().getError()) <= TRIANGLE_THRESHOLD ) {
+					// Point at which geometric solution begins/disengages is IMU maximumCourseDeviation from configuration
+					float PID_THRESHOLD  = robot.getIMUSetpointInfo().getMaximum()/2; // point at which PID engages/disengages
+					if( Math.abs(robot.getMotionPIDController().getError()) <= robot.getIMUSetpointInfo().getMaximum() ) {
 						if( robot.getMotionPIDController().getError() < 0.0f ) { // decrease left wheel power goal
 							// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
 							if( Math.abs(robot.getMotionPIDController().getError()) <= PID_THRESHOLD ) {
@@ -690,7 +686,7 @@ public class MotionController extends AbstractNodeMain {
 							}
 						}
 						if(DEBUG)
-							System.out.printf("<="+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+							System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 					} else {
 						// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
 						robot.getMotionPIDController().setITerm(0);//ITerm = 0;
@@ -704,7 +700,7 @@ public class MotionController extends AbstractNodeMain {
 							if( robot.getMotionPIDController().getError() > 0.0f )
 								speedR *= (arcin/arcout);
 						if(DEBUG)
-							System.out.printf(">"+TRIANGLE_THRESHOLD+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+							System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 					}
 				} else {
 					// manual steering mode, use tight radii and a human integrator
@@ -1033,7 +1029,7 @@ public class MotionController extends AbstractNodeMain {
 					if(DEBUG)
 					System.out.println(" Temp:"+temperature);
 					isTemperature = true;
-					if( temperature > TEMPERATURE_THRESHOLD )
+					if( temperature > robot.getTemperatureThreshold() )
 						isOverTemp = true;
 				} else
 					isTemperature = false;
@@ -1053,10 +1049,10 @@ public class MotionController extends AbstractNodeMain {
 			protected void setup() {
 				sequenceNumber = 0;
 				robot.getIMUSetpointInfo().setPrevErr(0.0f); // 0 degrees yaw
-				robot.getIMUSetpointInfo().setMinimum(-TRIANGLE_THRESHOLD); //  degree minimum integral windup
-				robot.getIMUSetpointInfo().setMaximum(TRIANGLE_THRESHOLD); // maximum degree windup
+				robot.getIMUSetpointInfo().setMinimum(-robot.getIMUSetpointInfo().getMaximum()); //degree minimum integral windup
 				robot.getMotionPIDController().clearPID();
-				WHEELBASE = Props.toFloat("MaxSpeedValue");
+				// wheelbase refers to max speed, both wheels averaged
+				WHEELBASE = (robot.getLeftSpeedSetpointInfo().getMaximum()+robot.getRightSpeedSetpointInfo().getMaximum())/2.0f;
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
@@ -1375,7 +1371,6 @@ public class MotionController extends AbstractNodeMain {
 		return new int[]{(int) robot.getLeftSpeedSetpointInfo().getTarget(),
 						 (int) robot.getRightSpeedSetpointInfo().getTarget()};
 	}
-	
 	
 	
 	/*

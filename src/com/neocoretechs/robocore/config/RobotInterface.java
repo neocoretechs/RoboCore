@@ -33,4 +33,5 @@ public interface RobotInterface {
 	public SetpointInfoInterface getRightTickSetpointInfo(); // Ticks and odometry related to the differing diff drives
 	public AffectorInterface getAffectors();
 	public boolean isIndoor();
+	public float getTemperatureThreshold();
 }

@@ -53,11 +53,12 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 public class Robot implements RobotInterface, Serializable {
 	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
-	private static boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
-	MotionPIDController motionPIDController;
-	RobotDiffDriveInterface robotDrive;
-	IMUSetpointInfo IMUSetpoint;
-	AffectorInterface affectors;
+	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
+	private int temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
+	private MotionPIDController motionPIDController;
+	private RobotDiffDriveInterface robotDrive;
+	private IMUSetpointInfo IMUSetpoint;
+	private AffectorInterface affectors;
 	// These arrays are by 'channel'
 	private TypedWrapper[] LUN;
 	private TypedWrapper[] WHEEL;
@@ -244,6 +245,12 @@ public class Robot implements RobotInterface, Serializable {
 		return indoor;
 	}
 	
+	@Override
+	public float getTemperatureThreshold() {
+		return temperatureThreshold;
+	}
+	
+
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format("Robot %s\r\nIndoor=%b Drive: %s\r\nMotion Controller:%s\r\n IMU:%s\r\nAffectors:%s",

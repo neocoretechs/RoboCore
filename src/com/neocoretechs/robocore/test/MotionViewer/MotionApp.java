@@ -23,6 +23,8 @@ import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
+import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.propulsion.MotionController;
 
 
@@ -42,6 +44,8 @@ import com.neocoretechs.robocore.propulsion.MotionController;
  * @author <a href="mailto:tdbrown@uiuc.edu">Tom Brown</a>
  *
  * @version 1.3
+ * This version:
+ * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
 public class MotionApp implements ChangeListener, DrawInterface
@@ -251,6 +255,7 @@ public class MotionApp implements ChangeListener, DrawInterface
 
     /** Temporary variable. */
     private int         nSegment;
+	private Robot robot;
 
     // END of simulation variables.
     public MotionApp() {
@@ -260,7 +265,7 @@ public class MotionApp implements ChangeListener, DrawInterface
      * Initialize the app.
      */
     public void init() {
-        /*
+    /*
     * Set up controls for Robot tab, which includes:
     *     Initial Position
     *         Slider for X coordinate
@@ -269,7 +274,8 @@ public class MotionApp implements ChangeListener, DrawInterface
     *     Body Settings
     *         Body Width
     */
-    	controlsRobot = new PlayerFrame();
+    robot = new Robot();
+    controlsRobot = new PlayerFrame();
    // Basic set up for the tab:
         controlsRobot.setLayout(new BoxLayout(controlsRobot,
                                               BoxLayout.Y_AXIS));
@@ -841,7 +847,8 @@ public class MotionApp implements ChangeListener, DrawInterface
         theFloatCanvas.drawPolyline(centerPoints, numSteps+1);
         theFloatCanvas.drawPolyline(leftPoints,   numSteps+1, Color.green);
         theFloatCanvas.drawPolyline(rightPoints,  numSteps+1, Color.red);
-
+		float PID_THRESHOLD  = robot.getIMUSetpointInfo().getMaximum()/2; // point at which PID engages/disengages
+		float TRIANGLE_THRESHOLD = robot.getIMUSetpointInfo().getMaximum();
         // Draw the triangles for the true positions
         for (int iSegment=0; iSegment<=numSteps/*nSegment*/; iSegment++){
             fpd[0] = IdealDrive.LeftWheelLoc( trueReckonPos[iSegment]);
@@ -849,10 +856,10 @@ public class MotionApp implements ChangeListener, DrawInterface
             fpd[2] = IdealDrive.RightWheelLoc(trueReckonPos[iSegment]);
             if( iSegment == currentPosition )
             	theFloatCanvas.fillPolygon(fpd, Color.red);
-            if( Math.abs(runData[0][iSegment]) <= MotionController.PID_THRESHOLD)
+            if( Math.abs(runData[0][iSegment]) <= PID_THRESHOLD)
             	theFloatCanvas.drawPolygon(fpd, Color.blue);
             else
-            	if( Math.abs(runData[0][iSegment]) <= MotionController.TRIANGLE_THRESHOLD)
+            	if( Math.abs(runData[0][iSegment]) <= TRIANGLE_THRESHOLD)
             		theFloatCanvas.drawPolygon(fpd, Color.DARK_GRAY);
             	else
             		theFloatCanvas.drawPolygon(fpd, Color.MAGENTA); // arc solution
