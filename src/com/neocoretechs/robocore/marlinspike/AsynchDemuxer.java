@@ -179,10 +179,19 @@ public class AsynchDemuxer implements Runnable {
 	public void clearLineBuffer() { marlinLines.clear(); }
 	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(1024);
 	public void clearWriteBuffer() { toWrite.clear(); }
+	
+	/**
+	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
+	 * If the elements reach a predetermined upper bound they are emplaced at the beginning. If this occurs,
+	 * a warning message is displayed but otherwise operation is unaffected. If these warnings are an issue,
+	 * the size of the deque must be increased.
+	 * @param ad The AsynchDemuxer to queue to.
+	 * @param req The request to be enqueued.
+	 */
 	public static void addWrite(AsynchDemuxer ad, String req) {
 		boolean overwrite = ad.toWrite.addLast(req);
 		if(overwrite)
-			System.out.println("WARNING - OUBOUND MARLINSPIKE QUEUE OVERWRITE!");
+			System.out.println("WARNING - OUTBOUND MARLINSPIKE QUEUE OVERWRITE!");
 	}
 
 	public MachineBridge getMachineBridge(String group) {
@@ -700,19 +709,29 @@ public class AsynchDemuxer implements Runnable {
 
  
 	/**
-	 * Configure the robot with a series of G-code directives at startup in file startup.gcode
+	 * Configure the robot with a series of G-code directives at startup in file startup.gcode.
+	 * Wait until write queue empties and number of waiters on write is 0
 	 * @throws IOException
 	 */
 	public synchronized void config() throws IOException {
 		// now read the startup G-code directives to initiate
 		//String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
 		List<String> starts = FileIOUtilities.getConfig();
+		config(starts);
+	}
+	
+	public synchronized void config(List<String> starts) throws IOException {
 		for(String s : starts) {
 			System.out.println("Startup GCode:"+s);
 			addWrite(this,s);
 		}
+		while(!toWrite.isEmpty() || mutexWrite.getNumberWaiting() > 0)
+			try {
+				Thread.sleep(0,10);
+			} catch (InterruptedException e) {
+				throw new IOException(e);
+			}
 	}
-	
 	
 	/**
 	 * Asynchronous demuxxing main loop.

@@ -34,4 +34,9 @@ public interface RobotInterface {
 	public AffectorInterface getAffectors();
 	public boolean isIndoor();
 	public float getTemperatureThreshold();
+	public TypedWrapper[] getLUN();
+	public TypedWrapper[] getWHEEL();
+	public TypedWrapper[] getPID();
+	public TypedWrapper[] getAXIS();
+	public TypedWrapper[] getBUTTON();
 }

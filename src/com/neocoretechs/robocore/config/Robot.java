@@ -19,6 +19,7 @@ import com.neocoretechs.robocore.affectors.Affectors;
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 /**
+ * This class represents a centralized configuration management instrument.
  * Read the paramaterized properties from the properties class. Config as follows by LUN, logical unit number:<p/>
  * LUN[0].Name:LeftWheel <br/>
  * LUN[0].NodeName:Control1 <br/>
@@ -51,7 +52,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public class Robot implements RobotInterface, Serializable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
 	private int temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
@@ -326,6 +327,31 @@ public class Robot implements RobotInterface, Serializable {
 	@Override
 	public AffectorInterface getAffectors() {
 		return affectors;
+	}
+
+	@Override
+	public TypedWrapper[] getLUN() {
+		return LUN;
+	}
+
+	@Override
+	public TypedWrapper[] getWHEEL() {
+		return WHEEL;
+	}
+
+	@Override
+	public TypedWrapper[] getPID() {
+		return PID;
+	}
+
+	@Override
+	public TypedWrapper[] getAXIS() {
+		return AXIS;
+	}
+
+	@Override
+	public TypedWrapper[] getBUTTON() {
+		return BUTTON;
 	}
 
 }

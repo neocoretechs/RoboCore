@@ -44,10 +44,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Jonathan Groff
  */
 public class Props {
+	public static boolean DEBUG = false;
 	private static final String propsFile = "RoboCore.properties";
 	private static String propfile = null;
 	public static final String dataDirectory = "/home/pi/";
-	public static boolean DEBUG = true;
 	/**
 	 * assume properties file is in 'RoboCore.properties' defined at runtime by -DRoboCore.properties=file
 	 * failing that, we will try to load a file name RoboCore.properties from the system resource stream

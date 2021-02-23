@@ -43,6 +43,8 @@ import com.neocoretechs.robocore.marlinspike.PublishResponses;
 import com.neocoretechs.robocore.marlinspike.PublishUltrasonicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
+import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
@@ -243,9 +245,11 @@ public void onStart(final ConnectedNode connectedNode) {
 				MarlinspikeControl.DEBUG = true;
 		}
 	}
+
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 			connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-
+	// TODO get this from parameter server or singleton with map of robot names
+	RobotInterface robot = new Robot();
 	final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 	try {
 		asynchDemuxer.connect(ByteSerialDataPort.getInstance());
