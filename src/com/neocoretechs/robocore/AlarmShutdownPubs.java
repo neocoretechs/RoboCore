@@ -18,20 +18,17 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
-import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
  * Publishes global alarm shutdown messages, for those nodes which may currently be alarmed.
- * Sends an empty message to the alarm/shutdown topic.
- * @author jg
+ * Sends a time marker to the alarm/shutdown topic.
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class AlarmShutdownPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = false;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
-	std_msgs.Empty offmsg = null;
-	public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 
 	
 	public AlarmShutdownPubs(String host, InetSocketAddress master) {
@@ -77,7 +74,7 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	
 		final Publisher<std_msgs.Empty> alarmpub =
-				connectedNode.newPublisher("alarm/shutdown", std_msgs.Empty._TYPE);
+				connectedNode.newPublisher("alarm/shutdown", std_msgs.Time._TYPE);
 		
 		// tell the waiting constructors that we have registered publishers
 		awaitStart.countDown();
@@ -93,7 +90,7 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 			    try {
 					awaitStart.await();
 				} catch (InterruptedException e) {}
-				std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Empty._TYPE);
+				std_msgs.Empty val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Time._TYPE);
 				alarmpub.publish(val);
 				cancel();
 			}
