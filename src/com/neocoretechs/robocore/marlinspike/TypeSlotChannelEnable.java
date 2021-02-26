@@ -105,21 +105,57 @@ public class TypeSlotChannelEnable {
 		if(M10CtrlType == 0) { // smart controller, may or may not have encoder defined with its firmware, not ours
 			if(encoder != 0)
 				sb.append(" W").append(encoder);
-			return sb.append(" E").append(dirdefault).toString();
+			return sb.append(" E").append(dirdefault).append("\r\n").toString();
 		}
 		if(M10CtrlType == 4) { // straight PWM driver, no motor, hence, no encoder
-			return sb.append(" D").append(dirdefault).toString();
+			return sb.append(" D").append(dirdefault).append("\r\n").toString();
 		}
-		sb.append(" D").append(dirdefault).append(" E").append(dirdefault).toString();
+		sb.append(" D").append(enable).append(" E").append(dirdefault).toString();
 		if(encoder != 0)
 			sb.append(" W").append(encoder);
 		return sb.append("\r\n").toString();
 	}
-	
+	/**
+	 * Define diff driver for traction in slot 0, Type 1 is HBridge driver in motor driver slots
+	 * M10 Z0 T1
+	 * M3 Z0 P8 C1 D24 E0 W68
+ 	 * Config H-bridge diff driver slot 0 PWM pin 10 channel 2, Dir pin 22, encoder 69 default start dir 0
+	 * M3 Z0 P10 C2 D22 E0 W69
+ 	 * Define H-bridge driver slot 1 for boom actuator, PWM pin 9 channel 1, Dir pin 26, no encoder
+	 * M10 Z1 T1
+ 	 * config H-bridge actuator slot 1, PWM pin 9 channel 1, Dir pin 26, default dir 0
+	 * M3 Z1 P9 C1 D26 E0
+ 	 * Define PWM LED driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers
+	 * M10 Z0 T4
+ 	 * Now config LED driver slot 0 to PWM pin 13 on channel 1 enable pin 30
+	 * M9 Z0 P13 C1 D30
+ 	 * Now Define SplitBridge lift actuator slot 2 to Type 2 split bridge driver in motor driver slot
+	 * M10 Z2 T2
+ 	 * Config SplitBridge lift actuator slot 2, pwm pins 6 and 7 for forward/reverse channel 1, enable pin 32, default dir 0
+	 * M4 Z2 P6 Q7 C1 D32 E0
+	 * @param args
+	 */
 	public static void main(String[] args) {
+		System.out.println("-----");		
 		TypeSlotChannelEnable tsce = new TypeSlotChannelEnable("SmartController", 0, 1, 22);
-		System.out.println(tsce.genM10());
+		System.out.print(tsce.genM10());
 		StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(0, 0)).append(tsce.genChannelDirDefaultEncoder(0));
-		System.out.println(sb);
+		System.out.print(sb);
+		System.out.println("-----");
+		tsce = new TypeSlotChannelEnable("H-Bridge", 0, 1, 24, 1);
+		System.out.print(tsce.genM10());
+		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(8, 0)).append(tsce.genChannelDirDefaultEncoder(68));
+		System.out.print(sb);
+		System.out.println("-----");		
+		tsce = new TypeSlotChannelEnable("PWM", 0, 1, 30);
+		System.out.print(tsce.genM10());
+		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(13, 0)).append(tsce.genChannelDirDefaultEncoder(0));
+		System.out.print(sb);
+		System.out.println("-----");		
+		tsce = new TypeSlotChannelEnable("SplitBridge", 2, 1, 32);
+		System.out.print(tsce.genM10());
+		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(6, 7)).append(tsce.genChannelDirDefaultEncoder(0));
+		System.out.print(sb);
+		System.out.println("-----");		
 	}
 }
