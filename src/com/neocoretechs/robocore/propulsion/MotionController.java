@@ -540,13 +540,11 @@ public class MotionController extends AbstractNodeMain {
 					speedL = -speedR;
 					// set it up to send
 					speedVals = new ArrayList<Integer>(6);
-					speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
-					speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
+					speedVals.add(robot.getDiffDrive().getLeftwheelLun());
 					speedVals.add((int)speedL);
-					speedVals.add(robot.getDiffDrive().getControllerRightSlot()); // controller slot
-					speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
+					speedVals.add(robot.getDiffDrive().getRightWheelLun());
 					speedVals.add((int)speedR);
-					velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
+					velpub.publish(setupPub(connectedNode, speedVals,"Controller LUN","Controller LUN"));
 					if(DEBUG)
 						System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 					return;
@@ -556,11 +554,9 @@ public class MotionController extends AbstractNodeMain {
 						speedR = -speedL;
 						// set it up to send
 						speedVals = new ArrayList<Integer>(6);
-						speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
-						speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
+						speedVals.add(robot.getDiffDrive().getLeftwheelLun());
 						speedVals.add((int)speedL);
-						speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); // controller slot
-						speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
+						speedVals.add(robot.getDiffDrive().getRightWheelLun()); // controller slot
 						speedVals.add((int)speedR);
 						velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
 						if(DEBUG)
@@ -724,11 +720,9 @@ public class MotionController extends AbstractNodeMain {
 				// set it up to send down the publishing pipeline
 				//
 				speedVals = new ArrayList<Integer>(6);
-				speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
-				speedVals.add(robot.getDiffDrive().getLeftWheelChannel()); // controller slot channel
+				speedVals.add(robot.getDiffDrive().getLeftwheelLun());
 				speedVals.add((int)speedL);
-				speedVals.add(robot.getDiffDrive().getControllerLeftSlot()); //controller slot
-				speedVals.add(robot.getDiffDrive().getRightWheelChannel()); // controller slot channel
+				speedVals.add(robot.getDiffDrive().getLeftwheelLun()); 
 				speedVals.add((int)speedR);
 				velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
 				try {

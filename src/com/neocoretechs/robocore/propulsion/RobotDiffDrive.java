@@ -21,10 +21,6 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	int rightWheelLun = -1;
 	int controllerAxisX = -1; 
 	int controllerAxisY = -1;
-	int leftSlot = -1;
-	int leftChannel = -1;
-	int rightSlot = -1;
-	int rightChannel = -1;
 	/* Define the robot parameters */
 	DrivenWheelInterface leftWheel;
 	DrivenWheelInterface rightWheel;
@@ -148,25 +144,6 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		return rightWheel;
 	}
 
-	@Override
-	public int getLeftWheelChannel() {
-		return leftChannel;
-	}
-
-	@Override
-	public int getRightWheelChannel() {
-		return rightChannel;
-	}
-
-	@Override
-	public int getControllerLeftSlot() {
-		return leftSlot;
-	}
-
-	@Override
-	public int getControllerRightSlot() {
-		return rightSlot;
-	}
 	
 	@Override
 	public void setDriveWheels(DrivenWheelInterface leftWheel, DrivenWheelInterface rightWheel) {
@@ -175,9 +152,7 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 
 	public String toString() {
-		return String.format("Controller LeftSlot=%d, Left Channel=%d, RightSlot=%d Right Channel=%d\r\n%s\r\n%s",
-				leftSlot, leftChannel, rightSlot, rightChannel,
-				leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
+		return String.format("%s\r\n%s",leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
 	}
 	
 	@Override
@@ -188,6 +163,16 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	@Override
 	public int getControllerAxisY() {
 		 return controllerAxisY;
+	}
+
+	@Override
+	public int getLeftwheelLun() {
+		return leftWheelLun;
+	}
+
+	@Override
+	public int getRightWheelLun() {
+		return rightWheelLun;
 	}
 
 }
