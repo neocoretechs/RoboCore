@@ -1,18 +1,20 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.util.Arrays;
-import java.util.stream.Stream;
 
 /**
- * M10 Controller types - Type 0=Smart controller, Type 1=HBridge, Type 2=Split Bridge, Type 3=Switch Bridge
- * Type 4=PWM driver which uses slots separate from controller types
- * After M10 definition, these codes configure the defined driver:
- * M2 - define smart controller. M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>]
- * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
- * M4 - define Split Bridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
- * M5 - define Switch Bridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>]
- * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>
- * @author groff
+ * Class to facilitate the creation of logical controllers in the Marlinspike microcontroller subsystem.<p/>
+ * M10 Controller types - Type 0=Smart controller, Type 1=HBridge, Type 2=Split Bridge, Type 3=Switch Bridge, Type 4=Straight up nonmotor PWM<p/>
+ * Type 4=PWM driver which uses slots separate from controller types. Its different because it doesnt have directions and encoders etc.
+ * and as such is derived from a different base class in the Marlinspike object hierarchy so the polymorphism is
+ * Separately arranged..<p/>
+ * After M10 definition, these codes configure the defined driver:<br/>
+ * M2 - define smart controller. M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] <br/>
+ * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>] <br/>
+ * M4 - define Split Bridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>] <br/>
+ * M5 - define Switch Bridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>] <br/>
+ * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>] <br/>
+ * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
 public class TypeSlotChannelEnable {
@@ -38,13 +40,27 @@ public class TypeSlotChannelEnable {
 
 	String[] configCodes = {"2","3","4","5","9"};
 	
+	/**
+	 * Create a template to initialize a logical controller within the Marlinspike where we have an enable pin and no direction pin.
+	 * @param cntrltype One of SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
+	 * @param slot The numerical slot for the controller there are 10 for motor types and 10 for non motor types.
+	 * @param channel The channel within the controller at the numerical slot; 10 channels per sloted controller
+	 * @param enable The pin to enable the controller at the slot at the channel in the Marlinspike on the node.
+	 */
 	public TypeSlotChannelEnable(String cntrltype, int slot, int channel, int enable) {
 		this.cntrltype = cntrltype;
 		this.slot = slot;
 		this.channel = channel;
 		this.enable = enable;
 	}
-	
+	/**
+	 * Create a template to initialize a logical controller within the Marlinspike where we have an enable pin and a direction pin.
+	 * @param cntrltype One of SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
+	 * @param slot The numerical slot for the controller there are 10 for motor types and 10 for non motor types.
+	 * @param channel The channel within the controller at the numerical slot; 10 channels per sloted controller
+	 * @param enable The pin to enable the controller at the slot at the channel in the Marlinspike on the node.
+	 * @param dirdefault The default direction for motor 0 is 'forward', 1 is 'reverse' in a case where a drive wheel is wired the same each side.
+	 */
 	public TypeSlotChannelEnable(String cntrltype, int slot, int channel, int enable, int dirdefault) {
 		this.cntrltype = cntrltype;
 		this.slot = slot;
@@ -84,6 +100,8 @@ public class TypeSlotChannelEnable {
 		return new StringBuilder("M").append(configCodes[M10CtrlType]).append(" Z").append(slot).toString();
 	}
 	
+	public String getType() { return cntrltype; }
+	
 	public String genDrivePins(int primary, int secondary) {
 		if(M10CtrlType == 0) // If its a smart controller, no drive pins
 			return "";
@@ -97,7 +115,7 @@ public class TypeSlotChannelEnable {
 	}
 	/**
 	 * Generate remaining portion of config
-	 * @param encoder
+	 * @param encoder The pin that receives hall effect or other encoder pulses per rotation of wheel.
 	 * @return
 	 */
 	public String genChannelDirDefaultEncoder(int encoder) {

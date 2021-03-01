@@ -12,9 +12,8 @@ import sensor_msgs.Range;
 public class PublishUltrasonicResponse extends PublishResponses<Range> {
 	private static int sequenceNumber = 0;
 
-	public PublishUltrasonicResponse(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<Range> rangepub,
-			CircularBlockingDeque<Range> outgoingRanges) {
-		super(asynchDemuxer, node, rangepub, outgoingRanges);
+	public PublishUltrasonicResponse(ConnectedNode node, Publisher<Range> rangepub, CircularBlockingDeque<Range> outgoingRanges) {
+		super(node, rangepub, outgoingRanges);
 	}
 	
 	@Override

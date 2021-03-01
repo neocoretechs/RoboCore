@@ -6,6 +6,7 @@ import java.net.InetSocketAddress;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,8 @@ import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControl;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
+import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
 import com.neocoretechs.robocore.marlinspike.PublishResponses;
@@ -117,12 +120,12 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
-	private MarlinspikeControlInterface motorControlHost;
+	//private MarlinspikeControlInterface motorControlHost;
 	NavListenerMotorControlInterface navListener = null;
 	private AuxGPIOControl auxGPIO = null;
 	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
-	private boolean[] isOperating = {false,false,false};
+	private boolean[] isOperating = {false,false,false,false,false,false,false,false,false,false};
 	private boolean shouldMove = true;
 	private int targetPitch;
 	private int targetDist;
@@ -188,10 +191,28 @@ public class MegaPubs extends AbstractNodeMain  {
 	diagnostic_msgs.DiagnosticStatus.OK,
 	diagnostic_msgs.DiagnosticStatus.OK,
 	diagnostic_msgs.DiagnosticStatus.OK};
+	
+	public enum typeNames {
+		LeftWheel("LeftWheel"),
+		RightWheel("RightWheel"),
+		LEDDriver("LEDDriver"),
+		BOOMACTUATOR("BoomActuator"),
+		ULTRASONIC("Ultrasonic"),
+		LIFTACTUATOR("LiftActuator"),
+		PWM("PWM");
+		String name;
+		typeNames(String name) { this.name= name;} 
+		public String val() { return name; }
+		public int index() { return ordinal(); }
+	};
 	//
 	// Initialize various types of responses that will be published to the various outgoing message busses.
-	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses = new PublishDiagnosticResponse[stopics.length];
-	PublishResponseInterface<sensor_msgs.Range> ultrasonic;
+	RobotInterface robot = new Robot();
+	//final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
+	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[][] responses = new PublishDiagnosticResponse[listNodeDeviceDemuxer.size()][stopics.length];
+	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic = new PublishResponseInterface[listNodeDeviceDemuxer.size()];
 	private List<String> statPub = new ArrayList<String>();
 	
 	public MegaPubs(String host, InetSocketAddress master) {
@@ -249,12 +270,12 @@ public void onStart(final ConnectedNode connectedNode) {
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 			connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 	// TODO get this from parameter server or singleton with map of robot names
-	RobotInterface robot = new Robot();
-	final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
+
 	try {
-		asynchDemuxer.connect(ByteSerialDataPort.getInstance());
-		asynchDemuxer.init();
-		motorControlHost = new MarlinspikeControl(asynchDemuxer);
+		//asynchDemuxer.connect(ByteSerialDataPort.getInstance());
+		//asynchDemuxer.init();
+		//motorControlHost = new MarlinspikeControl(asynchDemuxer);
+		marlinspikeManager.configureMarlinspike();
 	} catch (IOException e) {
 		System.out.println("Could not connect to Marlinspike.."+e);
 		e.printStackTrace();
@@ -276,28 +297,6 @@ public void onStart(final ConnectedNode connectedNode) {
 		connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
 	
-	// Start reading from serial port
-	String mode="";
-	if( remaps.containsKey("__mode") )
-		mode = remaps.get("__mode");
-	if( mode.equals("startup")) {
-		try {
-			asynchDemuxer.config();
-		} catch (IOException e) {
-			System.out.println("Could not issue configuration commands to Marlinspike.."+e);
-			e.printStackTrace();
-    		statPub.add("Could not issue configuration commands to Marlinspike.."+e);
-    		new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE CONFIGURATION", 
-				diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-    		while(!outgoingDiagnostics.isEmpty()) {
-    			try {
-    				statpub.publish(outgoingDiagnostics.takeFirst());
-					Thread.sleep(1);
-				} catch (InterruptedException e1) {}
-    		}
-			return;
-		}
-	}
 	if( remaps.containsKey("__pwm") )
 		PWM_MODE = remaps.get("__pwm");
 
@@ -317,18 +316,25 @@ public void onStart(final ConnectedNode connectedNode) {
 	final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE, ControllerStatusMessage._TYPE,
 		    new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
 				@Override
-				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
+				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {
+					StringBuilder sb = new StringBuilder();
 					try {
 						switch(request.getData()) {
 							case "id":
-								response.setData(motorControlHost.reportSystemId());
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									sb.append(ndd.getMarlinspikeControl().reportSystemId());
+								response.setData(sb.toString());
 								break;
 							case "reset":
-								response.setData(motorControlHost.commandReset());
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									sb.append(ndd.getMarlinspikeControl().commandReset());
+								response.setData(sb.toString());
 								break;
 							case "status":
 							default:
-								response.setData(motorControlHost.reportAllControllerStatus());
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									sb.append(ndd.getMarlinspikeControl().reportAllControllerStatus());
+								response.setData(sb.toString());
 								break;		
 						}
 					} catch (IOException e) {
@@ -363,8 +369,6 @@ public void onStart(final ConnectedNode connectedNode) {
 				try {
 					switch(PWM_MODE) {
 						case "controller":
-							motorControlHost.setAbsolutePWMLevel(0, 1, request.getData().getData()[0], 
-									0, 2, request.getData().getData()[1]);
 							break;
 							// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
 							// Activates a direct PWM timer without going through one of the various controller
@@ -374,7 +378,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							System.out.println("PWM direct");
 							if( auxPWM == null )
 								auxPWM = new AuxPWMControl();
-							auxPWM.activateAux(asynchDemuxer, request.getData().getData());	
+							auxPWM.activateAux(marlinspikeManager.getMarlinspikeControl("PWM"), request.getData().getData());	
 							break;
 					}
 					response.setData("success");
@@ -412,7 +416,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					System.out.println("GPIO direct");
 					if( auxGPIO == null )
 						auxGPIO = new AuxGPIOControl();
-					auxGPIO.activateAux(asynchDemuxer, request.getData().getData());
+					auxGPIO.activateAux(marlinspikeManager.getMarlinspikeControl("GPIO"), request.getData().getData());
 					response.setData("success");
 				} catch (IOException e) {
 					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
@@ -475,7 +479,8 @@ public void onStart(final ConnectedNode connectedNode) {
 			if( targetPitch == -1 && targetDist == -1 && targetYaw == -1) {
 				shouldMove = false;
 				try {
-					motorControlHost.commandStop();
+					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+						ndd.getMarlinspikeControl().commandStop();
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -519,7 +524,8 @@ public void onStart(final ConnectedNode connectedNode) {
 					//if(angularMode )
 					//	motorControlHost.setMotorArcSpeed(valch1, valch2, valch3, valch4, targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
 					//else
-					motorControlHost.setAbsoluteDiffDriveSpeed(valch1, valch2, valch3, valch4, valch5, valch6);
+					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+						ndd.getMarlinspikeControl().setAbsoluteDiffDriveSpeed(valch1, valch2);
 				} else {
 					//System.out.println("Emergency stop directive in effect, no motor power slot:"+valch1+
 					//		" channel:"+valch2+" slot:"+valch4+" channel:"+valch5);
@@ -550,65 +556,33 @@ public void onStart(final ConnectedNode connectedNode) {
 	public void onNewMessage(std_msgs.Int32MultiArray message) {
 		int[] valch = message.getData();
 		try {
-			if( valch.length == 5 ) {
-				// lift
-				int valch1 = valch[0];
-				int valch2 = valch[1];
-				int affectorSpeed = valch[3];
+			if( valch.length == 2 ) {
+				// lift, led,  boom
+				int affector = valch[0];
+				int affectorSpeed = valch[1];
 				// keep Marlinspike from getting bombed with zeroes
-				if(affectorSpeed == 0) {
-					if(isOperating[2]) {
-						motorControlHost.setAffectorDriveSpeed(valch1, valch2, 0);
-					}
-					isOperating[2] = false;
+				if(isOperating[affector]) {
+					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+						if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
+							ndd.getMarlinspikeControl().setAffectorDriveSpeed(typeNames.values()[affector].val(), 0);
+							break;
+						}
+					isOperating[affector] = false;
 				} else {
-					isOperating[2] = true;
+					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+						if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
+							ndd.getMarlinspikeControl().setAffectorDriveSpeed(typeNames.values()[affector].val(), 0);
+							break;
+						}
+					isOperating[affector] = true;
 					if(DEBUG)
-						System.out.println("Subs trigger, recieved Affector directives slot:"+valch1+" channel:"+valch2+" value:"+affectorSpeed);
-					motorControlHost.setAffectorDriveSpeed(valch1, valch2, affectorSpeed);
-				}
-			} else {
-				if( valch.length == 4 ) {
-					// boom
-					int valch1 = valch[0];
-					int valch2 = valch[1];
-					int affectorSpeed = valch[3];
-					// keep Marlinspike from getting bombed with zeroes
-					if(affectorSpeed == 0) {
-						if(isOperating[1]) {
-							motorControlHost.setAffectorDriveSpeed(valch1, valch2, 0);
-						}
-						isOperating[1] = false;
-					} else {
-						isOperating[1] = true;
-						if(DEBUG)
-							System.out.println("Subs trigger, recieved Affector directives slot:"+valch1+" channel:"+valch2+" value:"+affectorSpeed);
-						motorControlHost.setAffectorDriveSpeed(valch1, valch2, affectorSpeed);
-					}
-				} else {
-					if(valch.length == 3) {
-						// LED
-						int valch1 = valch[0];
-						int valch2 = valch[1];
-						int valch3 = valch[2];
-						if(valch3 == 0) {
-							if(isOperating[0]) {
-								motorControlHost.setAbsolutePWMLevel(valch1, valch2, 0);
-							}
-							isOperating[0] = false;
-						} else {			
-							isOperating[0] = true;
-							if(DEBUG)
-								System.out.println("Subs trigger, recieved PWM directives slot:"+valch1+" channel:"+valch2+" value:"+valch3);
-							motorControlHost.setAbsolutePWMLevel(valch1, valch2, valch3);
-						}
-					}
+						System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
 				}
 			}
 		} catch (IOException e) {
-			System.out.println("there was a problem communicating with PWM controller:"+e);
+			System.out.println("there was a problem communicating with a controller:"+e);
 			e.printStackTrace();
-			statPub.add("There was a problem communicating with PWM controller:"+e);
+			statPub.add("There was a problem communicating with a controller:"+e);
 			new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "TRIGGER PUBLISH", 
 			diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
 		}
@@ -696,15 +670,23 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	//ThreadPoolManager.init(stopics);
 	// Initialize the collection of DiagnosticStatus response handlers
-	for(int i = 0; i < stopics.length; i++) {
-		responses[i] = new PublishDiagnosticResponse(asynchDemuxer, connectedNode, statpub, outgoingDiagnostics);
-		responses[i].takeBridgeAndQueueMessage(stopics[i], publishStatus[i]);
+
+	for(int l = 0; l < listNodeDeviceDemuxer.size(); l++ ) {
+	  for(int i = 0; i < stopics.length; i++) {
+		responses[l][i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
+		responses[l][i].takeBridgeAndQueueMessage(stopics[i], 
+				((NodeDeviceDemuxer) ((ArrayList<NodeDeviceDemuxer>)listNodeDeviceDemuxer).get(l)).getAsynchDemuxer().getTopic(stopics[i]), 
+				publishStatus[i]);
 		//ThreadPoolManager.getInstance().spin(responses[i], stopics[i]);
+	  }
+	  // spin individual responders or other groups of responders as necessary
+	  ultrasonic[l] = new PublishUltrasonicResponse(connectedNode, rangepub, outgoingRanges);
+	  // so the type of the device in the configs must match ULTRASONIC.val, or "ultrasonic"
+	  ultrasonic[l].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONIC.val(), 
+			((NodeDeviceDemuxer)((ArrayList<NodeDeviceDemuxer>)listNodeDeviceDemuxer).get(l)).getAsynchDemuxer().getTopic(AsynchDemuxer.topicNames.ULTRASONIC.val()),
+			DiagnosticStatus.OK);
+	  //ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 	}
-	// spin individual responders or other groups of responders as necessary
-	ultrasonic = new PublishUltrasonicResponse(asynchDemuxer, connectedNode, rangepub, outgoingRanges);
-	ultrasonic.takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONIC.val(), DiagnosticStatus.OK);
-	//ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
@@ -729,12 +711,15 @@ public void onStart(final ConnectedNode connectedNode) {
 			sensor_msgs.Range rangemsg = null;	
 			
 			//ThreadPoolManager.init(stopics);
-			// Invoke the collection of response handlers
-			for(int i = 0; i < stopics.length; i++) {
-				responses[i].publish();
+			// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike
+			for(int l = 0; l < listNodeDeviceDemuxer.size(); l++ ) {
+				for(int i = 0; i < stopics.length; i++) {
+					responses[l][i].publish();
+				}
+				// spin individual responders or other groups of responders as necessary
+				// here, each ultrasonic sensor attached to each Marlinspike, or all sensors attached to all Marlinspikes, if you will.
+				ultrasonic[l].publish();
 			}
-			// spin individual responders or other groups of responders as necessary
-			ultrasonic.publish();
 			//ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 			//
 			// Poll the outgoing message array for diagnostics enqueued by the above processing

@@ -40,8 +40,8 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 	 * @param statpub The publisher of DiagnosticStatus messages topics connected to the ConnectedNode
 	 * @param outgoingDiagnostics The queue that will finally receive and manage the responses built from the demuxer bridge payloads here
 	 */
-	public PublishDiagnosticResponse(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<DiagnosticStatus> statpub, CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics) {
-		super(asynchDemuxer, node, statpub, outgoingDiagnostics);
+	public PublishDiagnosticResponse(ConnectedNode node, Publisher<DiagnosticStatus> statpub, CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics) {
+		super(node, statpub, outgoingDiagnostics);
 	}
 	/**
 	 * Generic method to format status message and publish to stated publisher outside of AsynchDemuxer.
@@ -53,7 +53,7 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 	public PublishDiagnosticResponse(ConnectedNode node, Publisher<DiagnosticStatus> statpub, 
 										CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics, 
 										String topicName, byte dstatus, List<String> messages) {
-		super(null, node, statpub, outgoingDiagnostics);
+		super(node, statpub, outgoingDiagnostics);
 		if(messages.size() > MAXMESSAGESIZE || outgoingDiagnostics.length() > MAXMESSAGESIZE)
 			throw new RuntimeException("GLOBAL MAXIMUM MESSAGE SIZE OF "+MAXMESSAGESIZE+
 					" EXCEEDED BY EITHER NEW MESSAGE BUFFER AT:"+messages.size()+" OR "+

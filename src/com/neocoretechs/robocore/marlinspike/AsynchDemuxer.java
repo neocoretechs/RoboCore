@@ -8,14 +8,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
+import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
@@ -129,6 +128,9 @@ public class AsynchDemuxer implements Runnable {
 	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
 	public CyclicBarrier mutexWrite = new CyclicBarrier(2);
+	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(1024);
+	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(1024);
+	private Map<String, TypeSlotChannelEnable> nameToTypeSlotChannel;
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
 
@@ -173,12 +175,17 @@ public class AsynchDemuxer implements Runnable {
 	};
 	
 	private Map<String, TopicListInterface> topics = new ConcurrentHashMap<String, TopicListInterface>(topicNames.values().length);
+
+	public AsynchDemuxer() { }
+	
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
-	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(1024);
 	public void clearLineBuffer() { marlinLines.clear(); }
-	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(1024);
 	public void clearWriteBuffer() { toWrite.clear(); }
+	
+	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
+		return nameToTypeSlotChannel.get(name);
+	}
 	
 	/**
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
@@ -204,8 +211,12 @@ public class AsynchDemuxer implements Runnable {
 		this.dataPort = dataPort;
 		dataPort.connect(true);
 	}
-	
-	public synchronized void init() {
+	/**
+	 * Initialize the topic names for this AsynchDemuxer
+	 * @param value The map of named controllers (with names being descriptive ones such as "LeftWheel", "LEDController") to their types, slots and channels
+	 */
+	public synchronized void init(Map<String, TypeSlotChannelEnable> value) {
+		nameToTypeSlotChannel = value;
 		//
 		// G4
 		//
@@ -988,7 +999,7 @@ public class AsynchDemuxer implements Runnable {
 	
 	public static void main(String[] args) throws Exception {
 		// start demux
-		
+		Robot r = new Robot();
 		AsynchDemuxer demuxer = new AsynchDemuxer();
 		/*
 		demuxer.connect(ByteSerialDataPort.getInstance());

@@ -24,7 +24,6 @@ import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
  */
 public abstract class PublishResponses<T> implements PublishResponseInterface<T> {
 	private static boolean DEBUG = false;
-	private AsynchDemuxer asynchDemuxer;
 	protected ConnectedNode node;
 	protected Publisher<T> publisher;
 	protected T msg = null;
@@ -37,13 +36,11 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 	/**
 	 * Constructor to build the per thread queuing for Marlinspike MachineBridge response payloads onto the
 	 * outgoing diagnostic status messaging bus.
-	 * @param asynchDemuxer The demuxer that initially builds the bridges of Marlinspike responses
 	 * @param node The ConnectedNode that will do the publishing of the Diagnostic Message topics
 	 * @param statpub The publisher of DiagnosticStatus messages topics connected to the ConnectedNode
 	 * @param outgoingDiagnostics The queue that will finally receive and manage the responses built from the demuxer bridge payloads here
 	 */
-	public PublishResponses(AsynchDemuxer asynchDemuxer, ConnectedNode node, Publisher<T> pub, CircularBlockingDeque<T> outgoingQueue) {
-		this.asynchDemuxer = asynchDemuxer;
+	public PublishResponses(ConnectedNode node, Publisher<T> pub, CircularBlockingDeque<T> outgoingQueue) {
 		this.node = node;
 		this.publisher = pub;	
 		this.outgoingQueue = outgoingQueue;
@@ -55,23 +52,23 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 	 * @throws IllegalStateException If the topic cant be retrieved from the collection of established topics
 	 */
 	@Override
-	public void takeBridgeAndQueueMessage(String topicName, byte dstatus) throws IllegalStateException {
+	public void takeBridgeAndQueueMessage(String topicName, TopicListInterface tli, byte dstatus) throws IllegalStateException {
 		this.topicName = topicName;
 		this.dstatus = dstatus;
-		this.tli = asynchDemuxer.getTopic(topicName);
+		this.tli = tli;//asynchDemuxer.getTopic(topicName);
 		if( tli == null ) {
 			System.out.println("Can't find Topic "+topicName);
-			throw new IllegalStateException("Can't find Topic "+topicName+" in MarlinSpike AsynchDemuxer "+asynchDemuxer+", possible programmatic initialization problem");
+			throw new IllegalStateException("Can't find Topic "+topicName+" in MarlinSpike AsynchDemuxer, possible programmatic initialization problem");
 		}
 	}
 	@Override
 	public TopicListInterface getTopicList() {
-		if(tli == null)
-			throw new RuntimeException("Topic has not been initialized for demuxer:"+asynchDemuxer);
 		return tli;
 	}
+	
 	@Override
 	public abstract void setUp();
+	
 	@Override
 	public abstract void addTo(MachineReading mr);
 	

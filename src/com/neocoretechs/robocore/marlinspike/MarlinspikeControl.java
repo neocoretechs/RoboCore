@@ -2,7 +2,6 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 
-
 /**
  * The MEGA control endpoint that controls serial data.
  * The 2 critical elements that must be provided to sustain the operations of this class are;
@@ -46,33 +45,43 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	
 	/**
 	 * Single channel affector speed
-	 * @param slot1
-	 * @param channel1
+	 * @param affector The affector name 
 	 * @param affectorSpeed
 	 * @throws IOException
 	 */
-	public synchronized void setAffectorDriveSpeed(int slot1, int channel1, int affectorSpeed) throws IOException {
+	public synchronized void setAffectorDriveSpeed(String affector, int affectorSpeed) throws IOException {
+		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(affector);
 		//if(DEBUG) 
-		//	System.out.println(this.getClass().getName()+".setAffectorDriveSpeed BEGIN writing slot:"+slot1+" channel:"+channel1+" affector spd:"+affectorSpeed);
-		String affectorCommand = "G5 Z"+slot1+" C"+channel1+" P"+String.valueOf(affectorSpeed);
+		//	System.out.println(this.getClass().getName()+".setAffectorDriveSpeed BEGIN writing slot:"+slot+" channel:"+channel+" affector spd:"+affectorSpeed);
+		String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(affectorSpeed);
 		AsynchDemuxer.addWrite(asynchDemuxer, affectorCommand);
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAffectorDriveSpeed slot:"+slot1+" channel:"+channel1+" affector spd:"+affectorSpeed);
+			System.out.println(this.getClass().getName()+".setAffectorDriveSpeed slot:"+tsce.slot+" channel:"+tsce.channel+" affector spd:"+affectorSpeed);
 	}
 	/**
-	 * Dual channel diff drive speed
+	 * Dual channel diff drive speed when both channels are on one Marlinspike controller (not optimal)
 	 */
-	public synchronized void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException {
-		//if(DEBUG) 
-		//	System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed BEGIN writing slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
-		//			"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
-		String motorCommand1 = "G5 Z"+slot1+" C"+channel1+" P"+String.valueOf(leftWheelSpeed);
-		String motorCommand2 = "G5 Z"+slot2+" C"+channel2+" P"+String.valueOf(rightWheelSpeed);
+	public synchronized void setAbsoluteDiffDriveSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException {
+		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel("LeftWheel");
+		String motorCommand1 = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(leftWheelSpeed);
+		if(DEBUG) 
+			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed slot:"+tsce.slot+" channel:"+tsce.channel+" left wheel spd:"+leftWheelSpeed);
+		tsce = asynchDemuxer.getNameToTypeSlotChannel("RightWheel");
+		String motorCommand2 = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(rightWheelSpeed);
+		if(DEBUG) 
+			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed slot:"+tsce.slot+" channel:"+tsce.channel+" right wheel spd:"+rightWheelSpeed);
 		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand1);
 		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand2);
+	}
+	/**
+	 * Dual channel diff drive speed when channels are on two Marlinspike controllers (optimal)
+	 */
+	public synchronized void setAbsoluteDiffDriveSpeed(String wheelName, int wheelSpeed) throws IOException {
+		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(wheelName);
+		String motorCommand1 = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(wheelSpeed);
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed slot:"+slot1+" channel:"+channel1+" left wheel spd:"+leftWheelSpeed+
-					"slot "+slot2+" channel:"+channel2+" right wheel speed "+rightWheelSpeed);
+			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed "+wheelName+" slot:"+tsce.slot+" channel:"+tsce.channel+" wheel spd:"+wheelSpeed);
+		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand1);
 	}
 	/**
 	 * Generate a series of requests to query the Marlinspike realtime subsystem and retrieve status
@@ -193,6 +202,11 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
     	}
     	return "Ok";
     }
+    
+	@Override
+	public void commandPWM(String req) {
+		AsynchDemuxer.addWrite(asynchDemuxer, req);
+	}
     /**
      * M798 Z<slot>
      * @return A String payload of the status of each of the assigned motor controllers.
@@ -207,8 +221,9 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
     	}
     }
     
-	public synchronized void setAbsolutePWMLevel(int slot, int channel, int pwmLevel) throws IOException {
-		String pwmCommand1 = "G5 Z"+slot+" C"+channel+" X"+pwmLevel;
+	public synchronized void setAbsolutePWMLevel(String pwm, int pwmLevel) throws IOException {
+		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(pwm);
+		String pwmCommand1 = "G5 Z"+tsce.slot+" C"+tsce.channel+" X"+pwmLevel;
 		AsynchDemuxer.addWrite(asynchDemuxer, pwmCommand1);
 	}
 	
@@ -218,19 +233,7 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand1);	
 	}
 
-	@Override
-	public void setAbsolutePWMLevel(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException {
-		String pwmCommand1 = "G5 Z"+slot1+" C"+channel1+" X"+String.valueOf(leftWheelSpeed);
-		AsynchDemuxer.addWrite(asynchDemuxer,pwmCommand1);
-		//try {
-		//	Thread.sleep(100);
-		//} catch (InterruptedException e) {}
-		String pwmCommand2 = "G5 Z"+slot2+" C"+channel2+" X"+String.valueOf(rightWheelSpeed);
-		AsynchDemuxer.addWrite(asynchDemuxer,pwmCommand2);
-		//try {
-		//	Thread.sleep(100);
-		//} catch (InterruptedException e) {}
-	}
+	
 	public static void main(String[] args) throws Exception {
 		if( args.length < 1 ) {
 			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MegaControl");
@@ -240,9 +243,10 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 		MarlinspikeControl mc = new MarlinspikeControl(asynchDemuxer);
 		// set the absolute speed of the diff drive controller in slot 0 to 100 on channel 1 and 
 		// 1 on channel 2
-		mc.setAbsoluteDiffDriveSpeed(0, 1, 100, 0, 2, 1);
+		mc.setAbsoluteDiffDriveSpeed(100, 1);
 
 	}
+
 
 }
 

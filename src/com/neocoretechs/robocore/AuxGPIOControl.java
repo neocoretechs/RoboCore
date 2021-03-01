@@ -3,6 +3,7 @@ package com.neocoretechs.robocore;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 
 /**
  * Create a persistent GPIO pin set high (M41) or low (M42) by writing the directive to the 
@@ -26,5 +27,10 @@ public class AuxGPIOControl {
 				AsynchDemuxer.addWrite(ad, "M42 P"+String.valueOf(pinaction[0]));
 				break;
 		}
+	}
+
+	public void activateAux(MarlinspikeControlInterface marlinspikeControlInterface, int[] data) {
+		// TODO Auto-generated method stub
+		
 	}
 }

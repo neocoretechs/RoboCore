@@ -2,6 +2,8 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.config.TypedWrapper;
+
 /**
  * This interface defines the object model to access the Marlinspike hardware controller.<p/>
  * It defines the contract between the callable methods and the M and G codes sent to the Marlispike controllers.<p/>
@@ -20,8 +22,8 @@ public interface MarlinspikeControlInterface {
 	public String reportSystemId() throws IOException;
 	public void commandStop() throws IOException;
 	public String commandReset() throws IOException;
-	public void setAbsoluteDiffDriveSpeed(int slot1, int channel1, int channel1Speed, int slot2, int channel2, int channel2Speed) throws IOException;
-	public void setAbsolutePWMLevel(int slot1, int channel1, int leftWheelSpeed, int slot2, int channel2, int rightWheelSpeed) throws IOException;
-	public void setAbsolutePWMLevel(int slot, int channel, int pwmLevel)throws IOException;
-	public void setAffectorDriveSpeed(int slot1, int channel1, int affectorSpeed) throws IOException;
+	public void setAbsoluteDiffDriveSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException;
+	public void setAbsolutePWMLevel(String tsl, int pwmLevel)throws IOException;
+	public void setAffectorDriveSpeed(String tsl, int affectorSpeed) throws IOException;
+	public void commandPWM(String string);
 }
