@@ -50,7 +50,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public class Robot implements RobotInterface, Serializable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
 	private int temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
@@ -149,12 +149,20 @@ public class Robot implements RobotInterface, Serializable {
 	private void extractWHEEL() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> wheels = globalConfigs.get("WHEEL");
+		 if(DEBUG)
+			 System.out.println("Wheel size:"+wheels.size());
 		 WHEEL = new TypedWrapper[wheels.size()];
 		 Set<Integer> wheelsChannels = wheels.keySet();
+		 if(DEBUG)
+			 System.out.println("Wheels channels:"+wheelsChannels.size());
 		 Object[] wheelsOChannels = wheelsChannels.toArray();
 		 Arrays.sort(wheelsOChannels); // make sure of order
+		 if(DEBUG)
+			 System.out.println("WheelsOChannels sorted size:"+wheelsOChannels.length);
 		 for(Object wheelsAChannels: wheelsOChannels) {
 			 Map<String, Object> sortedWheelProp = wheels.get(wheelsAChannels); //wheelsAChannels sorted
+			 if(DEBUG)
+				 System.out.println(wheelsAChannels+" of number of SortedWheelProp:"+sortedWheelProp.size());
 			 WHEEL[(int)wheelsAChannels] = new TypedWrapper(sortedWheelProp);
 		 }	
 	}
@@ -250,7 +258,7 @@ public class Robot implements RobotInterface, Serializable {
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("Robot %s\r\nIndoor=%b Drive: %s\r\nMotion Controller:%s\r\n IMU:%s\r\nAffectors:%s",
+		sb.append(String.format("Robot %s%nIndoor=%b Drive: %s%nMotion Controller:%s%n IMU:%s%n",
 				getName(),
 				indoor,
 				robotDrive == null ? "NULL" : robotDrive.toString(),
