@@ -195,10 +195,10 @@ public class MegaPubs extends AbstractNodeMain  {
 	public enum typeNames {
 		LeftWheel("LeftWheel"),
 		RightWheel("RightWheel"),
-		LEDDriver("LEDDriver"),
 		BOOMACTUATOR("BoomActuator"),
-		ULTRASONIC("Ultrasonic"),
+		LEDDriver("LEDDriver"),
 		LIFTACTUATOR("LiftActuator"),
+		ULTRASONIC("Ultrasonic"),
 		PWM("PWM");
 		String name;
 		typeNames(String name) { this.name= name;} 
@@ -490,9 +490,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	});
 	/**
 	 * Process the direct velocity commands from remote source to extract 2 3x32 bit int values and apply those to the
-	 * left and right propulsion wheels. the values represent <slot><channel<value> for each wheel where slot = controller
-	 * slot dynamically assigned vie M-code in the MEGA firmware, <channel> is the channel in the controller in the slot,
-	 * and value is the value to be applied to the channel in the slot.
+	 * left and right propulsion wheels. the values represent speeds for each wheel 
+	 * and value is the value to be applied to the channel in the slot for each wheel.
 	 */
 	subsvelocity.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 	@Override
@@ -500,17 +499,12 @@ public void onStart(final ConnectedNode connectedNode) {
 		//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		int[] valch = message.getData();
-		if(valch.length != 6)
+		if(valch.length != 2)
 			return;
 		// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
-		for(int i = 0; i < valch.length; i+=6) {
-			int valch1 = valch[i]; // slot
-			int valch2 = valch[i+1]; // channel
-			int valch3 = valch[i+2]; // value
-			int valch4 = valch[i+3]; // slot
-			int valch5 = valch[i+4]; // channel
-			int valch6 = valch[i+5]; // value
-			if( valch1 == 0.0 && valch2 == 0.0 ) {
+		int valch1 = valch[0]; // Left wheel
+		int valch2 = valch[1]; // Right wheel 	
+		if( valch1 == 0.0 && valch2 == 0.0 ) {
 				isMoving = false;
 			} else {
 				shouldMove = true;
@@ -519,18 +513,23 @@ public void onStart(final ConnectedNode connectedNode) {
 			try {
 				if( shouldMove ) {
 					if( DEBUG ) {
-						System.out.println("Robot commanded to move Left wheel ABS slot "+valch1+" channel:"+valch2+ ":" + valch3+"\r\nRight wheel ABS slot "+valch4+" channel:"+valch5+ ":" + valch6);
+						System.out.println("Robot commanded to move LeftWheel "+valch1);
 					}
-					//if(angularMode )
-					//	motorControlHost.setMotorArcSpeed(valch1, valch2, valch3, valch4, targetPitch, targetYaw);//.moveRobotRelative(targetYaw, targetPitch, targetDist);
-					//else
 					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-						ndd.getMarlinspikeControl().setAbsoluteDiffDriveSpeed(valch1, valch2);
+						if(ndd.getDeviceName().equals("LeftWheel")) {
+							ndd.getMarlinspikeControl().setAbsoluteDiffDriveSpeed("LeftWheel", valch1);
+							break;
+						}
+					if( DEBUG ) {
+						System.out.println("Robot commanded to move RightWheel "+valch2);
+					}
+					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+						if(ndd.getDeviceName().equals("RightWheel")) {
+							ndd.getMarlinspikeControl().setAbsoluteDiffDriveSpeed("RightWheel", valch2);
+							break;
+						}	
 				} else {
-					//System.out.println("Emergency stop directive in effect, no motor power slot:"+valch1+
-					//		" channel:"+valch2+" slot:"+valch4+" channel:"+valch5);
-					statPub.add("Emergency stop directive in effect, no motor power slot:"+valch1+
-							" channel:"+valch2+" slot:"+valch4+" channel:"+valch5);
+					statPub.add("Emergency stop directive in effect, no motor power ");
 					new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "VELOCITY PUBLISH", 
 					diagnostic_msgs.DiagnosticStatus.WARN, statPub );
 				}
@@ -542,7 +541,6 @@ public void onStart(final ConnectedNode connectedNode) {
 				diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
 			}
 		}
-	}
 	});
 	/**
 	 * Process a trigger value from the remote source, most likely a controller such as PS/3.
@@ -571,7 +569,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				} else {
 					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
 						if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
-							ndd.getMarlinspikeControl().setAffectorDriveSpeed(typeNames.values()[affector].val(), 0);
+							ndd.getMarlinspikeControl().setAffectorDriveSpeed(typeNames.values()[affector].val(), affectorSpeed);
 							break;
 						}
 					isOperating[affector] = true;
@@ -749,5 +747,11 @@ public void onStart(final ConnectedNode connectedNode) {
 
 }
 
-
+	public static void main(String[] args) {
+		MegaPubs.typeNames[] mp = typeNames.values();
+		System.out.println(MegaPubs.typeNames.values());
+		for(int i = 0; i < MegaPubs.typeNames.values().length; i++) {
+			System.out.printf("%d = %s%n",i,mp[i]);
+		}
+	}
 }

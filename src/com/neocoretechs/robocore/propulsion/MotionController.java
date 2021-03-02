@@ -26,12 +26,10 @@ import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
+import com.neocoretechs.robocore.MegaPubs;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
-import com.neocoretechs.robocore.affectors.BoomActuatorInterface;
-import com.neocoretechs.robocore.affectors.LEDIlluminatorInterface;
-import com.neocoretechs.robocore.affectors.LiftActuatorInterface;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -344,6 +342,14 @@ public class MotionController extends AbstractNodeMain {
 			System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
 			e1.printStackTrace();
 		}
+		// Megapubs.typeNames:
+		// 0 = LeftWheel
+		// 1 = RightWheel
+		// 2 = BOOMACTUATOR
+		// 3 = LEDDriver
+		// 4 = LIFTACTUATOR
+		// 5 = ULTRASONIC
+		// 6 = PWM
 		//
 		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
 		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
@@ -405,17 +411,16 @@ public class MotionController extends AbstractNodeMain {
 				// LEDCameraIlluminatorSlot:1
 				// LEDCameraIlluminatorChannel:1
 				//-------------------
-				if(axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()] != -1 || LEDCamlightIsOn) {//|| axes[5] != -1) {
-					if(axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()] == -1) {
+				if(axes[4] != -1 || LEDCamlightIsOn) {//|| axes[5] != -1) {
+					if(axes[4] == -1) {
 						if(LEDCamlightIsOn) {
-							ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
-							triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerSlot()); //controller slot
-							triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
+							ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
+							triggerVals.add(MegaPubs.typeNames.LEDDriver.index());
 							triggerVals.add(0);
 							if(DEBUG)
-								System.out.println(robot.getAffectors().getLEDIlluminatorInterface()+" turning off LED");
-							trigpub.publish(setupPub(connectedNode, triggerVals,robot.getAffectors().getLEDIlluminatorInterface(),
-														robot.getAffectors().getLEDIlluminatorInterface()));
+								System.out.println(" turning off LED");
+							trigpub.publish(setupPub(connectedNode, triggerVals, MegaPubs.typeNames.LEDDriver.val(),
+									MegaPubs.typeNames.LEDDriver.name()));
 							try {
 								Thread.sleep(5);
 							} catch (InterruptedException e) {}
@@ -423,14 +428,13 @@ public class MotionController extends AbstractNodeMain {
 						LEDCamlightIsOn = false;
 					} else {
 						LEDCamlightIsOn = true;
-						ArrayList<Integer> triggerVals = new ArrayList<Integer>(3);
-						triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerSlot()); //controller slot
-						triggerVals.add(robot.getAffectors().getLEDIlluminatorInterface().getControllerChannel()); // controller slot channel
-						triggerVals.add(Integer.valueOf((int)axes[robot.getAffectors().getLEDIlluminatorInterface().getControllerAxis()]));
+						ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
+						triggerVals.add(MegaPubs.typeNames.LEDDriver.index()); //controller slot
+						triggerVals.add(Integer.valueOf((int)axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("AxisY")])*1000);
 						if(DEBUG)
-							System.out.printf("%s= %d\n",robot.getAffectors().getLEDIlluminatorInterface().getClass(),triggerVals.get(2));
-						trigpub.publish(setupPub(connectedNode, triggerVals, robot.getAffectors().getLEDIlluminatorInterface(),
-														robot.getAffectors().getLEDIlluminatorInterface()));
+							System.out.printf("%s= %d\n",MegaPubs.typeNames.LEDDriver.val(),triggerVals.get(2));
+						trigpub.publish(setupPub(connectedNode, triggerVals, MegaPubs.typeNames.LEDDriver.val(),
+								MegaPubs.typeNames.LEDDriver.name()));
 						try {
 							Thread.sleep(5);
 						} catch (InterruptedException e) {}
@@ -440,63 +444,54 @@ public class MotionController extends AbstractNodeMain {
 				// Process right stick (joystick axes [1] right stick x, [3] right stick y)
 				// axes[3] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
 				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
-				speedR = -axes[robot.getAffectors().getBoomActuatorInterface().getControllerAxisY()] * SPEEDSCALE;
-				speedL = axes[robot.getAffectors().getBoomActuatorInterface().getControllerAxisX()] * SPEEDSCALE;
 				//
 				// set it up to send down the publishing pipeline cmd_periph1 topic
 				//
-				ArrayList<Integer> speedVals = new ArrayList<Integer>(4);
-				speedVals.add(robot.getAffectors().getBoomActuatorInterface().getControllerSlot()); //controller slot
-				speedVals.add(robot.getAffectors().getBoomActuatorInterface().getControllerChannel()); // controller slot channel
-				speedVals.add((int) speedL);
-				speedVals.add((int) speedR);
-				trigpub.publish(setupPub(connectedNode, speedVals,robot.getAffectors().getBoomActuatorInterface(),
-																 robot.getAffectors().getBoomActuatorInterface()));
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+				speedVals.add(MegaPubs.typeNames.BOOMACTUATOR.index()); //controller slot
+				speedVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BOOMACTUATOR.index()].get("AxisY")])*1000);
+				trigpub.publish(setupPub(connectedNode, speedVals,MegaPubs.typeNames.BOOMACTUATOR.val(),
+						MegaPubs.typeNames.BOOMACTUATOR.name()));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
 				//----
 				// Map the POV values to actions
-				if(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()] == 
-						robot.getAffectors().getLiftActuatorInterface().getControllerComponentUp()) {
+				//AXIS[4].AxisType:POV
+				//AXIS[4].Axis:6
+				//AXIS[4].AxisUp:0.25
+				//AXIS[4].AxisDown:0.75
+				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")] == 
+						(float)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("AxisUp")) {
 					//
 					// set it up to send down the publishing pipeline cmd_periph1 topic
 					//
-					ArrayList<Integer> povVals = new ArrayList<Integer>(5);
-					povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerSlot()); //controller slot
-					povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerChannel()); // controller slot channel
-					povVals.add((int)(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()]*100));
-					povVals.add(1000);
-					povVals.add(0);
-					trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface(),
-																	 robot.getAffectors().getLiftActuatorInterface()));
+					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
+					povVals.add(MegaPubs.typeNames.LIFTACTUATOR.index()); //controller slot
+					povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")]*1000));
+					trigpub.publish(setupPub(connectedNode, povVals, MegaPubs.typeNames.LIFTACTUATOR.val(),
+													MegaPubs.typeNames.LIFTACTUATOR.name()));
 					LiftActuatorIsOn = true;
 				} else {
-					if(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()] == 
-							robot.getAffectors().getLiftActuatorInterface().getControllerComponentDown()) {
+					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")] == 
+							(float)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("AxisDown")) {
 						//
 						// set it up to send down the publishing pipeline cmd_periph1 topic
 						//
-						ArrayList<Integer> povVals = new ArrayList<Integer>(5);
-						povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerSlot()); //controller slot
-						povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerChannel()); // controller slot channel
-						povVals.add((int)(axes[robot.getAffectors().getLiftActuatorInterface().getControllerAxis()]*100));
-						povVals.add(-1000);
-						povVals.add(0);
-						trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface(),
-																		 robot.getAffectors().getLiftActuatorInterface()));
+						ArrayList<Integer> povVals = new ArrayList<Integer>(2);
+						povVals.add(MegaPubs.typeNames.LIFTACTUATOR.index()); //controller slot
+						povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")]*-1000));
+						trigpub.publish(setupPub(connectedNode, povVals, MegaPubs.typeNames.LIFTACTUATOR.val(),
+														MegaPubs.typeNames.LIFTACTUATOR.name()));
 						LiftActuatorIsOn = true;
 					} else {
 						if(LiftActuatorIsOn) {
 							LiftActuatorIsOn = false;
-							ArrayList<Integer> povVals = new ArrayList<Integer>(5);
-							povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerSlot()); //controller slot
-							povVals.add(robot.getAffectors().getLiftActuatorInterface().getControllerChannel()); // controller slot channel
+							ArrayList<Integer> povVals = new ArrayList<Integer>(2);
+							povVals.add(MegaPubs.typeNames.LIFTACTUATOR.index()); //controller slot
 							povVals.add(0);
-							povVals.add(0);
-							povVals.add(0);
-							trigpub.publish(setupPub(connectedNode, povVals,robot.getAffectors().getLiftActuatorInterface(),
-																			 robot.getAffectors().getLiftActuatorInterface()));
+							trigpub.publish(setupPub(connectedNode, povVals, MegaPubs.typeNames.LIFTACTUATOR.val(),
+															MegaPubs.typeNames.LIFTACTUATOR.name()));
 						}
 					}
 				}
@@ -747,19 +742,6 @@ public class MotionController extends AbstractNodeMain {
 			 * @param ledIlluminatorInterface2 The label for dimension 2 of the array
 			 * @return The multi array we create
 			 */
-			private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf, LEDIlluminatorInterface ledIlluminatorInterface1, LEDIlluminatorInterface ledIlluminatorInterface2) {
-				return RosArrayUtilities.setupInt32Array(connectedNode, valBuf, ledIlluminatorInterface1.getClass().getName(), ledIlluminatorInterface2.getClass().getName());
-			}
-			
-			private std_msgs.Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> valBuf, BoomActuatorInterface boomActuatorInterface1, BoomActuatorInterface boomActuatorInterface2) {
-				return RosArrayUtilities.setupInt32Array(connectedNode, valBuf, boomActuatorInterface1.getClass().getName(), boomActuatorInterface2.getClass().getName());
-			}
-
-			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> povVals,
-					LiftActuatorInterface liftActuatorInterface, LiftActuatorInterface liftActuatorInterface2) {
-				return RosArrayUtilities.setupInt32Array(connectedNode, povVals, liftActuatorInterface.getClass().getName(), liftActuatorInterface2.getClass().getName());
-			}
-			
 			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> speedVals, String string,
 					String string2) {
 				return RosArrayUtilities.setupInt32Array(connectedNode, speedVals, string, string2);

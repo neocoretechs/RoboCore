@@ -23,6 +23,7 @@ public interface MarlinspikeControlInterface {
 	public void commandStop() throws IOException;
 	public String commandReset() throws IOException;
 	public void setAbsoluteDiffDriveSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException;
+	public void setAbsoluteDiffDriveSpeed(String wheel, int wheelSpeed) throws IOException;
 	public void setAbsolutePWMLevel(String tsl, int pwmLevel)throws IOException;
 	public void setAffectorDriveSpeed(String tsl, int affectorSpeed) throws IOException;
 	public void commandPWM(String string);

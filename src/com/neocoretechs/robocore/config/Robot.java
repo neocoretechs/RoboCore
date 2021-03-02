@@ -14,8 +14,6 @@ import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
-import com.neocoretechs.robocore.affectors.AffectorInterface;
-import com.neocoretechs.robocore.affectors.Affectors;
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 /**
@@ -59,7 +57,6 @@ public class Robot implements RobotInterface, Serializable {
 	private MotionPIDController motionPIDController;
 	private RobotDiffDriveInterface robotDrive;
 	private IMUSetpointInfo IMUSetpoint;
-	private AffectorInterface affectors;
 	// These arrays are by 'channel'
 	private TypedWrapper[] LUN;
 	private TypedWrapper[] WHEEL;
@@ -88,7 +85,6 @@ public class Robot implements RobotInterface, Serializable {
 		IMUSetpoint = new IMUSetpointInfo();
 		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
 		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
-		affectors = new Affectors(LUN, AXIS, PID);
 	}
 	
 	private void extractBUTTON() {
@@ -259,8 +255,7 @@ public class Robot implements RobotInterface, Serializable {
 				indoor,
 				robotDrive == null ? "NULL" : robotDrive.toString(),
 				motionPIDController == null ? "NULL" : motionPIDController.toString(),
-					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString(),
-							affectors == null ? "NULL" : affectors.toString()));
+					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString()));
 		for(int i = 0; i < LUN.length; i++) {
 			Set<Entry<String, Object>> x = LUN[i].entrySet();
 			Iterator<Entry<String, Object>> it = x.iterator();
@@ -324,10 +319,6 @@ public class Robot implements RobotInterface, Serializable {
 		return Props.toString("Name");
 	}
 
-	@Override
-	public AffectorInterface getAffectors() {
-		return affectors;
-	}
 
 	@Override
 	public TypedWrapper[] getLUN() {
