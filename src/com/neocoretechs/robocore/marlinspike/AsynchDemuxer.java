@@ -774,7 +774,8 @@ public class AsynchDemuxer implements Runnable {
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+writeReq);
 						} catch (TimeoutException e) {
 							if(DEBUG || PORTDEBUG)
-								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" NO RESPONSE FROM HANDLER IN TIME FOR DIRECTIVE:"+writeReq);
+								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+										" NO RESPONSE FROM PORT "+dataPort.getPortName()+"IN TIME FOR DIRECTIVE:"+writeReq);
 						} finally {
 							mutexWrite.reset();
 							if(DEBUG || PORTDEBUG)

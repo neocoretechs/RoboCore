@@ -112,7 +112,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	//if( mode.equals("startup")) {
 		try {
 			asynchDemuxer = new AsynchDemuxer();
-			asynchDemuxer.connect(ByteSerialDataPort.getInstance());
+			asynchDemuxer.connect(new ByteSerialDataPort());
 			asynchDemuxer.config();
 		} catch (IOException e) {
 		System.out.println("Could not start process to read attached serial port.."+e);

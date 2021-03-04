@@ -41,7 +41,7 @@ public class NodeDeviceDemuxer {
 						Map<String, TypeSlotChannelEnable> value) throws IOException {
 		Set<NodeDeviceDemuxer> sndd = deviceToType.keySet();
 		for(NodeDeviceDemuxer ndd : sndd) {
-			if(ndd != this && ndd.device.equals(device)) {
+			if(ndd.device.equals(device)) {
 				if( ndd.asynchDemuxer == null ) {
 					if(DEBUG)
 						System.out.printf("%s.activateMarlinspikes preparing to initialize %s%n",this.getClass().getName(), value);
@@ -51,6 +51,8 @@ public class NodeDeviceDemuxer {
 					controlHost = new MarlinspikeControl(asynchDemuxer);
 					return;
 				}
+				if(ndd == this)
+					return;
 				if(DEBUG)
 					System.out.printf("%s.activateMarlinspikes preparing to copy %s %s%n", this.getClass().getName(), ndd, value);
 				asynchDemuxer = ndd.asynchDemuxer;

@@ -6,7 +6,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 public class MotorTest {
 	public static void main(String[] args) throws Exception {
 		AsynchDemuxer ad = new AsynchDemuxer();
-		ad.connect(ByteSerialDataPort.getInstance());
+		ad.connect(new ByteSerialDataPort());
 		String motorCommand = "M0"; // turn off realtime output
 		AsynchDemuxer.addWrite(ad,motorCommand);
 		// config smart controller channel 1 default direction

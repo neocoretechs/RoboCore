@@ -2,6 +2,8 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
+
 /**
  * The MEGA control endpoint that controls serial data.
  * The 2 critical elements that must be provided to sustain the operations of this class are;
@@ -239,7 +241,7 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MegaControl");
 		}
 		AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
-		asynchDemuxer.connect(com.neocoretechs.robocore.serialreader.ByteSerialDataPort.getInstance());
+		asynchDemuxer.connect(new ByteSerialDataPort());
 		MarlinspikeControl mc = new MarlinspikeControl(asynchDemuxer);
 		// set the absolute speed of the diff drive controller in slot 0 to 100 on channel 1 and 
 		// 1 on channel 2

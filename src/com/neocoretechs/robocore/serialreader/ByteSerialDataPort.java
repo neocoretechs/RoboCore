@@ -14,9 +14,9 @@ import java.util.Enumeration;
 
 import com.neocoretechs.robocore.ThreadPoolManager;
 /**
- * Singleton class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
+ * Class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
  * to effect transmission and reception.
- * @author groff
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
 public class ByteSerialDataPort implements DataPortInterface {
@@ -29,35 +29,26 @@ public class ByteSerialDataPort implements DataPortInterface {
 		// serial settings
 		//Port=/dev/ttyACM0
 		//PortSettings=115200,n,8,1
-	    private static String portName = "/dev/ttyACM0";
+	    private String portName = "/dev/ttyACM0";
 	    //private static String portName = "/dev/ttyAMA0";
-	    private static int baud = 115200;
-	    private static int datab = 8;
-	    private static int stopb = 1;
-	    private static int parityb = 0;
+	    private int baud = 115200;
+	    private int datab = 8;
+	    private int stopb = 1;
+	    private int parityb = 0;
 	    //
-	    private static Object readMx = new Object();// mutex
-	    private static Object writeMx = new Object();
-	    private static boolean EOT = false;
+	    private Object readMx = new Object();// mutex
+	    private Object writeMx = new Object();
+	    private boolean EOT = false;
 	 
-	    private static int[] readBuffer = new int[32767];
-	    private static int[] writeBuffer = new int[32767];
-	    private static int readBufferHead = 0;
-	    private static int readBufferTail = 0;
-	    private static int writeBufferHead = 0;
-	    private static int writeBufferTail = 0;
+	    private int[] readBuffer = new int[32767];
+	    private int[] writeBuffer = new int[32767];
+	    private int readBufferHead = 0;
+	    private int readBufferTail = 0;
+	    private int writeBufferHead = 0;
+	    private int writeBufferTail = 0;
 	    
-	    private static volatile ByteSerialDataPort instance = null;
 	    private int portOwned = CommPortOwnershipListener.PORT_UNOWNED; 
 	    
-	    public static ByteSerialDataPort getInstance() {
-	    	if( instance == null ) {
-	    		synchronized(ByteSerialDataPort.class) { 
-	    				instance = new ByteSerialDataPort();
-	    		}
-	    	}
-	    	return instance;
-	    }
 	    
 	    public ByteSerialDataPort()  {
 	    	if( DEBUG ) 
@@ -403,10 +394,10 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    }
 	
 	        /** */
-	        public static class SerialReader implements Runnable 
+	        public class SerialReader implements Runnable 
 	        {
 	            InputStream in;
-	            public static volatile boolean shouldRun = true;
+	            public volatile boolean shouldRun = true;
 	            public volatile boolean isRunning = false;
 	            public SerialReader(InputStream in)
 	            {
@@ -417,7 +408,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	            {
 	                int inChar = -1;
 	                isRunning = true;
-	                while (SerialReader.shouldRun)
+	                while (shouldRun)
 					{
 						try {
 							inChar = this.in.read();
@@ -453,10 +444,10 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        }
 
 	        /** */
-	        public static class SerialWriter implements Runnable 
+	        public class SerialWriter implements Runnable 
 	        {
 	            OutputStream out;
-	            public static volatile boolean shouldRun = true;
+	            public volatile boolean shouldRun = true;
 	            public volatile boolean isRunning = false;
 	            public SerialWriter( OutputStream out )
 	            {
@@ -466,7 +457,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	            public void run ()
 	            {
 	            	isRunning = true;
-	                while(SerialWriter.shouldRun)
+	                while(shouldRun)
 					{
 	                	try
 	                	{                
@@ -510,6 +501,16 @@ public class ByteSerialDataPort implements DataPortInterface {
 	                }
 	                */
 	            }
+	        }
+	        
+	        public static void main(String[] args) {
+	        	Enumeration portEnum = getPortIdentifiers();
+	        	// iterate through, looking for the port
+	        	while (portEnum.hasMoreElements()) {
+	        		CommPortIdentifier currPortId = (CommPortIdentifier)portEnum.nextElement();
+	        		System.out.printf("Found port %s type %d (Serial, parallel, I2C, Raw, 485) Owner %s%n", currPortId.getName(),currPortId.getPortType(),
+	        				(currPortId.isCurrentlyOwned() ? currPortId.getCurrentOwner() : "NOT owned"));
+	        	}
 	        }
 	        
 }
