@@ -9,6 +9,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentHashMap.KeySetView;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
@@ -189,7 +191,16 @@ public class Robot implements RobotInterface, Serializable {
 			 LUN[(int)lunsAChannels] = new TypedWrapper(sortedLunProp);
 		 }
 	}
-
+	/**
+	 * Get the lun number of the lun with "Name:" property named name
+	 * @return -1 if no such name exists
+	 */
+	@Override
+	public int getLUN(String name) {
+		int len = LUN.length;
+        return IntStream.range(0, len).filter(i -> LUN[i].get("Name").equals(name)).findFirst().orElse(-1);          
+	}
+	
 	@Override
 	public RobotDiffDriveInterface getDiffDrive() {
 		return robotDrive;

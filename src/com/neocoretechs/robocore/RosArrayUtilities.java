@@ -69,6 +69,41 @@ public class RosArrayUtilities {
 		return val;
 	}
 	/**
+ 	 * The data will come in a linear array of elements
+ 	 * So basically a 1D array of the 3 values, one for each value
+	 * @param connectedNode Our node transceiver info
+	 * @param valBuf The linear array of values to send, which we will be transposing to our MultiArray, which is just a simulated linear array
+	 * @return The multi array we create
+	 */
+	public static std_msgs.Int32MultiArray setupInt32Array(ConnectedNode connectedNode, ArrayList<Integer> valBuf) {
+		std_msgs.Int32MultiArray val = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32MultiArray._TYPE);
+		std_msgs.MultiArrayLayout vlayout = new std_msgs.MultiArrayLayout();
+		List<std_msgs.MultiArrayDimension> vdim = new ArrayList<std_msgs.MultiArrayDimension>();
+		std_msgs.MultiArrayDimension vdim1 = new std_msgs.MultiArrayDimension();
+		std_msgs.MultiArrayDimension vdim2 = new std_msgs.MultiArrayDimension();
+		vdim1.setLabel("");
+		vdim2.setLabel("");
+		//
+		vdim1.setSize(0);
+		vdim2.setSize(0);
+		//
+		// multiarray(i,j) = data[data_offset + dim_stride[1]*i + k]
+		vdim1.setStride(0);
+		vdim2.setStride(0);
+		//
+		vdim.add(vdim1);
+		vdim.add(vdim2);
+		vlayout.setDim(vdim);
+		vlayout.setDataOffset(0);
+		val.setLayout(vlayout);
+		int[] vali = new int[valBuf.size()];
+		int i = 0;
+		for( Integer inv : valBuf)
+			vali[i++] = inv;
+		val.setData(vali);
+		return val;
+	}
+	/**
 	 * Create a 2d unint array
 	 * @param connectedNode
 	 * @param valBuf

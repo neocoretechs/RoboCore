@@ -37,4 +37,5 @@ public interface RobotInterface {
 	public TypedWrapper[] getPID();
 	public TypedWrapper[] getAXIS();
 	public TypedWrapper[] getBUTTON();
+	public int getLUN(String name);
 }

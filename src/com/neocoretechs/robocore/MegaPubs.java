@@ -46,6 +46,7 @@ import com.neocoretechs.robocore.marlinspike.PublishResponses;
 import com.neocoretechs.robocore.marlinspike.PublishUltrasonicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
+import com.neocoretechs.robocore.MegaPubs.typeNames;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -211,16 +212,18 @@ public class MegaPubs extends AbstractNodeMain  {
 	//final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+	NodeDeviceDemuxer[] nodeDeviceDemuxerByLUN;
 	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[][] responses = new PublishDiagnosticResponse[listNodeDeviceDemuxer.size()][stopics.length];
 	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic = new PublishResponseInterface[listNodeDeviceDemuxer.size()];
 	private List<String> statPub = new ArrayList<String>();
+
 	
 	public MegaPubs(String host, InetSocketAddress master) {
 		this.host = host;
 		this.master = master;
 		NodeConfiguration nc = build();
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);   
+	    nodeMainExecutor.execute(this, nc);
 	}
 	
 	public MegaPubs(String[] args) {
@@ -229,7 +232,19 @@ public class MegaPubs extends AbstractNodeMain  {
 	    nodeMainExecutor.execute(this, cl.build());
 	}
 	
-	public MegaPubs() {}
+	/**
+	 * Set up lunsByMegapubsType with the ordinal of the LUN in the configuration that has the name corresponding to
+	 * typeNames enum. when we get messages down from MotionController, this ordinal will be the first element of the
+	 * array identifying the message.
+	 */
+	public MegaPubs() {
+		typeNames[] megaTypes = MegaPubs.typeNames.values();
+		nodeDeviceDemuxerByLUN = new NodeDeviceDemuxer[megaTypes.length];
+		int i = 0;
+		for(typeNames configNames : megaTypes) {
+			nodeDeviceDemuxerByLUN[i] = marlinspikeManager.getNDDByLUN(i++);
+		}
+	}
 	
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("megapubs");
@@ -499,11 +514,12 @@ public void onStart(final ConnectedNode connectedNode) {
 		//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 		int[] valch = message.getData();
-		if(valch.length != 2)
+		if(valch.length != 4)
 			return;
 		// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
-		int valch1 = valch[0]; // Left wheel
-		int valch2 = valch[1]; // Right wheel 	
+		// 0,2 are the LUNs for the demuxers
+		int valch1 = valch[1]; // Left wheel
+		int valch2 = valch[3]; // Right wheel 	
 		if( valch1 == 0.0 && valch2 == 0.0 ) {
 				isMoving = false;
 			} else {

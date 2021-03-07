@@ -22,7 +22,7 @@ import com.neocoretechs.robocore.config.TypedWrapper;
 
 /**
  * Parse configs and allocate the necessary number of control elements for one or more Marlinspike boards
- * @author groff
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
 public class MarlinspikeManager {
@@ -38,6 +38,7 @@ public class MarlinspikeManager {
 	//Object[] nodeNames; // one of these for each subscriber to serve AsynchDemuxer and DataPortInterface
 	//Object[] controllers; // one of these for each AsynchDemuxer and DataPort
 	ConcurrentHashMap<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType = new ConcurrentHashMap<NodeDeviceDemuxer, Map<String,TypeSlotChannelEnable>>();
+	NodeDeviceDemuxer[] nodeDeviceDemuxerByLUN;
 	/**
 	 * 
 	 * @param lun
@@ -79,6 +80,7 @@ public class MarlinspikeManager {
 			throw new IOException(e);
 		}
 		NodeDeviceDemuxer ndd = null;
+		nodeDeviceDemuxerByLUN = new NodeDeviceDemuxer[lun.length];
 		for(int i = 0; i < lun.length; i++) {
 			if(hostName.equals(lun[i].get("NodeName"))) {
 				String name = (String)lun[i].get("Name");
@@ -86,6 +88,7 @@ public class MarlinspikeManager {
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
 				// assuming the config is properly done
 				ndd = new NodeDeviceDemuxer(name, controller);
+				nodeDeviceDemuxerByLUN[i] = ndd;
 				Map<String, TypeSlotChannelEnable> nameToTypeMap = deviceToType.get(ndd);
 				if(nameToTypeMap == null) {
 					nameToTypeMap = new ConcurrentHashMap<String, TypeSlotChannelEnable>();
@@ -262,6 +265,10 @@ public class MarlinspikeManager {
 	public List<TypeSlotChannelEnable> getTypeSlotChannelEnable() {
 		return Stream.of(deviceToType).flatMap(map -> map.entrySet().stream()).map(map->map.getValue().values())
 				.map(TypeSlotChannelEnable.class::cast).collect(Collectors.toList());		
+	}
+	
+	public NodeDeviceDemuxer getNDDByLUN(int lun) {
+		return nodeDeviceDemuxerByLUN[lun];
 	}
 	
 	public String toString() {

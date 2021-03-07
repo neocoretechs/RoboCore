@@ -27,6 +27,7 @@ import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.robocore.MegaPubs;
+import com.neocoretechs.robocore.MegaPubs.typeNames;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
@@ -205,6 +206,7 @@ public class MotionController extends AbstractNodeMain {
 	Object magMutex = new Object();
 	
 	RobotInterface robot;
+	int[] lunsByMegapubsType;
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	
@@ -233,9 +235,19 @@ public class MotionController extends AbstractNodeMain {
 	    	System.out.println("Bringing up MotionControl with args:"+args[0]+" "+args[1]+" "+args[2]);
 	    }
 	}
-	
+	/**
+	 * Set up lunsByMegapubsType with the ordinal of the LUN in the configuration that has the name corresponding to
+	 * typeNames in megaPubs. when we send messages down to megaPubs, this ordinal will be the first element of the
+	 * array identifying the message.
+	 */
 	public MotionController() {
 		robot = new Robot();
+		typeNames[] megaTypes = MegaPubs.typeNames.values();
+		lunsByMegapubsType = new int[megaTypes.length];
+		int i = 0;
+		for(typeNames configNames : megaTypes) {
+			lunsByMegapubsType[i++] = robot.getLUN(configNames.name());
+		}
 		if(DEBUG)
 			System.out.println("CTOR build robot"+robot);
 	}
@@ -415,12 +427,11 @@ public class MotionController extends AbstractNodeMain {
 					if(axes[4] == -1) {
 						if(LEDCamlightIsOn) {
 							ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-							triggerVals.add(MegaPubs.typeNames.LEDDriver.index());
+							triggerVals.add(lunsByMegapubsType[MegaPubs.typeNames.LEDDriver.index()]);
 							triggerVals.add(0);
 							if(DEBUG)
 								System.out.println(" turning off LED");
-							trigpub.publish(setupPub(connectedNode, triggerVals, MegaPubs.typeNames.LEDDriver.val(),
-									MegaPubs.typeNames.LEDDriver.name()));
+							trigpub.publish(setupPub(connectedNode, triggerVals));
 							try {
 								Thread.sleep(5);
 							} catch (InterruptedException e) {}
@@ -429,12 +440,11 @@ public class MotionController extends AbstractNodeMain {
 					} else {
 						LEDCamlightIsOn = true;
 						ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-						triggerVals.add(MegaPubs.typeNames.LEDDriver.index()); //controller slot
+						triggerVals.add(lunsByMegapubsType[MegaPubs.typeNames.LEDDriver.index()]); //controller slot
 						triggerVals.add(Integer.valueOf((int)axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("AxisY")])*1000);
 						if(DEBUG)
 							System.out.printf("%s= %d\n",MegaPubs.typeNames.LEDDriver.val(),triggerVals.get(2));
-						trigpub.publish(setupPub(connectedNode, triggerVals, MegaPubs.typeNames.LEDDriver.val(),
-								MegaPubs.typeNames.LEDDriver.name()));
+						trigpub.publish(setupPub(connectedNode, triggerVals));
 						try {
 							Thread.sleep(5);
 						} catch (InterruptedException e) {}
@@ -448,10 +458,9 @@ public class MotionController extends AbstractNodeMain {
 				// set it up to send down the publishing pipeline cmd_periph1 topic
 				//
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-				speedVals.add(MegaPubs.typeNames.BOOMACTUATOR.index()); //controller slot
+				speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.BOOMACTUATOR.index()]); //controller slot
 				speedVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BOOMACTUATOR.index()].get("AxisY")])*1000);
-				trigpub.publish(setupPub(connectedNode, speedVals,MegaPubs.typeNames.BOOMACTUATOR.val(),
-						MegaPubs.typeNames.BOOMACTUATOR.name()));
+				trigpub.publish(setupPub(connectedNode, speedVals));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
@@ -467,10 +476,9 @@ public class MotionController extends AbstractNodeMain {
 					// set it up to send down the publishing pipeline cmd_periph1 topic
 					//
 					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-					povVals.add(MegaPubs.typeNames.LIFTACTUATOR.index()); //controller slot
+					povVals.add(lunsByMegapubsType[MegaPubs.typeNames.LIFTACTUATOR.index()]); //controller slot
 					povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")]*1000));
-					trigpub.publish(setupPub(connectedNode, povVals, MegaPubs.typeNames.LIFTACTUATOR.val(),
-													MegaPubs.typeNames.LIFTACTUATOR.name()));
+					trigpub.publish(setupPub(connectedNode, povVals));
 					LiftActuatorIsOn = true;
 				} else {
 					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")] == 
@@ -479,19 +487,17 @@ public class MotionController extends AbstractNodeMain {
 						// set it up to send down the publishing pipeline cmd_periph1 topic
 						//
 						ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-						povVals.add(MegaPubs.typeNames.LIFTACTUATOR.index()); //controller slot
+						povVals.add(lunsByMegapubsType[MegaPubs.typeNames.LIFTACTUATOR.index()]); //controller slot
 						povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")]*-1000));
-						trigpub.publish(setupPub(connectedNode, povVals, MegaPubs.typeNames.LIFTACTUATOR.val(),
-														MegaPubs.typeNames.LIFTACTUATOR.name()));
+						trigpub.publish(setupPub(connectedNode, povVals));
 						LiftActuatorIsOn = true;
 					} else {
 						if(LiftActuatorIsOn) {
 							LiftActuatorIsOn = false;
 							ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-							povVals.add(MegaPubs.typeNames.LIFTACTUATOR.index()); //controller slot
+							povVals.add(lunsByMegapubsType[MegaPubs.typeNames.LIFTACTUATOR.index()]); //controller slot
 							povVals.add(0);
-							trigpub.publish(setupPub(connectedNode, povVals, MegaPubs.typeNames.LIFTACTUATOR.val(),
-															MegaPubs.typeNames.LIFTACTUATOR.name()));
+							trigpub.publish(setupPub(connectedNode, povVals));
 						}
 					}
 				}
@@ -534,12 +540,12 @@ public class MotionController extends AbstractNodeMain {
 					speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 					speedL = -speedR;
 					// set it up to send
-					speedVals = new ArrayList<Integer>(6);
-					speedVals.add(robot.getDiffDrive().getLeftwheelLun());
+					speedVals = new ArrayList<Integer>(4);
+					speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.LeftWheel.index()]);
 					speedVals.add((int)speedL);
-					speedVals.add(robot.getDiffDrive().getRightWheelLun());
+					speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.RightWheel.index()]);
 					speedVals.add((int)speedR);
-					velpub.publish(setupPub(connectedNode, speedVals,"Controller LUN","Controller LUN"));
+					velpub.publish(setupPub(connectedNode, speedVals));
 					if(DEBUG)
 						System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 					return;
@@ -548,12 +554,12 @@ public class MotionController extends AbstractNodeMain {
 						speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 						speedR = -speedL;
 						// set it up to send
-						speedVals = new ArrayList<Integer>(6);
-						speedVals.add(robot.getDiffDrive().getLeftwheelLun());
+						speedVals = new ArrayList<Integer>(4);
+						speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.LeftWheel.index()]);
 						speedVals.add((int)speedL);
-						speedVals.add(robot.getDiffDrive().getRightWheelLun()); // controller slot
+						speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.RightWheel.index()]); // controller slot
 						speedVals.add((int)speedR);
-						velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
+						velpub.publish(setupPub(connectedNode, speedVals));
 						if(DEBUG)
 							System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 						return;
@@ -714,12 +720,12 @@ public class MotionController extends AbstractNodeMain {
 				//
 				// set it up to send down the publishing pipeline
 				//
-				speedVals = new ArrayList<Integer>(6);
-				speedVals.add(robot.getDiffDrive().getLeftwheelLun());
+				speedVals = new ArrayList<Integer>(4);
+				speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.LeftWheel.index()]);
 				speedVals.add((int)speedL);
-				speedVals.add(robot.getDiffDrive().getLeftwheelLun()); 
+				speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.RightWheel.index()]); 
 				speedVals.add((int)speedR);
-				velpub.publish(setupPub(connectedNode, speedVals,"Controller slot/channel/val","Controller slot/channel/val value"));
+				velpub.publish(setupPub(connectedNode, speedVals));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
@@ -731,20 +737,15 @@ public class MotionController extends AbstractNodeMain {
 			
 			/**
 			 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
-			 * We will be sending [<slot> <channel> <value>]
-			 * We use a Int32MultiArray type of 2 dimensions, row of each value times column of all values.
-		 	 * Our setup is 10 possible slots for either motor or peripheral controllers
-		 	 * 10 possible channels per controller
-		 	 * 1 value per slot and channel.
+			 * We will be sending [<number> <> <>]
+			 * We use a Int32MultiArray type of 1 dimension, row of each value with other dimensions 0.
+			 * the first vale will be the ordinal of the named LUN configuration entry
 			 * @param connectedNode Our node transceiver info
 			 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
-			 * @param ledIlluminatorInterface1 The label for dimension 1 of the array
-			 * @param ledIlluminatorInterface2 The label for dimension 2 of the array
 			 * @return The multi array we create
 			 */
-			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> speedVals, String string,
-					String string2) {
-				return RosArrayUtilities.setupInt32Array(connectedNode, speedVals, string, string2);
+			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> vals) {
+				return RosArrayUtilities.setupInt32Array(connectedNode, vals);
 			}
 			/**
 			 * Increase power of right wheel based on PID results
