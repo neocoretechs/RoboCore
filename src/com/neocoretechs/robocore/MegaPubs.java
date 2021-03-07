@@ -242,7 +242,11 @@ public class MegaPubs extends AbstractNodeMain  {
 		nodeDeviceDemuxerByLUN = new NodeDeviceDemuxer[megaTypes.length];
 		int i = 0;
 		for(typeNames configNames : megaTypes) {
-			nodeDeviceDemuxerByLUN[i] = marlinspikeManager.getNDDByLUN(i++);
+			i = robot.getLUN(configNames.name());
+			if( i == -1 )
+				System.out.println("Configuration name in MegaPubs.typeNames declares a type "+configNames.name()+" not present in config file");
+			else
+				nodeDeviceDemuxerByLUN[i] = marlinspikeManager.getNDDByLUN(i);
 		}
 	}
 	
