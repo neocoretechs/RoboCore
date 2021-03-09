@@ -2,15 +2,11 @@ package com.neocoretechs.robocore.config;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentHashMap.KeySetView;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
@@ -52,7 +48,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public class Robot implements RobotInterface, Serializable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
 	private int temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F

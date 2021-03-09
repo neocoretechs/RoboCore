@@ -3,9 +3,7 @@ package com.neocoretechs.robocore.marlinspike;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
-import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 /**
  * deviceName is a descriptor for the device, such as "LeftWheel" etc. The device itself is typically a tty
@@ -14,7 +12,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  *
  */
 public class NodeDeviceDemuxer {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private String deviceName;
 	private String device;
 	AsynchDemuxer asynchDemuxer = null;
@@ -73,13 +71,13 @@ public class NodeDeviceDemuxer {
 	}
 	
 	/**
-	 * @return the name of the device
+	 * @return Name descriptor for the device, such as "LeftWheel" etc.
 	 */
 	public String getDeviceName() {
 		return deviceName;
 	}
 	/**
-	 * @return The physical device descriptor
+	 * @return The physical device descriptor, such as /dev/ttyACM0.
 	 */
 	public String getDevice() {
 		return device;

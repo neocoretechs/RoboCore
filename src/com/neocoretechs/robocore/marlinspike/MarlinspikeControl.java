@@ -46,45 +46,20 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	public MarlinspikeControl(AsynchDemuxer asynchDemuxer) { this.asynchDemuxer = asynchDemuxer; }
 	
 	/**
-	 * Single channel affector speed
-	 * @param affector The affector name 
-	 * @param affectorSpeed
+	 * Single channel device control
+	 * @param deviceName The deviceName as it appears in the configuration 
+	 * @param deviceLevel the value to set the level of the device
 	 * @throws IOException
 	 */
-	public synchronized void setAffectorDriveSpeed(String affector, int affectorSpeed) throws IOException {
-		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(affector);
-		//if(DEBUG) 
-		//	System.out.println(this.getClass().getName()+".setAffectorDriveSpeed BEGIN writing slot:"+slot+" channel:"+channel+" affector spd:"+affectorSpeed);
-		String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(affectorSpeed);
+	public synchronized void setDeviceLevel(String deviceName, int deviceLevel) throws IOException {
+		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
+		String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
 		AsynchDemuxer.addWrite(asynchDemuxer, affectorCommand);
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAffectorDriveSpeed slot:"+tsce.slot+" channel:"+tsce.channel+" affector spd:"+affectorSpeed);
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" slot:"+tsce.slot+" channel:"+tsce.channel+" deviceLevel:"+deviceLevel);
 	}
-	/**
-	 * Dual channel diff drive speed when both channels are on one Marlinspike controller (not optimal)
-	 */
-	public synchronized void setAbsoluteDiffDriveSpeed(int leftWheelSpeed, int rightWheelSpeed) throws IOException {
-		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel("LeftWheel");
-		String motorCommand1 = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(leftWheelSpeed);
-		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed slot:"+tsce.slot+" channel:"+tsce.channel+" left wheel spd:"+leftWheelSpeed);
-		tsce = asynchDemuxer.getNameToTypeSlotChannel("RightWheel");
-		String motorCommand2 = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(rightWheelSpeed);
-		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed slot:"+tsce.slot+" channel:"+tsce.channel+" right wheel spd:"+rightWheelSpeed);
-		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand1);
-		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand2);
-	}
-	/**
-	 * Dual channel diff drive speed when channels are on two Marlinspike controllers (optimal)
-	 */
-	public synchronized void setAbsoluteDiffDriveSpeed(String wheelName, int wheelSpeed) throws IOException {
-		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(wheelName);
-		String motorCommand1 = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(wheelSpeed);
-		if(DEBUG) 
-			System.out.println(this.getClass().getName()+".setAbsoluteDiffDriveSpeed "+wheelName+" slot:"+tsce.slot+" channel:"+tsce.channel+" wheel spd:"+wheelSpeed);
-		AsynchDemuxer.addWrite(asynchDemuxer, motorCommand1);
-	}
+
+
 	/**
 	 * Generate a series of requests to query the Marlinspike realtime subsystem and retrieve status
 	 * reports via various M codes issued to the realtime processing loop.<p>
@@ -223,11 +198,6 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
     	}
     }
     
-	public synchronized void setAbsolutePWMLevel(String pwm, int pwmLevel) throws IOException {
-		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(pwm);
-		String pwmCommand1 = "G5 Z"+tsce.slot+" C"+tsce.channel+" X"+pwmLevel;
-		AsynchDemuxer.addWrite(asynchDemuxer, pwmCommand1);
-	}
 	
 	@Override
 	public void commandStop() throws IOException {
@@ -238,14 +208,14 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	
 	public static void main(String[] args) throws Exception {
 		if( args.length < 1 ) {
-			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MegaControl");
+			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MegaControl deviceName deviceLevel");
 		}
 		AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 		asynchDemuxer.connect(new ByteSerialDataPort());
 		MarlinspikeControl mc = new MarlinspikeControl(asynchDemuxer);
 		// set the absolute speed of the diff drive controller in slot 0 to 100 on channel 1 and 
 		// 1 on channel 2
-		mc.setAbsoluteDiffDriveSpeed(100, 1);
+		mc.setDeviceLevel(args[0],Integer.parseInt(args[1]));
 
 	}
 

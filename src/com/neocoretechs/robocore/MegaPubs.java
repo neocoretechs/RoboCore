@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.exception.DuplicateServiceException;
@@ -72,10 +73,6 @@ import diagnostic_msgs.DiagnosticStatus;
  * the actual communications are centralized in the {@code MegaControl} class and its contained {@code ByteSerialDataPort} low level
  * access module.
  * 
- * The command line parameters drive the process through the following:<p/>
- * __mode:=startup<br/>
- * Indicates that the M and G code file specified, default startup.gcode, read a set of initialization codes
- * to be sent to the Marlinspike<p/>
  * __pwm:=controller<br/>
  * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
  * initialized with a previous M-code<p/>
@@ -85,20 +82,14 @@ import diagnostic_msgs.DiagnosticStatus;
  * GPIO service invocation always works directly on a pin.<p/>  
  * In addition, control functions are 
  * As input from the attached board is received, the {@code AsynchDemuxer} decodes the header and prepares the data for publication
- * to the Ros bus. Publish various warnings over the 'robocore/status' topic.
- * The ByteSerialDataPort and its associates read the base level data organized as a header delimited by chevrons and
- * containing the message topic identifier. After the identifier, which is used to demux the message and properly read the
- * remainder and process it after each successive line.
+ * to the Ros bus. Publish various warnings over the 'robocore/status' topic.<p/>
+ * <h3>AsynchDemuxer:</h3>
+ * The ByteSerialDataPort and its associates read the base level data coming over the USB port from the marlinspike organized 
+ * as a header delimited by chevrons and containing the message topic identifier.<p/>
+ * The identifier is used to demux the message and properly read the remainder and process it after each successive line.
  * Each line after the header has a parameter number and value. For instance, for an analog pin input or an ultrasonic reading
  * we have '1 pin', '2 reading' with pin and reading being the numeric values for the distance or pin reading value.
- * The end of the message is delimited with '</topic>' with topic being the matching header element.
- * 
- * On the subscriber side, Subscribe to messages on the cmd_vel standard ROS topic to receive motor control commands as TWIST messages and
- * send them on to the attached controller. We have the standard cmd_vel which receives TWIST messages and an aux "absolute/cmd_vel"
- * that we use to send absolute motor control acceleration directives, such as from the PS3 controller.
- * We also subscribe to the cmd_pwm message, which allows us to issue a M45 PWM directive for a particular power level.
- * The cmd_gpio message is also processed activating a specific pin with a specific value as a service
- * mentioned above.
+ * The end of the message is delimited with '</topic>' with topic being the matching header element.<p/>
  * 
  * Essentially this is the main interface to the attached Mega2560 and on to all GPIO
  * and high level motor control functions which are activated via a serial board TTL to RS-232 attached to Mega2560.
@@ -115,7 +106,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;
@@ -196,10 +187,10 @@ public class MegaPubs extends AbstractNodeMain  {
 	public enum typeNames {
 		LeftWheel("LeftWheel"),
 		RightWheel("RightWheel"),
-		BOOMACTUATOR("BoomActuator"),
+		BoomActuator("BoomActuator"),
 		LEDDriver("LEDDriver"),
-		LIFTACTUATOR("LiftActuator"),
-		ULTRASONIC("Ultrasonic"),
+		LiftActuator("LiftActuator"),
+		Ultrasonic("Ultrasonic"),
 		PWM("PWM");
 		String name;
 		typeNames(String name) { this.name= name;} 
@@ -211,8 +202,9 @@ public class MegaPubs extends AbstractNodeMain  {
 	RobotInterface robot = new Robot();
 	//final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+	// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
+	// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-	NodeDeviceDemuxer[] nodeDeviceDemuxerByLUN;
 	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[][] responses = new PublishDiagnosticResponse[listNodeDeviceDemuxer.size()][stopics.length];
 	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic = new PublishResponseInterface[listNodeDeviceDemuxer.size()];
 	private List<String> statPub = new ArrayList<String>();
@@ -233,22 +225,8 @@ public class MegaPubs extends AbstractNodeMain  {
 	}
 	
 	/**
-	 * Set up lunsByMegapubsType with the ordinal of the LUN in the configuration that has the name corresponding to
-	 * typeNames enum. when we get messages down from MotionController, this ordinal will be the first element of the
-	 * array identifying the message.
 	 */
-	public MegaPubs() {
-		typeNames[] megaTypes = MegaPubs.typeNames.values();
-		nodeDeviceDemuxerByLUN = new NodeDeviceDemuxer[megaTypes.length];
-		int i = 0;
-		for(typeNames configNames : megaTypes) {
-			i = robot.getLUN(configNames.name());
-			if( i == -1 )
-				System.out.println("Configuration name in MegaPubs.typeNames declares a type "+configNames.name()+" not present in config file");
-			else
-				nodeDeviceDemuxerByLUN[i] = marlinspikeManager.getNDDByLUN(i);
-		}
-	}
+	public MegaPubs() {}
 	
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("megapubs");
@@ -314,20 +292,22 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	final Publisher<sensor_msgs.Range> rangepub = 
 		connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
-
 	
 	if( remaps.containsKey("__pwm") )
 		PWM_MODE = remaps.get("__pwm");
 
-	
+	// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
 	final Subscriber<geometry_msgs.Twist> substwist = 
 			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
-	
-	final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
-			connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
-	
-	final Subscriber<std_msgs.Int32MultiArray> substrigger = 
-	connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
+	// channel collection receives each topic with a 2 or 4 element array that has [LUN,value], or [LUN,value,LUN,value] to activate a particular LUN with the given value
+	// or two channels of LUN with the 2 values (as in a dual channel generic controller)
+	final Collection<Subscriber<std_msgs.Int32MultiArray>> subschannel = new ArrayList<Subscriber<std_msgs.Int32MultiArray>>();
+	for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+			subschannel.add(connectedNode.newSubscriber("/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+	//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
+	//		connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
+	//final Subscriber<std_msgs.Int32MultiArray> substrigger = 
+	//connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
 	
 
 	final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
@@ -508,104 +488,59 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	/**
-	 * Process the direct velocity commands from remote source to extract 2 3x32 bit int values and apply those to the
-	 * left and right propulsion wheels. the values represent speeds for each wheel 
-	 * and value is the value to be applied to the channel in the slot for each wheel.
+	 * Process the commands from remote source to extract 32 bit int values and apply those to the
+	 * device channels. the values represent a logical unit LUN in the configuration which is
+	 * a collection of node, device, slot, channel of a controller attached to a ROS node, which has
+	 * a number of tty ports (devices) which have marlinspike boards attached (Mega2560 via USB running the firmware)
+	 * which have a number of logical software controllers configured by slot and channels.<p/>
+	 * Process a trigger value from the remote source, most likely a controller such as PS/3.<p/>
+	 * Take the 2 trigger values as int32 and send them on to the microcontroller 
+	 * related subsystem at the int valued LUNs. The marlinspike subsystem is composed of a software 
+	 * controller instance talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
 	 */
-	subsvelocity.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
-	@Override
-	public void onNewMessage(std_msgs.Int32MultiArray message) {
-		//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
-		//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
-		int[] valch = message.getData();
-		if(valch.length != 4)
-			return;
-		// multiarray(i,j,k) = data[data_offset + dim_stride[1]*i + dim_stride[2]*j + k]
-		// 0,2 are the LUNs for the demuxers
-		int valch1 = valch[1]; // Left wheel
-		int valch2 = valch[3]; // Right wheel 	
-		if( valch1 == 0.0 && valch2 == 0.0 ) {
-				isMoving = false;
-			} else {
-				shouldMove = true;
-				isMoving = true;
-			}
-			try {
-				if( shouldMove ) {
-					if( DEBUG ) {
-						System.out.println("Robot commanded to move LeftWheel "+valch1);
-					}
-					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-						if(ndd.getDeviceName().equals("LeftWheel")) {
-							ndd.getMarlinspikeControl().setAbsoluteDiffDriveSpeed("LeftWheel", valch1);
-							break;
+	for(Subscriber<std_msgs.Int32MultiArray> subs : subschannel) {
+		subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
+			@Override
+			public void onNewMessage(std_msgs.Int32MultiArray message) {
+				//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+				//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+				int[] valch = message.getData();
+				for(int iarg = 0; iarg < valch.length; iarg+=2) {
+						// lift, led,  boom
+						int affector = valch[iarg/2];
+						int affectorSpeed = valch[(iarg/2)+1];
+						// keep Marlinspike from getting bombed with zeroes
+						try {
+							if(isOperating[affector]) {
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
+										ndd.getMarlinspikeControl().setDeviceLevel(typeNames.values()[affector].val(), 0);
+										break;
+									}
+								isOperating[affector] = false;
+							} else {
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
+										ndd.getMarlinspikeControl().setDeviceLevel(typeNames.values()[affector].val(), affectorSpeed);
+										break;
+									}
+								isOperating[affector] = true;
+								if(DEBUG)
+									System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
+							}
+						} catch (IOException e) {
+							System.out.println("There was a problem communicating with the controller:"+e);
+							e.printStackTrace();
+							statPub.add("There was a problem communicating with the controller:");
+							statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+							new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
+									diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
 						}
-					if( DEBUG ) {
-						System.out.println("Robot commanded to move RightWheel "+valch2);
-					}
-					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-						if(ndd.getDeviceName().equals("RightWheel")) {
-							ndd.getMarlinspikeControl().setAbsoluteDiffDriveSpeed("RightWheel", valch2);
-							break;
-						}	
-				} else {
-					statPub.add("Emergency stop directive in effect, no motor power ");
-					new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "VELOCITY PUBLISH", 
-					diagnostic_msgs.DiagnosticStatus.WARN, statPub );
-				}
-			} catch (IOException e) {
-				System.out.println("There was a problem communicating with motor controller:"+e);
-				e.printStackTrace();
-				statPub.add("There was a problem communicating with motor controller:"+e);
-				new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "VELOCITY PUBLISH", 
-				diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-			}
-		}
-	});
-	/**
-	 * Process a trigger value from the remote source, most likely a controller such as PS/3.
-	 * Take the 2 trigger values as int32 and send them on to the microcontroller PWM non-propulsion 
-	 * related subsystem. this subsystem is composed of a software controller instance talking to a 
-	 * hardware driver such as an H-bridge or half bridge or even a simple switch.
-	 * the values here are <slot> <channel> <value>.
-	 */
-	substrigger.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
-	@Override
-	public void onNewMessage(std_msgs.Int32MultiArray message) {
-		int[] valch = message.getData();
-		try {
-			if( valch.length == 2 ) {
-				// lift, led,  boom
-				int affector = valch[0];
-				int affectorSpeed = valch[1];
-				// keep Marlinspike from getting bombed with zeroes
-				if(isOperating[affector]) {
-					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-						if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
-							ndd.getMarlinspikeControl().setAffectorDriveSpeed(typeNames.values()[affector].val(), 0);
-							break;
-						}
-					isOperating[affector] = false;
-				} else {
-					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-						if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
-							ndd.getMarlinspikeControl().setAffectorDriveSpeed(typeNames.values()[affector].val(), affectorSpeed);
-							break;
-						}
-					isOperating[affector] = true;
-					if(DEBUG)
-						System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
 				}
 			}
-		} catch (IOException e) {
-			System.out.println("there was a problem communicating with a controller:"+e);
-			e.printStackTrace();
-			statPub.add("There was a problem communicating with a controller:"+e);
-			new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "TRIGGER PUBLISH", 
-			diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-		}
+		});
 	}
-	});
+	
 	/*
 	 * Provide an emergency stop via image recognition facility
 	 

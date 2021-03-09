@@ -5,10 +5,11 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.internal.loader.CommandLineLoader;
@@ -34,6 +35,8 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
+import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
 import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
@@ -42,8 +45,7 @@ import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 import std_msgs.Int32MultiArray;
 
 /**
- * We are fusing data from the IMU, any joystick input, and other autonomous controls to affect
- * propulsion and issue status updates based on IMU data edge conditions that may indicate problems.
+ * We are fusing data from the IMU, any joystick input, and other autonomous controls to send down to the Marlinspike controllers.
  * Subscribing to:
  * sensor_msgs/Joy (joystick information boxed as an array of buttons and axis values common to standard controllers):
  * * NYCO CORE CONTROLLER:
@@ -110,11 +112,11 @@ import std_msgs.Int32MultiArray;
  * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)
  *
  * Publishing to:
- * absolute/cmd_vel (command velocity channel receiving absolute left and right motor speed values)
+ * All topics enumerated in MegaPubs typeNames which correspond to types that may appear in configuration by LUN.k
  * robocore/status (status update channel to receive information on alerts, etc, derived from IMU and other sensors)
  * 
- * Published on absolute/cmd_vel are the values from 0-1000 that represent actual power to each differential drive wheel.
- * Subscribers to absolute/cmd_vel include the process that manages serial data to the motor controller, possibly on a separate computer.
+ * Published are the values from 0-1000 that represent actual power to each differential drive wheel.
+ * Subscribers include the process that manages serial data to the motor controller, possibly on a separate computer.
  * Publishers on robocore/status provide status updates relating to IMU extremes that are picked up by the VoxHumana voice synth or others,
  * again most probably on a completely separate single board computer within the robot.
  *
@@ -144,6 +146,7 @@ import std_msgs.Int32MultiArray;
  */
 public class MotionController extends AbstractNodeMain {
 	private static boolean DEBUG = true;
+	private boolean IMUDEBUG = false;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
@@ -197,19 +200,18 @@ public class MotionController extends AbstractNodeMain {
 	static boolean inAuto = false;
 	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
 	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
-	static boolean LEDCamlightIsOn = true; // to send initial turn off
-	static boolean LiftActuatorIsOn = true;
 	
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
 	Object navMutex = new Object();
 	Object magMutex = new Object();
 	
-	RobotInterface robot;
-	int[] lunsByMegapubsType;
+	RobotInterface robot = new Robot();
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
-	
+	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+	boolean[] isActive = new boolean[listNodeDeviceDemuxer.size()];
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -236,18 +238,8 @@ public class MotionController extends AbstractNodeMain {
 	    }
 	}
 	/**
-	 * Set up lunsByMegapubsType with the ordinal of the LUN in the configuration that has the name corresponding to
-	 * typeNames in megaPubs. when we send messages down to megaPubs, this ordinal will be the first element of the
-	 * array identifying the message.
 	 */
 	public MotionController() {
-		robot = new Robot();
-		typeNames[] megaTypes = MegaPubs.typeNames.values();
-		lunsByMegapubsType = new int[megaTypes.length];
-		int i = 0;
-		for(typeNames configNames : megaTypes) {
-			lunsByMegapubsType[i++] = robot.getLUN(configNames.name());
-		}
 		if(DEBUG)
 			System.out.println("CTOR build robot"+robot);
 	}
@@ -297,10 +289,11 @@ public class MotionController extends AbstractNodeMain {
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-		final Publisher<std_msgs.Int32MultiArray> velpub =
-				connectedNode.newPublisher("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
-		final Publisher<std_msgs.Int32MultiArray> trigpub =
-				connectedNode.newPublisher("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
+		
+		final Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel = new ArrayList<Publisher<std_msgs.Int32MultiArray>>();
+		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+				pubschannel.add(connectedNode.newPublisher("/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+		
 		final Publisher<geometry_msgs.Twist> twistpub = 
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		
@@ -423,28 +416,31 @@ public class MotionController extends AbstractNodeMain {
 				// LEDCameraIlluminatorSlot:1
 				// LEDCameraIlluminatorChannel:1
 				//-------------------
-				if(axes[4] != -1 || LEDCamlightIsOn) {//|| axes[5] != -1) {
-					if(axes[4] == -1) {
-						if(LEDCamlightIsOn) {
+				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis")] != -1 || 
+						isActive[MegaPubs.typeNames.LEDDriver.index()]) {
+					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis")] == -1) {
+						if( isActive[MegaPubs.typeNames.LEDDriver.index()]) {
 							ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-							triggerVals.add(lunsByMegapubsType[MegaPubs.typeNames.LEDDriver.index()]);
+							triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
 							triggerVals.add(0);
 							if(DEBUG)
 								System.out.println(" turning off LED");
-							trigpub.publish(setupPub(connectedNode, triggerVals));
+							pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LEDDriver.val()))
+									.findFirst().get().publish(setupPub(connectedNode, triggerVals));
 							try {
 								Thread.sleep(5);
 							} catch (InterruptedException e) {}
 						}
-						LEDCamlightIsOn = false;
+						isActive[MegaPubs.typeNames.LEDDriver.index()] = false;
 					} else {
-						LEDCamlightIsOn = true;
+						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
 						ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-						triggerVals.add(lunsByMegapubsType[MegaPubs.typeNames.LEDDriver.index()]); //controller slot
+						triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
 						triggerVals.add(Integer.valueOf((int)axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("AxisY")])*1000);
 						if(DEBUG)
 							System.out.printf("%s= %d\n",MegaPubs.typeNames.LEDDriver.val(),triggerVals.get(2));
-						trigpub.publish(setupPub(connectedNode, triggerVals));
+						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LEDDriver.val()))
+							.findFirst().get().publish(setupPub(connectedNode, triggerVals));
 						try {
 							Thread.sleep(5);
 						} catch (InterruptedException e) {}
@@ -455,55 +451,81 @@ public class MotionController extends AbstractNodeMain {
 				// axes[3] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
 				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
 				//
-				// set it up to send down the publishing pipeline cmd_periph1 topic
+				// set it up to send down the publishing pipeline
 				//
-				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-				speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.BOOMACTUATOR.index()]); //controller slot
-				speedVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BOOMACTUATOR.index()].get("AxisY")])*1000);
-				trigpub.publish(setupPub(connectedNode, speedVals));
-				try {
-					Thread.sleep(5);
-				} catch (InterruptedException e) {}
+				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY")] != 0 ||
+					isActive[MegaPubs.typeNames.BoomActuator.index()]) {
+					// was active, no longer
+					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY")] == 0) {
+						isActive[MegaPubs.typeNames.BoomActuator.index()] = false;
+						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
+						speedVals.add(0);
+						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.BoomActuator.val()))
+							.findFirst().get().publish(setupPub(connectedNode, speedVals));
+						try {
+							Thread.sleep(5);
+						} catch (InterruptedException e) {}
+					} else {
+						// may not have been active, now is
+						isActive[MegaPubs.typeNames.BoomActuator.index()] = true;
+						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
+						speedVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY")])*1000);
+						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.BoomActuator.val()))
+							.findFirst().get().publish(setupPub(connectedNode, speedVals));
+						try {
+							Thread.sleep(5);
+						} catch (InterruptedException e) {}
+					}
+				}
 				//----
 				// Map the POV values to actions
 				//AXIS[4].AxisType:POV
 				//AXIS[4].Axis:6
 				//AXIS[4].AxisUp:0.25
 				//AXIS[4].AxisDown:0.75
-				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")] == 
-						(float)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("AxisUp")) {
-					//
-					// set it up to send down the publishing pipeline cmd_periph1 topic
-					//
+				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")] == 
+						(float)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisUp")) {
+					// set it up to send down the publishing pipeline
 					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-					povVals.add(lunsByMegapubsType[MegaPubs.typeNames.LIFTACTUATOR.index()]); //controller slot
-					povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")]*1000));
-					trigpub.publish(setupPub(connectedNode, povVals));
-					LiftActuatorIsOn = true;
+					povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val()));
+					povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")]*1000));
+					pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LiftActuator.val()))
+					.findFirst().get().publish(setupPub(connectedNode, povVals));
+					isActive[MegaPubs.typeNames.LiftActuator.index()] = true;
+					try {
+						Thread.sleep(5);
+					} catch (InterruptedException e) {}
 				} else {
-					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")] == 
-							(float)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("AxisDown")) {
+					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")] == 
+							(float)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisDown")) {
 						//
-						// set it up to send down the publishing pipeline cmd_periph1 topic
+						// set it up to send down the publishing pipeline 
 						//
 						ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-						povVals.add(lunsByMegapubsType[MegaPubs.typeNames.LIFTACTUATOR.index()]); //controller slot
-						povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LIFTACTUATOR.index()].get("Axis")]*-1000));
-						trigpub.publish(setupPub(connectedNode, povVals));
-						LiftActuatorIsOn = true;
+						povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
+						povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")]*-1000));
+						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LiftActuator.val()))
+						.findFirst().get().publish(setupPub(connectedNode, povVals));
+						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
+						try {
+							Thread.sleep(5);
+						} catch (InterruptedException e) {}
 					} else {
-						if(LiftActuatorIsOn) {
-							LiftActuatorIsOn = false;
+						if( isActive[MegaPubs.typeNames.LiftActuator.index()]) {
+							isActive[MegaPubs.typeNames.LiftActuator.index()]= false;
 							ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-							povVals.add(lunsByMegapubsType[MegaPubs.typeNames.LIFTACTUATOR.index()]); //controller slot
+							povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
 							povVals.add(0);
-							trigpub.publish(setupPub(connectedNode, povVals));
+							pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LiftActuator.val()))
+								.findFirst().get().publish(setupPub(connectedNode, povVals));
+							try {
+								Thread.sleep(5);
+							} catch (InterruptedException e) {}
 						}
 					}
 				}
-				try {
-					Thread.sleep(5);
-				} catch (InterruptedException e) {}
 				/*	
 				 if (axes[6] == Component.POV.OFF) {
 					 if(DEBUG)System.out.println("POV OFF");
@@ -540,29 +562,35 @@ public class MotionController extends AbstractNodeMain {
 					speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 					speedL = -speedR;
 					// set it up to send
-					speedVals = new ArrayList<Integer>(4);
-					speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.LeftWheel.index()]);
+					ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+					speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 					speedVals.add((int)speedL);
-					speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.RightWheel.index()]);
+					pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LeftWheel.val()))
+						.findFirst().get().publish(setupPub(connectedNode, speedVals));
+					speedVals = new ArrayList<Integer>(2);
+					speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val()));
 					speedVals.add((int)speedR);
-					velpub.publish(setupPub(connectedNode, speedVals));
+					pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.RightWheel.val()))
+						.findFirst().get().publish(setupPub(connectedNode, speedVals));
 					if(DEBUG)
 						System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
-					return;
 				} else {
 					if( buttons[5] != 0 ) { // right pivot
 						speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 						speedR = -speedL;
 						// set it up to send
-						speedVals = new ArrayList<Integer>(4);
-						speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.LeftWheel.index()]);
+						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+						speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 						speedVals.add((int)speedL);
-						speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.RightWheel.index()]); // controller slot
+						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LeftWheel.val()))
+						.findFirst().get().publish(setupPub(connectedNode, speedVals));
+						speedVals = new ArrayList<Integer>(2);
+						speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); // controller slot
 						speedVals.add((int)speedR);
-						velpub.publish(setupPub(connectedNode, speedVals));
+						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.RightWheel.val()))
+							.findFirst().get().publish(setupPub(connectedNode, speedVals));
 						if(DEBUG)
 							System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
-						return;
 					}
 				}
 				// get radian measure of left stick x,y
@@ -720,12 +748,16 @@ public class MotionController extends AbstractNodeMain {
 				//
 				// set it up to send down the publishing pipeline
 				//
-				speedVals = new ArrayList<Integer>(4);
-				speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.LeftWheel.index()]);
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+				speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 				speedVals.add((int)speedL);
-				speedVals.add(lunsByMegapubsType[MegaPubs.typeNames.RightWheel.index()]); 
+				pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LeftWheel.val()))
+					.findFirst().get().publish(setupPub(connectedNode, speedVals));
+				speedVals = new ArrayList<Integer>(2);
+				speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); 
 				speedVals.add((int)speedR);
-				velpub.publish(setupPub(connectedNode, speedVals));
+				pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.RightWheel.val()))
+					.findFirst().get().publish(setupPub(connectedNode, speedVals));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
@@ -882,7 +914,7 @@ public class MotionController extends AbstractNodeMain {
 					orientation.setZ(message.getOrientation().getZ());
 					orientation.setW(message.getOrientation().getW());
 					eulers = message.getOrientationCovariance();
-					if(DEBUG) {
+					if(IMUDEBUG) {
 						System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 						System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 					}
@@ -911,7 +943,7 @@ public class MotionController extends AbstractNodeMain {
 									isOverShock = true;
 								}
 							}
-							if(DEBUG) {
+							if(IMUDEBUG) {
 								System.out.printf("Nav:Angular X:%f | Angular Y:%f | Angular Z:%f",angular.getX(),angular.getY(),angular.getZ());
 								System.out.printf("Nav:Linear X:%f | Linear Y:%f | Linear Z:%f",linear.getX(),linear.getY(),linear.getZ());
 							}
@@ -919,8 +951,11 @@ public class MotionController extends AbstractNodeMain {
 						isNav = false;
 				} catch (Throwable e) {
 					isNav = false;
-					System.out.println("Nav subs exception:"+e.getMessage());
-					e.printStackTrace();
+					//System.out.println("Nav subs exception:"+e.getMessage());
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU",
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);
 				}
 				}
 			}
@@ -974,7 +1009,7 @@ public class MotionController extends AbstractNodeMain {
 		subsmag.addMessageListener(new MessageListener<sensor_msgs.MagneticField>() {
 			@Override
 			public void onNewMessage(sensor_msgs.MagneticField message) {
-				if( DEBUG )
+				if( IMUDEBUG )
 					System.out.println("New mag msg:"+message);
 				geometry_msgs.Vector3 mag3 = message.getMagneticField();
 				synchronized(magMutex) {
@@ -983,7 +1018,7 @@ public class MotionController extends AbstractNodeMain {
 					mag[1] = mag3.getY();
 					mag[2] = mag3.getZ();
 					isMag = true;
-					if(DEBUG)
+					if(IMUDEBUG)
 					System.out.println("Magnetic field:"+mag[0]+" "+mag[1]+" "+mag[2]);
 					if( MAG_THRESHOLD[0] != -1 ) {
 						if( mag[0] > MAG_THRESHOLD[0] && mag[1] > MAG_THRESHOLD[1] && mag[2] > MAG_THRESHOLD[2] ) {
@@ -1003,7 +1038,7 @@ public class MotionController extends AbstractNodeMain {
 					System.out.println("New temp msg:"+message);
 				if(temperature != message.getTemperature()) {
 					temperature = message.getTemperature();
-					if(DEBUG)
+					if(DEBUG || IMUDEBUG)
 					System.out.println(" Temp:"+temperature);
 					isTemperature = true;
 					if( temperature > robot.getTemperatureThreshold() )

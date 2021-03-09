@@ -11,7 +11,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
 */
 public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
 	TypedWrapper[] LUN;
 	TypedWrapper[] WHEEL;
