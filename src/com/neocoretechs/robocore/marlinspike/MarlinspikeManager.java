@@ -71,9 +71,10 @@ public class MarlinspikeManager {
 	//}
 	/**
 	 * Create the controllers from the lun properties. Aggregate them by port.
+	 * @param override true to ignore node-based limitations on config params
 	 * @throws IOException
 	 */
-	private void createControllers() throws IOException {
+	private void createControllers(boolean override) throws IOException {
 		try {
 			hostName = InetAddress.getLocalHost().getHostName();
 		} catch (UnknownHostException e) {
@@ -82,7 +83,7 @@ public class MarlinspikeManager {
 		NodeDeviceDemuxer ndd = null;
 		nodeDeviceDemuxerByLUN = new NodeDeviceDemuxer[lun.length];
 		for(int i = 0; i < lun.length; i++) {
-			if(hostName.equals(lun[i].get("NodeName"))) {
+			if(override || hostName.equals(lun[i].get("NodeName"))) {
 				String name = (String)lun[i].get("Name");
 				String controller = (String)lun[i].get("Controller");
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
@@ -154,10 +155,11 @@ public class MarlinspikeManager {
 	}
 	/**
 	 * Perform the final configuration and issue the commands to the Marlinspike via the retrieved properties.
+	 * @param override true to ignore node-specific parameter in loading configuration
 	 * @throws IOException
 	 */
-	public void configureMarlinspike() throws IOException {
-		createControllers();
+	public void configureMarlinspike(boolean override) throws IOException {
+		createControllers(override);
 		activateControllers();
 		NodeDeviceDemuxer ndd = null;
 		ArrayList<String> config = new ArrayList<String>();
@@ -282,7 +284,7 @@ public class MarlinspikeManager {
 	public static void main(String[] args) throws IOException {
 		RobotInterface robot = new Robot();
 		MarlinspikeManager mm = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
-		mm.createControllers();
+		mm.createControllers(true);
 		Stream.of(mm.deviceToType).flatMap(map -> map.entrySet().stream()).forEach(e -> System.out.println(e));
 		Collection<TypeSlotChannelEnable> tsce = mm.getTypeSlotChannelEnable();
 		System.out.println("-----");

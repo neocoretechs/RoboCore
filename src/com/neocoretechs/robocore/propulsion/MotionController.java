@@ -210,8 +210,8 @@ public class MotionController extends AbstractNodeMain {
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
-	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-	boolean[] isActive = new boolean[listNodeDeviceDemuxer.size()];
+	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
+	boolean[] isActive;
 	/**
 	 * We really only use these methods if we want to pull remapped params out of command line or do
 	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
@@ -238,10 +238,14 @@ public class MotionController extends AbstractNodeMain {
 	    }
 	}
 	/**
+	 * @throws IOException 
 	 */
-	public MotionController() {
+	public MotionController() throws IOException {
 		if(DEBUG)
 			System.out.println("CTOR build robot"+robot);
+		marlinspikeManager.configureMarlinspike(true);
+		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+		isActive = new boolean[listNodeDeviceDemuxer.size()];
 	}
 		
 	/**

@@ -204,9 +204,9 @@ public class MegaPubs extends AbstractNodeMain  {
 	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
 	// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
 	// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
-	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[][] responses = new PublishDiagnosticResponse[listNodeDeviceDemuxer.size()][stopics.length];
-	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic = new PublishResponseInterface[listNodeDeviceDemuxer.size()];
+	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
+	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[][] responses;
+	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic;
 	private List<String> statPub = new ArrayList<String>();
 
 	
@@ -225,8 +225,11 @@ public class MegaPubs extends AbstractNodeMain  {
 	}
 	
 	/**
+	 * @throws IOException 
 	 */
-	public MegaPubs() {}
+	public MegaPubs() {
+
+	}
 	
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("megapubs");
@@ -269,10 +272,12 @@ public void onStart(final ConnectedNode connectedNode) {
 	// TODO get this from parameter server or singleton with map of robot names
 
 	try {
-		//asynchDemuxer.connect(ByteSerialDataPort.getInstance());
-		//asynchDemuxer.init();
-		//motorControlHost = new MarlinspikeControl(asynchDemuxer);
-		marlinspikeManager.configureMarlinspike();
+		marlinspikeManager.configureMarlinspike(false);
+		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
+		// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
+		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+		responses = new PublishDiagnosticResponse[listNodeDeviceDemuxer.size()][stopics.length];
+		ultrasonic = new PublishResponseInterface[listNodeDeviceDemuxer.size()];
 	} catch (IOException e) {
 		System.out.println("Could not connect to Marlinspike.."+e);
 		e.printStackTrace();
