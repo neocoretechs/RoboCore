@@ -246,7 +246,7 @@ public class MarlinspikeManager {
 	 * @return The list of NodeDeviceDemuxer associated with the passed list of tsce
 	 */
 	//ConcurrentHashMap<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType 
-	public Collection<NodeDeviceDemuxer> getNodeDeviceDemuxerByType(List<TypeSlotChannelEnable> tsce) {
+	public Collection<NodeDeviceDemuxer> getNodeDeviceDemuxerByType(Collection<TypeSlotChannelEnable> tsce) {
 		return Stream.of(deviceToType).flatMap(map -> map.entrySet().stream()).filter(map->tsce.containsAll(map.getValue().values()))
 				.map(e -> e.getKey() ).collect(Collectors.toCollection(ArrayList::new));
 	}
@@ -262,9 +262,12 @@ public class MarlinspikeManager {
 	 * SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
 	 * @return All the devices attached to all the Marlinspikes on this node
 	 */
-	public List<TypeSlotChannelEnable> getTypeSlotChannelEnable() {
-		return Stream.of(deviceToType).flatMap(map -> map.entrySet().stream()).map(map->map.getValue().values())
-				.map(TypeSlotChannelEnable.class::cast).collect(Collectors.toList());		
+	public Collection<TypeSlotChannelEnable> getTypeSlotChannelEnable() {
+		Collection<TypeSlotChannelEnable> tsce = new ArrayList<TypeSlotChannelEnable>();
+		Stream.of(deviceToType).flatMap(map -> map.entrySet().stream())
+				.map(map->map.getValue().values())
+				.forEach(tsce::addAll);
+		return tsce;
 	}
 	
 	public NodeDeviceDemuxer getNDDByLUN(int lun) {
@@ -276,9 +279,21 @@ public class MarlinspikeManager {
 				leftSlot, leftChannel, rightSlot, rightChannel);
 	}
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		RobotInterface robot = new Robot();
 		MarlinspikeManager mm = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+		mm.createControllers();
+		Stream.of(mm.deviceToType).flatMap(map -> map.entrySet().stream()).forEach(e -> System.out.println(e));
+		Collection<TypeSlotChannelEnable> tsce = mm.getTypeSlotChannelEnable();
+		System.out.println("-----");
+		for(TypeSlotChannelEnable tt : tsce)
+			System.out.println(tt);
+		System.out.println("-----");
+		Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = mm.getNodeDeviceDemuxerByType(tsce);
+		System.out.println("-----");
+		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+			System.out.println(ndd);
+		System.out.println("-----");
 		//for(Object n : mm.aggregate(mm.lun, "NodeName"))
 		//	System.out.println(n);
 		//System.out.println("----");

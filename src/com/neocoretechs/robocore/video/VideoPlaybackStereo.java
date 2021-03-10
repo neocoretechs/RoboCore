@@ -21,6 +21,12 @@ import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -120,6 +126,39 @@ public class VideoPlaybackStereo  {
 			long timdiff = 0;
 			long timlast = 0;
 			long samplesPer = 0;
+			
+		    Stream<Comparable[]> stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
+		    stream.forEach(e -> Stream.of(e)
+				.forEach(g -> System.out.println("Element A:"+g)));
+		    
+		    stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
+			Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),
+		    		Collectors.groupingBy(d -> d[1].toString(), 
+		    		Collectors.groupingBy(e -> e[2].toString(), Collectors.counting()))));
+	        nameCount.forEach((name, count) -> {
+	            System.out.println(name + ":" + count);
+	        });
+		    
+		    
+		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
+		    //stream.flatMap(e -> Stream.of(e))
+		    //	.forEach((l,m,n) -> System.out.println("Element B:"+l));
+		    	//.forEach(g -> System.out.println("Element B:"+g));
+		    /*
+		    spliterator = Spliterators.spliteratorUnknownSize(Relatrix.findSet("?", "?", "?"), characteristics);
+		    parallel = false;
+		    stream = (Stream<Comparable[]>) StreamSupport.stream(spliterator, parallel);
+		    long nano = System.nanoTime();
+		    System.out.println(stream.count());
+		    System.out.println(System.nanoTime()-nano);
+		    
+		    spliterator = Spliterators.spliteratorUnknownSize(Relatrix.findSet("?", "?", "?"), characteristics);
+		    parallel = true;
+		    nano = System.nanoTime();
+		    stream = (Stream<Comparable[]>) StreamSupport.stream(spliterator, parallel);
+		    System.out.println(stream.count());
+		    System.out.println(System.nanoTime()-nano);
+		    */
 			Iterator<?> it = Relatrix.findSet("?", "?", "?");
 				while(it.hasNext()) {
 					Comparable[] c = (Comparable[]) it.next();

@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Map;
 import java.util.Set;
 
@@ -11,12 +12,13 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
-public class NodeDeviceDemuxer {
+public class NodeDeviceDemuxer implements Serializable {
+	private static final long serialVersionUID = 1L;
 	private static boolean DEBUG = false;
 	private String deviceName;
 	private String device;
-	AsynchDemuxer asynchDemuxer = null;
-	private MarlinspikeControlInterface controlHost;
+	transient AsynchDemuxer asynchDemuxer = null;
+	private transient  MarlinspikeControlInterface controlHost;
 	
 	/**
 	 * @param deviceName descriptor for the device, such as "LeftWheel" etc.

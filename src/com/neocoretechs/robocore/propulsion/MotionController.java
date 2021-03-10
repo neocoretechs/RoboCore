@@ -291,8 +291,11 @@ public class MotionController extends AbstractNodeMain {
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		
 		final Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel = new ArrayList<Publisher<std_msgs.Int32MultiArray>>();
-		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
 				pubschannel.add(connectedNode.newPublisher("/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+				if(DEBUG)
+					System.out.println("Bringing up publisher /"+ndd.getDeviceName());
+		}
 		
 		final Publisher<geometry_msgs.Twist> twistpub = 
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);

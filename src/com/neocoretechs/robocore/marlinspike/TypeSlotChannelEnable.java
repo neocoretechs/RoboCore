@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.marlinspike;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
 /**
@@ -17,7 +18,8 @@ import java.util.Arrays;
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
-public class TypeSlotChannelEnable {
+public class TypeSlotChannelEnable implements Serializable {
+	private static final long serialVersionUID = 1L;
 	String cntrltype;
 	int slot;
 	int channel;
@@ -133,6 +135,13 @@ public class TypeSlotChannelEnable {
 			sb.append(" W").append(encoder);
 		return sb.append("\r\n").toString();
 	}
+	
+	@Override
+	public String toString() {
+		return String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d M10 type:%d%n",  
+				cntrltype, slot, channel, enable, dirdefault, M10CtrlType);
+	}
+	
 	/**
 	 * Define diff driver for traction in slot 0, Type 1 is HBridge driver in motor driver slots
 	 * M10 Z0 T1
