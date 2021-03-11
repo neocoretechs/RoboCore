@@ -243,7 +243,7 @@ public class MotionController extends AbstractNodeMain {
 	public MotionController() throws IOException {
 		if(DEBUG)
 			System.out.println("CTOR build robot"+robot);
-		marlinspikeManager.configureMarlinspike(true);
+		marlinspikeManager.configureMarlinspike(true, false);
 		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
 		isActive = new boolean[listNodeDeviceDemuxer.size()];
 	}

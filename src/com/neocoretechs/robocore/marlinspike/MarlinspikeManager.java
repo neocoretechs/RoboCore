@@ -158,9 +158,10 @@ public class MarlinspikeManager {
 	 * @param override true to ignore node-specific parameter in loading configuration
 	 * @throws IOException
 	 */
-	public void configureMarlinspike(boolean override) throws IOException {
+	public void configureMarlinspike(boolean override, boolean... activate) throws IOException {
 		createControllers(override);
-		activateControllers();
+		if(activate.length > 0 && activate[0])
+			activateControllers();
 		NodeDeviceDemuxer ndd = null;
 		ArrayList<String> config = new ArrayList<String>();
 		// We have to sift back through the lun properties to get the additional optional fields
@@ -199,7 +200,8 @@ public class MarlinspikeManager {
 				config.add(sb.toString());
 			}
 		}
-		configControllers(config);
+		if(activate.length > 0 && activate[0])
+			configControllers(config);
 	}
 	/**
 	 * Locate the proper AsynchDemuxer by name of device we want to write to, then add the write to that AsynchDemuxer.
