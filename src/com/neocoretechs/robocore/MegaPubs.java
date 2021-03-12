@@ -199,9 +199,9 @@ public class MegaPubs extends AbstractNodeMain  {
 	};
 	//
 	// Initialize various types of responses that will be published to the various outgoing message busses.
-	RobotInterface robot = new Robot();
+	RobotInterface robot;
 	//final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
-	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+	MarlinspikeManager marlinspikeManager = null;
 	// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
 	// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
@@ -272,6 +272,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	// TODO get this from parameter server or singleton with map of robot names
 
 	try {
+		robot = new Robot();
+		marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
 		marlinspikeManager.configureMarlinspike(false);
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
 		// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
@@ -488,6 +490,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
+				for(int i =0 ; i < isOperating.length; i++)
+					isOperating[i] = false;
 			}
 				
 		}
@@ -510,29 +514,42 @@ public void onStart(final ConnectedNode connectedNode) {
 				//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 				//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
 				int[] valch = message.getData();
+				if(DEBUG)
+					System.out.printf("%s Message:%s args:%d%n", this.getClass().getName(), message.toString(), valch.length);
+				int argNum = 0;
 				for(int iarg = 0; iarg < valch.length; iarg+=2) {
 						// lift, led,  boom
-						int affector = valch[iarg/2];
-						int affectorSpeed = valch[(iarg/2)+1];
-						// keep Marlinspike from getting bombed with zeroes
+						int affector = valch[argNum++];
+						int affectorSpeed = valch[argNum++];
+						if(DEBUG)
+							System.out.printf("%s Message:%s affector:%d name:%s speed:%d operating:%b%n", this.getClass().getName(), message.toString(), affector, 
+									(affector > 0 ? typeNames.values()[affector].val() : "BAD"), affectorSpeed, (affector > 0 ? isOperating[affector] : false));
 						try {
-							if(isOperating[affector]) {
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-									if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
-										ndd.getMarlinspikeControl().setDeviceLevel(typeNames.values()[affector].val(), 0);
-										break;
-									}
-								isOperating[affector] = false;
-							} else {
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-									if(ndd.getDeviceName().equals(typeNames.values()[affector].val())) {
-										ndd.getMarlinspikeControl().setDeviceLevel(typeNames.values()[affector].val(), affectorSpeed);
-										break;
-									}
-								isOperating[affector] = true;
-								if(DEBUG)
-									System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
+							MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(typeNames.values()[affector].val());
+							if(control == null) {
+								System.out.println("Controller:"+typeNames.values()[affector].val()+" not configured for this node");
+								statPub.add("Controller:"+typeNames.values()[affector].val()+" not configured for this node");
+								new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
+									diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
+								statPub.clear();
+								continue;
 							}
+							// keep Marlinspike from getting bombed with zeroes
+							if(isOperating[affector]) {
+								if(affectorSpeed == 0) {
+									control.setDeviceLevel(typeNames.values()[affector].val(), 0);
+									isOperating[affector] = false;
+								} else {
+									control.setDeviceLevel(typeNames.values()[affector].val(), affectorSpeed);
+								}
+							} else {
+								if(affectorSpeed != 0) {
+									isOperating[affector] = true;
+									control.setDeviceLevel(typeNames.values()[affector].val(), affectorSpeed);
+								}
+							}
+							if(DEBUG)
+								System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
 						} catch (IOException e) {
 							System.out.println("There was a problem communicating with the controller:"+e);
 							e.printStackTrace();
@@ -540,6 +557,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
 							new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
 									diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+							statPub.clear();
 						}
 				}
 			}

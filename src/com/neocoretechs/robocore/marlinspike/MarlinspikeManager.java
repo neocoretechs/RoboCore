@@ -298,6 +298,10 @@ public class MarlinspikeManager {
 		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
 			System.out.println(ndd);
 		System.out.println("-----");
+		System.out.println("MarlinspikeControl for LeftWheel:"+mm.getMarlinspikeControl("LeftWheel"));
+		System.out.println("MarlinspikeControl for RightWheel:"+mm.getMarlinspikeControl("RightWheel"));
+		System.out.println("MarlinspikeControl for BogusWheel:"+mm.getMarlinspikeControl("BogusWheel"));
+		System.out.println("-----");
 		//for(Object n : mm.aggregate(mm.lun, "NodeName"))
 		//	System.out.println(n);
 		//System.out.println("----");

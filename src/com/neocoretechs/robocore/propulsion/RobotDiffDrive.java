@@ -111,7 +111,15 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		motorPIDRateR = Optional.ofNullable(PID[rightWheelLun].get("MotorPIDRate")).filter(String.class::isInstance)
 		        .map(e -> Integer.parseInt((String) e));
 		try {
-			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), leftWheelDiameter.get(), leftWheelTrack.get(), minSpeedL.get(), maxSpeedL.get(), leftTicksPerRevolution.get(), motorKpL.get(), motorKdL.get(), motorKiL.get(), motorKoL.get(), motorPIDRateL.get());
+			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), 
+					leftWheelDiameter.get(), 
+					leftWheelTrack.get(), 
+					minSpeedL.get(), 
+					maxSpeedL.get(), 
+					leftTicksPerRevolution.get(), 
+					motorKpL.get(), motorKdL.get(), 
+					motorKiL.get(), motorKoL.get(),
+					motorPIDRateL.get());
 		} catch(NoSuchElementException nse) {
 			System.out.println("<<WARNING; USING PID DEFAULTS leftWheelLun: "+leftWheelLun+" PID[leftWheelLun]: "+
 					(leftWheelLun < PID.length ? 
@@ -119,10 +127,26 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 					(PID[leftWheelLun].get("MotorKp")+","+PID[leftWheelLun].get("MotorKd")+","+PID[leftWheelLun].get("MotorKi")+","+PID[leftWheelLun].get("MotorKo")+","+PID[leftWheelLun].get("MotorPIDRate")):
 						" COLLECTION NULL ")) :
 						" PID ARRAY LEN BAD:"+PID.length));
-			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), leftWheelDiameter.get(), leftWheelTrack.get(), minSpeedL.get(), maxSpeedL.get(), leftTicksPerRevolution.get(), 1.0f, 1.0f, 1.0f, 1.0f, 1);
+			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), 
+					leftWheelDiameter.get(), 
+					leftWheelTrack.get(), 
+					minSpeedL.get(), 
+					maxSpeedL.get(), 
+					leftTicksPerRevolution.get(), 
+					1.0f, 1.0f, 1.0f, 1.0f, 1);
 		}
 		try {
-			rightWheel = new RobotWheel((String)LUN[rightWheelLun].get("Name"), rightWheelDiameter.get(), rightWheelTrack.get(), minSpeedR.get(), maxSpeedR.get(), rightTicksPerRevolution.get(), motorKpR.get(), motorKdR.get(), motorKiR.get(), motorKoR.get(), motorPIDRateR.get());
+			rightWheel = new RobotWheel((String)LUN[rightWheelLun].get("Name"), 
+					rightWheelDiameter.get(), 
+					rightWheelTrack.get(), 
+					minSpeedR.get(), 
+					maxSpeedR.get(), 
+					rightTicksPerRevolution.get(),
+					motorKpR.get(),
+					motorKdR.get(), 
+					motorKiR.get(), 
+					motorKoR.get(), 
+					motorPIDRateR.get());
 		} catch(NoSuchElementException nse) {
 			System.out.println("<<WARNING USING PID DEFAULTS rightWheelLun: "+rightWheelLun+" PID[rightWheelLun]: "+
 					(rightWheelLun < PID.length ? 
@@ -130,8 +154,30 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 					(PID[rightWheelLun].get("MotorKp")+","+PID[rightWheelLun].get("MotorKd")+","+PID[rightWheelLun].get("MotorKi")+","+PID[rightWheelLun].get("MotorKo")+","+PID[rightWheelLun].get("MotorPIDRate") ):
 						" COLLECTION NULL ")) :
 						" PID ARRAY LEN BAD:"+PID.length));
-			rightWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), rightWheelDiameter.get(), rightWheelTrack.get(), minSpeedR.get(), maxSpeedR.get(), rightTicksPerRevolution.get(), 1.0f, 1.0f, 1.0f, 1.0f, 1);
+			rightWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"),
+					rightWheelDiameter.get(), 
+					rightWheelTrack.get(), 
+					minSpeedR.get(), 
+					maxSpeedR.get(), 
+					rightTicksPerRevolution.get(), 1.0f, 1.0f, 1.0f, 1.0f, 1);
 		}
+		
+		Optional<Integer> controllerAxisXO = Optional.ofNullable(AXIS[rightWheelLun].get("AxisX")).filter(String.class::isInstance)
+		        .map(e -> Integer.parseInt((String) e));
+		Optional<Integer> controllerAxisYO = Optional.ofNullable(AXIS[rightWheelLun].get("AxisY")).filter(String.class::isInstance)
+		        .map(e -> Integer.parseInt((String) e));
+		if(controllerAxisXO.isPresent()) {
+			controllerAxisX = controllerAxisXO.get();
+		} else {
+			System.out.println("<<WARNING USING AXIS DEFAULTS rightWheelLun: "+rightWheelLun+" AXIS[rightWheelLun]: ");
+			controllerAxisX = 0;
+		}
+		if(controllerAxisYO.isPresent()) {
+			controllerAxisY = controllerAxisYO.get();
+		} else {
+			System.out.println("<<WARNING USING AXIS DEFAULTS rightWheelLun: "+rightWheelLun+" AXIS[rightWheelLun]: ");
+			controllerAxisY = 2;
+		}	
 	}
 	
 	@Override

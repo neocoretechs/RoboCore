@@ -206,10 +206,10 @@ public class MotionController extends AbstractNodeMain {
 	Object navMutex = new Object();
 	Object magMutex = new Object();
 	
-	RobotInterface robot = new Robot();
+	RobotInterface robot;
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
-	final MarlinspikeManager marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+	MarlinspikeManager marlinspikeManager;
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
 	boolean[] isActive;
 	/**
@@ -241,11 +241,12 @@ public class MotionController extends AbstractNodeMain {
 	 * @throws IOException 
 	 */
 	public MotionController() throws IOException {
-		if(DEBUG)
-			System.out.println("CTOR build robot"+robot);
+		robot = new Robot();
+		marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
 		marlinspikeManager.configureMarlinspike(true, false);
 		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
 		isActive = new boolean[listNodeDeviceDemuxer.size()];
+
 	}
 		
 	/**
@@ -291,6 +292,13 @@ public class MotionController extends AbstractNodeMain {
 		else
 			SPEEDSCALE = 1000.0f;
 		
+		int axisLED = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis"));
+		int axisBoom = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY"));
+		int axisLift = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis"));
+		// value of POV pad when actuating for up
+		float axisLiftUp = Float.parseFloat((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisUp"));
+		float axisLiftDown = Float.parseFloat((String)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisDown"));
+		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		
@@ -333,7 +341,7 @@ public class MotionController extends AbstractNodeMain {
 		});
 		*/
 		if(DEBUG)
-			System.out.println("PREPUBLISHING robot"+robot);
+			System.out.println("Robot:"+robot);
 		ArrayList<String> roboProps = new ArrayList<String>();
 		roboProps.add(robot.toString());
 		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
@@ -392,6 +400,7 @@ public class MotionController extends AbstractNodeMain {
 			public void onNewMessage(sensor_msgs.Joy message) {
 				float[] axes = message.getAxes();
 				int[] buttons = message.getButtons();
+
 				// check for emergency stop, on X or A or green or lower button
 				if( buttons[6] != 0 ) {
 					if(DEBUG)
@@ -423,16 +432,16 @@ public class MotionController extends AbstractNodeMain {
 				// LEDCameraIlluminatorSlot:1
 				// LEDCameraIlluminatorChannel:1
 				//-------------------
-				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis")] != -1 || 
+				if(axes[axisLED] != -1 || 
 						isActive[MegaPubs.typeNames.LEDDriver.index()]) {
-					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis")] == -1) {
+					if(axes[axisLED] == -1) {
 						if( isActive[MegaPubs.typeNames.LEDDriver.index()]) {
 							ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
 							triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
 							triggerVals.add(0);
 							if(DEBUG)
 								System.out.println(" turning off LED");
-							pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LEDDriver.val()))
+							pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LEDDriver.val()))
 									.findFirst().get().publish(setupPub(connectedNode, triggerVals));
 							try {
 								Thread.sleep(5);
@@ -443,10 +452,13 @@ public class MotionController extends AbstractNodeMain {
 						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
 						ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
 						triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
-						triggerVals.add(Integer.valueOf((int)axes[(int)robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("AxisY")])*1000);
-						if(DEBUG)
-							System.out.printf("%s= %d\n",MegaPubs.typeNames.LEDDriver.val(),triggerVals.get(2));
-						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LEDDriver.val()))
+						triggerVals.add(Integer.valueOf((int)axes[axisLED])*1000);
+						if(DEBUG) {
+							System.out.printf("%s= %d %s%n",MegaPubs.typeNames.LEDDriver.val(),triggerVals.get(1),
+									pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LEDDriver.val()))
+									.findFirst().get());
+						}
+						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LEDDriver.val()))
 							.findFirst().get().publish(setupPub(connectedNode, triggerVals));
 						try {
 							Thread.sleep(5);
@@ -460,15 +472,15 @@ public class MotionController extends AbstractNodeMain {
 				//
 				// set it up to send down the publishing pipeline
 				//
-				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY")] != 0 ||
+				if(axes[axisBoom] != 0 ||
 					isActive[MegaPubs.typeNames.BoomActuator.index()]) {
 					// was active, no longer
-					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY")] == 0) {
+					if(axes[axisBoom] == 0) {
 						isActive[MegaPubs.typeNames.BoomActuator.index()] = false;
 						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
 						speedVals.add(0);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.BoomActuator.val()))
+						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.BoomActuator.val()))
 							.findFirst().get().publish(setupPub(connectedNode, speedVals));
 						try {
 							Thread.sleep(5);
@@ -478,8 +490,8 @@ public class MotionController extends AbstractNodeMain {
 						isActive[MegaPubs.typeNames.BoomActuator.index()] = true;
 						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
-						speedVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY")])*1000);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.BoomActuator.val()))
+						speedVals.add((int)(axes[axisBoom])*1000);
+						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.BoomActuator.val()))
 							.findFirst().get().publish(setupPub(connectedNode, speedVals));
 						try {
 							Thread.sleep(5);
@@ -492,28 +504,26 @@ public class MotionController extends AbstractNodeMain {
 				//AXIS[4].Axis:6
 				//AXIS[4].AxisUp:0.25
 				//AXIS[4].AxisDown:0.75
-				if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")] == 
-						(float)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisUp")) {
+				if(axes[axisLift] == axisLiftUp) {
 					// set it up to send down the publishing pipeline
 					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
 					povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val()));
-					povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")]*1000));
-					pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LiftActuator.val()))
+					povVals.add(1000);
+					pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LiftActuator.val()))
 					.findFirst().get().publish(setupPub(connectedNode, povVals));
 					isActive[MegaPubs.typeNames.LiftActuator.index()] = true;
 					try {
 						Thread.sleep(5);
 					} catch (InterruptedException e) {}
 				} else {
-					if(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")] == 
-							(float)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisDown")) {
+					if(axes[axisLift] == axisLiftDown) {
 						//
 						// set it up to send down the publishing pipeline 
 						//
 						ArrayList<Integer> povVals = new ArrayList<Integer>(2);
 						povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
-						povVals.add((int)(axes[(int)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis")]*-1000));
-						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LiftActuator.val()))
+						povVals.add(-1000);
+						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LiftActuator.val()))
 						.findFirst().get().publish(setupPub(connectedNode, povVals));
 						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
 						try {
@@ -525,7 +535,7 @@ public class MotionController extends AbstractNodeMain {
 							ArrayList<Integer> povVals = new ArrayList<Integer>(2);
 							povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
 							povVals.add(0);
-							pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LiftActuator.val()))
+							pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LiftActuator.val()))
 								.findFirst().get().publish(setupPub(connectedNode, povVals));
 							try {
 								Thread.sleep(5);
@@ -572,12 +582,12 @@ public class MotionController extends AbstractNodeMain {
 					ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 					speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 					speedVals.add((int)speedL);
-					pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LeftWheel.val()))
+					pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
 						.findFirst().get().publish(setupPub(connectedNode, speedVals));
 					speedVals = new ArrayList<Integer>(2);
 					speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val()));
 					speedVals.add((int)speedR);
-					pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.RightWheel.val()))
+					pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
 						.findFirst().get().publish(setupPub(connectedNode, speedVals));
 					if(DEBUG)
 						System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
@@ -589,12 +599,12 @@ public class MotionController extends AbstractNodeMain {
 						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 						speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 						speedVals.add((int)speedL);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LeftWheel.val()))
+						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
 						.findFirst().get().publish(setupPub(connectedNode, speedVals));
 						speedVals = new ArrayList<Integer>(2);
 						speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); // controller slot
 						speedVals.add((int)speedR);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.RightWheel.val()))
+						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
 							.findFirst().get().publish(setupPub(connectedNode, speedVals));
 						if(DEBUG)
 							System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
@@ -758,12 +768,12 @@ public class MotionController extends AbstractNodeMain {
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 				speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 				speedVals.add((int)speedL);
-				pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.LeftWheel.val()))
+				pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
 					.findFirst().get().publish(setupPub(connectedNode, speedVals));
 				speedVals = new ArrayList<Integer>(2);
 				speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); 
 				speedVals.add((int)speedR);
-				pubschannel.stream().filter(e -> e.getTopicName().toString().equals("/"+MegaPubs.typeNames.RightWheel.val()))
+				pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
 					.findFirst().get().publish(setupPub(connectedNode, speedVals));
 				try {
 					Thread.sleep(5);
@@ -1041,12 +1051,12 @@ public class MotionController extends AbstractNodeMain {
 		substemp.addMessageListener(new MessageListener<sensor_msgs.Temperature>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Temperature message) {
-				if( DEBUG )
+				if( IMUDEBUG )
 					System.out.println("New temp msg:"+message);
 				if(temperature != message.getTemperature()) {
 					temperature = message.getTemperature();
 					if(DEBUG || IMUDEBUG)
-					System.out.println(" Temp:"+temperature);
+						System.out.println(" Temp:"+temperature);
 					isTemperature = true;
 					if( temperature > robot.getTemperatureThreshold() )
 						isOverTemp = true;
@@ -1404,8 +1414,24 @@ public class MotionController extends AbstractNodeMain {
 	float pitchDeg = 57.2958 * pitch;
 	float yawDeg   = 57.2958 * yaw;
 	 */
-	public static void main(String[] args) {
-		Robot robot = new Robot();
-		System.out.println(robot);
+	public static void main(String[] args) throws IOException {
+		MotionController mc = new MotionController();
+		ArrayList<String> pubs = new ArrayList<String>();
+		for(NodeDeviceDemuxer ndd : mc.listNodeDeviceDemuxer) {
+			System.out.println("/"+ndd.getDeviceName());
+			if(DEBUG)
+				System.out.println("Bringing up publisher /"+ndd.getDeviceName());
+			pubs.add("/"+ndd.getDeviceName());
+		}
+		System.out.printf("Diffydrive; %d %d %n", mc.robot.getDiffDrive().getControllerAxisX(), mc.robot.getDiffDrive().getControllerAxisY());
+		System.out.println("----");
+		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LEDDriver.val()))
+		.findFirst().get());
+		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.BoomActuator.val()))
+				.findFirst().get());
+		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LeftWheel.val()))
+				.findFirst().get());
+		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LiftActuator.val()))
+				.findFirst().get());
 	}
 }
