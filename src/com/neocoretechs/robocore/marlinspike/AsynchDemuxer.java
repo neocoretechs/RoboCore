@@ -130,7 +130,7 @@ public class AsynchDemuxer implements Runnable {
 	public CyclicBarrier mutexWrite = new CyclicBarrier(2);
 	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(1024);
 	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(1024);
-	private Map<String, TypeSlotChannelEnable> nameToTypeSlotChannel;
+	private MarlinspikeManager marlinSpikeManager;
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
 
@@ -176,7 +176,9 @@ public class AsynchDemuxer implements Runnable {
 	
 	private Map<String, TopicListInterface> topics = new ConcurrentHashMap<String, TopicListInterface>(topicNames.values().length);
 
-	public AsynchDemuxer() { }
+	public AsynchDemuxer(MarlinspikeManager marlinspikeManager) { 
+		this.marlinSpikeManager = marlinspikeManager;
+	}
 	
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
@@ -184,7 +186,7 @@ public class AsynchDemuxer implements Runnable {
 	public void clearWriteBuffer() { toWrite.clear(); }
 	
 	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
-		return nameToTypeSlotChannel.get(name);
+		return marlinSpikeManager.getTypeSlotChannelEnableByType(name).get(0);
 	}
 	
 	/**
@@ -213,10 +215,8 @@ public class AsynchDemuxer implements Runnable {
 	}
 	/**
 	 * Initialize the topic names for this AsynchDemuxer
-	 * @param value The map of named controllers (with names being descriptive ones such as "LeftWheel", "LEDController") to their types, slots and channels
 	 */
-	public synchronized void init(Map<String, TypeSlotChannelEnable> value) {
-		nameToTypeSlotChannel = value;
+	public synchronized void init() {
 		//
 		// G4
 		//
@@ -1001,7 +1001,8 @@ public class AsynchDemuxer implements Runnable {
 	public static void main(String[] args) throws Exception {
 		// start demux
 		Robot r = new Robot();
-		AsynchDemuxer demuxer = new AsynchDemuxer();
+		MarlinspikeManager mm = new MarlinspikeManager(r);
+		AsynchDemuxer demuxer = new AsynchDemuxer(mm);
 		/*
 		demuxer.connect(ByteSerialDataPort.getInstance());
 		// the L H and T values represent those to EXCLUDE

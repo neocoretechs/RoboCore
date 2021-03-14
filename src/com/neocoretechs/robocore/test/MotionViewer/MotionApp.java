@@ -10,6 +10,7 @@ import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 
 import javax.swing.Box;
@@ -258,13 +259,14 @@ public class MotionApp implements ChangeListener, DrawInterface
 	private Robot robot;
 
     // END of simulation variables.
-    public MotionApp() {
+    public MotionApp() throws IOException {
     	init();
     }
     /**
      * Initialize the app.
+     * @throws IOException 
      */
-    public void init() {
+    public void init() throws IOException {
     /*
     * Set up controls for Robot tab, which includes:
     *     Initial Position
@@ -873,7 +875,11 @@ public class MotionApp implements ChangeListener, DrawInterface
     	latch.await();
 		SwingUtilities.invokeLater(new Runnable() {
 		    public void run() {
-		    	new MotionApp();
+		    	try {
+					new MotionApp();
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
 		        
 		    }
 		});

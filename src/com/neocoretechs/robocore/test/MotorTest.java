@@ -1,11 +1,15 @@
 package com.neocoretechs.robocore.test;
 
+import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class MotorTest {
 	public static void main(String[] args) throws Exception {
-		AsynchDemuxer ad = new AsynchDemuxer();
+		Robot robot = new Robot();
+		MarlinspikeManager mm = new MarlinspikeManager(robot);
+		AsynchDemuxer ad = new AsynchDemuxer(mm);
 		ad.connect(new ByteSerialDataPort());
 		String motorCommand = "M0"; // turn off realtime output
 		AsynchDemuxer.addWrite(ad,motorCommand);

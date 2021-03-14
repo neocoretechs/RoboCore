@@ -36,26 +36,27 @@ public class NodeDeviceDemuxer implements Serializable {
 	 * activated. We must ensure that 1 demuxer/device is activated for a particular physical port
 	 * and that subsequent attempts at activation are met with an assignment 
 	 * to an existing instance of asynchDemuxer.
+	 * @param marlinspikeManager 
 	 * @param deviceToType The mapping of all NodeDeviceDemuxer to all the TypeSlotChannels
 	 * @throws IOException If we attempt to re-use a port, we box up the runtime exception with the IOException
 	 */
-	public void activateMarlinspikes(Map<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType) throws IOException {
+	public void activateMarlinspikes(MarlinspikeManager marlinspikeManager, Map<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType) throws IOException {
 		Set<NodeDeviceDemuxer> sndd = deviceToType.keySet();
 		for(NodeDeviceDemuxer ndd : sndd) {
 			if(ndd.device.equals(device)) {
 				if( ndd.asynchDemuxer == null ) {
 					if(DEBUG)
-						System.out.printf("%s.activateMarlinspikes preparing to initialize %s%n",this.getClass().getName(), value);
-					asynchDemuxer = new AsynchDemuxer();
+						System.out.printf("%s.activateMarlinspikes preparing to initialize %n",this.getClass().getName());
+					asynchDemuxer = new AsynchDemuxer(marlinspikeManager);
 					asynchDemuxer.connect(new ByteSerialDataPort(device));
-					asynchDemuxer.init(value);
+					asynchDemuxer.init();
 					controlHost = new MarlinspikeControl(asynchDemuxer);
 					return;
 				}
 				if(ndd == this)
 					return;
 				if(DEBUG)
-					System.out.printf("%s.activateMarlinspikes preparing to copy %s %s%n", this.getClass().getName(), ndd, value);
+					System.out.printf("%s.activateMarlinspikes preparing to copy %s %n", this.getClass().getName(), ndd);
 				asynchDemuxer = ndd.asynchDemuxer;
 				controlHost = ndd.controlHost;
 				return;

@@ -133,7 +133,7 @@ public class MarlinspikeManager {
 			try {
 				if(DEBUG)
 					System.out.printf("%s activating Marlinspike %s %s%n",this.getClass().getName(),key,value);
-				key.activateMarlinspikes(deviceToType, value);
+				key.activateMarlinspikes(this, deviceToType);
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}

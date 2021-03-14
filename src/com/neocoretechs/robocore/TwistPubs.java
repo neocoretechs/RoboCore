@@ -24,6 +24,9 @@ import org.ros.internal.loader.CommandLineLoader;
 
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
+import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
@@ -111,7 +114,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	//	mode = remaps.get("__mode");
 	//if( mode.equals("startup")) {
 		try {
-			asynchDemuxer = new AsynchDemuxer();
+			RobotInterface robot = new Robot();
+			MarlinspikeManager mm = new MarlinspikeManager(robot); 
+			asynchDemuxer = new AsynchDemuxer(mm);
 			asynchDemuxer.connect(new ByteSerialDataPort());
 			asynchDemuxer.config();
 		} catch (IOException e) {
