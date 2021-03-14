@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 
@@ -48,24 +49,26 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 	 * @param node The node originating the status message
 	 * @param statpub The publisher to the status message bus
 	 * @param outgoingDiagnostics queue to stash response for future publishing
-	 * @param messages A list of string values to be formatted and published
+	 * @param statPub2 A list of string values to be formatted and published
 	 */
 	public PublishDiagnosticResponse(ConnectedNode node, Publisher<DiagnosticStatus> statpub, 
 										CircularBlockingDeque<DiagnosticStatus> outgoingDiagnostics, 
-										String topicName, byte dstatus, List<String> messages) {
+										String topicName, byte dstatus, Collection<String> statPub2) {
 		super(node, statpub, outgoingDiagnostics);
-		if(messages.size() > MAXMESSAGESIZE || outgoingDiagnostics.length() > MAXMESSAGESIZE)
+		if(statPub2.size() > MAXMESSAGESIZE || outgoingDiagnostics.length() > MAXMESSAGESIZE)
 			throw new RuntimeException("GLOBAL MAXIMUM MESSAGE SIZE OF "+MAXMESSAGESIZE+
-					" EXCEEDED BY EITHER NEW MESSAGE BUFFER AT:"+messages.size()+" OR "+
+					" EXCEEDED BY EITHER NEW MESSAGE BUFFER AT:"+statPub2.size()+" OR "+
 					" OUTGOING MESSAGE QUEUE AT:"+outgoingDiagnostics.length());
 		this.topicName = topicName;
 		this.dstatus = dstatus;
 		setUp();
-		for(String s : messages) {
-			diagnostic_msgs.KeyValue kv2 = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
-			kv2.setKey(String.valueOf(messageSize++)+".)");
-			kv2.setValue(s);
-			li.add(kv2);
+		synchronized(statPub2) {
+			for(String s : statPub2) {
+				diagnostic_msgs.KeyValue kv2 = node.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+				kv2.setKey(String.valueOf(messageSize++)+".)");
+				kv2.setValue(s);
+				li.add(kv2);
+			}
 		}
 		outgoingDiagnostics.addLast(msg);
 	}

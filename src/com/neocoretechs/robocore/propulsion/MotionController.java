@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.internal.loader.CommandLineLoader;
+import org.ros.internal.node.topic.SubscriberIdentifier;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.namespace.NameResolver;
@@ -25,6 +26,7 @@ import org.ros.node.service.CountDownServiceServerListener;
 import org.ros.node.service.ServiceResponseBuilder;
 import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Publisher;
+import org.ros.node.topic.PublisherListener;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.robocore.MegaPubs;
@@ -42,6 +44,7 @@ import com.neocoretechs.robocore.services.ControllerStatusMessage;
 import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
 import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 
+import diagnostic_msgs.DiagnosticStatus;
 import std_msgs.Int32MultiArray;
 
 /**
@@ -151,6 +154,7 @@ public class MotionController extends AbstractNodeMain {
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
+	private String serveNode = null;
 	float rangetop, rangebot;
 	double pressure, temperature;
 	double[] mag = {0, 0, 0};
@@ -206,7 +210,14 @@ public class MotionController extends AbstractNodeMain {
 	Object navMutex = new Object();
 	Object magMutex = new Object();
 	
-	RobotInterface robot;
+	static RobotInterface robot;
+	static {
+		try {
+			robot = new Robot();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	MarlinspikeManager marlinspikeManager;
@@ -241,8 +252,8 @@ public class MotionController extends AbstractNodeMain {
 	 * @throws IOException 
 	 */
 	public MotionController() throws IOException {
-		robot = new Robot();
-		marlinspikeManager = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+
+		marlinspikeManager = new MarlinspikeManager(robot);
 		marlinspikeManager.configureMarlinspike(true, false);
 		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
 		isActive = new boolean[listNodeDeviceDemuxer.size()];
@@ -277,6 +288,11 @@ public class MotionController extends AbstractNodeMain {
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if(remaps.containsKey("__debug"))
 			DEBUG = true;
+		if( remaps.containsKey("__serveNode") ) {
+			serveNode = remaps.get("__serveNode");
+		} else {
+			throw new RuntimeException("Must specify __serveNode:=<node> to configure topics to publish to node specificed in configuration.");
+		}
 		if( remaps.containsKey("__speedlimit") ) {
 			robot.getLeftSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
 			robot.getRightSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
@@ -292,22 +308,56 @@ public class MotionController extends AbstractNodeMain {
 		else
 			SPEEDSCALE = 1000.0f;
 		
-		int axisLED = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis"));
-		int axisBoom = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY"));
-		int axisLift = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis"));
-		// value of POV pad when actuating for up
-		float axisLiftUp = Float.parseFloat((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisUp"));
-		float axisLiftDown = Float.parseFloat((String)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisDown"));
-		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		
 		final Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel = new ArrayList<Publisher<std_msgs.Int32MultiArray>>();
 		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
-				pubschannel.add(connectedNode.newPublisher("/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
-				if(DEBUG)
-					System.out.println("Bringing up publisher /"+ndd.getDeviceName());
-		}
+			if(ndd.getNodeName().equals(serveNode)) {
+				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher("absolute/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+				pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
+					@Override
+					public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
+						throw new RuntimeException("Failed to register with master "+pub);					
+					}
+					@Override
+					public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
+						if(DEBUG) {
+							System.out.printf("Successful Master Registration for %s%n", pub);
+						}
+						pubschannel.add(pub);
+						if(DEBUG)
+							System.out.println("Bringing up publisher absolute/"+ndd.getDeviceName());
+					}
+					@Override
+					public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
+						if(DEBUG) {
+							System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
+						}
+					}
+					@Override
+					public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
+						if(DEBUG) {
+							System.out.printf("Successful Master Unregistration for %s%n", pub);
+						}
+						pubschannel.remove(pub);
+					}
+					@Override
+					public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
+						if(DEBUG) {
+							System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
+						}				
+					}
+					@Override
+					public void onShutdown(Publisher<Int32MultiArray> pub) {
+						if(DEBUG) {
+							System.out.printf("Shutdown initiated for %s%n", pub);
+						}
+						pubschannel.remove(pub);
+					}	
+				});
+			}
+		}	
 		
 		final Publisher<geometry_msgs.Twist> twistpub = 
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
@@ -344,32 +394,9 @@ public class MotionController extends AbstractNodeMain {
 			System.out.println("Robot:"+robot);
 		ArrayList<String> roboProps = new ArrayList<String>();
 		roboProps.add(robot.toString());
-		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
-		        CountDownServiceServerListener.newDefault();
-		final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE , ControllerStatusMessage._TYPE,
-		    new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
-				@Override
-				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
-					//switch(request.getData())
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Robot Properties", 
-							diagnostic_msgs.DiagnosticStatus.OK, roboProps);
-				}
-			});	
-		serviceServer.addListener(serviceServerListener);	      
-		try {
-			serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
-		} catch (InterruptedException e1) {
-			System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
-			e1.printStackTrace();
-		}
 		// Megapubs.typeNames:
 		// 0 = LeftWheel
 		// 1 = RightWheel
-		// 2 = BOOMACTUATOR
-		// 3 = LEDDriver
-		// 4 = LIFTACTUATOR
-		// 5 = ULTRASONIC
-		// 6 = PWM
 		//
 		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
 		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
@@ -428,121 +455,9 @@ public class MotionController extends AbstractNodeMain {
 				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
 				// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
 				// hence the boolean checks.
-				// LEDCameraIlluminatorControl:4
-				// LEDCameraIlluminatorSlot:1
-				// LEDCameraIlluminatorChannel:1
+
 				//-------------------
-				if(axes[axisLED] != -1 || 
-						isActive[MegaPubs.typeNames.LEDDriver.index()]) {
-					if(axes[axisLED] == -1) {
-						if( isActive[MegaPubs.typeNames.LEDDriver.index()]) {
-							ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-							triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
-							triggerVals.add(0);
-							if(DEBUG)
-								System.out.println(" turning off LED");
-							pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LEDDriver.val()))
-									.findFirst().get().publish(setupPub(connectedNode, triggerVals));
-							try {
-								Thread.sleep(5);
-							} catch (InterruptedException e) {}
-						}
-						isActive[MegaPubs.typeNames.LEDDriver.index()] = false;
-					} else {
-						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
-						ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-						triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
-						triggerVals.add(Integer.valueOf((int)axes[axisLED])*1000);
-						if(DEBUG) {
-							System.out.printf("%s= %d %s%n",MegaPubs.typeNames.LEDDriver.val(),triggerVals.get(1),
-									pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LEDDriver.val()))
-									.findFirst().get());
-						}
-						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LEDDriver.val()))
-							.findFirst().get().publish(setupPub(connectedNode, triggerVals));
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					}
-				}
-				//---
-				// Process right stick (joystick axes [1] right stick x, [3] right stick y)
-				// axes[3] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
-				//
-				// set it up to send down the publishing pipeline
-				//
-				if(axes[axisBoom] != 0 ||
-					isActive[MegaPubs.typeNames.BoomActuator.index()]) {
-					// was active, no longer
-					if(axes[axisBoom] == 0) {
-						isActive[MegaPubs.typeNames.BoomActuator.index()] = false;
-						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
-						speedVals.add(0);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.BoomActuator.val()))
-							.findFirst().get().publish(setupPub(connectedNode, speedVals));
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					} else {
-						// may not have been active, now is
-						isActive[MegaPubs.typeNames.BoomActuator.index()] = true;
-						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
-						speedVals.add((int)(axes[axisBoom])*1000);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.BoomActuator.val()))
-							.findFirst().get().publish(setupPub(connectedNode, speedVals));
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					}
-				}
-				//----
-				// Map the POV values to actions
-				//AXIS[4].AxisType:POV
-				//AXIS[4].Axis:6
-				//AXIS[4].AxisUp:0.25
-				//AXIS[4].AxisDown:0.75
-				if(axes[axisLift] == axisLiftUp) {
-					// set it up to send down the publishing pipeline
-					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-					povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val()));
-					povVals.add(1000);
-					pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LiftActuator.val()))
-					.findFirst().get().publish(setupPub(connectedNode, povVals));
-					isActive[MegaPubs.typeNames.LiftActuator.index()] = true;
-					try {
-						Thread.sleep(5);
-					} catch (InterruptedException e) {}
-				} else {
-					if(axes[axisLift] == axisLiftDown) {
-						//
-						// set it up to send down the publishing pipeline 
-						//
-						ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-						povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
-						povVals.add(-1000);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LiftActuator.val()))
-						.findFirst().get().publish(setupPub(connectedNode, povVals));
-						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					} else {
-						if( isActive[MegaPubs.typeNames.LiftActuator.index()]) {
-							isActive[MegaPubs.typeNames.LiftActuator.index()]= false;
-							ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-							povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
-							povVals.add(0);
-							pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LiftActuator.val()))
-								.findFirst().get().publish(setupPub(connectedNode, povVals));
-							try {
-								Thread.sleep(5);
-							} catch (InterruptedException e) {}
-						}
-					}
-				}
+	
 				/*	
 				 if (axes[6] == Component.POV.OFF) {
 					 if(DEBUG)System.out.println("POV OFF");
@@ -575,20 +490,16 @@ public class MotionController extends AbstractNodeMain {
 				//-----
 				// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
 				// If the button square or circle is depressed, rotate in place at stick position Y speed
-				if( buttons[7] != 0 ) { // left pivot
-					speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
-					speedL = -speedR;
+				if( buttons[7] != 0 ) { // left pivo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           t                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 					// set it up to send
 					ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 					speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 					speedVals.add((int)speedL);
-					pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
-						.findFirst().get().publish(setupPub(connectedNode, speedVals));
+					getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
 					speedVals = new ArrayList<Integer>(2);
 					speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val()));
 					speedVals.add((int)speedR);
-					pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
-						.findFirst().get().publish(setupPub(connectedNode, speedVals));
+					getPublisher(pubschannel,MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
 					if(DEBUG)
 						System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 				} else {
@@ -599,13 +510,11 @@ public class MotionController extends AbstractNodeMain {
 						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 						speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
 						speedVals.add((int)speedL);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
-						.findFirst().get().publish(setupPub(connectedNode, speedVals));
+						getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
 						speedVals = new ArrayList<Integer>(2);
 						speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); // controller slot
 						speedVals.add((int)speedR);
-						pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
-							.findFirst().get().publish(setupPub(connectedNode, speedVals));
+						getPublisher(pubschannel, MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
 						if(DEBUG)
 							System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 					}
@@ -1178,6 +1087,14 @@ public class MotionController extends AbstractNodeMain {
 	}); // cancellable loop
 
 	}
+	
+	protected Publisher<Int32MultiArray> getPublisher(Collection<Publisher<Int32MultiArray>> pubschannel, String val) {
+		if(DEBUG) {
+			System.out.printf("%s %s%n",this.getClass().getName(), val);
+		}
+		return pubschannel.stream().filter(e -> e.getTopicName().toString().contains(val)).findFirst().get();
+	}
+
 	/**
 	 * Move the robot to an absolute pose of 0-360 degrees and attempt to travel the target distance in the target time
 	 * when the IMU and target coincide distance and time produce linear motion

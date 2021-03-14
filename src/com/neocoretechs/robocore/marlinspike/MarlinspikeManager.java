@@ -27,6 +27,7 @@ import com.neocoretechs.robocore.config.TypedWrapper;
  */
 public class MarlinspikeManager {
 	private static boolean DEBUG = true;
+	RobotInterface robot;
 	String hostName;
 	int leftSlot = -1;
 	int leftChannel = -1;
@@ -45,10 +46,12 @@ public class MarlinspikeManager {
 	 * @param wheel
 	 * @param pid 
 	 */
-	public MarlinspikeManager(TypedWrapper[] lun, TypedWrapper[] wheel, TypedWrapper[] pid) {
-		this.lun = lun;
-		this.wheel = wheel;
-		this.pid = pid;
+	public MarlinspikeManager(RobotInterface robot2) {
+		this.robot = robot2;
+		this.lun = robot2.getLUN();
+		this.wheel = robot2.getWHEEL();
+		this.pid = robot2.getPID();
+		this.hostName = robot2.getHostName();
 		//nodeNames = aggregate(lun, "NodeName");
 		//controllers = aggregate(lun,"Controller");
 	}
@@ -75,11 +78,6 @@ public class MarlinspikeManager {
 	 * @throws IOException
 	 */
 	private void createControllers(boolean override) throws IOException {
-		try {
-			hostName = InetAddress.getLocalHost().getHostName();
-		} catch (UnknownHostException e) {
-			throw new IOException(e);
-		}
 		NodeDeviceDemuxer ndd = null;
 		nodeDeviceDemuxerByLUN = new NodeDeviceDemuxer[lun.length];
 		for(int i = 0; i < lun.length; i++) {
@@ -88,7 +86,7 @@ public class MarlinspikeManager {
 				String controller = (String)lun[i].get("Controller");
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
 				// assuming the config is properly done
-				ndd = new NodeDeviceDemuxer(name, controller);
+				ndd = new NodeDeviceDemuxer((String) lun[i].get("NodeName"), name, controller);
 				nodeDeviceDemuxerByLUN[i] = ndd;
 				Map<String, TypeSlotChannelEnable> nameToTypeMap = deviceToType.get(ndd);
 				if(nameToTypeMap == null) {
@@ -285,7 +283,7 @@ public class MarlinspikeManager {
 	
 	public static void main(String[] args) throws IOException {
 		RobotInterface robot = new Robot();
-		MarlinspikeManager mm = new MarlinspikeManager(robot.getLUN(), robot.getWHEEL(), robot.getPID());
+		MarlinspikeManager mm = new MarlinspikeManager(robot);
 		mm.createControllers(true);
 		Stream.of(mm.deviceToType).flatMap(map -> map.entrySet().stream()).forEach(e -> System.out.println(e));
 		Collection<TypeSlotChannelEnable> tsce = mm.getTypeSlotChannelEnable();

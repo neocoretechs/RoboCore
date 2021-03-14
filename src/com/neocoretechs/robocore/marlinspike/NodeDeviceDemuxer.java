@@ -15,16 +15,19 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 public class NodeDeviceDemuxer implements Serializable {
 	private static final long serialVersionUID = 1L;
 	private static boolean DEBUG = false;
+	private String nodeName;
 	private String deviceName;
 	private String device;
 	transient AsynchDemuxer asynchDemuxer = null;
 	private transient  MarlinspikeControlInterface controlHost;
 	
 	/**
+	 * @param nodeName 
 	 * @param deviceName descriptor for the device, such as "LeftWheel" etc.
 	 * @param device the physical device the Marlinspike board is connected to, typically a tty via USB
 	 */
-	public NodeDeviceDemuxer(String deviceName, String device)  {
+	public NodeDeviceDemuxer(String nodeName, String deviceName, String device)  {
+		this.nodeName = nodeName;
 		this.deviceName = deviceName;
 		this.device = device;
 	}
@@ -34,11 +37,9 @@ public class NodeDeviceDemuxer implements Serializable {
 	 * and that subsequent attempts at activation are met with an assignment 
 	 * to an existing instance of asynchDemuxer.
 	 * @param deviceToType The mapping of all NodeDeviceDemuxer to all the TypeSlotChannels
-	 * @param value the particular TypeSlot Channel that we are trying to enable
 	 * @throws IOException If we attempt to re-use a port, we box up the runtime exception with the IOException
 	 */
-	public void activateMarlinspikes(Map<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType,
-						Map<String, TypeSlotChannelEnable> value) throws IOException {
+	public void activateMarlinspikes(Map<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType) throws IOException {
 		Set<NodeDeviceDemuxer> sndd = deviceToType.keySet();
 		for(NodeDeviceDemuxer ndd : sndd) {
 			if(ndd.device.equals(device)) {
@@ -72,6 +73,9 @@ public class NodeDeviceDemuxer implements Serializable {
 		return asynchDemuxer;
 	}
 	
+	public String getNodeName() {
+		return nodeName;
+	}
 	/**
 	 * @return Name descriptor for the device, such as "LeftWheel" etc.
 	 */
@@ -87,6 +91,6 @@ public class NodeDeviceDemuxer implements Serializable {
 	
 	@Override
 	public String toString() {
-		return String.format("%s %s %s (key)%n",this.getClass().getName(), deviceName, device);
+		return String.format("%s %s %s %s (key)%n",this.getClass().getName(), nodeName, deviceName, device);
 	}
 }

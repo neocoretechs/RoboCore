@@ -1,6 +1,9 @@
 package com.neocoretechs.robocore.config;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
@@ -62,8 +65,14 @@ public class Robot implements RobotInterface, Serializable {
 	private TypedWrapper[] AXIS;
 	private TypedWrapper[] BUTTON;
 	private Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
-	public Robot() {
+	private String hostName;
+	public Robot() throws IOException {
 		try {
+			try {
+				hostName = InetAddress.getLocalHost().getHostName();
+			} catch (UnknownHostException e) {
+				throw new IOException(e);
+			}
 			globalConfigs = Props.collectivizeProps();
 		} catch (IllegalAccessException e) {
 			throw new RuntimeException(e);
@@ -358,6 +367,10 @@ public class Robot implements RobotInterface, Serializable {
 	@Override
 	public TypedWrapper[] getBUTTON() {
 		return BUTTON;
+	}
+
+	public String getHostName() {
+		return hostName;
 	}
 
 }

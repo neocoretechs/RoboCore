@@ -19,6 +19,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  */
 public interface RobotInterface {
 	public String getName(); // The name of the Robot. Each one is special and unique.
+	public String getHostName(); // the individual processor in the robot internal network.
 	public RobotDiffDriveInterface getDiffDrive(); // embodies different differential drive characteristics
 	public PIDParameterInterface getMotionPIDController(); // PID control parameters for trave by the different diff drives
 	public PIDParameterInterface getLeftMotorPIDController(); // motor PID control accounting for different drivers and propulsion motors
