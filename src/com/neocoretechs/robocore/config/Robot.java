@@ -207,6 +207,11 @@ public class Robot implements RobotInterface, Serializable {
 	}
 	
 	@Override
+	public String getNameByLUN(int lun) {
+		return (String) LUN[lun].get("Name");
+	}
+	
+	@Override
 	public RobotDiffDriveInterface getDiffDrive() {
 		return robotDrive;
 	}

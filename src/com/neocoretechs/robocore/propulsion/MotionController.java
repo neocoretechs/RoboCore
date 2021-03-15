@@ -32,7 +32,6 @@ import org.ros.node.topic.Subscriber;
 import org.ros.node.topic.SubscriberListener;
 
 import com.neocoretechs.robocore.MegaPubs;
-import com.neocoretechs.robocore.MegaPubs.typeNames;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
@@ -409,12 +408,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 			@Override
 			public void onMasterRegistrationSuccess(Subscriber<Joy> subs) {
-				subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
-					@Override
-					public void onNewMessage(sensor_msgs.Joy message) {
-						processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
-					} // onMessage from Joystick controller, with all the axes[] and buttons[]	
-				});
+	
 			}
 			@Override
 			public void onMasterUnregistrationFailure(Subscriber<Joy> subs) {
@@ -424,7 +418,13 @@ public class MotionController extends AbstractNodeMain {
 			@Override
 			public void onNewPublisher(Subscriber<Joy> subs, PublisherIdentifier pubs) {
 				if(DEBUG)
-					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);					
+					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);
+				subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
+					@Override
+					public void onNewMessage(sensor_msgs.Joy message) {
+						processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
+					} // onMessage from Joystick controller, with all the axes[] and buttons[]	
+				});
 			}
 			@Override
 			public void onShutdown(Subscriber<Joy> subs) {
@@ -906,13 +906,13 @@ public class MotionController extends AbstractNodeMain {
 		if( buttons[7] != 0 ) { // left pivo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           t                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 			// set it up to send
 			ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-			speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
+			speedVals.add(robot.getLUN("LeftWheel"));
 			speedVals.add((int)speedL);
-			getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
+			getPublisher(pubschannel, "LeftWheel").publish(setupPub(connectedNode, speedVals));
 			speedVals = new ArrayList<Integer>(2);
-			speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val()));
+			speedVals.add(robot.getLUN("RightWheel"));
 			speedVals.add((int)speedR);
-			getPublisher(pubschannel,MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
+			getPublisher(pubschannel,"RightWheel").publish(setupPub(connectedNode, speedVals));
 			if(DEBUG)
 				System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 		} else {
@@ -921,13 +921,13 @@ public class MotionController extends AbstractNodeMain {
 				speedR = -speedL;
 				// set it up to send
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-				speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
+				speedVals.add(robot.getLUN("LeftWheel"));
 				speedVals.add((int)speedL);
-				getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
+				getPublisher(pubschannel,"LeftWheel").publish(setupPub(connectedNode, speedVals));
 				speedVals = new ArrayList<Integer>(2);
-				speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); // controller slot
+				speedVals.add(robot.getLUN("RightWheel")); // controller slot
 				speedVals.add((int)speedR);
-				getPublisher(pubschannel, MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
+				getPublisher(pubschannel,"RightWheel").publish(setupPub(connectedNode, speedVals));
 				if(DEBUG)
 					System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 			}
@@ -1090,16 +1090,16 @@ public class MotionController extends AbstractNodeMain {
 		// in a more realtime fashion. MegaPubs will process as many elements as appear in the request.
 		//
 		ArrayList<Integer> speedVals = new ArrayList<Integer>(4);
-		speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
+		speedVals.add(robot.getLUN("LeftWheel"));
 		speedVals.add((int)speedL);
-		speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); 
+		speedVals.add(robot.getLUN("RightWheel")); 
 		speedVals.add((int)speedR);
-		pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
+		pubschannel.stream().filter(e -> e.getTopicName().toString().contains("LeftWheel"))
 			.findFirst().get().publish(setupPub(connectedNode, speedVals));
 		//speedVals = new ArrayList<Integer>(2);
 		//speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); 
 		//speedVals.add((int)speedR);
-		//pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
+		//pubschannel.stream().filter(e -> e.getTopicName().toString().contains("RightWheel"))
 		//	.findFirst().get().publish(setupPub(connectedNode, speedVals));
 		try {
 			Thread.sleep(5);
@@ -1363,13 +1363,13 @@ public class MotionController extends AbstractNodeMain {
 		}
 		System.out.printf("Diffydrive; %d %d %n", mc.robot.getDiffDrive().getControllerAxisX(), mc.robot.getDiffDrive().getControllerAxisY());
 		System.out.println("----");
-		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LEDDriver.val()))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))
 		.findFirst().get());
-		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.BoomActuator.val()))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("BoomActuator"))
 				.findFirst().get());
-		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LeftWheel.val()))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("LeftWheel"))
 				.findFirst().get());
-		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LiftActuator.val()))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("LiftActuator"))
 				.findFirst().get());
 	}
 }

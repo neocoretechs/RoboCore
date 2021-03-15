@@ -189,7 +189,7 @@ public class AsynchDemuxer implements Runnable {
 	
 	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
 		try {
-			return marlinSpikeManager.getTypeSlotChannelEnable(name);
+			return marlinSpikeManager.getTypeSlotChannelEnableByName(name);
 		} catch(NoSuchElementException npe) {
 			throw new RuntimeException(npe);
 		}

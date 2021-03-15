@@ -6,6 +6,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -156,8 +157,10 @@ public class MarlinspikeManager {
 		});
 	}
 	/**
-	 * Perform the final configuration and issue the commands to the Marlinspike via the retrieved properties.
+	 * Perform the final configuration and issue the commands to the Marlinspike via the retrieved properties.<p/>
+	 * Calls createControllers as first operation.
 	 * @param override true to ignore node-specific parameter in loading configuration
+	 * @param activate Optional parameter true to call activateControllers, which in override true may be undesirable, at the end of configuring, it calls activateControllers as final operation if activate is true.
 	 * @throws IOException
 	 */
 	public void configureMarlinspike(boolean override, boolean... activate) throws IOException {
@@ -192,29 +195,33 @@ public class MarlinspikeManager {
 					ipin1 = Integer.parseInt((String) pin1.get());
 				if(enc.isPresent())
 					ienc = Integer.parseInt((String) enc.get());
-				if(DEBUG)
-					System.out.printf("%s: Controller Name:%s device:%s generating M10:%s%n",this.getClass().getName(), name, controller, tsce.genM10());
-				config.add(tsce.genM10());
-				StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(ipin0, ipin1)).append(tsce.genChannelDirDefaultEncoder(ienc));
-				if(DEBUG) {
-					System.out.printf("%s: Controller Name:%s device:%s generating config%s%n",this.getClass().getName(), name, controller,sb.toString());
+				String M10Gen = null;
+				try {
+					M10Gen = tsce.genM10();
+					if(DEBUG)
+						System.out.printf("%s: Controller Name:%s device:%s generating M10:%s%n",this.getClass().getName(), name, controller, M10Gen);
+					config.add(M10Gen);
+					StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(ipin0, ipin1)).append(tsce.genChannelDirDefaultEncoder(ienc));
+					if(DEBUG) {
+						System.out.printf("%s: Controller Name:%s device:%s generating config%s%n",this.getClass().getName(), name, controller,sb.toString());
+					}
+					config.add(sb.toString());
+				} catch(NoSuchElementException nse) {
 				}
-				config.add(sb.toString());
 			}
 		}
-		if(activate.length > 0 && activate[0])
+		if(activate.length > 0 && activate[0] && !config.isEmpty())
 			configControllers(config);
 	}
+	
+
 	/**
 	 * Locate the proper AsynchDemuxer by name of device we want to write to, then add the write to that AsynchDemuxer.
 	 * @param name The name of the device in the config file, such as "LeftWheel", "RightWheel"
 	 * @param req The request to queue
 	 */
 	public void addWrite(String name, String req) {
-		Stream<Object> nddx = deviceToType.entrySet().stream().
-				filter(entry -> name.equals(entry.getKey().getDeviceName())).map(Map.Entry::getKey);
-		NodeDeviceDemuxer ndd = (NodeDeviceDemuxer) nddx.findFirst().get();
-		AsynchDemuxer.addWrite(ndd.asynchDemuxer, req);
+		AsynchDemuxer.addWrite(getNodeDeviceDemuxer(name).asynchDemuxer, req);
 	}
 	/**
 	 * Get the class with methods that talk to the Marlinspike board by the descriptive name of the device
@@ -222,14 +229,14 @@ public class MarlinspikeManager {
 	 * @param name One of "Leftwheel", "RightWheel" etc.
 	 * @return the MarlinspikeControlInterface with methods to communicate with the board
 	 */
-	public MarlinspikeControlInterface getMarlinspikeControl(String name) throws IOException {
+	public MarlinspikeControlInterface getMarlinspikeControl(String name) throws NoSuchElementException {
 		Stream<Object> nddx = deviceToType.entrySet().stream().
 				filter(entry -> name.equals(entry.getKey().getDeviceName())).map(Map.Entry::getKey);
 		try {
-			NodeDeviceDemuxer ndd = (NodeDeviceDemuxer) nddx.findFirst().get();
+			NodeDeviceDemuxer ndd = (NodeDeviceDemuxer) nddx.findAny().get();
 			return ndd.getMarlinspikeControl();
-		} catch(NullPointerException | NoSuchElementException nse) {
-			throw new IOException(nse);
+		} catch(NullPointerException npe) {
+			throw new NoSuchElementException("The device "+name+" was not found in the collection");
 		}
 	}
 	/**
@@ -258,11 +265,37 @@ public class MarlinspikeManager {
 	}
 	/**
 	 * @param type One of SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
-	 * @return All the devices of a particular type attached to all the Marlinspikes on this node
+	 * @return All devices of a particular type attached to the Marlinspike on this node
 	 */
-	public List<TypeSlotChannelEnable> getTypeSlotChannelEnableByType(String type) {
-		return Stream.of(deviceToType).flatMap(map -> map.entrySet().stream()).map(map->map.getValue().values())
-				.map(TypeSlotChannelEnable.class::cast).filter(map -> map.cntrltype.equals(type)).collect(Collectors.toList());		
+	public Collection<TypeSlotChannelEnable> getTypeSlotChannelEnableByType(String type) throws NoSuchElementException {
+		Collection<TypeSlotChannelEnable> ret = new ArrayList<TypeSlotChannelEnable>();
+		Iterator<Map<String,TypeSlotChannelEnable>> it = deviceToType.values().iterator();
+		while(it.hasNext()){
+			Map<String,TypeSlotChannelEnable> tsces = it.next();
+			Iterator<TypeSlotChannelEnable> itx = tsces.values().iterator();
+			while(itx.hasNext()) {
+				TypeSlotChannelEnable tsce = itx.next();
+				if(tsce.getType().equals(type))
+					ret.add(tsce);
+			}
+		}
+		if(ret.isEmpty())
+			throw new NoSuchElementException("The type "+type+" was not found in the collection of device to type");
+		return ret;
+	}
+	
+	/**
+	 * @param type One of "LiftActuator" "LeftWheel" etc.
+	 * @return device of a particular name, which points to the actual device of a particular type, attached to the Marlinspike on this node
+	 */
+	public TypeSlotChannelEnable getTypeSlotChannelEnableByName(String name) throws NoSuchElementException {
+		Iterator<Map<String,TypeSlotChannelEnable>> it = deviceToType.values().iterator();
+		while(it.hasNext()){
+			Map<String,TypeSlotChannelEnable> tsces = it.next();
+			TypeSlotChannelEnable ret = tsces.get(name);
+				return ret;
+		}
+		throw new NoSuchElementException("The name "+name+" was not found in the collection of device to type");
 	}
 	/**
 	 * SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
@@ -288,29 +321,12 @@ public class MarlinspikeManager {
 		Stream<Object> nddx = deviceToType.entrySet().stream().
 				filter(entry -> name.equals(entry.getKey().getDeviceName())).map(Map.Entry::getKey);
 		try {
-			return (NodeDeviceDemuxer) nddx.findFirst().get();
+			return (NodeDeviceDemuxer) nddx.findAny().get();
 		} catch(NullPointerException nse) {
 			throw new NoSuchElementException("The device "+name+" was not found in the collection");
 		}
 	}
-	/**
-	 * @param type One of SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
-	 * @return The first device of particular type attached to a Marlinspike on this node
-	 * @throw NosuchElementException if no element of this type exists
-	 */
-	public TypeSlotChannelEnable getTypeSlotChannelEnable(String type) throws NoSuchElementException {
-		long count = 0;
-		try {
-			count = getTypeSlotChannelEnableByType(type).stream().count();
-			Optional<TypeSlotChannelEnable> tsce = getTypeSlotChannelEnableByType(type).stream().findFirst();
-			if(tsce.isPresent())
-				return tsce.get();
-			else
-				throw new NoSuchElementException("No elements of TypeSlotchannelEnable were returned from the collection of length "+count+" using name:"+type);
-		} catch(NullPointerException npe) {
-			throw new NoSuchElementException("A null element of TypeSlotchannelEnable was returned from the collection of length "+count+" using name:"+type);
-		}
-	}
+
 	
 	public String toString() {
 		return String.format("Controller LeftSlot=%d, Left Channel=%d, RightSlot=%d Right Channel=%d\r\n",
@@ -321,6 +337,13 @@ public class MarlinspikeManager {
 		RobotInterface robot = new Robot();
 		MarlinspikeManager mm = new MarlinspikeManager(robot);
 		mm.createControllers(true);
+		System.out.println("NodeDeviceDemuxer for LeftWheel:"+mm.getNodeDeviceDemuxer("LeftWheel"));
+		System.out.println("NodeDeviceDemuxer for RightWheel:"+mm.getNodeDeviceDemuxer("RightWheel"));
+		System.out.println("NodeDeviceDemuxer for BoomActuator:"+mm.getNodeDeviceDemuxer("BoomActuator"));
+		System.out.println("NodeDeviceDemuxer for LEDDriver:"+mm.getNodeDeviceDemuxer("LEDDriver"));
+		try {
+			System.out.println("MarlinspikeControl for BogusWheel:"+mm.getNodeDeviceDemuxer("BogusWheel"));
+		} catch(NoSuchElementException nse) { System.out.println("passed");}
 		Stream.of(mm.deviceToType).flatMap(map -> map.entrySet().stream()).forEach(e -> System.out.println(e));
 		Collection<TypeSlotChannelEnable> tsce = mm.getTypeSlotChannelEnable();
 		System.out.println("-----");
@@ -334,7 +357,9 @@ public class MarlinspikeManager {
 		System.out.println("-----");
 		System.out.println("MarlinspikeControl for LeftWheel:"+mm.getMarlinspikeControl("LeftWheel"));
 		System.out.println("MarlinspikeControl for RightWheel:"+mm.getMarlinspikeControl("RightWheel"));
+		try {
 		System.out.println("MarlinspikeControl for BogusWheel:"+mm.getMarlinspikeControl("BogusWheel"));
+		} catch(NoSuchElementException nse) { System.out.println("passed");}
 		System.out.println("-----");
 		//for(Object n : mm.aggregate(mm.lun, "NodeName"))
 		//	System.out.println(n);

@@ -32,7 +32,6 @@ import org.ros.node.topic.Subscriber;
 import org.ros.node.topic.SubscriberListener;
 
 import com.neocoretechs.robocore.MegaPubs;
-import com.neocoretechs.robocore.MegaPubs.typeNames;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
@@ -376,13 +375,8 @@ public class PeripheralController extends AbstractNodeMain {
 			}
 			@Override
 			public void onMasterRegistrationSuccess(Subscriber<Joy> subs) {
-				subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
-					@Override
-					public void onNewMessage(sensor_msgs.Joy message) {
-						processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
-					} // onMessage from Joystick controller, with all the axes[] and buttons[]	
-
-				});
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s registered with master!%n", this.getClass().getName(), subs);	
 			}
 			@Override
 			public void onMasterUnregistrationFailure(Subscriber<Joy> subs) {
@@ -392,23 +386,20 @@ public class PeripheralController extends AbstractNodeMain {
 			@Override
 			public void onNewPublisher(Subscriber<Joy> subs, PublisherIdentifier pubs) {
 				if(DEBUG)
-					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);					
+					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);
+				subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
+					@Override
+					public void onNewMessage(sensor_msgs.Joy message) {
+						processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
+					} // onMessage from Joystick controller, with all the axes[] and buttons[]	
+
+				});
 			}
 			@Override
 			public void onShutdown(Subscriber<Joy> subs) {
 				if(DEBUG)
 					System.out.printf("%s Subscsriber %s shutdown!%n", this.getClass().getName(), subs);
-			}
-			
-		});
-
-		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
-			@Override
-			public void onNewMessage(sensor_msgs.Joy message) {
-
-	
-			} // onMessage from Joystick controller, with all the axes[] and buttons[]
-			
+			}		
 		});
 		/*
 		subsrangetop.addMessageListener(new MessageListener<sensor_msgs.Range>() {
@@ -563,12 +554,12 @@ public class PeripheralController extends AbstractNodeMain {
 		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
-		int axisLED = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis"));
-		int axisBoom = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY"));
-		int axisLift = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis"));
+		int axisLED = Integer.parseInt((String) robot.getAXIS()[robot.getLUN("LEDDriver")].get("Axis"));
+		int axisBoom = Integer.parseInt((String) robot.getAXIS()[robot.getLUN("BoomActuator")].get("AxisY"));
+		int axisLift = Integer.parseInt((String) robot.getAXIS()[robot.getLUN("LiftActuator")].get("Axis"));
 		// value of POV pad when actuating for up
-		float axisLiftUp = Float.parseFloat((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisUp"));
-		float axisLiftDown = Float.parseFloat((String)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisDown"));
+		float axisLiftUp = Float.parseFloat((String) robot.getAXIS()[robot.getLUN("LiftActuator")].get("AxisUp"));
+		float axisLiftDown = Float.parseFloat((String)robot.getAXIS()[robot.getLUN("LiftActuator")].get("AxisDown"));
 		float[] axes = message.getAxes();
 		int[] buttons = message.getButtons();
 
@@ -603,27 +594,29 @@ public class PeripheralController extends AbstractNodeMain {
 		// LEDCameraIlluminatorSlot:1
 		// LEDCameraIlluminatorChannel:1
 		//-------------------
+		if(DEBUG)
+			System.out.printf("%s message:%s vals:%f %f %f %n",this.getClass().getName(), message.toString(), axes[axisLED],axes[axisBoom],axes[axisLift]);
 		if(axes[axisLED] != -1 || 
-				isActive[MegaPubs.typeNames.LEDDriver.index()]) {
+				isActive[robot.getLUN("LEDDriver")]) {
 			if(axes[axisLED] == -1) {
-				if( isActive[MegaPubs.typeNames.LEDDriver.index()]) {
+				if( isActive[robot.getLUN("LEDDriver")]) {
 					ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-					triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
+					triggerVals.add(robot.getLUN("LEDDriver"));
 					triggerVals.add(0);
 					if(DEBUG)
 						System.out.println(" turning off LED");
-					getPublisher(pubschannel, MegaPubs.typeNames.LEDDriver.val()).publish(setupPub(connectedNode, triggerVals));
+					getPublisher(pubschannel,"LEDDriver").publish(setupPub(connectedNode, triggerVals));
 					try {
 						Thread.sleep(5);
 					} catch (InterruptedException e) {}
 				}
-				isActive[MegaPubs.typeNames.LEDDriver.index()] = false;
+				isActive[robot.getLUN("LEDDriver")] = false;
 			} else {
-				isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
+				isActive[robot.getLUN("LEDDriver")] = true;
 				ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-				triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
+				triggerVals.add(robot.getLUN("LEDDriver"));
 				triggerVals.add(Integer.valueOf((int)axes[axisLED])*1000);
-				getPublisher(pubschannel, MegaPubs.typeNames.LEDDriver.val()).publish(setupPub(connectedNode, triggerVals));
+				getPublisher(pubschannel, "LEDDriver").publish(setupPub(connectedNode, triggerVals));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
@@ -637,24 +630,24 @@ public class PeripheralController extends AbstractNodeMain {
 		// set it up to send down the publishing pipeline
 		//
 		if(axes[axisBoom] != 0 ||
-			isActive[MegaPubs.typeNames.BoomActuator.index()]) {
+			isActive[robot.getLUN("BoomActuator")]) {
 			// was active, no longer
 			if(axes[axisBoom] == 0) {
-				isActive[MegaPubs.typeNames.BoomActuator.index()] = false;
+				isActive[robot.getLUN("BoomActuator")] = false;
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-				speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
+				speedVals.add(robot.getLUN("BoomActuator")); //controller slot
 				speedVals.add(0);
-				getPublisher(pubschannel, MegaPubs.typeNames.BoomActuator.val()).publish(setupPub(connectedNode, speedVals));
+				getPublisher(pubschannel, "BoomActuator").publish(setupPub(connectedNode, speedVals));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
 			} else {
 				// may not have been active, now is
-				isActive[MegaPubs.typeNames.BoomActuator.index()] = true;
+				isActive[robot.getLUN("BoomActuator")] = true;
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-				speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
+				speedVals.add(robot.getLUN("BoomActuator")); //controller slot
 				speedVals.add((int)(axes[axisBoom])*1000);
-				getPublisher(pubschannel, MegaPubs.typeNames.BoomActuator.val()).publish(setupPub(connectedNode, speedVals));
+				getPublisher(pubschannel, "BoomActuator").publish(setupPub(connectedNode, speedVals));
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
@@ -669,10 +662,10 @@ public class PeripheralController extends AbstractNodeMain {
 		if(axes[axisLift] == axisLiftUp) {
 			// set it up to send down the publishing pipeline
 			ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-			povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val()));
+			povVals.add(robot.getLUN("LiftActuator"));
 			povVals.add(1000);
-			getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
-			isActive[MegaPubs.typeNames.LiftActuator.index()] = true;
+			getPublisher(pubschannel, "LiftActuator").publish(setupPub(connectedNode, povVals));
+			isActive[robot.getLUN("LiftActuator")] = true;
 			try {
 				Thread.sleep(5);
 			} catch (InterruptedException e) {}
@@ -682,20 +675,20 @@ public class PeripheralController extends AbstractNodeMain {
 				// set it up to send down the publishing pipeline 
 				//
 				ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-				povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
+				povVals.add(robot.getLUN("LiftActuator")); //controller slot
 				povVals.add(-1000);
-				getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
-				isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
+				getPublisher(pubschannel, "LiftActuator").publish(setupPub(connectedNode, povVals));
+				isActive[robot.getLUN("LiftActuator")] = true;
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
 			} else {
-				if( isActive[MegaPubs.typeNames.LiftActuator.index()]) {
-					isActive[MegaPubs.typeNames.LiftActuator.index()]= false;
+				if( isActive[robot.getLUN("LiftActuator")]) {
+					isActive[robot.getLUN("LiftActuator")]= false;
 					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-					povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
+					povVals.add(robot.getLUN("LiftActuator")); //controller slot
 					povVals.add(0);
-					getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
+					getPublisher(pubschannel, "LiftActuator").publish(setupPub(connectedNode, povVals));
 					try {
 						Thread.sleep(5);
 					} catch (InterruptedException e) {}
@@ -763,12 +756,12 @@ public class PeripheralController extends AbstractNodeMain {
 			pubs.add("/"+ndd.getDeviceName());
 		}
 		System.out.println("----");
-		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LEDDriver.val()))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))
 		.findFirst().get());
-		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.BoomActuator.val()))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))
 				.findFirst().get());
 
-		System.out.println(pubs.stream().filter(e -> e.toString().contains(MegaPubs.typeNames.LiftActuator.val()))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))
 				.findFirst().get());
 	}
 }

@@ -52,7 +52,7 @@ import com.neocoretechs.robocore.marlinspike.PublishResponses;
 import com.neocoretechs.robocore.marlinspike.PublishUltrasonicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
-import com.neocoretechs.robocore.MegaPubs.typeNames;
+
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -189,19 +189,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	diagnostic_msgs.DiagnosticStatus.OK,
 	diagnostic_msgs.DiagnosticStatus.OK};
 	
-	public enum typeNames {
-		LeftWheel("LeftWheel"),
-		RightWheel("RightWheel"),
-		BoomActuator("BoomActuator"),
-		LEDDriver("LEDDriver"),
-		LiftActuator("LiftActuator"),
-		Ultrasonic("Ultrasonic"),
-		PWM("PWM");
-		String name;
-		typeNames(String name) { this.name= name;} 
-		public String val() { return name; }
-		public int index() { return ordinal(); }
-	};
+	
 	//
 	// Initialize various types of responses that will be published to the various outgoing message busses.
 	static RobotInterface robot;
@@ -370,13 +358,13 @@ public void onStart(final ConnectedNode connectedNode) {
 									int affectorSpeed = valch[argNum++];
 									if(DEBUG)
 										System.out.printf("%s Message:%s affector:%d name:%s speed:%d operating:%b%n", this.getClass().getName(), message.toString(), affector, 
-												(affector > 0 ? typeNames.values()[affector].val() : "BAD"), affectorSpeed, (affector > 0 ? isOperating[affector] : false));
+												(affector > -1 ? robot.getNameByLUN(affector) : "BAD"), affectorSpeed, (affector > -1 ? isOperating[affector] : false));
 									try {
-										MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(typeNames.values()[affector].val());
+										MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(robot.getNameByLUN(affector));
 										if(control == null) {
-											System.out.println("Controller:"+typeNames.values()[affector].val()+" not configured for this node");
+											System.out.println("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
 											synchronized(statPub) {
-												statPub.add("Controller:"+typeNames.values()[affector].val()+" not configured for this node");
+												statPub.add("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
 												new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
 														diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
 											}
@@ -385,15 +373,15 @@ public void onStart(final ConnectedNode connectedNode) {
 										// keep Marlinspike from getting bombed with zeroes
 										if(isOperating[affector]) {
 											if(affectorSpeed == 0) {
-												control.setDeviceLevel(typeNames.values()[affector].val(), 0);
+												control.setDeviceLevel(robot.getNameByLUN(affector), 0);
 												isOperating[affector] = false;
 											} else {
-												control.setDeviceLevel(typeNames.values()[affector].val(), affectorSpeed);
+												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
 											}
 										} else {
 											if(affectorSpeed != 0) {
 												isOperating[affector] = true;
-												control.setDeviceLevel(typeNames.values()[affector].val(), affectorSpeed);
+												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
 											}
 										}
 										if(DEBUG)
@@ -537,13 +525,13 @@ public void onStart(final ConnectedNode connectedNode) {
 	    new ServiceResponseBuilder<GPIOControlMessageRequest, GPIOControlMessageResponse>() {
 			@Override
 			public void build(GPIOControlMessageRequest request, GPIOControlMessageResponse response) {	
-				try {
+				//try {
 					System.out.println("GPIO direct");
 					if( auxGPIO == null )
 						auxGPIO = new AuxGPIOControl();
 					auxGPIO.activateAux(marlinspikeManager.getMarlinspikeControl("GPIO"), request.getData().getData());
 					response.setData("success");
-				} catch (IOException e) {
+				/*} catch (NoSuchElementException e) {
 					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
 					e.printStackTrace();
 					response.setData("fail");
@@ -558,7 +546,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							} catch (InterruptedException e1) {}
 						}
 					}
-				}
+				}*/
 			}
 		});	
 	servicePWMServer.addListener(servicePWMServerListener);	      
@@ -767,10 +755,6 @@ public void onStart(final ConnectedNode connectedNode) {
 }
 
 	public static void main(String[] args) {
-		MegaPubs.typeNames[] mp = typeNames.values();
-		System.out.println(MegaPubs.typeNames.values());
-		for(int i = 0; i < MegaPubs.typeNames.values().length; i++) {
-			System.out.printf("%d = %s%n",i,mp[i]);
-		}
+		
 	}
 }
