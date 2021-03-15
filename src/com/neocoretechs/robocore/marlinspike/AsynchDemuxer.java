@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
@@ -186,7 +188,11 @@ public class AsynchDemuxer implements Runnable {
 	public void clearWriteBuffer() { toWrite.clear(); }
 	
 	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
-		return marlinSpikeManager.getTypeSlotChannelEnableByType(name).get(0);
+		try {
+			return marlinSpikeManager.getTypeSlotChannelEnable(name);
+		} catch(NoSuchElementException npe) {
+			throw new RuntimeException(npe);
+		}
 	}
 	
 	/**

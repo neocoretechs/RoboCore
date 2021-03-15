@@ -19,6 +19,7 @@ import java.util.stream.Stream;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
+import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 
 /**
  * Parse configs and allocate the necessary number of control elements for one or more Marlinspike boards
@@ -38,6 +39,9 @@ public class MarlinspikeManager {
 	TypedWrapper[] pid;
 	//Object[] nodeNames; // one of these for each subscriber to serve AsynchDemuxer and DataPortInterface
 	//Object[] controllers; // one of these for each AsynchDemuxer and DataPort
+	/**
+	 * deviceToType - NodeDeviceDemuxer -> <DeviceName, i.e. "LeftWheel"-> TypeSlotChannelEnable>
+	 */
 	ConcurrentHashMap<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType = new ConcurrentHashMap<NodeDeviceDemuxer, Map<String,TypeSlotChannelEnable>>();
 	NodeDeviceDemuxer[] nodeDeviceDemuxerByLUN;
 	/**
@@ -275,6 +279,38 @@ public class MarlinspikeManager {
 	public NodeDeviceDemuxer getNDDByLUN(int lun) {
 		return nodeDeviceDemuxerByLUN[lun];
 	}
+	/**
+	 * Get the NodeDeviceDemuxer from DeviceToType
+	 * @param string The DeviceName, i.e. "LeftWheel"
+	 * @return
+	 */
+	public NodeDeviceDemuxer getNodeDeviceDemuxer(String name) throws NoSuchElementException  {
+		Stream<Object> nddx = deviceToType.entrySet().stream().
+				filter(entry -> name.equals(entry.getKey().getDeviceName())).map(Map.Entry::getKey);
+		try {
+			return (NodeDeviceDemuxer) nddx.findFirst().get();
+		} catch(NullPointerException nse) {
+			throw new NoSuchElementException("The device "+name+" was not found in the collection");
+		}
+	}
+	/**
+	 * @param type One of SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
+	 * @return The first device of particular type attached to a Marlinspike on this node
+	 * @throw NosuchElementException if no element of this type exists
+	 */
+	public TypeSlotChannelEnable getTypeSlotChannelEnable(String type) throws NoSuchElementException {
+		long count = 0;
+		try {
+			count = getTypeSlotChannelEnableByType(type).stream().count();
+			Optional<TypeSlotChannelEnable> tsce = getTypeSlotChannelEnableByType(type).stream().findFirst();
+			if(tsce.isPresent())
+				return tsce.get();
+			else
+				throw new NoSuchElementException("No elements of TypeSlotchannelEnable were returned from the collection of length "+count+" using name:"+type);
+		} catch(NullPointerException npe) {
+			throw new NoSuchElementException("A null element of TypeSlotchannelEnable was returned from the collection of length "+count+" using name:"+type);
+		}
+	}
 	
 	public String toString() {
 		return String.format("Controller LeftSlot=%d, Left Channel=%d, RightSlot=%d Right Channel=%d\r\n",
@@ -312,4 +348,6 @@ public class MarlinspikeManager {
 					mm.lun[i].get("EnablePin")+","+mm.lun[i].get("Direction")+","+mm.lun[i].get("EncoderPin"));
 		}
 	}
+
+
 }

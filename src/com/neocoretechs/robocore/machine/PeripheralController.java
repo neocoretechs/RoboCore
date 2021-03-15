@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.internal.loader.CommandLineLoader;
+import org.ros.internal.node.topic.PublisherIdentifier;
 import org.ros.internal.node.topic.SubscriberIdentifier;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -28,6 +29,7 @@ import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.PublisherListener;
 import org.ros.node.topic.Subscriber;
+import org.ros.node.topic.SubscriberListener;
 
 import com.neocoretechs.robocore.MegaPubs;
 import com.neocoretechs.robocore.MegaPubs.typeNames;
@@ -46,6 +48,8 @@ import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
 import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 
 import diagnostic_msgs.DiagnosticStatus;
+import geometry_msgs.Twist;
+import sensor_msgs.Joy;
 import std_msgs.Int32MultiArray;
 
 /**
@@ -271,13 +275,7 @@ public class PeripheralController extends AbstractNodeMain {
 			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
-		
-		int axisLED = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis"));
-		int axisBoom = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY"));
-		int axisLift = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis"));
-		// value of POV pad when actuating for up
-		float axisLiftUp = Float.parseFloat((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisUp"));
-		float axisLiftDown = Float.parseFloat((String)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisDown"));
+	
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -334,37 +332,19 @@ public class PeripheralController extends AbstractNodeMain {
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		
 		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
-		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
-		
+
 		Subscriber<sensor_msgs.Joy> subsrange = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("/sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
 		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("/sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
-		/*
-		Subscriber<sensor_msgs.PointCloud> subsrange = connectedNode.newSubscriber("robocore/kinect", sensor_msgs.PointCloud._TYPE);
 
-		subsrange.addMessageListener(new MessageListener<sensor_msgs.PointCloud>() {
-			@Override
-			public void onNewMessage(sensor_msgs.PointCloud message) {
-				List<geometry_msgs.Point32> cloud = message.getPoints();
-				if( DEBUG )
-					System.out.println("Kinect.."+cloud.size()+" points..");
-				try {
-			
-				} catch (Throwable e) {
-					e.printStackTrace();
-				}	
-			}
-		});
-		*/
 		if(DEBUG)
 			System.out.println("Robot:"+robot);
 		ArrayList<String> roboProps = new ArrayList<String>();
 		roboProps.add(robot.toString());
+		
 		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
 		        CountDownServiceServerListener.newDefault();
 		final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE , ControllerStatusMessage._TYPE,
@@ -383,219 +363,52 @@ public class PeripheralController extends AbstractNodeMain {
 			System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
 			e1.printStackTrace();
 		}
-		// Megapubs.typeNames:
-		// 0 = LeftWheel
-		// 1 = RightWheel
-		// 2 = BOOMACTUATOR
-		// 3 = LEDDriver
-		// 4 = LIFTACTUATOR
-		// 5 = ULTRASONIC
-		// 6 = PWM
-		//
-		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
-		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
-		// If the joystick chimes in the target point becomes the current course minus relative stick position,
-		// and the speed is modified by the Y value of the stick.
-		// Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
-		// correct for deviation an wheel slippage.
-		// To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
-		// (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0 added to current heading forming theta.
-		// Theta may also be formed by button press and the difference in current heading and ongoing IMU headings for bearing on a forward course.
-		// We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
-		// of speeds of each wheel, time and speed being distance and all, and the fact that both wheels, being attached to the robot,
-		// have to arrive at essentially the same time after covering the desired distance based on desired speed.
-		// The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
-		// in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
-		// So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE and we generate 2 arc lengths that are taken
-		// as a ratio that is multiplied by the proper wheel depending on direction to reduce power in one wheel to affect turn.
-		// The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.
-		// The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
-		// The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
-		// for the inner arc and the hypotenuse computed by the base and chord formed from course deviation and half wheelbase for the outer arc.
-		// The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
-		// us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.<p/>
-		// axis[6] is POV, it has quantized values to represent its states.
-		//
+		subsrange.addSubscriberListener(new SubscriberListener<sensor_msgs.Joy>() {
+			@Override
+			public void onMasterRegistrationFailure(Subscriber<Joy> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);				
+			}
+			@Override
+			public void onMasterUnregistrationSuccess(Subscriber<Joy> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s unregistered with master!%n", this.getClass().getName(), subs);			
+			}
+			@Override
+			public void onMasterRegistrationSuccess(Subscriber<Joy> subs) {
+				subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
+					@Override
+					public void onNewMessage(sensor_msgs.Joy message) {
+						processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
+					} // onMessage from Joystick controller, with all the axes[] and buttons[]	
+
+				});
+			}
+			@Override
+			public void onMasterUnregistrationFailure(Subscriber<Joy> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);					
+			}
+			@Override
+			public void onNewPublisher(Subscriber<Joy> subs, PublisherIdentifier pubs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);					
+			}
+			@Override
+			public void onShutdown(Subscriber<Joy> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s shutdown!%n", this.getClass().getName(), subs);
+			}
+			
+		});
+
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Joy message) {
-				float[] axes = message.getAxes();
-				int[] buttons = message.getButtons();
 
-				// check for emergency stop, on X or A or green or lower button
-				if( buttons[6] != 0 ) {
-					if(DEBUG)
-						System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
-					angular.setX(-1);
-					angular.setY(-1);
-					angular.setZ(-1);
-					linear.setX(-1);
-					linear.setY(-1);
-					linear.setZ(-1);
-					twistmsg.setAngular(angular);
-					twistmsg.setLinear(linear);
-					twistpub.publish(twistmsg);
-					return;
-				}
-				// Process the affectors and peripherals before the motion controls, this is mainly due to some of the logic
-				// In motion control returning from this method rather than try to implement more complex decision making.
-				// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
-				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
-				// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
-				// for the majority of downstream processing. In the case of PWM, we are going to scale this
-				// from -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
-				// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
-				// sure to scale it to the positive range downstream. We are going to publish the scaled
-				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
-				// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
-				// hence the boolean checks.
-				// LEDCameraIlluminatorControl:4
-				// LEDCameraIlluminatorSlot:1
-				// LEDCameraIlluminatorChannel:1
-				//-------------------
-				if(axes[axisLED] != -1 || 
-						isActive[MegaPubs.typeNames.LEDDriver.index()]) {
-					if(axes[axisLED] == -1) {
-						if( isActive[MegaPubs.typeNames.LEDDriver.index()]) {
-							ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-							triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
-							triggerVals.add(0);
-							if(DEBUG)
-								System.out.println(" turning off LED");
-							getPublisher(pubschannel, MegaPubs.typeNames.LEDDriver.val()).publish(setupPub(connectedNode, triggerVals));
-							try {
-								Thread.sleep(5);
-							} catch (InterruptedException e) {}
-						}
-						isActive[MegaPubs.typeNames.LEDDriver.index()] = false;
-					} else {
-						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
-						ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
-						triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
-						triggerVals.add(Integer.valueOf((int)axes[axisLED])*1000);
-						getPublisher(pubschannel, MegaPubs.typeNames.LEDDriver.val()).publish(setupPub(connectedNode, triggerVals));
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					}
-				}
-				//---
-				// Process right stick (joystick axes [1] right stick x, [3] right stick y)
-				// axes[3] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
-				//
-				// set it up to send down the publishing pipeline
-				//
-				if(axes[axisBoom] != 0 ||
-					isActive[MegaPubs.typeNames.BoomActuator.index()]) {
-					// was active, no longer
-					if(axes[axisBoom] == 0) {
-						isActive[MegaPubs.typeNames.BoomActuator.index()] = false;
-						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
-						speedVals.add(0);
-						getPublisher(pubschannel, MegaPubs.typeNames.BoomActuator.val()).publish(setupPub(connectedNode, speedVals));
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					} else {
-						// may not have been active, now is
-						isActive[MegaPubs.typeNames.BoomActuator.index()] = true;
-						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-						speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
-						speedVals.add((int)(axes[axisBoom])*1000);
-						getPublisher(pubschannel, MegaPubs.typeNames.BoomActuator.val()).publish(setupPub(connectedNode, speedVals));
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					}
-				}
-				//----
-				// Map the POV values to actions
-				//AXIS[4].AxisType:POV
-				//AXIS[4].Axis:6
-				//AXIS[4].AxisUp:0.25
-				//AXIS[4].AxisDown:0.75
-				if(axes[axisLift] == axisLiftUp) {
-					// set it up to send down the publishing pipeline
-					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-					povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val()));
-					povVals.add(1000);
-					getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
-					isActive[MegaPubs.typeNames.LiftActuator.index()] = true;
-					try {
-						Thread.sleep(5);
-					} catch (InterruptedException e) {}
-				} else {
-					if(axes[axisLift] == axisLiftDown) {
-						//
-						// set it up to send down the publishing pipeline 
-						//
-						ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-						povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
-						povVals.add(-1000);
-						getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
-						isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
-						try {
-							Thread.sleep(5);
-						} catch (InterruptedException e) {}
-					} else {
-						if( isActive[MegaPubs.typeNames.LiftActuator.index()]) {
-							isActive[MegaPubs.typeNames.LiftActuator.index()]= false;
-							ArrayList<Integer> povVals = new ArrayList<Integer>(2);
-							povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
-							povVals.add(0);
-							getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
-							try {
-								Thread.sleep(5);
-							} catch (InterruptedException e) {}
-						}
-					}
-				}
-				/*	
-				 if (axes[6] == Component.POV.OFF) {
-					 if(DEBUG)System.out.println("POV OFF");
-				 } else 
-					 if ( axes[6] == Component.POV.UP) {
-						 if(DEBUG)System.out.println("POV Up");
-					 } else 
-						 if ( axes[6] == Component.POV.UP_RIGHT) {
-							 if(DEBUG)System.out.println("POV Up_Right");
-						 } else 
-							 if ( axes[6] == Component.POV.RIGHT) {
-								 if(DEBUG)System.out.println("POV Right");
-							 } else 
-								 if ( axes[6] == Component.POV.DOWN_RIGHT) {
-									 if(DEBUG)System.out.println("POV Down Right");
-								 } else 
-									 if ( axes[6] == Component.POV.DOWN) {
-										 if(DEBUG)System.out.println("POV Down");
-									 } else 
-										 if ( axes[6] == Component.POV.DOWN_LEFT) {
-											 if(DEBUG)System.out.println("POV Down left");
-										 } else 
-											 if ( axes[6] == Component.POV.LEFT) {
-												 if(DEBUG)System.out.println("POV Left");
-											 } else 
-												 if ( axes[6] == Component.POV.UP_LEFT) {
-													 
-												 }
-				*/
 	
 			} // onMessage from Joystick controller, with all the axes[] and buttons[]
 			
-			/**
-			 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
-			 * We will be sending [<number> <> <>]
-			 * We use a Int32MultiArray type of 1 dimension, row of each value with other dimensions 0.
-			 * the first vale will be the ordinal of the named LUN configuration entry
-			 * @param connectedNode Our node transceiver info
-			 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
-			 * @return The multi array we create
-			 */
-			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> vals) {
-				return RosArrayUtilities.setupInt32Array(connectedNode, vals);
-			}
 		});
 		/*
 		subsrangetop.addMessageListener(new MessageListener<sensor_msgs.Range>() {
@@ -691,6 +504,236 @@ public class PeripheralController extends AbstractNodeMain {
 
 	}
 	
+	/**
+	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
+	 * We will be sending [<number> <> <>]
+	 * We use a Int32MultiArray type of 1 dimension, row of each value with other dimensions 0.
+	 * the first vale will be the ordinal of the named LUN configuration entry
+	 * @param connectedNode Our node transceiver info
+	 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
+	 * @return The multi array we create
+	 */
+	private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> vals) {
+		return RosArrayUtilities.setupInt32Array(connectedNode, vals);
+	}
+	
+	/**
+	* Megapubs.typeNames:
+	* 0 = LeftWheel
+	* 1 = RightWheel
+	* 2 = BOOMACTUATOR
+	* 3 = LEDDriver
+	* 4 = LIFTACTUATOR
+	* 5 = ULTRASONIC
+	* 6 = PWM
+	*
+	* Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
+	* The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
+	* If the joystick chimes in the target point becomes the current course minus relative stick position,
+	* and the speed is modified by the Y value of the stick.
+	* Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
+	* correct for deviation an wheel slippage.
+	* To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
+	* (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0 added to current heading forming theta.
+	* Theta may also be formed by button press and the difference in current heading and ongoing IMU headings for bearing on a forward course.
+	* We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
+	* of speeds of each wheel, time and speed being distance and all, and the fact that both wheels, being attached to the robot,
+	* have to arrive at essentially the same time after covering the desired distance based on desired speed.
+	* The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
+	* in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
+	* So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE and we generate 2 arc lengths that are taken
+	* as a ratio that is multiplied by the proper wheel depending on direction to reduce power in one wheel to affect turn.
+	* The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.
+	* The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
+	* The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
+	* for the inner arc and the hypotenuse computed by the base and chord formed from course deviation and half wheelbase for the outer arc.
+	* The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
+	* us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.<p/>
+	* axis[6] is POV, it has quantized values to represent its states.
+	*
+	* @param connectedNode
+	* @param pubschannel
+	* @param message
+	* @param twistpub
+	* @param twistmsg
+	*/
+	private void processJoystickMessages(ConnectedNode connectedNode,
+			Collection<Publisher<Int32MultiArray>> pubschannel, Joy message, Publisher<Twist> twistpub,
+			Twist twistmsg) {
+		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
+		int axisLED = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LEDDriver.index()].get("Axis"));
+		int axisBoom = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.BoomActuator.index()].get("AxisY"));
+		int axisLift = Integer.parseInt((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("Axis"));
+		// value of POV pad when actuating for up
+		float axisLiftUp = Float.parseFloat((String) robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisUp"));
+		float axisLiftDown = Float.parseFloat((String)robot.getAXIS()[MegaPubs.typeNames.LiftActuator.index()].get("AxisDown"));
+		float[] axes = message.getAxes();
+		int[] buttons = message.getButtons();
+
+		// check for emergency stop, on X or A or green or lower button
+		if( buttons[6] != 0 ) {
+			if(DEBUG)
+				System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
+			angular.setX(-1);
+			angular.setY(-1);
+			angular.setZ(-1);
+			linear.setX(-1);
+			linear.setY(-1);
+			linear.setZ(-1);
+			twistmsg.setAngular(angular);
+			twistmsg.setLinear(linear);
+			twistpub.publish(twistmsg);
+			return;
+		}
+		// Process the affectors and peripherals before the motion controls, this is mainly due to some of the logic
+		// In motion control returning from this method rather than try to implement more complex decision making.
+		// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
+		// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
+		// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
+		// for the majority of downstream processing. In the case of PWM, we are going to scale this
+		// from -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
+		// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
+		// sure to scale it to the positive range downstream. We are going to publish the scaled
+		// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
+		// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
+		// hence the boolean checks.
+		// LEDCameraIlluminatorControl:4
+		// LEDCameraIlluminatorSlot:1
+		// LEDCameraIlluminatorChannel:1
+		//-------------------
+		if(axes[axisLED] != -1 || 
+				isActive[MegaPubs.typeNames.LEDDriver.index()]) {
+			if(axes[axisLED] == -1) {
+				if( isActive[MegaPubs.typeNames.LEDDriver.index()]) {
+					ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
+					triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
+					triggerVals.add(0);
+					if(DEBUG)
+						System.out.println(" turning off LED");
+					getPublisher(pubschannel, MegaPubs.typeNames.LEDDriver.val()).publish(setupPub(connectedNode, triggerVals));
+					try {
+						Thread.sleep(5);
+					} catch (InterruptedException e) {}
+				}
+				isActive[MegaPubs.typeNames.LEDDriver.index()] = false;
+			} else {
+				isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
+				ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
+				triggerVals.add(robot.getLUN(MegaPubs.typeNames.LEDDriver.val()));
+				triggerVals.add(Integer.valueOf((int)axes[axisLED])*1000);
+				getPublisher(pubschannel, MegaPubs.typeNames.LEDDriver.val()).publish(setupPub(connectedNode, triggerVals));
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {}
+			}
+		}
+		//---
+		// Process right stick (joystick axes [1] right stick x, [3] right stick y)
+		// axes[3] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
+		// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
+		//
+		// set it up to send down the publishing pipeline
+		//
+		if(axes[axisBoom] != 0 ||
+			isActive[MegaPubs.typeNames.BoomActuator.index()]) {
+			// was active, no longer
+			if(axes[axisBoom] == 0) {
+				isActive[MegaPubs.typeNames.BoomActuator.index()] = false;
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+				speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
+				speedVals.add(0);
+				getPublisher(pubschannel, MegaPubs.typeNames.BoomActuator.val()).publish(setupPub(connectedNode, speedVals));
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {}
+			} else {
+				// may not have been active, now is
+				isActive[MegaPubs.typeNames.BoomActuator.index()] = true;
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+				speedVals.add(robot.getLUN(MegaPubs.typeNames.BoomActuator.val())); //controller slot
+				speedVals.add((int)(axes[axisBoom])*1000);
+				getPublisher(pubschannel, MegaPubs.typeNames.BoomActuator.val()).publish(setupPub(connectedNode, speedVals));
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {}
+			}
+		}
+		//----
+		// Map the POV values to actions
+		//AXIS[4].AxisType:POV
+		//AXIS[4].Axis:6
+		//AXIS[4].AxisUp:0.25
+		//AXIS[4].AxisDown:0.75
+		if(axes[axisLift] == axisLiftUp) {
+			// set it up to send down the publishing pipeline
+			ArrayList<Integer> povVals = new ArrayList<Integer>(2);
+			povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val()));
+			povVals.add(1000);
+			getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
+			isActive[MegaPubs.typeNames.LiftActuator.index()] = true;
+			try {
+				Thread.sleep(5);
+			} catch (InterruptedException e) {}
+		} else {
+			if(axes[axisLift] == axisLiftDown) {
+				//
+				// set it up to send down the publishing pipeline 
+				//
+				ArrayList<Integer> povVals = new ArrayList<Integer>(2);
+				povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
+				povVals.add(-1000);
+				getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
+				isActive[MegaPubs.typeNames.LEDDriver.index()] = true;
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {}
+			} else {
+				if( isActive[MegaPubs.typeNames.LiftActuator.index()]) {
+					isActive[MegaPubs.typeNames.LiftActuator.index()]= false;
+					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
+					povVals.add(robot.getLUN(MegaPubs.typeNames.LiftActuator.val())); //controller slot
+					povVals.add(0);
+					getPublisher(pubschannel, MegaPubs.typeNames.LiftActuator.val()).publish(setupPub(connectedNode, povVals));
+					try {
+						Thread.sleep(5);
+					} catch (InterruptedException e) {}
+				}
+			}
+		}
+		/*	
+		 if (axes[6] == Component.POV.OFF) {
+			 if(DEBUG)System.out.println("POV OFF");
+		 } else 
+			 if ( axes[6] == Component.POV.UP) {
+				 if(DEBUG)System.out.println("POV Up");
+			 } else 
+				 if ( axes[6] == Component.POV.UP_RIGHT) {
+					 if(DEBUG)System.out.println("POV Up_Right");
+				 } else 
+					 if ( axes[6] == Component.POV.RIGHT) {
+						 if(DEBUG)System.out.println("POV Right");
+					 } else 
+						 if ( axes[6] == Component.POV.DOWN_RIGHT) {
+							 if(DEBUG)System.out.println("POV Down Right");
+						 } else 
+							 if ( axes[6] == Component.POV.DOWN) {
+								 if(DEBUG)System.out.println("POV Down");
+							 } else 
+								 if ( axes[6] == Component.POV.DOWN_LEFT) {
+									 if(DEBUG)System.out.println("POV Down left");
+								 } else 
+									 if ( axes[6] == Component.POV.LEFT) {
+										 if(DEBUG)System.out.println("POV Left");
+									 } else 
+										 if ( axes[6] == Component.POV.UP_LEFT) {
+											 
+										 }
+		*/
+		
+	}
+	
 	protected Publisher<Int32MultiArray> getPublisher(Collection<Publisher<Int32MultiArray>> pubschannel, String val) {
 		if(DEBUG) {
 			System.out.printf("%s %s%n",this.getClass().getName(), val);
@@ -698,8 +741,6 @@ public class PeripheralController extends AbstractNodeMain {
 		return pubschannel.stream().filter(e -> e.getTopicName().toString().contains(val)).findFirst().get();
 	}
 
-	
-	
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 
 	double yy = quat.y() * quat.y(); // 2 Uses below

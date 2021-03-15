@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.internal.loader.CommandLineLoader;
+import org.ros.internal.node.topic.PublisherIdentifier;
 import org.ros.internal.node.topic.SubscriberIdentifier;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -28,6 +29,7 @@ import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.PublisherListener;
 import org.ros.node.topic.Subscriber;
+import org.ros.node.topic.SubscriberListener;
 
 import com.neocoretechs.robocore.MegaPubs;
 import com.neocoretechs.robocore.MegaPubs.typeNames;
@@ -45,6 +47,7 @@ import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
 import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 
 import diagnostic_msgs.DiagnosticStatus;
+import sensor_msgs.Joy;
 import std_msgs.Int32MultiArray;
 
 /**
@@ -363,9 +366,7 @@ public class MotionController extends AbstractNodeMain {
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		
 		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
-		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE); 
+	
 		
 		Subscriber<sensor_msgs.Joy> subsrange = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
@@ -394,446 +395,51 @@ public class MotionController extends AbstractNodeMain {
 			System.out.println("Robot:"+robot);
 		ArrayList<String> roboProps = new ArrayList<String>();
 		roboProps.add(robot.toString());
-		// Megapubs.typeNames:
-		// 0 = LeftWheel
-		// 1 = RightWheel
-		//
-		// Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
-		// The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
-		// If the joystick chimes in the target point becomes the current course minus relative stick position,
-		// and the speed is modified by the Y value of the stick.
-		// Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
-		// correct for deviation an wheel slippage.
-		// To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
-		// (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0 added to current heading forming theta.
-		// Theta may also be formed by button press and the difference in current heading and ongoing IMU headings for bearing on a forward course.
-		// We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
-		// of speeds of each wheel, time and speed being distance and all, and the fact that both wheels, being attached to the robot,
-		// have to arrive at essentially the same time after covering the desired distance based on desired speed.
-		// The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
-		// in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
-		// So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE and we generate 2 arc lengths that are taken
-		// as a ratio that is multiplied by the proper wheel depending on direction to reduce power in one wheel to affect turn.
-		// The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.
-		// The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
-		// The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
-		// for the inner arc and the hypotenuse computed by the base and chord formed from course deviation and half wheelbase for the outer arc.
-		// The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
-		// us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.<p/>
-		// axis[6] is POV, it has quantized values to represent its states.
-		//
-		subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
+
+		subsrange.addSubscriberListener(new SubscriberListener<sensor_msgs.Joy>() {
 			@Override
-			public void onNewMessage(sensor_msgs.Joy message) {
-				float[] axes = message.getAxes();
-				int[] buttons = message.getButtons();
-
-				// check for emergency stop, on X or A or green or lower button
-				if( buttons[6] != 0 ) {
-					if(DEBUG)
-						System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
-					angular.setX(-1);
-					angular.setY(-1);
-					angular.setZ(-1);
-					linear.setX(-1);
-					linear.setY(-1);
-					linear.setZ(-1);
-					twistmsg.setAngular(angular);
-					twistmsg.setLinear(linear);
-					twistpub.publish(twistmsg);
-					return;
-				}
-				// Process the affectors and peripherals before the motion controls, this is mainly due to some of the logic
-				// In motion control returning from this method rather than try to implement more complex decision making.
-				// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
-				// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
-				// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
-				// for the majority of downstream processing. In the case of PWM, we are going to scale this
-				// from -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
-				// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
-				// sure to scale it to the positive range downstream. We are going to publish the scaled
-				// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
-				// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
-				// hence the boolean checks.
-
-				//-------------------
-	
-				/*	
-				 if (axes[6] == Component.POV.OFF) {
-					 if(DEBUG)System.out.println("POV OFF");
-				 } else 
-					 if ( axes[6] == Component.POV.UP) {
-						 if(DEBUG)System.out.println("POV Up");
-					 } else 
-						 if ( axes[6] == Component.POV.UP_RIGHT) {
-							 if(DEBUG)System.out.println("POV Up_Right");
-						 } else 
-							 if ( axes[6] == Component.POV.RIGHT) {
-								 if(DEBUG)System.out.println("POV Right");
-							 } else 
-								 if ( axes[6] == Component.POV.DOWN_RIGHT) {
-									 if(DEBUG)System.out.println("POV Down Right");
-								 } else 
-									 if ( axes[6] == Component.POV.DOWN) {
-										 if(DEBUG)System.out.println("POV Down");
-									 } else 
-										 if ( axes[6] == Component.POV.DOWN_LEFT) {
-											 if(DEBUG)System.out.println("POV Down left");
-										 } else 
-											 if ( axes[6] == Component.POV.LEFT) {
-												 if(DEBUG)System.out.println("POV Left");
-											 } else 
-												 if ( axes[6] == Component.POV.UP_LEFT) {
-													 
-												 }
-				*/
-				//-----
-				// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
-				// If the button square or circle is depressed, rotate in place at stick position Y speed
-				if( buttons[7] != 0 ) { // left pivo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           t                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
-					// set it up to send
-					ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-					speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
-					speedVals.add((int)speedL);
-					getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
-					speedVals = new ArrayList<Integer>(2);
-					speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val()));
-					speedVals.add((int)speedR);
-					getPublisher(pubschannel,MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
-					if(DEBUG)
-						System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
-				} else {
-					if( buttons[5] != 0 ) { // right pivot
-						speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
-						speedR = -speedL;
-						// set it up to send
-						ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-						speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
-						speedVals.add((int)speedL);
-						getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
-						speedVals = new ArrayList<Integer>(2);
-						speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); // controller slot
-						speedVals.add((int)speedR);
-						getPublisher(pubschannel, MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
-						if(DEBUG)
-							System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
-					}
-				}
-				// get radian measure of left stick x,y
-				float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[0]);
-				float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
-				// horizontal axis is 0 to -180 degrees, we want 0 at the top
-				stickDegrees += 90;
-				stickDegrees = (stickDegrees > 180.0 ? stickDegrees -= 90.0 : -stickDegrees);
-				// we have absolute stickdegrees, offset the current IMU by that quantity to get new desired course
-				float offsetDegrees = (float) (eulers[0] - stickDegrees);
-			    // reduce the angle  
-			    offsetDegrees =  offsetDegrees % 360;
-			    //
-			    if (offsetDegrees <= -180.0)
-			         offsetDegrees += 360.0;
-			    if (offsetDegrees >= 180)  
-			         offsetDegrees -= 360;
-			    // force it to be the positive remainder, so that 0 <= angle < 360  
-			    //offsetDegrees = (offsetDegrees + 360) % 360;  
-			    // force into the minimum absolute value residue class, so that -180 < angle <= 180  
-			    //if (offsetDegrees > 180)  
-			    //      offsetDegrees -= 360;
-			      
-				//if( DEBUG )
-				//	System.out.println("Axes:"+axes[0]+","+axes[2]+" deg:"+bearingDegrees+" rad:"+radians);
-			    // Button 4 - triangle. Establish setpoint for autonomous course following.
-				// If we are pressing the button, dont update the setpoint with IMU yaw, this has the effect of locking
-				// the course onto the absolute track relative to the way the robot is pointing offset by stick position
-				// rather than a continuous update of stick offset added to current orientation. so if you want the robot to track
-				// straight forward on its current orientation, hold triangle/top and push stick forward or back.
-			    if( buttons[4] != 0 ) {   
-					// is it initial button press? then log current bearing of IMU to hold to
-					if( !holdBearing ) {
-						holdBearing = true;
-						outputNeg = false;
-						robot.getIMUSetpointInfo().setDesiredTarget((float) eulers[0]); // Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
-						robot.getMotionPIDController().clearPID();
-						wasPid = true; // start with PID control until we get out of tolerance
-						if(DEBUG);
-							System.out.println("Stick absolute deg set:"+eulers[0]);	
-					}
-			    } else {
-			    	holdBearing = false;
-			    	robot.getIMUSetpointInfo().setDesiredTarget(offsetDegrees); // joystick setting becomes desired target yaw angle heading and IMU is disregarded
-			    }
-	
-				robot.getIMUSetpointInfo().setTarget((float) eulers[0]); //eulers[0] is Input: target yaw angle from IMU
-				//
-				// perform the PID processing
-				//
-				((MotionPIDController) robot.getMotionPIDController()).Compute(robot.getIMUSetpointInfo());
-				
-				// Speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
-				// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
-				// or on the computed derivation from desired course if a straight line course is set.
-				// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-				// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
-				speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
-				speedL = speedR;
-				// PTerm has the positive or negative difference in degrees (left or right offset)
-				// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
-				// We determine the radius of the turn potential by the forward speed desired (joystick Y)
-				// For instance if at 0 we can spin at radius .5 of wheelbase if necessary, while at speed 500 out of 1000
-				// we can turn at radius 1, which is 90 degrees with inner wheel stationary, and at 1000 out of 1000
-				// we turn inner radius 1 and outer radius 2 robot widths as defined by WHEELBASE, which is a gradual arc.
-				// degrees/180 * PI * (r + WHEELBASE) = outer wheel arc length
-				// degrees/180 * PI * r = inner wheel arc length
-				// we compare the arc lengths as a ratio.
-				// We use the speed in the range of the stick Y range (0 to 1) times a scale, and establish that as a scale factor to 
-				// add to wheelbase, so at max speed we extend the radius by one robot length; joystick y + WHEELBASE making 
-				// inner radius 1 'robot length unit' and outer radius 1 + WHEELBASE units.
-				// We dont really need absolute measurements, we just assign the values based on stick Y and a scale factor
-				// and the same scale factor to 1 'robot width unit'. We are multiplying the stick Y by 1000 and WHEELBASE by 1000
-				// but in reality we are using radius 0 to 1, and then 0 to 1 plus WHEELBASE scaled to finer granularity.
-				// This assumes that at half speed we can still make a 90 degree turn.
-				// We use value of IMU vs desired course to turn left or right via
-				// a plus or minus value from the Compute method set in the variable called PTerm.
-				float radius = Math.abs(axes[robot.getDiffDrive().getControllerAxisY()]) * SPEEDSCALE;
-				float arcin, arcout;
-				//
-				// If holding an inertially guided course, check for the tolerance of error proportion
-				// from setpoint to current heading, if within a lower tolerance, use the pid values of the
-				// currently computed course deviation to
-				// alter the motor speed to reduce cross track error and become critically damped.
-				// If we are at the higher tolerance, compute a solution based on triangles that brings us on a tangent course
-				// to the crosstrack. The base of a right triangle is the speed plus half wheelbase, the hypotenuse is computed from
-				// the chord of the magnitude error offset from track and the base (speed). The ratio of base to hypotenuse is used
-				// based on required distance traveled for each wheel and the opposite wheel is slowed by that proportion
-				// just as we do for a solution of arcs.
-				// The chord leg of the triangle is computed based on half wheelbase as radius via 2*R*sin(theta/2) with theta
-				// being crosstrack deviation.
-				//
-				if( holdBearing ) {
-					if(DEBUG)
-						System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
-					// In auto
-					// Point at which geometric solution begins/disengages is IMU maximumCourseDeviation from configuration
-					float PID_THRESHOLD  = robot.getIMUSetpointInfo().getMaximum()/2; // point at which PID engages/disengages
-					if( Math.abs(robot.getMotionPIDController().getError()) <= robot.getIMUSetpointInfo().getMaximum() ) {
-						if( robot.getMotionPIDController().getError() < 0.0f ) { // decrease left wheel power goal
-							// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
-							if( Math.abs(robot.getMotionPIDController().getError()) <= PID_THRESHOLD ) {
-								rightPid(radius);
-							} else {
-								rightAngle(radius);
-							}
-						} else {
-							if( robot.getMotionPIDController().getError() > 0.0f ) { // decrease right wheel power goal
-								if( robot.getMotionPIDController().getError() <= PID_THRESHOLD) {
-									leftPid(radius);
-								} else {
-									leftAngle(radius);
-								}
-							} else {
-								// we are critically damped, set integral to 0
-								//ITerm = 0;
-								robot.getMotionPIDController().setITerm(0);
-							}
-						}
-						if(DEBUG)
-							System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
-					} else {
-						// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
-						robot.getMotionPIDController().setITerm(0);//ITerm = 0;
-						wasPid = false;
-						arcin = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * radius);
-						arcout = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
-						// error is difference in degrees between setpoint and input
-						if( robot.getMotionPIDController().getError() < 0.0f )
-							speedL *= (arcin/arcout);
-						else
-							if( robot.getMotionPIDController().getError() > 0.0f )
-								speedR *= (arcin/arcout);
-						if(DEBUG)
-							System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
-					}
-				} else {
-					// manual steering mode, use tight radii and a human integrator
-					arcin = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * radius);
-					arcout = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
-					// error is difference in degrees between setpoint and input
-					// Stick position will override any IMU tolerances
-					if( stickDegrees != -180.0 && stickDegrees != 180 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
-						if( robot.getMotionPIDController().getError() < 0.0f )
-							speedL *= (arcin/arcout);
-						else
-							if( robot.getMotionPIDController().getError() > 0.0f )
-								speedR *= (arcin/arcout);
-					}
-					if(DEBUG)
-						System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
-				}
+			public void onMasterRegistrationFailure(Subscriber<Joy> subs) {
 				if(DEBUG)
-					System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
-				//
-				// set it up to send down the publishing pipeline
-				//
-				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-				speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
-				speedVals.add((int)speedL);
-				pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
-					.findFirst().get().publish(setupPub(connectedNode, speedVals));
-				speedVals = new ArrayList<Integer>(2);
-				speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); 
-				speedVals.add((int)speedR);
-				pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
-					.findFirst().get().publish(setupPub(connectedNode, speedVals));
-				try {
-					Thread.sleep(5);
-				} catch (InterruptedException e) {}
-				//-------------------
-				// Above cases handle all steering and motor control and button press for automated
-				// control of course following by button press.
-	
-			} // onMessage from Joystick controller, with all the axes[] and buttons[]
+					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);				
+			}
+			@Override
+			public void onMasterUnregistrationSuccess(Subscriber<Joy> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s unregistered with master!%n", this.getClass().getName(), subs);			
+			}
+			@Override
+			public void onMasterRegistrationSuccess(Subscriber<Joy> subs) {
+				subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
+					@Override
+					public void onNewMessage(sensor_msgs.Joy message) {
+						processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
+					} // onMessage from Joystick controller, with all the axes[] and buttons[]	
+				});
+			}
+			@Override
+			public void onMasterUnregistrationFailure(Subscriber<Joy> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);					
+			}
+			@Override
+			public void onNewPublisher(Subscriber<Joy> subs, PublisherIdentifier pubs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);					
+			}
+			@Override
+			public void onShutdown(Subscriber<Joy> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s shutdown!%n", this.getClass().getName(), subs);
+			}
 			
-			/**
-			 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
-			 * We will be sending [<number> <> <>]
-			 * We use a Int32MultiArray type of 1 dimension, row of each value with other dimensions 0.
-			 * the first vale will be the ordinal of the named LUN configuration entry
-			 * @param connectedNode Our node transceiver info
-			 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
-			 * @return The multi array we create
-			 */
-			private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> vals) {
-				return RosArrayUtilities.setupInt32Array(connectedNode, vals);
-			}
-			/**
-			 * Increase power of right wheel based on PID results
-			 * If we hit max we are going to decrease power to left wheel by splitting the difference
-			 * of leftover speed on right applied to left wheel decrease. whether these are equivalent in reality is
-			 * left to evaluation.
-			 * @param speed the scaled velocity
-			 */
-			private void rightPid(float speed) {
-				/*
-				if( !outputNeg ) { // prevent integral windup by checking when track is crossed via sign of course diff changing
-					ITerm = 0;
-				}
-				outputNeg = true;
-				// see if we are entering from the geometric realm, if so preload integral
-				if( !wasPid ) {
-					wasPid = true;
-					// get rid of old integral and replace with our preload windup
-					// Since we are in negative offsets we will subtract the maximum offset that is threshold value 
-					pidOutput = PTerm + DTerm + (-PID_THRESHOLD * ki);
-					// Now set up integral to reflect transition state
-					ITerm = -PID_THRESHOLD;
-				}
-				*/
-				// Reduce speed of left wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
-				// scale it by speed
-				speedL -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
-				/*
-				// goal is to increase power of right wheel
-				// We scale it by speed with the assumption that at full speed,
-				// the values from PID represent the ones necessary to work at top speed of 1000 or SPEEDLIMIT.
-				speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
-				// if we cap at max, use the difference to retard opposite
-				if( speedR > SPEEDLIMIT ) {
-					// over limit, split the difference
-					float speeDif = speedR - SPEEDLIMIT;
-					speedR = SPEEDLIMIT;
-					// left is decreased by the amount right went over max
-					speedL -= speeDif;
-					if( speedL < 0.0 ) speedL = 0.0f;
-					// and the robot is pivoting at max speed if everything was capped
-				}
-				*/
-			}
-			/**
-			 * Increase power of left wheel base don PID results. If we max out we are going to apply the leftover
-			 * power over maximum to decreasing the right wheel speed.
-			 * @param speed The scaled velocity
-			 */
-			private void leftPid(float speed) {
-				/*
-				if( outputNeg ) {
-					ITerm = 0;
-				}
-				outputNeg = false;
-				// see if we are entering from the geometric realm, if so preload integral
-				if( !wasPid ) {
-					wasPid = true;
-					// get rid of old integral and replace with our preload windup
-					// Since we are in positive offsets we will add the maximum threshold value for windup.
-					pidOutput = PTerm + DTerm + (PID_THRESHOLD * ki);
-					// Now set up integral to reflect transition state
-					ITerm = PID_THRESHOLD;
-				}
-				*/
-				// Reduce speed of right wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
-				// scale it by speed
-				speedR -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
-				/*
-				// goal is net increase of left wheel power
-				// We scale it by speed with the assumption that at full speed,
-				// the values from PID represent the ones necessary to work at top speed of 1000 or SPEEDLIMIT.
-				speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
-				if( speedL > SPEEDLIMIT ) {
-					// over limit, split the difference
-					float speeDif = speedL - SPEEDLIMIT;
-					speedL = SPEEDLIMIT;
-					speedR -= speeDif;
-					if( speedR < 0.0) speedR = 0.0f;
-				}
-				*/
-				
-			}
-			/**
-			 * Apply a solution in triangles as we do with solution in arcs to reduce left wheel speed.
-			 * This presupposes we are within tolerance.
-			 * @param radius velocity-based value of turn radius component
-			 */
-			private void rightAngle(float radius) {
-				// Mitigate integral windup
-				robot.getMotionPIDController().setITerm(0);//ITerm = 0;
-				wasPid = false;
-				// compute chord of course deviation, this is short leg of triangle.
-				// chord is 2Rsin(theta/2) ( we convert to radians first)
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI))/2);
-				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
-				// square root of sum of square of base and leg
-				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
-				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
-				// travel the length of base and the other needs to travel length of hypotenuse
-				if(DEBUG)
-					System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
-				speedL *= ((radius+(WHEELBASE/2))/hypot);
-			}
-			/**
-			 * Apply a solution in triangles as we do with solution in arcs to reduce right wheel speed.
-			 * This presupposes we are within tolerance.
-			 * @param radius Velocity based component of turning radius
-			 */
-			private void leftAngle(float radius) {
-				// Mitigate integral windup
-				robot.getMotionPIDController().setITerm(0);//ITerm = 0;
-				wasPid = false;
-				// compute chord of course deviation, this is short leg of triangle.
-				// chord is 2Rsin(theta/2), R is half wheeltrack so we assume our robot is roughly 'square'
-				double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI))/2);
-				// make the base of the triangle radius , the do a simple pythagorean deal and take the 
-				// square root of sum of square of base and leg
-				double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
-				// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
-				// travel the length of base and the other needs to travel length of hypotenuse
-				if(DEBUG)
-					System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().getWheelTrack()/2))/hypot),holdBearing);
-				speedR *= ((radius+(WHEELBASE/2))/hypot);
-			}
 		});
+		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);
 		
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
-			public void onNewMessage(sensor_msgs.Imu message) {
+			public void onNewMessage(sensor_msgs.Imu message) { 
 				synchronized(navMutex) {
 					orientation.setX(message.getOrientation().getX());
 					orientation.setY(message.getOrientation().getY());
@@ -886,7 +492,9 @@ public class MotionController extends AbstractNodeMain {
 				}
 			}
 
-		});
+		},5); // buffer 5 messages
+		
+
 		/*
 		subsrangetop.addMessageListener(new MessageListener<sensor_msgs.Range>() {
 		@Override
@@ -1048,8 +656,7 @@ public class MotionController extends AbstractNodeMain {
 					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Accelerometer shock warning", 
 							diagnostic_msgs.DiagnosticStatus.WARN, shockVals);
 				}
-				
-					
+								
 				if( isOverPressure ) { // check for dropping
 						diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
 							//long meas = System.currentTimeMillis()-lastPressureNotification;
@@ -1086,6 +693,420 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}); // cancellable loop
 
+	} // onStart
+	
+	/**
+	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
+	 * We will be sending [<number> <> <>]
+	 * We use a Int32MultiArray type of 1 dimension, row of each value with other dimensions 0.
+	 * the first vale will be the ordinal of the named LUN configuration entry
+	 * @param connectedNode Our node transceiver info
+	 * @param valBuf The linear array of values to send, which we will be transposing to our MultiAray
+	 * @return The multi array we create
+	 */
+	private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> vals) {
+		return RosArrayUtilities.setupInt32Array(connectedNode, vals);
+	}
+	/**
+	 * Increase power of right wheel based on PID results
+	 * If we hit max we are going to decrease power to left wheel by splitting the difference
+	 * of leftover speed on right applied to left wheel decrease. whether these are equivalent in reality is
+	 * left to evaluation.
+	 * @param speed the scaled velocity
+	 */
+	private void rightPid(float speed) {
+		/*
+		if( !outputNeg ) { // prevent integral windup by checking when track is crossed via sign of course diff changing
+			ITerm = 0;
+		}
+		outputNeg = true;
+		// see if we are entering from the geometric realm, if so preload integral
+		if( !wasPid ) {
+			wasPid = true;
+			// get rid of old integral and replace with our preload windup
+			// Since we are in negative offsets we will subtract the maximum offset that is threshold value 
+			pidOutput = PTerm + DTerm + (-PID_THRESHOLD * ki);
+			// Now set up integral to reflect transition state
+			ITerm = -PID_THRESHOLD;
+		}
+		*/
+		// Reduce speed of left wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
+		// scale it by speed
+		speedL -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
+		/*
+		// goal is to increase power of right wheel
+		// We scale it by speed with the assumption that at full speed,
+		// the values from PID represent the ones necessary to work at top speed of 1000 or SPEEDLIMIT.
+		speedR += ( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
+		// if we cap at max, use the difference to retard opposite
+		if( speedR > SPEEDLIMIT ) {
+			// over limit, split the difference
+			float speeDif = speedR - SPEEDLIMIT;
+			speedR = SPEEDLIMIT;
+			// left is decreased by the amount right went over max
+			speedL -= speeDif;
+			if( speedL < 0.0 ) speedL = 0.0f;
+			// and the robot is pivoting at max speed if everything was capped
+		}
+		*/
+	}
+	/**
+	 * Increase power of left wheel base don PID results. If we max out we are going to apply the leftover
+	 * power over maximum to decreasing the right wheel speed.
+	 * @param speed The scaled velocity
+	 */
+	private void leftPid(float speed) {
+		/*
+		if( outputNeg ) {
+			ITerm = 0;
+		}
+		outputNeg = false;
+		// see if we are entering from the geometric realm, if so preload integral
+		if( !wasPid ) {
+			wasPid = true;
+			// get rid of old integral and replace with our preload windup
+			// Since we are in positive offsets we will add the maximum threshold value for windup.
+			pidOutput = PTerm + DTerm + (PID_THRESHOLD * ki);
+			// Now set up integral to reflect transition state
+			ITerm = PID_THRESHOLD;
+		}
+		*/
+		// Reduce speed of right wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
+		// scale it by speed
+		speedR -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
+		/*
+		// goal is net increase of left wheel power
+		// We scale it by speed with the assumption that at full speed,
+		// the values from PID represent the ones necessary to work at top speed of 1000 or SPEEDLIMIT.
+		speedL +=( Math.abs(pidOutput) * (Math.abs(axes[2])*3.2) );
+		if( speedL > SPEEDLIMIT ) {
+			// over limit, split the difference
+			float speeDif = speedL - SPEEDLIMIT;
+			speedL = SPEEDLIMIT;
+			speedR -= speeDif;
+			if( speedR < 0.0) speedR = 0.0f;
+		}
+		*/
+		
+	}
+	/**
+	 * Apply a solution in triangles as we do with solution in arcs to reduce left wheel speed.
+	 * This presupposes we are within tolerance.
+	 * @param radius velocity-based value of turn radius component
+	 */
+	private void rightAngle(float radius) {
+		// Mitigate integral windup
+		robot.getMotionPIDController().setITerm(0);//ITerm = 0;
+		wasPid = false;
+		// compute chord of course deviation, this is short leg of triangle.
+		// chord is 2Rsin(theta/2) ( we convert to radians first)
+		double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI))/2);
+		// make the base of the triangle radius , the do a simple pythagorean deal and take the 
+		// square root of sum of square of base and leg
+		double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
+		// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
+		// travel the length of base and the other needs to travel length of hypotenuse
+		if(DEBUG)
+			System.out.printf(" RIGHTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(WHEELBASE/2))/hypot),holdBearing);
+		speedL *= ((radius+(WHEELBASE/2))/hypot);
+	}
+	/**
+	 * Apply a solution in triangles as we do with solution in arcs to reduce right wheel speed.
+	 * This presupposes we are within tolerance.
+	 * @param radius Velocity based component of turning radius
+	 */
+	private void leftAngle(float radius) {
+		// Mitigate integral windup
+		robot.getMotionPIDController().setITerm(0);//ITerm = 0;
+		wasPid = false;
+		// compute chord of course deviation, this is short leg of triangle.
+		// chord is 2Rsin(theta/2), R is half wheeltrack so we assume our robot is roughly 'square'
+		double chord = 2 * ((WHEELBASE/2)*2.7) * Math.sin((Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI))/2);
+		// make the base of the triangle radius , the do a simple pythagorean deal and take the 
+		// square root of sum of square of base and leg
+		double hypot = Math.sqrt((chord*chord) + ((radius+(WHEELBASE/2))*(radius+(WHEELBASE/2))));
+		// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
+		// travel the length of base and the other needs to travel length of hypotenuse
+		if(DEBUG)
+			System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().getWheelTrack()/2))/hypot),holdBearing);
+		speedR *= ((radius+(WHEELBASE/2))/hypot);
+	}
+	
+	/**
+	* 
+	* Megapubs.typeNames:
+	* 0 = LeftWheel
+	* 1 = RightWheel
+	*
+	* Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
+	* The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
+	* If the joystick chimes in the target point becomes the current course minus relative stick position,
+	* and the speed is modified by the Y value of the stick.
+	* Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
+	* correct for deviation an wheel slippage.
+	* To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
+	* (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0 added to current heading forming theta.
+	* Theta may also be formed by button press and the difference in current heading and ongoing IMU headings for bearing on a forward course.
+	* We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
+	* of speeds of each wheel, time and speed being distance and all, and the fact that both wheels, being attached to the robot,
+	* have to arrive at essentially the same time after covering the desired distance based on desired speed.
+	* The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
+	* in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
+	* So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE and we generate 2 arc lengths that are taken
+	* as a ratio that is multiplied by the proper wheel depending on direction to reduce power in one wheel to affect turn.
+	* The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.
+	* The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
+	* The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
+	* for the inner arc and the hypotenuse computed by the base and chord formed from course deviation and half wheelbase for the outer arc.
+	* The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
+	* us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.<p/>
+	* axis[6] is POV, it has quantized values to represent its states.
+	 * @param message 
+	*/
+	private void processJoystickMessages(ConnectedNode connectedNode, Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel, Joy message, 
+			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg) {
+		float[] axes = message.getAxes();
+		int[] buttons = message.getButtons();
+		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);
+		// check for emergency stop, on X or A or green or lower button
+		if( buttons[6] != 0 ) {
+			if(DEBUG)
+				System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
+			angular.setX(-1);
+			angular.setY(-1);
+			angular.setZ(-1);
+			linear.setX(-1);
+			linear.setY(-1);
+			linear.setZ(-1);
+			twistmsg.setAngular(angular);
+			twistmsg.setLinear(linear);
+			twistpub.publish(twistmsg);
+			return;
+		}
+		// Process the affectors and peripherals before the motion controls, this is mainly due to some of the logic
+		// In motion control returning from this method rather than try to implement more complex decision making.
+		// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
+		// Check them and see if either one was depressed. If so, scale them to the -1000 to 1000
+		// SPEEDSCALE constant (or whatever the SPEEDSCALE constant is, we presume its set at 1000)
+		// for the majority of downstream processing. In the case of PWM, we are going to scale this
+		// from -1000,1000 to 0,2000 since controls such as LED dont have a negativer or 'reverse' value.
+		// Actually, could be potentially destructive to reverse polarity as a motor does, so we are
+		// sure to scale it to the positive range downstream. We are going to publish the scaled
+		// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
+		// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
+		// hence the boolean checks.
+
+		//-------------------
+
+		//-----
+		// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
+		// If the button square or circle is depressed, rotate in place at stick position Y speed
+		if( buttons[7] != 0 ) { // left pivo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           t                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+			// set it up to send
+			ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+			speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
+			speedVals.add((int)speedL);
+			getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
+			speedVals = new ArrayList<Integer>(2);
+			speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val()));
+			speedVals.add((int)speedR);
+			getPublisher(pubschannel,MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
+			if(DEBUG)
+				System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
+		} else {
+			if( buttons[5] != 0 ) { // right pivot
+				speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
+				speedR = -speedL;
+				// set it up to send
+				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
+				speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
+				speedVals.add((int)speedL);
+				getPublisher(pubschannel, MegaPubs.typeNames.LeftWheel.val()).publish(setupPub(connectedNode, speedVals));
+				speedVals = new ArrayList<Integer>(2);
+				speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); // controller slot
+				speedVals.add((int)speedR);
+				getPublisher(pubschannel, MegaPubs.typeNames.RightWheel.val()).publish(setupPub(connectedNode, speedVals));
+				if(DEBUG)
+					System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
+			}
+		}
+		// get radian measure of left stick x,y
+		float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[0]);
+		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
+		// horizontal axis is 0 to -180 degrees, we want 0 at the top
+		stickDegrees += 90;
+		stickDegrees = (stickDegrees > 180.0 ? stickDegrees -= 90.0 : -stickDegrees);
+		// we have absolute stickdegrees, offset the current IMU by that quantity to get new desired course
+		float offsetDegrees = (float) (eulers[0] - stickDegrees);
+	    // reduce the angle  
+	    offsetDegrees =  offsetDegrees % 360;
+	    //
+	    if (offsetDegrees <= -180.0)
+	         offsetDegrees += 360.0;
+	    if (offsetDegrees >= 180)  
+	         offsetDegrees -= 360;
+	    // force it to be the positive remainder, so that 0 <= angle < 360  
+	    //offsetDegrees = (offsetDegrees + 360) % 360;  
+	    // force into the minimum absolute value residue class, so that -180 < angle <= 180  
+	    //if (offsetDegrees > 180)  
+	    //      offsetDegrees -= 360;
+	      
+		//if( DEBUG )
+		//	System.out.println("Axes:"+axes[0]+","+axes[2]+" deg:"+bearingDegrees+" rad:"+radians);
+	    // Button 4 - triangle. Establish setpoint for autonomous course following.
+		// If we are pressing the button, dont update the setpoint with IMU yaw, this has the effect of locking
+		// the course onto the absolute track relative to the way the robot is pointing offset by stick position
+		// rather than a continuous update of stick offset added to current orientation. so if you want the robot to track
+		// straight forward on its current orientation, hold triangle/top and push stick forward or back.
+	    if( buttons[4] != 0 ) {   
+			// is it initial button press? then log current bearing of IMU to hold to
+			if( !holdBearing ) {
+				holdBearing = true;
+				outputNeg = false;
+				robot.getIMUSetpointInfo().setDesiredTarget((float) eulers[0]); // Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
+				robot.getMotionPIDController().clearPID();
+				wasPid = true; // start with PID control until we get out of tolerance
+				if(DEBUG);
+					System.out.println("Stick absolute deg set:"+eulers[0]);	
+			}
+	    } else {
+	    	holdBearing = false;
+	    	robot.getIMUSetpointInfo().setDesiredTarget(offsetDegrees); // joystick setting becomes desired target yaw angle heading and IMU is disregarded
+	    }
+
+		robot.getIMUSetpointInfo().setTarget((float) eulers[0]); //eulers[0] is Input: target yaw angle from IMU
+		//
+		// perform the PID processing
+		//
+		((MotionPIDController) robot.getMotionPIDController()).Compute(robot.getIMUSetpointInfo());
+		
+		// Speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
+		// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
+		// or on the computed derivation from desired course if a straight line course is set.
+		// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
+		// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
+		speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
+		speedL = speedR;
+		// PTerm has the positive or negative difference in degrees (left or right offset)
+		// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
+		// We determine the radius of the turn potential by the forward speed desired (joystick Y)
+		// For instance if at 0 we can spin at radius .5 of wheelbase if necessary, while at speed 500 out of 1000
+		// we can turn at radius 1, which is 90 degrees with inner wheel stationary, and at 1000 out of 1000
+		// we turn inner radius 1 and outer radius 2 robot widths as defined by WHEELBASE, which is a gradual arc.
+		// degrees/180 * PI * (r + WHEELBASE) = outer wheel arc length
+		// degrees/180 * PI * r = inner wheel arc length
+		// we compare the arc lengths as a ratio.
+		// We use the speed in the range of the stick Y range (0 to 1) times a scale, and establish that as a scale factor to 
+		// add to wheelbase, so at max speed we extend the radius by one robot length; joystick y + WHEELBASE making 
+		// inner radius 1 'robot length unit' and outer radius 1 + WHEELBASE units.
+		// We dont really need absolute measurements, we just assign the values based on stick Y and a scale factor
+		// and the same scale factor to 1 'robot width unit'. We are multiplying the stick Y by 1000 and WHEELBASE by 1000
+		// but in reality we are using radius 0 to 1, and then 0 to 1 plus WHEELBASE scaled to finer granularity.
+		// This assumes that at half speed we can still make a 90 degree turn.
+		// We use value of IMU vs desired course to turn left or right via
+		// a plus or minus value from the Compute method set in the variable called PTerm.
+		float radius = Math.abs(axes[robot.getDiffDrive().getControllerAxisY()]) * SPEEDSCALE;
+		float arcin, arcout;
+		//
+		// If holding an inertially guided course, check for the tolerance of error proportion
+		// from setpoint to current heading, if within a lower tolerance, use the pid values of the
+		// currently computed course deviation to
+		// alter the motor speed to reduce cross track error and become critically damped.
+		// If we are at the higher tolerance, compute a solution based on triangles that brings us on a tangent course
+		// to the crosstrack. The base of a right triangle is the speed plus half wheelbase, the hypotenuse is computed from
+		// the chord of the magnitude error offset from track and the base (speed). The ratio of base to hypotenuse is used
+		// based on required distance traveled for each wheel and the opposite wheel is slowed by that proportion
+		// just as we do for a solution of arcs.
+		// The chord leg of the triangle is computed based on half wheelbase as radius via 2*R*sin(theta/2) with theta
+		// being crosstrack deviation.
+		//
+		if( holdBearing ) {
+			if(DEBUG)
+				System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
+			// In auto
+			// Point at which geometric solution begins/disengages is IMU maximumCourseDeviation from configuration
+			float PID_THRESHOLD  = robot.getIMUSetpointInfo().getMaximum()/2; // point at which PID engages/disengages
+			if( Math.abs(robot.getMotionPIDController().getError()) <= robot.getIMUSetpointInfo().getMaximum() ) {
+				if( robot.getMotionPIDController().getError() < 0.0f ) { // decrease left wheel power goal
+					// If in lower bound use PID, between lower and middle use triangle solution, above that use arc
+					if( Math.abs(robot.getMotionPIDController().getError()) <= PID_THRESHOLD ) {
+						rightPid(radius);
+					} else {
+						rightAngle(radius);
+					}
+				} else {
+					if( robot.getMotionPIDController().getError() > 0.0f ) { // decrease right wheel power goal
+						if( robot.getMotionPIDController().getError() <= PID_THRESHOLD) {
+							leftPid(radius);
+						} else {
+							leftAngle(radius);
+						}
+					} else {
+						// we are critically damped, set integral to 0
+						//ITerm = 0;
+						robot.getMotionPIDController().setITerm(0);
+					}
+				}
+				if(DEBUG)
+					System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+			} else {
+				// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
+				robot.getMotionPIDController().setITerm(0);//ITerm = 0;
+				wasPid = false;
+				arcin = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * radius);
+				arcout = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+				// error is difference in degrees between setpoint and input
+				if( robot.getMotionPIDController().getError() < 0.0f )
+					speedL *= (arcin/arcout);
+				else
+					if( robot.getMotionPIDController().getError() > 0.0f )
+						speedR *= (arcin/arcout);
+				if(DEBUG)
+					System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+			}
+		} else {
+			// manual steering mode, use tight radii and a human integrator
+			arcin = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * radius);
+			arcout = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
+			// error is difference in degrees between setpoint and input
+			// Stick position will override any IMU tolerances
+			if( stickDegrees != -180.0 && stickDegrees != 180 && stickDegrees != 0.0) { // if we want to go straight forward or backwards dont bother computing any ratios
+				if( robot.getMotionPIDController().getError() < 0.0f )
+					speedL *= (arcin/arcout);
+				else
+					if( robot.getMotionPIDController().getError() > 0.0f )
+						speedR *= (arcin/arcout);
+			}
+			if(DEBUG)
+				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+		}
+		if(DEBUG)
+			System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
+		//
+		// set it up to send down the publishing pipeline, we are going to pack both requests onto the "left wheel"
+		// channel so that 2 separate publishing operations are not necessary and the wheels are activated
+		// in a more realtime fashion. MegaPubs will process as many elements as appear in the request.
+		//
+		ArrayList<Integer> speedVals = new ArrayList<Integer>(4);
+		speedVals.add(robot.getLUN(MegaPubs.typeNames.LeftWheel.val()));
+		speedVals.add((int)speedL);
+		speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); 
+		speedVals.add((int)speedR);
+		pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.LeftWheel.val()))
+			.findFirst().get().publish(setupPub(connectedNode, speedVals));
+		//speedVals = new ArrayList<Integer>(2);
+		//speedVals.add(robot.getLUN(MegaPubs.typeNames.RightWheel.val())); 
+		//speedVals.add((int)speedR);
+		//pubschannel.stream().filter(e -> e.getTopicName().toString().contains(MegaPubs.typeNames.RightWheel.val()))
+		//	.findFirst().get().publish(setupPub(connectedNode, speedVals));
+		try {
+			Thread.sleep(5);
+		} catch (InterruptedException e) {}
+		//-------------------
+		// Above cases handle all steering and motor control and button press for automated
+		// control of course following by button press.
 	}
 	
 	protected Publisher<Int32MultiArray> getPublisher(Collection<Publisher<Int32MultiArray>> pubschannel, String val) {

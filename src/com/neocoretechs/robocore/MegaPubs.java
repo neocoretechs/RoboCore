@@ -217,7 +217,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
 	// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
-	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[][] responses;
+	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses;
 	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic;
 	private Collection<String> statPub = Collections.synchronizedCollection(new ArrayList<String>());
 
@@ -289,8 +289,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
 		// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
 		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-		responses = new PublishDiagnosticResponse[listNodeDeviceDemuxer.size()][stopics.length];
-		ultrasonic = new PublishResponseInterface[listNodeDeviceDemuxer.size()];
+		responses = new PublishDiagnosticResponse[stopics.length];
 	} catch (IOException e) {
 		System.out.println("Could not connect to Marlinspike.."+e);
 		e.printStackTrace();
@@ -354,6 +353,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 				@Override
 				public void onMasterRegistrationSuccess(Subscriber<Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s successfully registered with master%n", this.getClass().getName(), subs);				
 					subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 						@Override
 						public void onNewMessage(std_msgs.Int32MultiArray message) {
@@ -700,22 +701,13 @@ public void onStart(final ConnectedNode connectedNode) {
 	//ThreadPoolManager.init(stopics);
 	// Initialize the collection of DiagnosticStatus response handlers
 
-	for(int l = 0; l < listNodeDeviceDemuxer.size(); l++ ) {
 	  for(int i = 0; i < stopics.length; i++) {
-		responses[l][i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
-		responses[l][i].takeBridgeAndQueueMessage(stopics[i], 
-				((NodeDeviceDemuxer) ((ArrayList<NodeDeviceDemuxer>)listNodeDeviceDemuxer).get(l)).getAsynchDemuxer().getTopic(stopics[i]), 
+		responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
+		responses[i].takeBridgeAndQueueMessage(stopics[i],
+				marlinspikeManager.getNodeDeviceDemuxer(stopics[i]).getAsynchDemuxer().getTopic(stopics[i]),
+				//((NodeDeviceDemuxer) ((ArrayList<NodeDeviceDemuxer>)listNodeDeviceDemuxer).get(l)).getAsynchDemuxer().getTopic(stopics[i]), 
 				publishStatus[i]);
-		//ThreadPoolManager.getInstance().spin(responses[i], stopics[i]);
 	  }
-	  // spin individual responders or other groups of responders as necessary
-	  ultrasonic[l] = new PublishUltrasonicResponse(connectedNode, rangepub, outgoingRanges);
-	  // so the type of the device in the configs must match ULTRASONIC.val, or "ultrasonic"
-	  ultrasonic[l].takeBridgeAndQueueMessage(AsynchDemuxer.topicNames.ULTRASONIC.val(), 
-			((NodeDeviceDemuxer)((ArrayList<NodeDeviceDemuxer>)listNodeDeviceDemuxer).get(l)).getAsynchDemuxer().getTopic(AsynchDemuxer.topicNames.ULTRASONIC.val()),
-			DiagnosticStatus.OK);
-	  //ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
-	}
 	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
@@ -741,13 +733,9 @@ public void onStart(final ConnectedNode connectedNode) {
 			
 			//ThreadPoolManager.init(stopics);
 			// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike
-			for(int l = 0; l < listNodeDeviceDemuxer.size(); l++ ) {
-				for(int i = 0; i < stopics.length; i++) {
-					responses[l][i].publish();
-				}
-				// spin individual responders or other groups of responders as necessary
-				// here, each ultrasonic sensor attached to each Marlinspike, or all sensors attached to all Marlinspikes, if you will.
-				ultrasonic[l].publish();
+		
+			for(int i = 0; i < stopics.length; i++) {
+				responses[i].publish();
 			}
 			//ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 			//
