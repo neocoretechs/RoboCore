@@ -1,17 +1,18 @@
 package com.neocoretechs.robocore.config;
+import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+
 /*
 * Copyright (c) 2003, NeoCoreTechs
 * All rights reserved.
@@ -44,10 +45,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Jonathan Groff
  */
 public class Props {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final String propsFile = "RoboCore.properties";
 	private static String propfile = null;
-	public static final String dataDirectory = "/home/pi/";
+	public static String dataDirectory;
+	public static Properties properties;
 	/**
 	 * assume properties file is in 'RoboCore.properties' defined at runtime by -DRoboCore.properties=file
 	 * failing that, we will try to load a file name RoboCore.properties from the system resource stream
@@ -57,10 +59,15 @@ public class Props {
 	static {
 		try {
 			String file = System.getProperty(propsFile);
+			properties = new Properties();
 			if (file == null) {
 				init(top());
 			} else {
-				init(new FileInputStream(file));
+				File f = new File(file);
+				if(f.exists())
+					init(new FileInputStream(file));
+				else
+					init(top());
 			}
 		} catch (IOException ioe) {
 			throw new RuntimeException(ioe.toString());
@@ -76,6 +83,11 @@ public class Props {
 		java.net.URL loader =
 			ClassLoader.getSystemResource(propsFile);
 		if (loader == null) {
+		   	dataDirectory = System.getProperty("jars.provision");
+		   	if(dataDirectory == null)
+		   		throw new IOException(propsFile+" cannot be loaded from any resource path to configure Robot");
+	    	if(!dataDirectory.endsWith("/"))
+	    			dataDirectory += "/";
 			if( DEBUG )
 				System.out.println("Loading properties:"+dataDirectory+propsFile);
 			return new FileInputStream(dataDirectory+propsFile);
@@ -96,7 +108,7 @@ public class Props {
 	 */
 	public static void init(InputStream propFile) throws IOException {
 		try {
-			System.getProperties().load(propFile);
+			properties.load(propFile);
 		} catch (Exception ex) {
 			throw new IOException("FATAL ERROR:  unable to load "+propsFile+" file " + ex.toString());
 		}
@@ -166,7 +178,7 @@ public class Props {
 	 * @exception IllegalArgumentException if not set. 
 	 **/	
 	public static String toString(String prop) {
-		String result = System.getProperty(prop);
+		String result = properties.getProperty(prop);
 		if (result == null)
 			throw new IllegalArgumentException("property " + prop + " not set");
 		if (result != null)
@@ -175,7 +187,7 @@ public class Props {
 	}
 
 	public static float toFloat(String prop) {
-		String val = Props.toString(prop);
+		String val = properties.getProperty(prop);
 		try {
 			return Float.valueOf(val).floatValue();
 		} catch (Exception ex) {
@@ -211,8 +223,8 @@ public class Props {
 	 * @throws IllegalAccessException
 	 */
 	public static Map<String, Map<Integer, Map<String, Object>>> collectivizeProps() throws IllegalAccessException {
-		Enumeration<Object> keys = System.getProperties().keys();
-		Collection<Object> values = System.getProperties().values();
+		Enumeration<Object> keys = properties.keys();
+		Collection<Object> values = properties.values();
 		Iterator<Object> vit = values.iterator();
 		ConcurrentHashMap<String, Map<Integer, Map<String,Object>>> mainMap = new ConcurrentHashMap<String, Map<Integer, Map<String,Object>>>();
 		while(keys.hasMoreElements()) {
@@ -255,7 +267,7 @@ public class Props {
 		StringBuilder sb = new StringBuilder("<<MarlinSpike Configs>>\r\n");
 		try {
 			fos = new FileOutputStream(dataDirectory+"XML"+propsFile);
-			System.getProperties().storeToXML(fos, "MarlinSpike Configs");
+			properties.storeToXML(fos, "MarlinSpike Configs");
 			try {
 				Map<String, Map<Integer, Map<String, Object>>> globalConfigs = Props.collectivizeProps();
 				Set<Entry<String, Map<Integer, Map<String, Object>>>> props = globalConfigs.entrySet();

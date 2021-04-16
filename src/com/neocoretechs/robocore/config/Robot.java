@@ -51,7 +51,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public class Robot implements RobotInterface, Serializable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
 	private int temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
@@ -77,6 +77,8 @@ public class Robot implements RobotInterface, Serializable {
 		} catch (IllegalAccessException e) {
 			throw new RuntimeException(e);
 		}
+		if(globalConfigs == null)
+			throw new RuntimeException("Global property configuration failed in starting Robot, possibly data directory:"+Props.dataDirectory+" or property file:"+Props.getPropFile()+" is invalid");
 		extractLUN();
 		extractWHEEL();
 		extractPID();

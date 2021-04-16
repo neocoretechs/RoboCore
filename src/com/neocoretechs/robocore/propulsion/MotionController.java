@@ -213,13 +213,6 @@ public class MotionController extends AbstractNodeMain {
 	Object magMutex = new Object();
 	
 	static RobotInterface robot;
-	static {
-		try {
-			robot = new Robot();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	MarlinspikeManager marlinspikeManager;
@@ -254,7 +247,7 @@ public class MotionController extends AbstractNodeMain {
 	 * @throws IOException 
 	 */
 	public MotionController() throws IOException {
-
+		robot = new Robot();
 		marlinspikeManager = new MarlinspikeManager(robot);
 		marlinspikeManager.configureMarlinspike(true, false);
 		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
