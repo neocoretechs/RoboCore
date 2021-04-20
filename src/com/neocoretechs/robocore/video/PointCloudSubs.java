@@ -41,7 +41,7 @@ import com.neocoretechs.machinevision.hough3d.hough_settings;
 import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 import com.neocoretechs.robocore.video.VideoProcessor.AbstractDepth;
 import com.neocoretechs.robocore.video.VideoProcessor.envInterface;
 

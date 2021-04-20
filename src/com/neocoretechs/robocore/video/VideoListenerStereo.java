@@ -36,7 +36,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -167,6 +167,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 				        			Socket client_socket = ssocket.accept();
 				        			if( DEBUG )
 				        				System.out.println("Connection established from "+client_socket);
+				        			ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 				        			ThreadPoolManager.getInstance().spin(new StandardImageConnection(client_socket), "SYSTEM");
 				        		}
 				        	} catch (Exception e) {

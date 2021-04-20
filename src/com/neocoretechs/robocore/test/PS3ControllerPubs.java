@@ -30,7 +30,7 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 
 /**
@@ -389,7 +389,7 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2) {
 		if( ca[i].getName().contains("USB Joystick"))
 			makeController(pubdata2, ca[i]);
 	}
-
+	ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 	ThreadPoolManager.getInstance().spin(new Runnable() {
 		public void run(){
 			try {

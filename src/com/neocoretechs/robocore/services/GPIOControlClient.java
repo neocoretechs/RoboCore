@@ -26,9 +26,9 @@ import org.ros.node.service.ServiceClient;
 import org.ros.node.service.ServiceResponseListener;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 import com.neocoretechs.robocore.RosArrayUtilities;
-import com.neocoretechs.robocore.ThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
@@ -104,8 +104,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	switch(command) {
 		case "gpio":
 			// spinup reader that will place PWM commands on queue
+			ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 			fileReader<Integer> reader = new fileReader<Integer>(pubdataGPIO,"/home/pi/gpio", Integer.class);
-			ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
+			org.ros.internal.node.server.ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 			break;
 		case "direct":
 			if( remaps.containsKey("__pin") ) {

@@ -28,7 +28,7 @@ import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
 import com.neocoretechs.robocore.RosArrayUtilities;
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
@@ -102,6 +102,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	switch(command) {
 		case "pwm":
 			// spinup reader that will place PWM commands on queue
+			ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 			fileReader<Integer> reader = new fileReader<Integer>(pubdataPWM,"/home/pi/pwm", Integer.class);
 			ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 			break;

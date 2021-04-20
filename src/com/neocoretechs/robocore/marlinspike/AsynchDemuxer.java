@@ -14,7 +14,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -196,6 +196,7 @@ public class AsynchDemuxer implements Runnable {
 	}
 	
 	/**
+
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
 	 * If the elements reach a predetermined upper bound they are emplaced at the beginning. If this occurs,
 	 * a warning message is displayed but otherwise operation is unaffected. If these warnings are an issue,
@@ -223,6 +224,7 @@ public class AsynchDemuxer implements Runnable {
 	 * Initialize the topic names for this AsynchDemuxer
 	 */
 	public synchronized void init() {
+		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 		//
 		// G4
 		//
@@ -652,6 +654,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.PWMPINSETTING.val(), new pwmpinsetting(this).getTopicList());
 		
 		// spin the main loop to read lines from the Marlinspike and muxx them
+		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 		ThreadPoolManager.getInstance().spin(this, "SYSTEM");
 
 		if(DEBUG)

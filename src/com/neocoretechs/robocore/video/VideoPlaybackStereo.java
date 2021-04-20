@@ -40,7 +40,7 @@ import javax.swing.border.TitledBorder;
 
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.Relatrix;
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 

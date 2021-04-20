@@ -1039,7 +1039,7 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Conc
 	if( !shouldRun )
 		System.out.println("NO CONTROLLER MATCHING "+cotype+" FOUND, CONTROL THREAD WILL EXIT.");
 	
-	ThreadPoolManager.getInstance().spin(new Runnable() {
+	org.ros.internal.node.server.ThreadPoolManager.getInstance().spin(new Runnable() {
 		public void run(){
 			try {
 				while(shouldRun){

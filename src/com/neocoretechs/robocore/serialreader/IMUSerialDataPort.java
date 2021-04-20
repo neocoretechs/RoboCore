@@ -19,7 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Enumeration;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
@@ -241,6 +241,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	            //{
 	            //	err
 	            //}
+	            
 	            // Set the parameters of the connection.
 	            setSerialPortParameters(baud, datab, stopb, parityb);
 	 
@@ -249,7 +250,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 	            inStream = serialPort.getInputStream();
 	            if( inStream == null ) {
 	            	throw new IOException("Cant get InputStream for port "+portName);
-	            }   
+	            }
+	            
+	            
+	            ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
+	            
 	            //(new Thread(new SerialReader(inStream))).start();
 	            SerialReader readThread = new SerialReader(inStream);
 	            ThreadPoolManager.getInstance().spin(readThread, "SYSTEM");

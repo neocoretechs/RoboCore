@@ -232,6 +232,8 @@ public class MegaPubs extends AbstractNodeMain  {
 	}
 	
 	public GraphName getDefaultNodeName() {
+		if(DEBUG)
+			System.out.printf("Robot reports host name as %s%n",robot.getHostName());
 		return GraphName.of(robot.getHostName());
 	}
 

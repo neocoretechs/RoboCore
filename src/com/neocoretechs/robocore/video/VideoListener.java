@@ -36,7 +36,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -96,6 +96,7 @@ public class VideoListener extends AbstractNodeMain
 			        displayPanel.paintPanel();
 			    }
 			});
+			ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 			ThreadPoolManager.getInstance().spin(new Runnable() {
 				@Override
 				public void run() {

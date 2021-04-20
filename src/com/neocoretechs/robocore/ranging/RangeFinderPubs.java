@@ -11,7 +11,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
@@ -49,11 +49,11 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 	@Override
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("pubs_rangefinder1");
-	}
+	} 
 
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-		
+		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 		//final Log log = connectedNode.getLog();
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);

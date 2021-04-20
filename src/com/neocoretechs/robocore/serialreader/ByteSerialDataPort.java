@@ -12,7 +12,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Enumeration;
 
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 /**
  * Class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
  * to effect transmission and reception.
@@ -81,6 +81,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port whose ownership has already been requested by "+portId.getCurrentOwner());
 	    	}
 	        try {
+	        	ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 	            // Obtain a CommPortIdentifier object for the port you want to open
 	        	portId = CommPortIdentifier.getPortIdentifier(portName);
 	            if( portId == null ) {

@@ -49,7 +49,7 @@ import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
 import com.neocoretechs.robocore.machine.bridge.RadixTree;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.

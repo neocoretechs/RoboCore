@@ -51,7 +51,7 @@ import com.neocoretechs.machinevision.hough3d.hough_settings;
 import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-import com.neocoretechs.robocore.ThreadPoolManager;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.
@@ -496,6 +496,7 @@ public class VideoViewer extends AbstractNodeMain
 		 * notify waiting worker threads to process them.
 		 * Wait at synch barrier for completion of all processing threads, then display disparity 
 		 */
+		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 		ThreadPoolManager.getInstance().spin(new Runnable() {			
 				public void run() {
 					System.out.println("Image queue..");
