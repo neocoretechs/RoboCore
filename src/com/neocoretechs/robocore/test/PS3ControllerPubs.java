@@ -72,17 +72,6 @@ public class PS3ControllerPubs extends AbstractNodeMain  {
 	final static int motorSpeedMax = 1000;
 	// scale it to motor speed
 	
-	public PS3ControllerPubs(String host, InetSocketAddress master) {
-		this.host = host;
-		this.master = master;
-		NodeConfiguration nc = build();
-	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
-	    
-	}
 	
 	public PS3ControllerPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -99,20 +88,6 @@ public class PS3ControllerPubs extends AbstractNodeMain  {
 		return GraphName.of("pubs_ps3unit1");
 	}
 
-/**
- * Create NodeConfiguration 
- * @throws URISyntaxException 
- */
-public NodeConfiguration build()  {
-  //NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
-  NodeConfiguration nodeConfiguration = NodeConfiguration.newPublic(host, master);
-  nodeConfiguration.setParentResolver(NameResolver.newFromNamespace("/"));
-  nodeConfiguration.setRosRoot(null); // currently unused
-  nodeConfiguration.setRosPackagePath(new ArrayList<File>());
-  nodeConfiguration.setMasterUri(master);
-  nodeConfiguration.setNodeName(getDefaultNodeName());
-  return nodeConfiguration;
-}
 
 
 @Override

@@ -82,7 +82,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.containsKey("__commitRate") )
 			commitRate = Integer.parseInt(remaps.get("__commitRate"));
-	
+		try {
 		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
 			CountDownServiceServerListener.newDefault();
 		final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(STORE_SERVICE, ControllerStatusMessage._TYPE,
@@ -111,7 +111,10 @@ public class VideoRecorderStereo extends AbstractNodeMain
 			} catch (InterruptedException e1) {
 				System.out.println("STORAGE SERVICE REGISTRATION WAS INTERRUPTED");
 				e1.printStackTrace();
-			}	
+			}
+		} catch(Exception e2) {
+			System.out.println("CONTROL VIA SERVICE NOT AVAILABLE");
+		}
 
 
 		/**
@@ -146,7 +149,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 				try {
 					Relatrix.transactionCommit();
 				} catch (IOException e) {
-					System.out.println("Sorage commit fialed due to:"+e);
+					System.out.println("Storage commit fialed due to:"+e);
 					e.printStackTrace();
 				}
 			}

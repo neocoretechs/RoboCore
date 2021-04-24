@@ -79,7 +79,9 @@ public class VideoListenerStereo extends AbstractNodeMain
     byte[][] bqueue;
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
-	
+	static {
+		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, false);
+	}
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -87,7 +89,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-		
+
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = 
@@ -167,7 +169,6 @@ public class VideoListenerStereo extends AbstractNodeMain
 				        			Socket client_socket = ssocket.accept();
 				        			if( DEBUG )
 				        				System.out.println("Connection established from "+client_socket);
-				        			ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 				        			ThreadPoolManager.getInstance().spin(new StandardImageConnection(client_socket), "SYSTEM");
 				        		}
 				        	} catch (Exception e) {

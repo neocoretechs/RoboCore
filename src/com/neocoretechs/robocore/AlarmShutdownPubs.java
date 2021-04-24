@@ -31,15 +31,6 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
 	
-	public AlarmShutdownPubs(String host, InetSocketAddress master) {
-		this.host = host;
-		this.master = master;
-		NodeConfiguration nc = build();
-	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    
-	}
-	
 	public AlarmShutdownPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
 	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
@@ -52,20 +43,6 @@ public class AlarmShutdownPubs extends AbstractNodeMain  {
 		return GraphName.of("pubs_alarmshutdown");
 	}
 
-	/**
-	 * Create NodeConfiguration 
-	 * @throws URISyntaxException 
-	 */
-	public NodeConfiguration build()  {
-		//NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
-		NodeConfiguration nodeConfiguration = NodeConfiguration.newPublic(host, master);
-		nodeConfiguration.setParentResolver(NameResolver.newFromNamespace("/"));
-		nodeConfiguration.setRosRoot(null); // currently unused
-		nodeConfiguration.setRosPackagePath(new ArrayList<File>());
-		nodeConfiguration.setMasterUri(master);
-		nodeConfiguration.setNodeName(getDefaultNodeName());
-		return nodeConfiguration;
-	}
 
 
 	@Override

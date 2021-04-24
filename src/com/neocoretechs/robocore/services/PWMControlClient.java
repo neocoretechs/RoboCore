@@ -47,18 +47,6 @@ public class PWMControlClient extends AbstractNodeMain  {
 	public CircularBlockingDeque<Integer> pubdataPWM = new CircularBlockingDeque<Integer>(16);
 	private String pin;
 	private String value;
-
-	public PWMControlClient(String host, InetSocketAddress master) {
-		this.host = host;
-		this.master = master;
-		NodeConfiguration nc = build();
-	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    try {
-			awaitStart.await();
-		} catch (InterruptedException e) {}
-	    
-	}
 	
 	public PWMControlClient(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -75,20 +63,6 @@ public class PWMControlClient extends AbstractNodeMain  {
 		return GraphName.of("pwmcontrolclient");
 	}
 
-/**
- * Create NodeConfiguration 
- * @throws URISyntaxException 
- */
-public NodeConfiguration build()  {
-  //NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
-  NodeConfiguration nodeConfiguration = NodeConfiguration.newPublic(host, master);
-  nodeConfiguration.setParentResolver(NameResolver.newFromNamespace("/"));
-  nodeConfiguration.setRosRoot(null); // currently unused
-  nodeConfiguration.setRosPackagePath(new ArrayList<File>());
-  nodeConfiguration.setMasterUri(master);
-  nodeConfiguration.setNodeName(getDefaultNodeName());
-  return nodeConfiguration;
-}
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {

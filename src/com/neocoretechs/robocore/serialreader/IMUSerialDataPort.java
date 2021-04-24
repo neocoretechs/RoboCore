@@ -28,8 +28,8 @@ import org.ros.internal.node.server.ThreadPoolManager;
  *
  */
 public class IMUSerialDataPort implements DataPortInterface {
-		private static boolean DEBUG = false;
-		private static boolean PORTDEBUG = false;
+		private static boolean DEBUG = true;
+		private static boolean PORTDEBUG = true;
 		private static boolean INFO = true;
 	    private SerialPort serialPort;
 	    private OutputStream outStream;
@@ -60,6 +60,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private static Object mutex = new Object();
 	    private int portOwned = CommPortOwnershipListener.PORT_UNOWNED;
 	    private CommPortIdentifier portId = null;
+	    
+	    static {
+            ThreadPoolManager.getInstance().init(new String[] {"IMU"}, true);
+	    }
 	    
 	    //BNO055
 	    //Page id register definition
@@ -252,12 +256,9 @@ public class IMUSerialDataPort implements DataPortInterface {
 	            	throw new IOException("Cant get InputStream for port "+portName);
 	            }
 	            
-	            
-	            ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
-	            
 	            //(new Thread(new SerialReader(inStream))).start();
 	            SerialReader readThread = new SerialReader(inStream);
-	            ThreadPoolManager.getInstance().spin(readThread, "SYSTEM");
+	            ThreadPoolManager.getInstance().spin(readThread, "IMU");
 	            while(!readThread.isRunning)
 					try {
 						Thread.sleep(1);
@@ -271,7 +272,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		            }
 		            //(new Thread(new SerialWriter(outStream))).start();
 		            SerialWriter writeThread = new SerialWriter(outStream);
-		            ThreadPoolManager.getInstance().spin(writeThread, "SYSTEM");
+		            ThreadPoolManager.getInstance().spin(writeThread, "IMU");
 		            while(!writeThread.isRunning)
 						try {
 							Thread.sleep(1);

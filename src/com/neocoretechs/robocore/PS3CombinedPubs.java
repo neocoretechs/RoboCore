@@ -34,6 +34,7 @@ import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
+import org.ros.internal.node.server.ThreadPoolManager;
 
 
 /**
@@ -139,13 +140,6 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 	private boolean shouldPublish = false;
 	private boolean onceThrough = true; // sets initial defaults from stick readings, done at first and then when refresh interval exceeded
 	
-	public PS3CombinedPubs(String host, InetSocketAddress master) {
-		this.host = host;
-		this.master = master;
-		NodeConfiguration nc = build();
-	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);  
-	}
 	
 	public PS3CombinedPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -159,20 +153,6 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 		return GraphName.of("pubs_ps3unit1");
 	}
 
-/**
- * Create NodeConfiguration 
- * @throws URISyntaxException 
- */
-public NodeConfiguration build()  {
-  //NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
-  NodeConfiguration nodeConfiguration = NodeConfiguration.newPublic(host, master);
-  nodeConfiguration.setParentResolver(NameResolver.newFromNamespace("/"));
-  nodeConfiguration.setRosRoot(null); // currently unused
-  nodeConfiguration.setRosPackagePath(new ArrayList<File>());
-  nodeConfiguration.setMasterUri(master);
-  nodeConfiguration.setNodeName(getDefaultNodeName());
-  return nodeConfiguration;
-}
 
 
 @Override
@@ -1038,7 +1018,7 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Conc
 
 	if( !shouldRun )
 		System.out.println("NO CONTROLLER MATCHING "+cotype+" FOUND, CONTROL THREAD WILL EXIT.");
-	
+	ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
 	org.ros.internal.node.server.ThreadPoolManager.getInstance().spin(new Runnable() {
 		public void run(){
 			try {

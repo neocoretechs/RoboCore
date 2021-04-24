@@ -218,22 +218,7 @@ public class MotionController extends AbstractNodeMain {
 	MarlinspikeManager marlinspikeManager;
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
 	boolean[] isActive;
-	/**
-	 * We really only use these methods if we want to pull remapped params out of command line or do
-	 * some special binding, otherwise the default uses the ROS_HOSTNAME environment or the remapped __ip:= and __master:=
-	 * @param host
-	 * @param master
-	 */
-	public MotionController(String host, InetSocketAddress master) {
-		this.host = host;
-		this.master = master;
-		NodeConfiguration nc = build();
-	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);
-	    if( DEBUG ) {
-	    	System.out.println("Bringing up MotionControl with host and master:"+host+" "+master);
-	    }   
-	}
+
 	
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -255,19 +240,6 @@ public class MotionController extends AbstractNodeMain {
 
 	}
 		
-	/**
-	 * Create NodeConfiguration.
-	 */
-	public NodeConfiguration build()  {
-	  //NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
-	  NodeConfiguration nodeConfiguration = NodeConfiguration.newPublic(host, master);
-	  nodeConfiguration.setParentResolver(NameResolver.newFromNamespace("/"));
-	  nodeConfiguration.setRosRoot(null); // currently unused
-	  nodeConfiguration.setRosPackagePath(new ArrayList<File>());
-	  nodeConfiguration.setMasterUri(master);
-	  nodeConfiguration.setNodeName(getDefaultNodeName());
-	  return nodeConfiguration;
-	}
 	
 	@Override
 	public GraphName getDefaultNodeName() {

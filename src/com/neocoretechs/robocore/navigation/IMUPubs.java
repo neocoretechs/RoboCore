@@ -85,13 +85,6 @@ public class IMUPubs extends AbstractNodeMain  {
 	boolean system_needs_calibrating = true; // if mode is calibration and its first time through
 	boolean display_revision = true;
 	
-	public IMUPubs(String host, InetSocketAddress master) {
-		this.host = host;
-		this.master = master;
-		NodeConfiguration nc = build();
-	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, nc);    
-	}
 	
 	public IMUPubs(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -105,20 +98,7 @@ public class IMUPubs extends AbstractNodeMain  {
 		return GraphName.of("pubs_imu");
 	}
 
-/**
- * Create NodeConfiguration 
- * @throws URISyntaxException 
- */
-public NodeConfiguration build()  {
-  //NodeConfiguration nodeConfiguration = NodeConfiguration.copyOf(Core.getInstance().nodeConfiguration);
-  NodeConfiguration nodeConfiguration = NodeConfiguration.newPublic(host, master);
-  nodeConfiguration.setParentResolver(NameResolver.newFromNamespace("/"));
-  nodeConfiguration.setRosRoot(null); // currently unused
-  nodeConfiguration.setRosPackagePath(new ArrayList<File>());
-  nodeConfiguration.setMasterUri(master);
-  nodeConfiguration.setNodeName(getDefaultNodeName());
-  return nodeConfiguration;
-}
+
 
 
 @Override

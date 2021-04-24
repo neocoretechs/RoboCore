@@ -22,10 +22,12 @@ public class StatusAlertSubs extends AbstractNodeMain {
 	private static boolean DEBUG = false;
 	private static boolean speak = false;
 	public static VoxHumana speaker = null;
+	
 	@Override
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("subs_statusalerts");
 	}
+	
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 		if( speak ) {
