@@ -2,7 +2,7 @@ package com.neocoretechs.robocore.machine.bridge;
 
 import java.io.Serializable;
 import java.util.List;
-import javax.xml.bind.annotation.adapters.XmlAdapter;
+//import javax.xml.bind.annotation.adapters.XmlAdapter;
 
 /**
  * This class is called by JAXB by installing it as an adapter to control serialization/deserialization
@@ -13,7 +13,7 @@ import javax.xml.bind.annotation.adapters.XmlAdapter;
  * @author jg
  *
  */
-public class RawDataXmlAdapter extends XmlAdapter<RawDataSubset,List<MachineReading>> implements Serializable {
+public class RawDataXmlAdapter /*extends XmlAdapter<RawDataSubset,List<MachineReading>>*/ implements Serializable {
 	private static final long serialVersionUID = 1L;
 	private static int page = 1;
 	private static int numberPerPage = 20;
@@ -34,7 +34,7 @@ public class RawDataXmlAdapter extends XmlAdapter<RawDataSubset,List<MachineRead
 	/* (non-Javadoc)
 	 * @see javax.xml.bind.annotation.adapters.XmlAdapter#marshal(java.lang.Object)
 	 */
-	@Override
+	//@Override
 	public RawDataSubset marshal(List<MachineReading> arg0) throws Exception {
 		int start = 0,end = 0;
 		RawDataSubset rds = new RawDataSubset();
@@ -69,7 +69,7 @@ public class RawDataXmlAdapter extends XmlAdapter<RawDataSubset,List<MachineRead
 	/* (non-Javadoc)
 	 * @see javax.xml.bind.annotation.adapters.XmlAdapter#unmarshal(java.lang.Object)
 	 */
-	@Override
+	//@Override
 	public List<MachineReading> unmarshal(RawDataSubset arg0) throws Exception {
 		return arg0.machineReadings;
 	}

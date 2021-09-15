@@ -5,15 +5,15 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Iterator;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.annotation.XmlAccessType;
-import javax.xml.bind.annotation.XmlAccessorType;
-import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.bind.annotation.XmlType;
-import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+//import javax.xml.bind.JAXBContext;
+//import javax.xml.bind.JAXBException;
+//import javax.xml.bind.Marshaller;
+//import javax.xml.bind.Unmarshaller;
+//import javax.xml.bind.annotation.XmlAccessType;
+//import javax.xml.bind.annotation.XmlAccessorType;
+//import javax.xml.bind.annotation.XmlRootElement;
+//import javax.xml.bind.annotation.XmlType;
+//import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
  	/**
  	 * Bridges machine ops and model implementation. The manner in which this acts as a bridge is that this is
@@ -23,13 +23,13 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
  	 * @author Jonathan Groff (C) Copyright 2012,2017 NeoCoreTechs
  	 */
 	//@XmlRootElement @XmlType(factoryMethod="getInstance")
-	@XmlRootElement(name="MachineBridge")
-	@XmlAccessorType(XmlAccessType.FIELD)
+	//@XmlRootElement(name="MachineBridge")
+	//@XmlAccessorType(XmlAccessType.FIELD)
     public final class MachineBridge implements Serializable{
 		private static final long serialVersionUID = 1L;
 		private static boolean DEBUG = false;
 		//@XmlElement(name="machineReadings", type=MachineReading.class)
-		@XmlJavaTypeAdapter(RawDataXmlAdapter.class)
+		//@XmlJavaTypeAdapter(RawDataXmlAdapter.class)
 		//@XmlElementWrapper()
 		//@XmlAnyElement(lax=true)
     	CircularBlockingDeque<MachineReading> machineReadings = null;
@@ -79,33 +79,33 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 					}
 		}
 		
-		public synchronized static MachineBridge fromXml(String xml) throws JAXBException {
+		//public synchronized static MachineBridge fromXml(String xml) throws JAXBException {
 			//MachineBridge mb = MachineBridge.getInstance();
-			StringReader reader = new StringReader(xml);
-			JAXBContext context;	
-			context = JAXBContext.newInstance(MachineBridge.class, MachineReading.class, RawDataSubset.class);
+			//StringReader reader = new StringReader(xml);
+			//JAXBContext context;	
+			//context = JAXBContext.newInstance(MachineBridge.class, MachineReading.class, RawDataSubset.class);
 		    //SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI); 
 		    //Schema schema = sf.newSchema(new File("MachineReading.xsd")); 
-			Unmarshaller m = context.createUnmarshaller();
+			//Unmarshaller m = context.createUnmarshaller();
 		    //m.setSchema(schema);
-			return (MachineBridge)m.unmarshal(reader);
+			//return (MachineBridge)m.unmarshal(reader);
 
-		}
+		//}
 		
-		public synchronized static String toXml(MachineBridge mb) {
-			StringWriter writer = new StringWriter();
-			JAXBContext context;
-			try {
-				context = JAXBContext.newInstance(MachineBridge.class, MachineReading.class, RawDataSubset.class);
-				Marshaller m = context.createMarshaller();
-				m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-				m.marshal(mb, writer);
-			} catch (JAXBException e) {
-				e.printStackTrace();
-			}
+		//public synchronized static String toXml(MachineBridge mb) {
+			//StringWriter writer = new StringWriter();
+			//JAXBContext context;
+			//try {
+				//context = JAXBContext.newInstance(MachineBridge.class, MachineReading.class, RawDataSubset.class);
+				//Marshaller m = context.createMarshaller();
+				//m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+				//m.marshal(mb, writer);
+			//} catch (JAXBException e) {
+				//e.printStackTrace();
+			//}
 			//if( Props.DEBUG ) System.out.println("Bridge: "+writer.toString());
-			return writer.toString();
-		}
+			//return writer.toString();
+		//}
 		
 		@Override
 		public String toString() {

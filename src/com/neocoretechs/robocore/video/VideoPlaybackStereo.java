@@ -38,8 +38,14 @@ import javax.swing.WindowConstants;
 import javax.swing.border.Border;
 import javax.swing.border.TitledBorder;
 
+import com.neocoretechs.bigsack.iterator.Entry;
+import com.neocoretechs.bigsack.session.BigSackAdapter;
+import com.neocoretechs.bigsack.session.TransactionalHashSet;
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.Relatrix;
+import com.neocoretechs.relatrix.client.RelatrixKVClient;
+import com.neocoretechs.relatrix.client.RemoteEntrySetIterator;
+
 import org.ros.internal.node.server.ThreadPoolManager;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -56,7 +62,7 @@ import org.ros.internal.node.server.ThreadPoolManager;
 public class VideoPlaybackStereo  {
 	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-
+	public static RelatrixKVClient rkvc;
     private static BufferedImage imagel = null;
     private static BufferedImage imager = null;
     private static PlayerFrame displayPanel1;
@@ -80,14 +86,16 @@ public class VideoPlaybackStereo  {
     private static byte[][] bqueue;
 	private static int sequenceNumber,lastSequenceNumber;
 	static long time1;
-	private static String DATABASE = "/etc/ROSCOE2/Images";
-	
 	
 	public static void main(String[] args) {
 		try {
-			Relatrix.setTablespaceDirectory(DATABASE);
+			if(args.length != 3 ) {
+				System.out.println("usage: java com.neocoretechs.robocore.video.VideoPlaybackStereo [local node] [remote node] [server port]");
+				System.exit(1);
+			}
+			rkvc = new RelatrixKVClient(args[0], args[1], Integer.parseInt(args[2]));
 		} catch (IOException e2) {
-			System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
+			System.out.println("Relatrix database volume "+VideoRecorderStereo.DATABASE+" does not exist!");
 			throw new RuntimeException();
 		}
 		if( mode.equals("display")) {
@@ -127,17 +135,17 @@ public class VideoPlaybackStereo  {
 			long timlast = 0;
 			long samplesPer = 0;
 			
-		    Stream<Comparable[]> stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
-		    stream.forEach(e -> Stream.of(e)
-				.forEach(g -> System.out.println("Element A:"+g)));
+		    //Stream<Comparable[]> stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
+		    //stream.forEach(e -> Stream.of(e)
+			//	.forEach(g -> System.out.println("Element A:"+g)));
 		    
-		    stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
-			Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),
-		    		Collectors.groupingBy(d -> d[1].toString(), 
-		    		Collectors.groupingBy(e -> e[2].toString(), Collectors.counting()))));
-	        nameCount.forEach((name, count) -> {
-	            System.out.println(name + ":" + count);
-	        });
+		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
+			//Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),
+		    //		Collectors.groupingBy(d -> d[1].toString(), 
+		    //		Collectors.groupingBy(e -> e[2].toString(), Collectors.counting()))));
+	        //nameCount.forEach((name, count) -> {
+	        //    System.out.println(name + ":" + count);
+	        //});
 		    
 		    
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
@@ -159,8 +167,10 @@ public class VideoPlaybackStereo  {
 		    System.out.println(stream.count());
 		    System.out.println(System.nanoTime()-nano);
 		    */
-			Iterator<?> it = Relatrix.findSet("?", "?", "?");
-				while(it.hasNext()) {
+			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
+			RemoteEntrySetIterator it = rkvc.entrySet(java.lang.Long.class);
+				while(rkvc.hasNext(it)) {
+					/*
 					Comparable[] c = (Comparable[]) it.next();
 					Long tim = (Long) c[0];
 					Double yaw = (Double) c[1];
@@ -173,6 +183,9 @@ public class VideoPlaybackStereo  {
 						timlast = tim;
 					}
 					StereoscopicImageBytes<?> sib = (StereoscopicImageBytes<?>) c[2];
+					*/
+					Entry e = (Entry) rkvc.next(it);
+					StereoscopicImageBytes sib = (StereoscopicImageBytes) e.getValue();
 					synchronized(mutex) {
 						bufferl = sib.getLeft(); // 3 byte BGR
 						bufferr = sib.getRight(); // 3 byte BGR	
@@ -200,8 +213,8 @@ public class VideoPlaybackStereo  {
 						}
 	        			displayPanel1.setLastFrame((java.awt.Image)imagel);
 	        			displayPanel2.setLastFrame((java.awt.Image)imager);
-	    				displayPanel2.setComputedValues(yaw, tim, 0);
-	        			displayPanel1.setComputedValues(yaw, tim, 0); // values from db for time, yaw
+	    				//displayPanel2.setComputedValues(yaw, tim, 0);
+	        			//displayPanel1.setComputedValues(yaw, tim, 0); // values from db for time, yaw
 	        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 	        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 	        			displayPanel1.invalidate();

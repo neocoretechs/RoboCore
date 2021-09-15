@@ -2,7 +2,8 @@ package com.neocoretechs.robocore.video;
 
 import java.io.Serializable;
 
-public class StereoscopicImageBytes<T> implements Comparable<T>, Serializable {
+public class StereoscopicImageBytes implements Comparable, Serializable {
+	private static final long serialVersionUID = 1L;
 	private byte[] left;
 	private byte[] right;
 	public StereoscopicImageBytes(byte[] bytesl, byte[] bytesr) {
@@ -34,7 +35,7 @@ public class StereoscopicImageBytes<T> implements Comparable<T>, Serializable {
 		this.left = left;
 	}
 	@Override
-	public int compareTo(T o) {
+	public int compareTo(Object o) {
 		if(left.length > ((StereoscopicImageBytes)o).getLeft().length)
 			return 1;
 		if(left.length < ((StereoscopicImageBytes)o).getLeft().length)

@@ -2,10 +2,10 @@ package com.neocoretechs.robocore.machine.bridge;
 
 import java.io.Serializable;
 
-import javax.xml.bind.annotation.XmlAccessType;
-import javax.xml.bind.annotation.XmlAccessorType;
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlRootElement;
+//import javax.xml.bind.annotation.XmlAccessType;
+//import javax.xml.bind.annotation.XmlAccessorType;
+//import javax.xml.bind.annotation.XmlElement;
+//import javax.xml.bind.annotation.XmlRootElement;
 
 /**
  * This class represents a machine reading taken from the Marlinspike code via the
@@ -29,8 +29,8 @@ import javax.xml.bind.annotation.XmlRootElement;
  * @author Jonathan Neville Groff (C) NeoCoreTechs 2020
  *
  */
-@XmlRootElement(name="MachineReading")
-@XmlAccessorType(XmlAccessType.PROPERTY)
+//@XmlRootElement(name="MachineReading")
+//@XmlAccessorType(XmlAccessType.PROPERTY)
 public final class MachineReading implements Serializable{
 
 	private static final long serialVersionUID = -3231437136596373851L;
@@ -40,36 +40,36 @@ public final class MachineReading implements Serializable{
 	private double readingVal;
 	private int readingValInt;
 	private String readingValString;
-	@XmlElement
+	//@XmlElement
 	public int getRawGroup() {
 		return rawGroup;
 	}
 	public void setRawGroup(int rawGroup) {
 		this.rawGroup = rawGroup;
 	}
-	@XmlElement
+	//@XmlElement
 	public int getRawSeq() {
 		return rawSeq;
 	}
 	public void setRawSeq(int rawSeq) {
 		this.rawSeq = rawSeq;
 	}
-	@XmlElement
+	//@XmlElement
 	public int getRawReadingNum() {
 		return rawReadingNum;
 	}
 	public void setRawReadingNum(int rawReadingNum) {
 		this.rawReadingNum = rawReadingNum;
 	}
-	@XmlElement
+	//@XmlElement
 	public double getReadingValDouble() {
 		return readingVal;
 	}
-	@XmlElement
+	//@XmlElement
 	public int getReadingValInt() {
 		return readingValInt;
 	}
-	@XmlElement
+	//@XmlElement
 	public String getReadingValString() {
 		return readingValString;
 	}

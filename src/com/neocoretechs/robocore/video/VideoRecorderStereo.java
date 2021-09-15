@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import java.util.Map;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 
 import org.ros.message.MessageListener;
@@ -15,6 +18,8 @@ import org.ros.node.service.ServiceResponseBuilder;
 import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Subscriber;
 
+import com.neocoretechs.bigsack.session.BigSackAdapter;
+import com.neocoretechs.bigsack.session.TransactionalHashSet;
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.Relatrix;
 import org.ros.internal.node.server.ThreadPoolManager;
@@ -38,7 +43,7 @@ import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
  */
 public class VideoRecorderStereo extends AbstractNodeMain 
 {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
     private Object mutex = new Object();
@@ -58,9 +63,14 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	long time1;
 	protected static boolean shouldStore = true;
 	private static String STORE_SERVICE = "cmd_store";
-	int commitRate = 100;
-	private static String DATABASE = "/etc/ROSCOE2/Images";
-	
+	private static int MAXIMUM = 50000;
+	int commitRate = 500;
+	public static String DATABASE = "D:/etc/ROSCOE2/Images";
+	CountDownLatch latch;
+	TransactionalHashSet session = null;
+	static {
+		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, false);
+	}
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -68,20 +78,26 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
+		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		if( remaps.containsKey("__database") )
+			DATABASE = remaps.get("__database");
 		try {
-			Relatrix.setTablespaceDirectory(DATABASE);
-		} catch (IOException e2) {
-			System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
-			throw new RuntimeException();
+			//Relatrix.setTablespaceDirectory(DATABASE);
+			BigSackAdapter.setTableSpaceDir(DATABASE);
+			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE);
+			session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
+		} catch (IOException | IllegalAccessException e2) {
+			//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
+			throw new RuntimeException(e2);
 		}
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = 
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 
-		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.containsKey("__commitRate") )
 			commitRate = Integer.parseInt(remaps.get("__commitRate"));
+		/*
 		try {
 		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
 			CountDownServiceServerListener.newDefault();
@@ -115,8 +131,46 @@ public class VideoRecorderStereo extends AbstractNodeMain
 		} catch(Exception e2) {
 			System.out.println("CONTROL VIA SERVICE NOT AVAILABLE");
 		}
-
-
+	*/
+		latch = new CountDownLatch(1);
+		
+		ThreadPoolManager.getInstance().spin(new Runnable() {
+			@Override
+			public void run() {
+				if(DEBUG)
+					System.out.println("Entering storage loop");
+				try {
+					while(shouldStore) {
+						try {
+							latch.await();
+						} catch (InterruptedException e) {
+							shouldStore = false;
+						}
+						synchronized(mutex) {
+							StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
+							//try {
+								//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
+								session.put(sib);
+							//} catch (DuplicateKeyException e) {
+								// if within 1 ms, rare but occurs
+							//}
+							if(sequenceNumber%commitRate == 0) {
+								System.out.println("Committing at sequence "+sequenceNumber);
+								//Relatrix.transactionCommit();
+								session.Commit();
+								session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
+								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
+									System.exit(0);
+							}
+						}
+					}
+		        } catch (IllegalAccessException | IOException e) {
+		        	System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
+		        	e.printStackTrace();
+		        }
+			}
+		}, "SYSTEM");
+		
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
@@ -128,35 +182,19 @@ public class VideoRecorderStereo extends AbstractNodeMain
 				time1 = System.currentTimeMillis();
 				System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
 				lastSequenceNumber = sequenceNumber;
-			}
-			if(shouldStore) {
-				synchronized(mutex) {
+			}		
+			synchronized(mutex) {
 					cbl = img.getData();
 					bufferl = cbl.array(); // 3 byte BGR
 					cbr = img.getData2();
 					bufferr = cbr.array(); // 3 byte BGR
-					StereoscopicImageBytes<?> sib = new StereoscopicImageBytes(bufferl, bufferr);
-					try {
-						Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
-						if(sequenceNumber%commitRate == 0)
-							Relatrix.transactionCheckpoint();
-					} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
-						System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
-						e.printStackTrace();
-					}
-				}
-			} else {
-				try {
-					Relatrix.transactionCommit();
-				} catch (IOException e) {
-					System.out.println("Storage commit fialed due to:"+e);
-					e.printStackTrace();
-				}
 			}
+			latch.countDown();
+			latch = new CountDownLatch(1);
 			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
-			if( DEBUG ) {
-				System.out.println("New images "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
-			}
+			//if( DEBUG ) {
+			//	System.out.println("New image set #"+sequenceNumber+" - "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
+			//}
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
 			/*
@@ -194,11 +232,14 @@ public class VideoRecorderStereo extends AbstractNodeMain
 				synchronized(mutex) {
 					eulers = message.getOrientationCovariance();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
-					if(DEBUG)
-						System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+					//if(DEBUG)
+						//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 				}
 			}
 		});
+		
+
+		
 	}
 	
 
