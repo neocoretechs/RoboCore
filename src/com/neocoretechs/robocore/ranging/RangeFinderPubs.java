@@ -45,6 +45,8 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	//public static VoxHumana speaker = null;
 	public ConcurrentLinkedQueue<String> pubdata = new ConcurrentLinkedQueue<String>();
+	private static final int DISTANCE_THRESHOLD = 10; // 10 cm variance
+	private static double previousDistance = -1;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -53,25 +55,17 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
+		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
 		//final Log log = connectedNode.getLog();
-		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
-				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-		Subscriber<std_msgs.Empty> subsalarm = connectedNode.newSubscriber("alarm/shutdown", std_msgs.Empty._TYPE);
-		
-		subsalarm.addMessageListener(new MessageListener<std_msgs.Empty>() {
-			@Override
-			public void onNewMessage(std_msgs.Empty message) {
-				alarmTrip = false;
-			}
-		});
-	
+		final Publisher<std_msgs.String> statpub =
+				connectedNode.newPublisher("robocore/alerts", std_msgs.String._TYPE);
+
 		UltraPing up = new UltraPing();
 		ThreadPoolManager.getInstance().spin(up, "SYSTEM");
 		// This CancellableLoop will be canceled automatically when the node shuts
 		// down.
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
-			diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
+			std_msgs.String statmsg = statpub.newMessage();
 			@Override
 			protected void setup() {
 				
@@ -80,8 +74,11 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 			@Override
 			protected void loop() throws InterruptedException {
 				if( !pubdata.isEmpty()) {
-					statmsg.setMessage(pubdata.poll());
-					statpub.publish(statmsg);
+					String sDist = pubdata.poll();
+					if(sDist != null) {
+						statmsg.setData(sDist);
+						statpub.publish(statmsg);
+					}
 				}
 				Thread.sleep(1);
 			}
@@ -139,24 +136,14 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 		  do {
 			  // Get the range
 			  double distance=RangeFinderPubs.getRange(rangefindertrigger, rangefinderresult);
-			  if( distance < 300) { // 300 cm, max range is 200 cm typical
+			  if(previousDistance == -1)
+				  previousDistance = distance;
+			  if( Math.abs(distance-previousDistance) >= DISTANCE_THRESHOLD) { // 300 cm, max range is 200 cm typical
 				  if( DEBUG ) {
 					  System.out.println();
 					  System.out.println("RangeFinder result ="+distance +" cm");
 				  }
-				  alarmTrip = true;
-				  count = System.currentTimeMillis();
 			  }
-			  if( alarmTrip) {
-				  if( (System.currentTimeMillis() - count) > 2) {// alert every 2 seconds
-					  if(DEBUG)
-						  System.out.print("Intruder ALERT!!\r");
-					  count = System.currentTimeMillis();
-				  }
-			  }
-			  // try {
-			  //	Thread.sleep(100);
-			  //} catch (InterruptedException e) {}
 		  
 		  } while (true);
 		   	   
@@ -183,22 +170,18 @@ class UltraPing implements Runnable {
 		try {
 			 // Get the range
 			  double distance=RangeFinderPubs.getRange(rangefindertrigger, rangefinderresult);
-			  if( distance < 300) { // 300 cm, max range is 200 cm typical
+			  if(previousDistance == -1)
+				  previousDistance = distance;
+			  if( Math.abs(distance-previousDistance) >= DISTANCE_THRESHOLD) { // 300 cm, max range is 200 cm typical
 				  if( DEBUG ) {
 					  System.out.println();
 					  System.out.println("RangeFinder result ="+distance +" cm");
 				  }
-				  alarmTrip = true;
-				  count = System.currentTimeMillis();
+				  if(DEBUG)
+					System.out.print("Intruder ALERT!!\r");
+				  pubdata.add(String.valueOf(Math.abs(distance-previousDistance)));
 			  }
-			  if( alarmTrip) {
-				  if( (System.currentTimeMillis() - count) > 2) {// alert every 2 seconds
-					  if(DEBUG)
-						  System.out.print("Intruder ALERT!!\r");
-					  pubdata.add("Intruder Alert!");
-					  count = System.currentTimeMillis();
-				  }
-			  }
+			  previousDistance = distance;
 			
 		} catch (Exception e) {
 			e.printStackTrace();
