@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import com.neocoretechs.relatrix.DuplicateKeyException;
+import com.neocoretechs.relatrix.client.RelatrixClientInterface;
 import com.neocoretechs.relatrix.client.RelatrixKVClient;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -32,7 +33,7 @@ public class VidCapAndStoreStereo  {
 	private static final boolean DEBUG = false;
 	private static final boolean DEBUGFRAME = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-	public static RelatrixKVClient rkvc;
+	public static RelatrixClientInterface rkvc;
 	public static CircularBlockingDeque<byte[]> dequeL = new CircularBlockingDeque<byte[]>(30);
 	public static CircularBlockingDeque<byte[]> dequeR = new CircularBlockingDeque<byte[]>(30);
 	static int FRAME_COMMIT_THRESHOLD = 10;
@@ -79,7 +80,7 @@ public class VidCapAndStoreStereo  {
 		vcas.init(rkvc);
 	}
 	
-	private void init(RelatrixKVClient rkvc) {
+	private void init(RelatrixClientInterface rkvc) {
             /**
              * Start capture threads, enter loop to extract circular deque frames left and right
              */	

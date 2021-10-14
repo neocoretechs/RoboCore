@@ -43,8 +43,10 @@ import com.neocoretechs.bigsack.session.BigSackAdapter;
 import com.neocoretechs.bigsack.session.TransactionalHashSet;
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.Relatrix;
+import com.neocoretechs.relatrix.client.RelatrixClientInterface;
 import com.neocoretechs.relatrix.client.RelatrixKVClient;
 import com.neocoretechs.relatrix.client.RemoteEntrySetIterator;
+import com.neocoretechs.relatrix.client.RemoteStream;
 
 import org.ros.internal.node.server.ThreadPoolManager;
 
@@ -62,7 +64,7 @@ import org.ros.internal.node.server.ThreadPoolManager;
 public class VideoPlaybackStereo  {
 	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-	public static RelatrixKVClient rkvc;
+	public static RelatrixClientInterface rkvc;
     private static BufferedImage imagel = null;
     private static BufferedImage imager = null;
     private static PlayerFrame displayPanel1;
@@ -168,8 +170,9 @@ public class VideoPlaybackStereo  {
 		    System.out.println(System.nanoTime()-nano);
 		    */
 			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
-			RemoteEntrySetIterator it = rkvc.entrySet(java.lang.Long.class);
-				while(rkvc.hasNext(it)) {
+			RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
+			it.of().forEach(e -> {
+				//while(rkvc.hasNext(it)) {
 					/*
 					Comparable[] c = (Comparable[]) it.next();
 					Long tim = (Long) c[0];
@@ -184,8 +187,8 @@ public class VideoPlaybackStereo  {
 					}
 					StereoscopicImageBytes<?> sib = (StereoscopicImageBytes<?>) c[2];
 					*/
-					Entry e = (Entry) rkvc.next(it);
-					StereoscopicImageBytes sib = (StereoscopicImageBytes) e.getValue();
+					//Entry e = (Entry) rkvc.next(it);
+					StereoscopicImageBytes sib = (StereoscopicImageBytes) ((Entry) e).getValue();
 					synchronized(mutex) {
 						bufferl = sib.getLeft(); // 3 byte BGR
 						bufferr = sib.getRight(); // 3 byte BGR	
@@ -223,7 +226,8 @@ public class VideoPlaybackStereo  {
 	        			displayPanel2.updateUI();
 					}
 					++sequenceNumber; // we want to inc seq regardless to see how many we drop	
-				}
+				//}
+		});
 				System.out.println("Average storage time im ms. ="+samplesPer);
 		} catch(IllegalAccessException | IllegalArgumentException | ClassNotFoundException | IOException iae) {
 			iae.printStackTrace();

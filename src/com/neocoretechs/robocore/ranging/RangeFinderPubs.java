@@ -1,17 +1,16 @@
 package com.neocoretechs.robocore.ranging;
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
-import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
-import org.ros.node.topic.Subscriber;
 
 import org.ros.internal.node.server.ThreadPoolManager;
+
+import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
@@ -19,8 +18,7 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.PinPullResistance;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.RaspiPin;
-import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
-import com.pi4j.io.gpio.event.GpioPinListenerDigital;
+
 /**
  * Use the Pi4J GPIO libraries to drive an ultrasonic range finder attached to GPIO pins 2 and 3 on the RasPi.
  * Pin2 being the trigger and pin 3 being the resulting signal.
@@ -31,22 +29,25 @@ import com.pi4j.io.gpio.event.GpioPinListenerDigital;
  * From there we enter the loop to acquire the ranging checking for a 300cm maximum distance.
  * If we get something that fits these parameters we publish to the robocore/status bus. We can also shut down
  * publishing to the bus while remaining in the detection loop by sending a message to the alarm/shutdown topic.
- * @author Jonathan Groff (C) NeoCoreTechs 2020
+ * Alternately, the URM37 uses a serial data protocol at 9600,8,N,1 {@link UltrasonicSerialDataPort}
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
 public class RangeFinderPubs  extends AbstractNodeMain {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	static long count = 0;
-	static boolean alarmTrip = false;
-	double result = 0;
 	GpioPinDigitalOutput firepulse;
 	GpioPinDigitalInput result_pin;
+	private static final int PULSE_DELAY = 2000;        // #2 us pulse = 2,000 ns
 	private static final int PULSE = 10000;        // #10 us pulse = 10,000 ns
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
+	private static final double MAX_RANGE = 4000; // 400 cm max range
+	private static final int REJECTION_START = 1000;
+	private CountDownLatch awaitStart = new CountDownLatch(1);
 	//public static VoxHumana speaker = null;
 	public ConcurrentLinkedQueue<String> pubdata = new ConcurrentLinkedQueue<String>();
-	private static final int DISTANCE_THRESHOLD = 10; // 10 cm variance
-	private static double previousDistance = -1;
+	static enum MODE { HCSR04, URM37};
+	static MODE SENSOR_TYPE = MODE.URM37;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -60,8 +61,11 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 		final Publisher<std_msgs.String> statpub =
 				connectedNode.newPublisher("robocore/alerts", std_msgs.String._TYPE);
 
-		UltraPing up = new UltraPing();
+		//UltraPing up = new UltraPing();
+		UltraRead up = new UltraRead();
 		ThreadPoolManager.getInstance().spin(up, "SYSTEM");
+		// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
+		awaitStart.countDown();
 		// This CancellableLoop will be canceled automatically when the node shuts
 		// down.
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
@@ -73,6 +77,9 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 
 			@Override
 			protected void loop() throws InterruptedException {
+			    try {
+					awaitStart.await();
+				} catch (InterruptedException e) {}
 				if( !pubdata.isEmpty()) {
 					String sDist = pubdata.poll();
 					if(sDist != null) {
@@ -89,62 +96,130 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 	 /**
 	  * 
 	  * Trigger the Range Finder and return the result
-	  * 
+	  * https://www.tutorialspoint.com/arduino/arduino_ultrasonic_sensor.htm
 	  * @return
 	  */
-	 public static double getRange(GpioPinDigitalOutput rangefindertrigger,  GpioPinDigitalInput rangefinderresult ) {
-	  long distance = -1;
+	 public static double getRangeHCSR04(GpioPinDigitalOutput rangefindertrigger,  GpioPinDigitalInput rangefinderresult ) {
+	  double distance = -1;
+	  int rejection_start = 0;
 	  try {
+		  //drive low and wait 2 us
+		  rangefindertrigger.low();
+		  Thread.sleep(0, PULSE_DELAY);// wait 2 us
 		  // fire the trigger pulse, 1 then 0 with 10 microsecond wait 
 		  rangefindertrigger.high();
 		  Thread.sleep(0, PULSE);// wait 10 us
 		  rangefindertrigger.low();
-		  long starttime = System.nanoTime(); //ns
-	      long stop = starttime;
-	      long start = starttime;
-	      //echo will go 0 to 1 and need to save time for that. 2 seconds difference
-	      while ((rangefinderresult.getState() == PinState.LOW) && (start < starttime + 1000000000L * 2)) {
-	          start = System.nanoTime();
+	      long stop, start;
+	      //echo will go 0 to 1 and need to save time for that. equivalent to pulseIn(HIGH)
+	      //duration = pulseIn(echoPin, HIGH);
+	      //if value is HIGH, pulseIn() waits for the pin to go from LOW to HIGH, starts timing, 
+	      //then waits for the pin to go LOW and stops timing. 
+	      while ((rangefinderresult.getState() == PinState.LOW)) {
+			  Thread.sleep(0, 1);
+	          rejection_start++;
+	          if(rejection_start == REJECTION_START) 
+	        	  return -1; //infinity
 	      }
-	      while ((rangefinderresult.getState() == PinState.HIGH) && (stop < starttime + 1000000000L * 2)) {
-	          stop = System.nanoTime();
+	      start = System.nanoTime();
+	      rejection_start = 0;
+	      while ((rangefinderresult.getState() == PinState.HIGH) ) {
+			  Thread.sleep(0, 1);
+	          rejection_start++;
+	          if(rejection_start == REJECTION_START) 
+	        	  return -1; //infinity
 	      }
+	      stop = System.nanoTime();
 	      long delta = (stop - start);
-	      distance = delta * SPEEDOFSOUND; // echo from 0 to 1 depending on object distance
-	      //Thread.sleep(20);
+	      //distance = ((((delta)/1e3)/2) / 29.1);
+	      distance = delta/5882.35294118;
 	  } catch (InterruptedException e) {    
 		  e.printStackTrace();
 		  System.out.println("Exception triggering range finder:"+e);
-	  }
+	  }	 
+	  return distance;
+	 }
 	 
-	  return distance / 2.0 / (1000000000L); // cm/s; 
+	 /**
+	  * 
+	  * Trigger the Range Finder and return the result
+	  * https://media.digikey.com/pdf/Data%20Sheets/DFRobot%20PDFs/SEN0001_Web.pdf
+	  * @return
+	  */
+	 public static double getRangeURM37(GpioPinDigitalOutput rangefindertrigger,  GpioPinDigitalInput rangefinderresult ) {
+	  double distance = -1;
+	  int rejection_start = 0;
+      long stop, start;
+	  try {
+		  //drive low and wait 2 us
+		  rangefindertrigger.low();
+	      start = System.nanoTime();
+		  rangefindertrigger.high();
+	      //echo will go 1 to 0 and need to save time for that. equivalent to pulseIn(LOW)
+	      //duration = pulseIn(echoPin, LOW);
+	      while ((rangefinderresult.getState() == PinState.HIGH)) {
+			  Thread.sleep(0, 1);
+	          rejection_start++;
+	          if(rejection_start == REJECTION_START) 
+	        	  return -1; //infinity
+	      }
+	      stop = System.nanoTime();
+	      long delta = (stop - start);
+	      distance = delta/50000; // 50 us per cm
+	  } catch (InterruptedException e) {    
+		  e.printStackTrace();
+		  System.out.println("Exception triggering range finder:"+e);
+	  }	 
+	  return distance;
 	 }
 	 
 	 public static void main(String[] args) {	 
 		  // Setup GPIO Pins 
 		  GpioController gpio = GpioFactory.getInstance();
 		  //range finder pins 
-		  GpioPinDigitalOutput rangefindertrigger = gpio.provisionDigitalOutputPin(RaspiPin.GPIO_02, "Range Finder Trigger", PinState.LOW);
+		  GpioPinDigitalOutput rangefindertrigger = gpio.provisionDigitalOutputPin(RaspiPin.GPIO_02, "Range Finder Trigger", PinState.HIGH);
+		  rangefindertrigger.setShutdownOptions(true, PinState.LOW);
 		  try {
 			Thread.sleep(250);
 		  } catch (InterruptedException e) {}
-		  GpioPinDigitalInput rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result", PinPullResistance.PULL_UP);
+		  GpioPinDigitalInput rangefinderresult = null;
+		  switch(SENSOR_TYPE) {
+		  	case HCSR04:
+		  	  rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result",PinPullResistance.PULL_DOWN);
+		  	  break;
+		  	case URM37:
+		  	  rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result");
+		  	  break;
+		  	default:
+		  		break;
+		  }
+	
 		  try {
 			Thread.sleep(250);
 		  } catch (InterruptedException e) {}
 	
 		  do {
 			  // Get the range
-			  double distance=RangeFinderPubs.getRange(rangefindertrigger, rangefinderresult);
-			  if(previousDistance == -1)
-				  previousDistance = distance;
-			  if( Math.abs(distance-previousDistance) >= DISTANCE_THRESHOLD) { // 300 cm, max range is 200 cm typical
+			  double distance= -1;
+			  switch(SENSOR_TYPE) {
+			  	case HCSR04:
+			  	  distance = RangeFinderPubs.getRangeHCSR04(rangefindertrigger, rangefinderresult);
+			  	  break;
+			  	case URM37:
+				  distance = RangeFinderPubs.getRangeURM37(rangefindertrigger, rangefinderresult);
+			  	  break;
+			  	default:
+			  		break;
+			  }
+			
+			  if( distance < MAX_RANGE) { // 400 cm, max range is 200 cm typical
 				  if( DEBUG ) {
-					  System.out.println();
-					  System.out.println("RangeFinder result ="+distance +" cm");
+					  System.out.println("RangeFinder result ="+distance +" mm");
 				  }
 			  }
-		  
+			try {
+					Thread.sleep(1000);
+			} catch (InterruptedException e) {}
 		  } while (true);
 		   	   
 	}
@@ -157,32 +232,74 @@ class UltraPing implements Runnable {
 	public void run() {
 		// Setup GPIO Pins 
 		GpioController gpio = GpioFactory.getInstance();
-		//range finder pins 
-		final GpioPinDigitalOutput rangefindertrigger = gpio.provisionDigitalOutputPin(RaspiPin.GPIO_02, "Range Finder Trigger", PinState.LOW);
+		//range finder pins
+		final GpioPinDigitalOutput rangefindertrigger = gpio.provisionDigitalOutputPin(RaspiPin.GPIO_02, "Range Finder Trigger", PinState.HIGH);
+		rangefindertrigger.setShutdownOptions(true, PinState.LOW);
 		try {
 			Thread.sleep(250);
 		} catch (InterruptedException e) {}
-		final GpioPinDigitalInput rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result", PinPullResistance.PULL_UP);
+		GpioPinDigitalInput rangefinderresult = null;
+		switch(SENSOR_TYPE) {
+		  	case HCSR04:
+		  	  rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result",PinPullResistance.PULL_DOWN);
+		  	  break;
+		  	case URM37:
+		  	  rangefinderresult = gpio.provisionDigitalInputPin(RaspiPin.GPIO_03, "Range Pulse Result");
+		  	  break;
+		  	default:
+		  		break;
+		}
 		try {
 			Thread.sleep(250);
 		} catch (InterruptedException e) {}
 		while(shouldRun) {
 		try {
-			 // Get the range
-			  double distance=RangeFinderPubs.getRange(rangefindertrigger, rangefinderresult);
-			  if(previousDistance == -1)
-				  previousDistance = distance;
-			  if( Math.abs(distance-previousDistance) >= DISTANCE_THRESHOLD) { // 300 cm, max range is 200 cm typical
+			// Get the range
+			double distance= -1;
+			switch(SENSOR_TYPE) {
+			  	case HCSR04:
+			  	  distance = RangeFinderPubs.getRangeHCSR04(rangefindertrigger, rangefinderresult);
+			  	  break;
+			  	case URM37:
+				  distance = RangeFinderPubs.getRangeURM37(rangefindertrigger, rangefinderresult);
+			  	  break;
+			  	default:
+			  		break;
+			}
+			//if( distance < MAX_RANGE) { 
 				  if( DEBUG ) {
-					  System.out.println();
-					  System.out.println("RangeFinder result ="+distance +" cm");
+					  System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
 				  }
-				  if(DEBUG)
-					System.out.print("Intruder ALERT!!\r");
-				  pubdata.add(String.valueOf(Math.abs(distance-previousDistance)));
-			  }
-			  previousDistance = distance;
-			
+				  pubdata.add(String.valueOf(distance));
+			//}
+			try {
+				Thread.sleep(250);
+			} catch (InterruptedException e) {}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		}
+	}
+}
+
+class UltraRead implements Runnable {
+	public volatile boolean shouldRun = true;	
+	@Override
+	public void run() {
+		UltrasonicSerialDataPort usdp = UltrasonicSerialDataPort.getInstance();
+		while(shouldRun) {
+		try {
+			// Get the range
+			double distance = usdp.readDistance();
+			//if( distance < MAX_RANGE) { // 500 cm for URM37
+				  if( DEBUG ) {
+					  System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
+				  }
+				  pubdata.add(String.valueOf(distance));
+			//}
+			try {
+				Thread.sleep(200);
+			} catch (InterruptedException e) {}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
