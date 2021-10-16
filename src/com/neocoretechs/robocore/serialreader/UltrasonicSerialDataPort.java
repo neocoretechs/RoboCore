@@ -265,13 +265,12 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 		    //if( DEBUG )
 		    //		System.out.println("Reading response header in signalRead");
 	    	try {
-					Thread.sleep(25);
+					Thread.sleep(30);
 			} catch (InterruptedException e) {
 					e.printStackTrace();
 			}
 		    for(int i = 0; i < DISTANCE_RETURN.length; i++)
 		    	DISTANCE_RETURN[i] = (byte)( read() & 0xFF);
-
 		    return DISTANCE_RETURN;
 	    }
 	        
