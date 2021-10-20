@@ -1,4 +1,6 @@
 package com.neocoretechs.robocore.ranging;
+import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 
@@ -18,6 +20,8 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.PinPullResistance;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.RaspiPin;
+
+import gnu.io.NoSuchPortException;
 
 /**
  * Use the Pi4J GPIO libraries to drive an ultrasonic range finder attached to GPIO pins 2 and 3 on the RasPi.
@@ -48,6 +52,7 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 	public ConcurrentLinkedQueue<String> pubdata = new ConcurrentLinkedQueue<String>();
 	static enum MODE { HCSR04, URM37};
 	static MODE SENSOR_TYPE = MODE.URM37;
+	static String portName = null; //auto select, otherwise set to this from command line __PORT:=/dev/ttyxxx
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -57,6 +62,9 @@ public class RangeFinderPubs  extends AbstractNodeMain {
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
+		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		if( remaps.containsKey("__PORT") )
+			portName = remaps.get("__PORT");
 		//final Log log = connectedNode.getLog();
 		final Publisher<std_msgs.String> statpub =
 				connectedNode.newPublisher("robocore/alerts", std_msgs.String._TYPE);
@@ -286,7 +294,16 @@ class UltraRead implements Runnable {
 	public volatile boolean shouldRun = true;	
 	@Override
 	public void run() {
-		UltrasonicSerialDataPort usdp = UltrasonicSerialDataPort.getInstance();
+		UltrasonicSerialDataPort usdp = null;
+		if(portName == null)
+			usdp = UltrasonicSerialDataPort.getInstance();
+		else
+			try {
+				usdp = UltrasonicSerialDataPort.getInstance(portName);
+			} catch (NoSuchPortException | IOException e1) {
+				e1.printStackTrace();
+				System.exit(1);
+			}
 		while(shouldRun) {
 		try {
 			// Get the range
@@ -302,6 +319,9 @@ class UltraRead implements Runnable {
 			} catch (InterruptedException e) {}
 		} catch (Exception e) {
 			e.printStackTrace();
+			try {
+				Thread.sleep(200);
+			} catch (InterruptedException e2) {}
 		}
 		}
 	}

@@ -110,6 +110,19 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 	    	}
 	    }
 	    
+	    public static UltrasonicSerialDataPort getInstance(String sportName) throws NoSuchPortException, IOException {
+	    	synchronized(mutex) {
+	    	if( instance == null ) {
+	    			CommPortIdentifier cpi  = null;
+	    			System.setProperty("gnu.io.rxtx.SerialPorts", sportName);
+	    			cpi = CommPortIdentifier.getPortIdentifier(sportName);
+	    			portName = sportName;
+					instance = new UltrasonicSerialDataPort(portName, baud, datab, stopb, parityb);				
+	    	}
+	    	return instance;
+	    	}
+	    }
+	    	
 	    private UltrasonicSerialDataPort(String tportName, int tbaud, int tdatab, int tstopb, int tparityb) throws IOException {
 	    	portName = tportName;
 	    	baud = tbaud;
@@ -265,12 +278,15 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 		    //if( DEBUG )
 		    //		System.out.println("Reading response header in signalRead");
 	    	try {
-					Thread.sleep(30);
-			} catch (InterruptedException e) {
-					e.printStackTrace();
-			}
+				Thread.sleep(30);
+	    	} catch (InterruptedException e) {
+				e.printStackTrace();
+	    	}
 		    for(int i = 0; i < DISTANCE_RETURN.length; i++)
 		    	DISTANCE_RETURN[i] = (byte)( read() & 0xFF);
+		    // check checksum
+		    if((DISTANCE_RETURN[0]+DISTANCE_RETURN[1]+DISTANCE_RETURN[2]) != DISTANCE_RETURN[3])
+		    	throw new IOException("Bad checksum:"+Integer.toHexString(DISTANCE_RETURN[3]));
 		    return DISTANCE_RETURN;
 	    }
 	        
