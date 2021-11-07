@@ -43,6 +43,7 @@ import com.neocoretechs.bigsack.session.BigSackAdapter;
 import com.neocoretechs.bigsack.session.TransactionalHashSet;
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.Relatrix;
+import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RelatrixClientInterface;
 import com.neocoretechs.relatrix.client.RelatrixKVClient;
 import com.neocoretechs.relatrix.client.RemoteEntrySetIterator;
@@ -64,7 +65,7 @@ import org.ros.internal.node.server.ThreadPoolManager;
 public class VideoPlaybackStereo  {
 	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-	public static RelatrixClientInterface rkvc;
+	public static RelatrixClient rkvc;
     private static BufferedImage imagel = null;
     private static BufferedImage imager = null;
     private static PlayerFrame displayPanel1;
@@ -95,7 +96,7 @@ public class VideoPlaybackStereo  {
 				System.out.println("usage: java com.neocoretechs.robocore.video.VideoPlaybackStereo [local node] [remote node] [server port]");
 				System.exit(1);
 			}
-			rkvc = new RelatrixKVClient(args[0], args[1], Integer.parseInt(args[2]));
+			rkvc = new RelatrixClient(args[0], args[1], Integer.parseInt(args[2]));
 		} catch (IOException e2) {
 			System.out.println("Relatrix database volume "+VideoRecorderStereo.DATABASE+" does not exist!");
 			throw new RuntimeException();
@@ -124,22 +125,20 @@ public class VideoPlaybackStereo  {
 			    }
 			});
 			
-			while(displayPanel1 == null || displayPanel2 == null ||
+			while(displayPanel1 == null || displayPanel2 == null /*||
 					displayPanel2.aField == null || displayPanel2.yField == null || displayPanel2.xField == null ||
-					displayPanel1.aField == null || displayPanel1.yField == null || displayPanel1.xField == null)
+					displayPanel1.aField == null || displayPanel1.yField == null || displayPanel1.xField == null*/)
 				try {
 					Thread.sleep(1);
 				} catch (InterruptedException e) {}
-		}
+		//}
 		
 		try {
 			long timdiff = 0;
 			long timlast = 0;
 			long samplesPer = 0;
 			
-		    //Stream<Comparable[]> stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
-		    //stream.forEach(e -> Stream.of(e)
-			//	.forEach(g -> System.out.println("Element A:"+g)));
+		    RemoteStream stream = (RemoteStream) rkvc.findSetStream("?", "?", "?");
 		    
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
 			//Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),
@@ -170,8 +169,8 @@ public class VideoPlaybackStereo  {
 		    System.out.println(System.nanoTime()-nano);
 		    */
 			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
-			RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
-			it.of().forEach(e -> {
+			//RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
+			stream.of().forEach(e -> {
 				//while(rkvc.hasNext(it)) {
 					/*
 					Comparable[] c = (Comparable[]) it.next();
@@ -188,7 +187,7 @@ public class VideoPlaybackStereo  {
 					StereoscopicImageBytes<?> sib = (StereoscopicImageBytes<?>) c[2];
 					*/
 					//Entry e = (Entry) rkvc.next(it);
-					StereoscopicImageBytes sib = (StereoscopicImageBytes) ((Entry) e).getValue();
+					StereoscopicImageBytes sib = (StereoscopicImageBytes) ((Comparable[]) e)[2];
 					synchronized(mutex) {
 						bufferl = sib.getLeft(); // 3 byte BGR
 						bufferr = sib.getRight(); // 3 byte BGR	
@@ -216,8 +215,8 @@ public class VideoPlaybackStereo  {
 						}
 	        			displayPanel1.setLastFrame((java.awt.Image)imagel);
 	        			displayPanel2.setLastFrame((java.awt.Image)imager);
-	    				//displayPanel2.setComputedValues(yaw, tim, 0);
-	        			//displayPanel1.setComputedValues(yaw, tim, 0); // values from db for time, yaw
+	    				displayPanel2.setComputedValues((double)((Comparable[]) e)[1], (long)((Comparable[]) e)[0],(double) 0);
+	        			displayPanel1.setComputedValues((double)((Comparable[]) e)[1], (long)((Comparable[]) e)[0], (double)0); // values from db for time, yaw
 	        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 	        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 	        			displayPanel1.invalidate();
@@ -228,13 +227,17 @@ public class VideoPlaybackStereo  {
 					++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 				//}
 		});
-				System.out.println("Average storage time im ms. ="+samplesPer);
+		System.out.println("End of retrieval");
 		} catch(IllegalAccessException | IllegalArgumentException | ClassNotFoundException | IOException iae) {
 			iae.printStackTrace();
 			return;
 		}
-	}
+		
+		} // run
 	
+		
+	} // main
+
 	/**
 	 * Pump the HTTP image payload to the socket connected client, most likely a browser.
 	 * Designed to be spun up in its own thread.
