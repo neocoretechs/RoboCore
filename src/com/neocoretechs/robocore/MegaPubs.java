@@ -247,295 +247,47 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	}
 
-	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
-			connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-	// TODO get this from parameter server or singleton with map of robot names
-
-	try {
-		marlinspikeManager = new MarlinspikeManager(robot);
-		marlinspikeManager.configureMarlinspike(false, true);
-		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
-		// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
-		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-		responses = new PublishDiagnosticResponse[stopics.length];
-	} catch (IOException e) {
-		System.out.println("Could not connect to Marlinspike.."+e);
-		e.printStackTrace();
-		synchronized(statPub) {
-			statPub.add("Could not connect to Marlinspike.."+e);
-			new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE CONNECTION", 
-					diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-			while(!outgoingDiagnostics.isEmpty()) {
-				try {
-					statpub.publish(outgoingDiagnostics.takeFirst());
-					Thread.sleep(1);
-				} catch (InterruptedException e1) {}
-			}
-		}
-		return;
-	}
+	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub = connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+	
+	configureMarlinspikeManager(connectedNode, statpub);
 	
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 
-	final Publisher<sensor_msgs.Range> rangepub = 
-		connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+	final Publisher<sensor_msgs.Range> rangepub = connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 	
 	if( remaps.containsKey("__pwm") )
 		PWM_MODE = remaps.get("__pwm");
 
 	// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
-	final Subscriber<geometry_msgs.Twist> substwist = 
-			connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
+	final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 	// channel collection receives each topic with a 2 or 4 element array that has [LUN,value], or [LUN,value,LUN,value] to activate a particular LUN with the given value
 	// or two channels of LUN with the 2 values (as in a dual channel generic controller)
 	final Collection<Subscriber<std_msgs.Int32MultiArray>> subschannel = new ArrayList<Subscriber<std_msgs.Int32MultiArray>>();
+	//
+	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager.
+	// for each NodeDeviceDemuxer, create a subscriber on the channel 'absolute/<demuxer device name>' of type Int32MultiArray
+	//
 	for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
 		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber("absolute/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE);
-		/**
-		 * Process the commands from remote source to extract 32 bit int values and apply those to the
-		 * device channels. the values represent a logical unit LUN in the configuration which is
-		 * a collection of node, device, slot, channel of a controller attached to a ROS node, which has
-		 * a number of tty ports (devices) which have marlinspike boards attached (Mega2560 via USB running the firmware)
-		 * which have a number of logical software controllers configured by slot and channels.<p/>
-		 * Process a trigger value from the remote source, most likely a controller such as PS/3.<p/>
-		 * Take the 2 trigger values as int32 and send them on to the microcontroller 
-		 * related subsystem at the int valued LUNs. The marlinspike subsystem is composed of a software 
-		 * controller instance talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
-		 */
-		subscr.addSubscriberListener(new SubscriberListener<std_msgs.Int32MultiArray>() {
-				@Override
-				public void onNewPublisher(Subscriber subs, PublisherIdentifier pubs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s new publisher %s%n", this.getClass().getName(), subs, pubs);				
-				}
-
-				@Override
-				public void onShutdown(Subscriber<std_msgs.Int32MultiArray> subs) {
-					subschannel.remove(subs);
-				}
-				@Override
-				public void onMasterRegistrationFailure(Subscriber<Int32MultiArray> subs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);	
-					
-				}
-				@Override
-				public void onMasterRegistrationSuccess(Subscriber<Int32MultiArray> subs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s successfully registered with master%n", this.getClass().getName(), subs);				
-					subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
-						@Override
-						public void onNewMessage(std_msgs.Int32MultiArray message) {
-							//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
-							//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
-							int[] valch = message.getData();
-							if(DEBUG)
-								System.out.printf("%s Message:%s args:%d%n", this.getClass().getName(), message.toString(), valch.length);
-							int argNum = 0;
-							for(int iarg = 0; iarg < valch.length; iarg+=2) {
-									// lift, led,  boom
-									int affector = valch[argNum++];
-									int affectorSpeed = valch[argNum++];
-									if(DEBUG)
-										System.out.printf("%s Message:%s affector:%d name:%s speed:%d operating:%b%n", this.getClass().getName(), message.toString(), affector, 
-												(affector > -1 ? robot.getNameByLUN(affector) : "BAD"), affectorSpeed, (affector > -1 ? isOperating[affector] : false));
-									try {
-										MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(robot.getNameByLUN(affector));
-										if(control == null) {
-											System.out.println("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
-											synchronized(statPub) {
-												statPub.add("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
-												new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
-														diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
-											}
-											continue;
-										}
-										// keep Marlinspike from getting bombed with zeroes
-										if(isOperating[affector]) {
-											if(affectorSpeed == 0) {
-												control.setDeviceLevel(robot.getNameByLUN(affector), 0);
-												isOperating[affector] = false;
-											} else {
-												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
-											}
-										} else {
-											if(affectorSpeed != 0) {
-												isOperating[affector] = true;
-												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
-											}
-										}
-										if(DEBUG)
-											System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
-									} catch (IOException e) {
-										System.out.println("There was a problem communicating with the controller:"+e);
-										e.printStackTrace();
-										synchronized(statPub) {
-											statPub.add("There was a problem communicating with the controller:");
-											statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-											new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
-												diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-										}
-									}
-							}
-						}
-					});
-					subschannel.add(subs);		
-				}
-				@Override
-				public void onMasterUnregistrationFailure(Subscriber<Int32MultiArray> subs) {			
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);	
-				}
-				@Override
-				public void onMasterUnregistrationSuccess(Subscriber<Int32MultiArray> subs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);	
-				}
-		});
-	
+		configureSubscriberListener(subscr, connectedNode, statpub, subschannel);
 	}
 	//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
 	//		connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
 	//final Subscriber<std_msgs.Int32MultiArray> substrigger = 
 	//connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
 	
-
 	final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
-		        CountDownServiceServerListener.newDefault();
-	final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE, ControllerStatusMessage._TYPE,
-		    new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
-				@Override
-				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {
-					StringBuilder sb = new StringBuilder();
-					try {
-						switch(request.getData()) {
-							case "id":
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-									sb.append(ndd.getMarlinspikeControl().reportSystemId());
-								response.setData(sb.toString());
-								break;
-							case "reset":
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-									sb.append(ndd.getMarlinspikeControl().commandReset());
-								response.setData(sb.toString());
-								break;
-							case "status":
-							default:
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-									sb.append(ndd.getMarlinspikeControl().reportAllControllerStatus());
-								response.setData(sb.toString());
-								break;		
-						}
-					} catch (IOException e) {
-						System.out.println("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
-						e.printStackTrace();
-						synchronized(statPub) {
-							statPub.add("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
-							new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE STATUS", 
-									diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-							while(!outgoingDiagnostics.isEmpty()) {
-								try {
-									statpub.publish(outgoingDiagnostics.takeFirst());
-									Thread.sleep(1);
-								} catch (InterruptedException e1) {}
-							}
-						}
-					}
-				}
-			});	
-	serviceServer.addListener(serviceServerListener);	      
-	try {
-		serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
-	} catch (InterruptedException e1) {
-		System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
-		e1.printStackTrace();
-	}
+	        CountDownServiceServerListener.newDefault();
+	configureControllerStatusServer(serviceServerListener, connectedNode, statpub);	
 
 	final CountDownServiceServerListener<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServerListener =
 	        CountDownServiceServerListener.newDefault();
-	final ServiceServer<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServer = connectedNode.newServiceServer(PWM_SERVICE, PWMControlMessage._TYPE,
-	    new ServiceResponseBuilder<PWMControlMessageRequest, PWMControlMessageResponse>() {
-			@Override
-			public void build(PWMControlMessageRequest request, PWMControlMessageResponse response) {	
-				try {
-					switch(PWM_MODE) {
-						case "controller":
-							break;
-							// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
-							// Activates a direct PWM timer without going through one of the various controller
-							// objects. Issues an M45 to the Marlinspike on the Mega2560
-						case "direct":
-						default:
-							System.out.println("PWM direct");
-							if( auxPWM == null )
-								auxPWM = new AuxPWMControl();
-							auxPWM.activateAux(marlinspikeManager.getMarlinspikeControl("PWM"), request.getData().getData());	
-							break;
-					}
-					response.setData("success");
-				} catch (IOException e) {
-					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE");
-					e.printStackTrace();
-					response.setData("fail");
-					synchronized(statPub) {
-						statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE:"+e);
-						new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE PWM ACTIVATION", 
-								diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-						while(!outgoingDiagnostics.isEmpty()) {
-							try {
-								statpub.publish(outgoingDiagnostics.takeFirst());
-								Thread.sleep(1);
-							} catch (InterruptedException e1) {}
-						}
-					}
-				}
-			}
-		});	
-	servicePWMServer.addListener(servicePWMServerListener);	      
-	try {
-		serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
-	} catch (InterruptedException e1) {
-		System.out.println("PWM SERVICE REGISTRATION WAS INTERRUPTED");
-		e1.printStackTrace();
-	}
+	configurePWMServer(servicePWMServerListener, connectedNode, statpub);
 	
 	final CountDownServiceServerListener<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServerListener =
 	        CountDownServiceServerListener.newDefault();
-	final ServiceServer<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServer = connectedNode.newServiceServer(GPIO_SERVICE, GPIOControlMessage._TYPE,
-	    new ServiceResponseBuilder<GPIOControlMessageRequest, GPIOControlMessageResponse>() {
-			@Override
-			public void build(GPIOControlMessageRequest request, GPIOControlMessageResponse response) {	
-				//try {
-					System.out.println("GPIO direct");
-					if( auxGPIO == null )
-						auxGPIO = new AuxGPIOControl();
-					auxGPIO.activateAux(marlinspikeManager.getMarlinspikeControl("GPIO"), request.getData().getData());
-					response.setData("success");
-				/*} catch (NoSuchElementException e) {
-					System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
-					e.printStackTrace();
-					response.setData("fail");
-					synchronized(statPub) {
-						statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE:"+e);
-						new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE GPIO ACTIVATION", 
-								diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-						while(!outgoingDiagnostics.isEmpty()) {
-							try {
-								statpub.publish(outgoingDiagnostics.takeFirst());
-								Thread.sleep(1);
-							} catch (InterruptedException e1) {}
-						}
-					}
-				}*/
-			}
-		});	
-	servicePWMServer.addListener(servicePWMServerListener);	      
-	try {
-		serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
-	} catch (InterruptedException e1) {
-		System.out.println("GPIO SERVICE REGISTRATION WAS INTERRUPTED");
-		e1.printStackTrace();
-	}
+	configureGPIOServer(serviceGPIOServerListener, connectedNode, statpub);	
+	
 	//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 	//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
@@ -681,7 +433,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	awaitStart.countDown();
 
 	/**
-	 * 	A CancellableLoop will be canceled automatically when the node shuts down.
+	 * A CancellableLoop will be canceled automatically when the node shuts down.
 	 * Check the various topic message queues for entries and if any are present, multiplex them onto the outbound bus
 	 * under the DiagnosticStatus tops for any waiting subscribers to process and deal with.
 	 */
@@ -733,7 +485,308 @@ public void onStart(final ConnectedNode connectedNode) {
 	});  
 
 }
+	/**
+	 * Configure the GPIO direct service.
+	 * @param serviceGPIOServerListener
+	 * @param connectedNode
+	 * @param tstatpub
+	 */
+	private void configureGPIOServer(CountDownServiceServerListener<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServerListener,
+		ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
+		final ServiceServer<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServer = connectedNode.newServiceServer(GPIO_SERVICE, GPIOControlMessage._TYPE,
+			    new ServiceResponseBuilder<GPIOControlMessageRequest, GPIOControlMessageResponse>() {
+					@Override
+					public void build(GPIOControlMessageRequest request, GPIOControlMessageResponse response) {	
+						//try {
+							System.out.println("GPIO direct");
+							if( auxGPIO == null )
+								auxGPIO = new AuxGPIOControl();
+							auxGPIO.activateAux(marlinspikeManager.getMarlinspikeControl("GPIO"), request.getData().getData());
+							response.setData("success");
+						/*} catch (NoSuchElementException e) {
+							System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
+							e.printStackTrace();
+							response.setData("fail");
+							synchronized(statPub) {
+								statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE:"+e);
+								new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE GPIO ACTIVATION", 
+										diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+								while(!outgoingDiagnostics.isEmpty()) {
+									try {
+										statpub.publish(outgoingDiagnostics.takeFirst());
+										Thread.sleep(1);
+									} catch (InterruptedException e1) {}
+								}
+							}
+						}*/
+					}
+				});	
+			serviceGPIOServer.addListener(serviceGPIOServerListener);	      
+			try {
+				serviceGPIOServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+			} catch (InterruptedException e1) {
+				System.out.println("GPIO SERVICE REGISTRATION WAS INTERRUPTED");
+				e1.printStackTrace();
+			}
+	
+	}
+	/**
+	 * Configure the PWM direct service
+	 * @param servicePWMServerListener
+	 * @param connectedNode
+	 * @param tstatpub
+	 */
+	private void configurePWMServer(CountDownServiceServerListener<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServerListener,
+		ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
+		final ServiceServer<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServer = connectedNode.newServiceServer(PWM_SERVICE, PWMControlMessage._TYPE,
+			    new ServiceResponseBuilder<PWMControlMessageRequest, PWMControlMessageResponse>() {
+					@Override
+					public void build(PWMControlMessageRequest request, PWMControlMessageResponse response) {	
+						try {
+							switch(PWM_MODE) {
+								case "controller":
+									break;
+									// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
+									// Activates a direct PWM timer without going through one of the various controller
+									// objects. Issues an M45 to the Marlinspike on the Mega2560
+								case "direct":
+								default:
+									System.out.println("PWM direct");
+									if( auxPWM == null )
+										auxPWM = new AuxPWMControl();
+									auxPWM.activateAux(marlinspikeManager.getMarlinspikeControl("PWM"), request.getData().getData());	
+									break;
+							}
+							response.setData("success");
+						} catch (IOException e) {
+							System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE");
+							e.printStackTrace();
+							response.setData("fail");
+							synchronized(statPub) {
+								statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE:"+e);
+								new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, "MARLINSPIKE PWM ACTIVATION", 
+										diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+								while(!outgoingDiagnostics.isEmpty()) {
+									try {
+										tstatpub.publish(outgoingDiagnostics.takeFirst());
+										Thread.sleep(1);
+									} catch (InterruptedException e1) {}
+								}
+							}
+						}
+					}
+				});	
+			servicePWMServer.addListener(servicePWMServerListener);	      
+			try {
+				servicePWMServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+			} catch (InterruptedException e1) {
+				System.out.println("PWM SERVICE REGISTRATION WAS INTERRUPTED");
+				e1.printStackTrace();
+			}
+	}
+	/**
+	 * Configure the controller status service
+	 * @param serviceServerListener
+	 * @param connectedNode
+	 * @param tstatpub
+	 */
+	private void configureControllerStatusServer(CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener, 
+			ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
+		final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE, ControllerStatusMessage._TYPE,
+		    new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
+				@Override
+				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {
+					StringBuilder sb = new StringBuilder();
+					try {
+						switch(request.getData()) {
+							case "id":
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									sb.append(ndd.getMarlinspikeControl().reportSystemId());
+								response.setData(sb.toString());
+								break;
+							case "reset":
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									sb.append(ndd.getMarlinspikeControl().commandReset());
+								response.setData(sb.toString());
+								break;
+							case "status":
+							default:
+								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+									sb.append(ndd.getMarlinspikeControl().reportAllControllerStatus());
+								response.setData(sb.toString());
+								break;		
+						}
+					} catch (IOException e) {
+						System.out.println("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
+						e.printStackTrace();
+						synchronized(statPub) {
+							statPub.add("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
+							new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, "MARLINSPIKE STATUS", 
+									diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+							while(!outgoingDiagnostics.isEmpty()) {
+								try {
+									tstatpub.publish(outgoingDiagnostics.takeFirst());
+									Thread.sleep(1);
+								} catch (InterruptedException e1) {}
+							}
+						}
+					}
+				}
+			});	
+		serviceServer.addListener(serviceServerListener);	      
+		try {
+			serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+		} catch (InterruptedException e1) {
+			System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
+			e1.printStackTrace();
+		}
+	}
 
+	/**
+	* Configure a subscriber to talk to a MarlinSpikeControlInterface which receives 
+	* a message of type: LUN#, value of control for that LUN#. <br/>
+	* Process the commands from remote source to extract 32 bit int values and apply those to the
+	* device channels LUNs. The ordinals represent a logical unit LUN in the configuration which is
+	* a collection of node, device, slot, channel of a controller attached to a ROS node, which has
+	* a number of tty ports (devices) which have marlinspike boards attached (Mega2560 via USB running the firmware)
+	* which have a number of logical software controllers configured by slot and channels.<p/>
+	* Process a trigger value from the remote source, most likely a controller such as PS/3.<p/>
+	* Take the 2 trigger values as int32 and send them on to the microcontroller 
+	* related subsystem at the int valued LUNs. The marlinspike subsystem is composed of a software 
+	* controller instance talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
+	* @param subscr The target subscriber
+	* @param connectedNode the Ros node we are using
+	* @param tstatpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
+	* @param subschannel the collection of subscriber channels to add the subscriber to if all goes as planned.
+	*/
+	private void configureSubscriberListener(Subscriber<Int32MultiArray> subscr, ConnectedNode connectedNode, 
+					Publisher<DiagnosticStatus> tstatpub, Collection<Subscriber<Int32MultiArray>> subschannel) {
+		subscr.addSubscriberListener(new SubscriberListener<std_msgs.Int32MultiArray>() {
+				@Override
+				public void onNewPublisher(Subscriber subs, PublisherIdentifier pubs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s new publisher %s%n", this.getClass().getName(), subs, pubs);				
+				}
+				@Override
+				public void onShutdown(Subscriber<std_msgs.Int32MultiArray> subs) {
+					subschannel.remove(subs);
+				}
+				@Override
+				public void onMasterRegistrationFailure(Subscriber<Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);				
+				}
+				@Override
+				public void onMasterRegistrationSuccess(Subscriber<Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s successfully registered with master%n", this.getClass().getName(), subs);				
+					subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
+						@Override
+						public void onNewMessage(std_msgs.Int32MultiArray message) {
+							//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+							//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+							int[] valch = message.getData();
+							if(DEBUG)
+								System.out.printf("%s Message:%s args:%d%n", this.getClass().getName(), message.toString(), valch.length);
+							int argNum = 0;
+							for(int iarg = 0; iarg < valch.length; iarg+=2) {
+									// lift, led,  boom
+									int affector = valch[argNum++];
+									int affectorSpeed = valch[argNum++];
+									if(DEBUG)
+										System.out.printf("%s Message:%s affector:%d name:%s speed:%d operating:%b%n", this.getClass().getName(), message.toString(), affector, 
+												(affector > -1 ? robot.getNameByLUN(affector) : "BAD"), affectorSpeed, (affector > -1 ? isOperating[affector] : false));
+									try {
+										MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(robot.getNameByLUN(affector));
+										if(control == null) {
+											System.out.println("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
+											synchronized(statPub) {
+												statPub.add("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
+												new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, subs.toString(), 
+														diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
+											}
+											continue;
+										}
+										// keep Marlinspike from getting bombed with zeroes
+										if(isOperating[affector]) {
+											if(affectorSpeed == 0) {
+												control.setDeviceLevel(robot.getNameByLUN(affector), 0);
+												isOperating[affector] = false;
+											} else {
+												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
+											}
+										} else {
+											if(affectorSpeed != 0) {
+												isOperating[affector] = true;
+												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
+											}
+										}
+										if(DEBUG)
+											System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
+									} catch (IOException e) {
+										System.out.println("There was a problem communicating with the controller:"+e);
+										e.printStackTrace();
+										synchronized(statPub) {
+											statPub.add("There was a problem communicating with the controller:");
+											statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+											new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, subs.toString(), 
+												diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+										}
+									}
+							}
+						}
+					});
+					subschannel.add(subs);		
+				}
+				@Override
+				public void onMasterUnregistrationFailure(Subscriber<Int32MultiArray> subs) {			
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);	
+				}
+				@Override
+				public void onMasterUnregistrationSuccess(Subscriber<Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);	
+				}
+		});
+	}
+
+	/**
+	 * Create the MarlinspikeManager and the list of diagnostic responses to publish based on the stopics collection.
+	 * If there is a problem we will try to publish exxception to diagnostic channel if possible and throw a RuntimeException.<p/>
+	 * Here, we configure the critical listNodeDeviceDemuxer that is used in the onStart method above.
+	 * @param connectedNode The Ros node we are currently initializing
+	 * @param statpub the diagnostic status publisher channel
+	 */
+	private void configureMarlinspikeManager(ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
+		// TODO get this from parameter server or singleton with map of robot names
+		try {
+			marlinspikeManager = new MarlinspikeManager(robot);
+			marlinspikeManager.configureMarlinspike(false, true);
+			// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
+			// if it matched the name of this host the entry is included in the collection. 
+			// In this way only entries that apply to Marlinspikes attached to this host are utilized.
+			listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+			responses = new PublishDiagnosticResponse[stopics.length];
+		} catch (IOException e) {
+			System.out.println("Could not connect to Marlinspike.."+e);
+			e.printStackTrace();
+			synchronized(statPub) {
+				statPub.add("Could not connect to Marlinspike.."+e);
+				new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, "MARLINSPIKE CONNECTION", 
+					diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+				while(!outgoingDiagnostics.isEmpty()) {
+					try {
+						tstatpub.publish(outgoingDiagnostics.takeFirst());
+						Thread.sleep(1);
+					} catch (InterruptedException e1) {}
+				}
+			}
+			throw new RuntimeException(e);
+		}
+	}
+	
+	
 	public static void main(String[] args) {
 		
 	}

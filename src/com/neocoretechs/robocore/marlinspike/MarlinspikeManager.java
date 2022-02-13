@@ -322,7 +322,7 @@ public class MarlinspikeManager {
 				filter(entry -> name.equals(entry.getKey().getDeviceName())).map(Map.Entry::getKey);
 		try {
 			return (NodeDeviceDemuxer) nddx.findAny().get();
-		} catch(NullPointerException nse) {
+		} catch(NullPointerException | NoSuchElementException nse) {
 			throw new NoSuchElementException("The device "+name+" was not found in the collection");
 		}
 	}
