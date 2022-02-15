@@ -61,6 +61,7 @@ public abstract class PublishResponses<T> implements PublishResponseInterface<T>
 			throw new IllegalStateException("Can't find Topic "+topicName+" in MarlinSpike AsynchDemuxer, possible programmatic initialization problem");
 		}
 	}
+	
 	@Override
 	public TopicListInterface getTopicList() {
 		return tli;

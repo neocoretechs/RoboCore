@@ -136,10 +136,11 @@ public class MegaPubs extends AbstractNodeMain  {
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	// Queue for outgoing diagnostic messages
 	CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> outgoingDiagnostics = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(256);
-	// Queue for outgoing range messages
+	// Queue for outgoing ranging messages, if any such sensors are present
 	CircularBlockingDeque<sensor_msgs.Range> outgoingRanges = new CircularBlockingDeque<sensor_msgs.Range>(256);
-	// Preload the collection of response handlers
-	String[] stopics = new String[] {AsynchDemuxer.topicNames.BATTERY.val(),
+	// Preload the collection of response handlers that match responses from attached Marlinspike microcontrollers
+	String[] stopics = new String[] {
+	AsynchDemuxer.topicNames.BATTERY.val(),
 	AsynchDemuxer.topicNames.MOTORFAULT.val(), 
 	AsynchDemuxer.topicNames.TIME.val(),
 	AsynchDemuxer.topicNames.CONTROLLERSTATUS.val(),
@@ -162,7 +163,8 @@ public class MegaPubs extends AbstractNodeMain  {
 	AsynchDemuxer.topicNames.DIGITALPINSETTING.val(),
 	AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),
 	AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),
-	AsynchDemuxer.topicNames.PWMPINSETTING.val()};
+	AsynchDemuxer.topicNames.PWMPINSETTING.val()
+	};
 
 	Byte[] publishStatus = new Byte[] {	 diagnostic_msgs.DiagnosticStatus.WARN,
 	diagnostic_msgs.DiagnosticStatus.ERROR,
@@ -188,8 +190,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	diagnostic_msgs.DiagnosticStatus.OK,
 	diagnostic_msgs.DiagnosticStatus.OK,
 	diagnostic_msgs.DiagnosticStatus.OK};
-	
-	
+		
 	//
 	// Initialize various types of responses that will be published to the various outgoing message busses.
 	static RobotInterface robot;
@@ -246,6 +247,9 @@ public void onStart(final ConnectedNode connectedNode) {
 				MarlinspikeControl.DEBUG = true;
 		}
 	}
+	// in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
+	if( remaps.containsKey("__pwm") )
+		PWM_MODE = remaps.get("__pwm");
 
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub = connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 	
@@ -254,9 +258,6 @@ public void onStart(final ConnectedNode connectedNode) {
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 
 	final Publisher<sensor_msgs.Range> rangepub = connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
-	
-	if( remaps.containsKey("__pwm") )
-		PWM_MODE = remaps.get("__pwm");
 
 	// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
 	final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
@@ -267,9 +268,18 @@ public void onStart(final ConnectedNode connectedNode) {
 	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager.
 	// for each NodeDeviceDemuxer, create a subscriber on the channel 'absolute/<demuxer device name>' of type Int32MultiArray
 	//
+	boolean responseInit = true;
 	for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
 		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber("absolute/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE);
 		configureSubscriberListener(subscr, connectedNode, statpub, subschannel);
+		// Initialize the collection of DiagnosticStatus response handlers
+		if(responseInit) {
+			for(int i = 0; i < stopics.length; i++) {
+				responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
+				responses[i].takeBridgeAndQueueMessage(stopics[i], ndd.getAsynchDemuxer().getTopic(stopics[i]), publishStatus[i]);
+			}
+			responseInit = false;
+		}
 	}
 	//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
 	//		connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
@@ -417,17 +427,6 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	*/
-
-	//ThreadPoolManager.init(stopics);
-	// Initialize the collection of DiagnosticStatus response handlers
-
-	  for(int i = 0; i < stopics.length; i++) {
-		responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
-		responses[i].takeBridgeAndQueueMessage(stopics[i],
-				marlinspikeManager.getNodeDeviceDemuxer(stopics[i]).getAsynchDemuxer().getTopic(stopics[i]),
-				//((NodeDeviceDemuxer) ((ArrayList<NodeDeviceDemuxer>)listNodeDeviceDemuxer).get(l)).getAsynchDemuxer().getTopic(stopics[i]), 
-				publishStatus[i]);
-	  }
 	
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();

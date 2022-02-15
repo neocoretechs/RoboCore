@@ -30,13 +30,12 @@ import diagnostic_msgs.DiagnosticStatus;
  *
  */
 public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus> {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static int MAXMESSAGESIZE = 1024; // upper bound to keep endless loops from hanging status
 	List<diagnostic_msgs.KeyValue> li = null;	
 	/**
 	 * Constructor to build the per thread queuing for Marlinspike MachineBridge response payloads onto the
-	 * outgoing diagnostic status messaging bus.
-	 * @param asynchDemuxer The demuxer that initially builds the bridges of Marlinspike responses
+	 * outgoing diagnostic status messaging bus. This method merely calls the superclass constructor.
 	 * @param node The ConnectedNode that will do the publishing of the Diagnostic Message topics
 	 * @param statpub The publisher of DiagnosticStatus messages topics connected to the ConnectedNode
 	 * @param outgoingDiagnostics The queue that will finally receive and manage the responses built from the demuxer bridge payloads here
@@ -49,6 +48,8 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 	 * @param node The node originating the status message
 	 * @param statpub The publisher to the status message bus
 	 * @param outgoingDiagnostics queue to stash response for future publishing
+	 * @param topicName target topic name
+	 * @param dstatus The status byte indicating Ok, etc.
 	 * @param statPub2 A list of string values to be formatted and published
 	 */
 	public PublishDiagnosticResponse(ConnectedNode node, Publisher<DiagnosticStatus> statpub, 
@@ -71,6 +72,10 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 			}
 		}
 		outgoingDiagnostics.addLast(msg);
+		if(DEBUG) {
+			System.out.printf("%s Message %s added to collection of outgoing diagnostics of length:%d%n", 
+					this.getClass().getName(), displayMessage(), outgoingDiagnostics.size());
+		}
 	}
 	
 	@Override
@@ -92,6 +97,10 @@ public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus
 		kv2.setKey(String.valueOf(messageSize)+".)");
 		kv2.setValue(String.valueOf(getTopicList().getResult(mr)));
 		li.add(kv2);
+		if(DEBUG) {
+			System.out.printf("%s MachineReading %s added to key/value collection of outgoing diagnostics of length:%d%n", 
+					this.getClass().getName(), mr, li.size());
+		}
 	}
 	
 	@Override

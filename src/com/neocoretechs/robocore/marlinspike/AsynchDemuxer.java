@@ -196,7 +196,6 @@ public class AsynchDemuxer implements Runnable {
 	}
 	
 	/**
-
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
 	 * If the elements reach a predetermined upper bound they are emplaced at the beginning. If this occurs,
 	 * a warning message is displayed but otherwise operation is unaffected. If these warnings are an issue,

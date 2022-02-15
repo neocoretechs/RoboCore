@@ -115,7 +115,7 @@ import org.ros.internal.node.server.ThreadPoolManager;
  * @author jg Copyright (C) NeoCoreTechs 2017,2018
  */
 public class PS3CombinedPubs extends AbstractNodeMain  {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false; // use cmdl remaps to set true
 	private static volatile boolean shouldRun = false; // main controller run method loop control
 	private String host;
 	private InetSocketAddress master;
@@ -493,9 +493,9 @@ public void onStart(final ConnectedNode connectedNode) {
 							buttonPub[13] = data.intValue();	 
 						}
 					}
-					
+				//--------------------------------------	
 				} else { // Default pad
-					
+				//--------------------------------------	
 				     if(pubdata.containsKey(Component.Identifier.Axis.X)) { // left stick horiz.
 							data = pubdata.get(Component.Identifier.Axis.X);
 							predata = prevdata.get(Component.Identifier.Axis.X);
@@ -786,7 +786,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			sensor_msgs.Joy val = setupPub(connectedNode, axisPub, buttonPub);
 			velpub.publish(val);
 			if( DEBUG ) 
-				System.out.println("Published with "+val+" rate:"+(System.currentTimeMillis()-lastPubTime));
+				System.out.printf("Published with Axis=%s Button=%s rate=%d%n",Arrays.toString(axisPub),Arrays.toString(buttonPub),(System.currentTimeMillis()-lastPubTime));
 			lastPubTime = System.currentTimeMillis();
 			lastRefreshTime = lastPubTime; // a pub counts as refresh since something changed
 		  }
@@ -827,8 +827,8 @@ private static class DigitalAxis extends Axis {
 
 	protected void renderData(){
 		if( pubdata2.containsKey(getAxis().getIdentifier())) {
-			if( DEBUG )
-				System.out.println("DigitalAxis:"+getAxis().getIdentifier()+" replacing data:"+data);
+			//if( DEBUG )
+			//	System.out.println("DigitalAxis:"+getAxis().getIdentifier()+" replacing data:"+data);
 			pubdata2.replace(getAxis().getIdentifier(), data);
 		} else {
 			if( DEBUG )
@@ -874,8 +874,8 @@ private static class DigitalHat extends Axis {
 		*/
 
 		if( pubdata2.containsKey(getAxis().getIdentifier())) {
-			if( DEBUG )
-				System.out.println("DigitalHat:"+getAxis().getIdentifier()+" replacing data:"+data);
+			//if( DEBUG )
+			//	System.out.println("DigitalHat:"+getAxis().getIdentifier()+" replacing data:"+data);
 			pubdata2.replace(getAxis().getIdentifier(), data);
 		} else {
 			if( DEBUG )
