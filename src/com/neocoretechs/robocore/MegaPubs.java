@@ -1,28 +1,24 @@
 package com.neocoretechs.robocore;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.ros.concurrent.CancellableLoop;
-import org.ros.exception.DuplicateServiceException;
 import org.ros.namespace.GraphName;
-import org.ros.namespace.NameResolver;
+
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
-import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.service.CountDownServiceServerListener;
 import org.ros.node.service.ServiceResponseBuilder;
@@ -32,15 +28,11 @@ import org.ros.node.topic.Subscriber;
 import org.ros.node.topic.SubscriberListener;
 import org.ros.internal.loader.CommandLineLoader;
 import org.ros.internal.node.topic.PublisherIdentifier;
-import org.ros.internal.node.topic.SubscriberIdentifier;
 import org.ros.message.MessageListener;
-import org.ros.message.Time;
 
-import rosgraph_msgs.Log;
 import sensor_msgs.Range;
 import std_msgs.Int32MultiArray;
 
-import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControl;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
@@ -48,17 +40,12 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
-import com.neocoretechs.robocore.marlinspike.PublishResponses;
-import com.neocoretechs.robocore.marlinspike.PublishUltrasonicResponse;
-import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
+
 import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
 
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
-import com.neocoretechs.robocore.machine.bridge.MachineBridge;
-import com.neocoretechs.robocore.machine.bridge.MachineReading;
-import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
 import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
 import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
@@ -122,7 +109,6 @@ public class MegaPubs extends AbstractNodeMain  {
 	private AuxGPIOControl auxGPIO = null;
 	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
-	private boolean[] isOperating = {false,false,false,false,false,false,false,false,false,false};
 	private boolean shouldMove = true;
 	private int targetPitch;
 	private int targetDist;
@@ -206,8 +192,13 @@ public class MegaPubs extends AbstractNodeMain  {
 	// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
 	// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
+	// Collection of subscriber to node device name
+	HashMap<Subscriber<Int32MultiArray>, String> subscriberDevice = new HashMap<Subscriber<Int32MultiArray>, String>();
+	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
+	
 	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses;
 	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic;
+	
 	private Collection<String> statPub = Collections.synchronizedCollection(new ArrayList<String>());
 	
 	public MegaPubs(String[] args) {
@@ -228,7 +219,6 @@ public class MegaPubs extends AbstractNodeMain  {
 			System.out.printf("Robot reports host name as %s%n",robot.getHostName());
 		return GraphName.of(robot.getHostName());
 	}
-
 
 @Override
 public void onStart(final ConnectedNode connectedNode) {
@@ -261,17 +251,15 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
 	final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
-	// channel collection receives each topic with a 2 or 4 element array that has [LUN,value], or [LUN,value,LUN,value] to activate a particular LUN with the given value
-	// or two channels of LUN with the 2 values (as in a dual channel generic controller)
-	final Collection<Subscriber<std_msgs.Int32MultiArray>> subschannel = new ArrayList<Subscriber<std_msgs.Int32MultiArray>>();
 	//
 	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager.
-	// for each NodeDeviceDemuxer, create a subscriber on the channel 'absolute/<demuxer device name>' of type Int32MultiArray
+	// for each NodeDeviceDemuxer, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
 	//
 	boolean responseInit = true;
 	for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
-		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber("absolute/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE);
-		configureSubscriberListener(subscr, connectedNode, statpub, subschannel);
+		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE);
+		subscriberDevice.put(subscr, ndd.getDeviceName());
+		configureSubscriberListener(subscr, connectedNode, statpub);
 		// Initialize the collection of DiagnosticStatus response handlers
 		if(responseInit) {
 			for(int i = 0; i < stopics.length; i++) {
@@ -341,8 +329,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
-				for(int i =0 ; i < isOperating.length; i++)
-					isOperating[i] = false;
+				isOperating.replaceAll((key, value) -> false);
 			}
 				
 		}
@@ -427,7 +414,63 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	*/
-	
+	for(Subscriber<std_msgs.Int32MultiArray> subs : subscriberDevice.keySet()) {
+		subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
+			@Override
+			public void onNewMessage(std_msgs.Int32MultiArray message) {
+				//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+				String deviceName = subscriberDevice.get(subs);
+				int[] valch = message.getData();
+				if(DEBUG)
+					System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%d Thread:%d%n", this.getClass().getName(), subs, deviceName, message.toString(), valch.length, Thread.currentThread().getId());
+				for(int iarg = 0; iarg < valch.length; iarg++) {
+					int affectorSpeed = valch[iarg];
+					if(DEBUG)
+						System.out.printf("%s Message:%s DeviceName=%s speed:%d operating:%b%n", this.getClass().getName(), message.toString(), 
+								deviceName, affectorSpeed, isOperating.get(deviceName));
+					try {
+						MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(deviceName);
+						if(DEBUG)
+							System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
+						if(control == null) {
+							System.out.println("Controller:"+deviceName+" not configured for this node");
+							synchronized(statPub) {
+								statPub.add("Controller:"+deviceName+" not configured for this node");
+								new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
+										diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
+							}
+							continue;
+						}
+						// keep Marlinspike from getting bombed with zeroes
+						if(isOperating.get(deviceName)) {
+							if(affectorSpeed == 0) {
+								control.setDeviceLevel(deviceName, 0);
+								isOperating.replace(deviceName, true, false);
+							} else {
+								control.setDeviceLevel(deviceName, affectorSpeed);
+							}
+						} else {
+							if(affectorSpeed != 0) {
+								isOperating.replace(deviceName, false, true);
+								control.setDeviceLevel(deviceName, affectorSpeed);
+							}
+						}
+						if(DEBUG)
+							System.out.printf("NewMessage, thread %d recieved Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getId(),deviceName,affectorSpeed);
+					} catch (IOException e) {
+						System.out.println("There was a problem communicating with the controller:"+e);
+						e.printStackTrace();
+						synchronized(statPub) {
+							statPub.add("There was a problem communicating with the controller:");
+							statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+							new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
+								diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+						}
+					}
+				}
+			}
+		});
+	}
 	// tell the waiting constructors that we have registered publishers
 	awaitStart.countDown();
 
@@ -656,19 +699,19 @@ public void onStart(final ConnectedNode connectedNode) {
 	* @param subscr The target subscriber
 	* @param connectedNode the Ros node we are using
 	* @param tstatpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
-	* @param subschannel the collection of subscriber channels to add the subscriber to if all goes as planned.
 	*/
 	private void configureSubscriberListener(Subscriber<Int32MultiArray> subscr, ConnectedNode connectedNode, 
-					Publisher<DiagnosticStatus> tstatpub, Collection<Subscriber<Int32MultiArray>> subschannel) {
+					Publisher<DiagnosticStatus> tstatpub) {
 		subscr.addSubscriberListener(new SubscriberListener<std_msgs.Int32MultiArray>() {
 				@Override
-				public void onNewPublisher(Subscriber subs, PublisherIdentifier pubs) {
+				public void onNewPublisher(Subscriber<Int32MultiArray> subs, PublisherIdentifier pubs) {
 					if(DEBUG)
 						System.out.printf("%s Subscsriber %s new publisher %s%n", this.getClass().getName(), subs, pubs);				
 				}
 				@Override
 				public void onShutdown(Subscriber<std_msgs.Int32MultiArray> subs) {
-					subschannel.remove(subs);
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s SHUTDOWN%n", this.getClass().getName(), subs);	
 				}
 				@Override
 				public void onMasterRegistrationFailure(Subscriber<Int32MultiArray> subs) {
@@ -678,64 +721,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				@Override
 				public void onMasterRegistrationSuccess(Subscriber<Int32MultiArray> subs) {
 					if(DEBUG)
-						System.out.printf("%s Subscsriber %s successfully registered with master%n", this.getClass().getName(), subs);				
-					subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
-						@Override
-						public void onNewMessage(std_msgs.Int32MultiArray message) {
-							//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
-							//std_msgs.Int32 valch2 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
-							int[] valch = message.getData();
-							if(DEBUG)
-								System.out.printf("%s Message:%s args:%d%n", this.getClass().getName(), message.toString(), valch.length);
-							int argNum = 0;
-							for(int iarg = 0; iarg < valch.length; iarg+=2) {
-									// lift, led,  boom
-									int affector = valch[argNum++];
-									int affectorSpeed = valch[argNum++];
-									if(DEBUG)
-										System.out.printf("%s Message:%s affector:%d name:%s speed:%d operating:%b%n", this.getClass().getName(), message.toString(), affector, 
-												(affector > -1 ? robot.getNameByLUN(affector) : "BAD"), affectorSpeed, (affector > -1 ? isOperating[affector] : false));
-									try {
-										MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(robot.getNameByLUN(affector));
-										if(control == null) {
-											System.out.println("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
-											synchronized(statPub) {
-												statPub.add("Controller:"+robot.getNameByLUN(affector)+" not configured for this node");
-												new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, subs.toString(), 
-														diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
-											}
-											continue;
-										}
-										// keep Marlinspike from getting bombed with zeroes
-										if(isOperating[affector]) {
-											if(affectorSpeed == 0) {
-												control.setDeviceLevel(robot.getNameByLUN(affector), 0);
-												isOperating[affector] = false;
-											} else {
-												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
-											}
-										} else {
-											if(affectorSpeed != 0) {
-												isOperating[affector] = true;
-												control.setDeviceLevel(robot.getNameByLUN(affector), affectorSpeed);
-											}
-										}
-										if(DEBUG)
-											System.out.println("Subs trigger, recieved Affector directives slot:"+affector+" value:"+affectorSpeed);
-									} catch (IOException e) {
-										System.out.println("There was a problem communicating with the controller:"+e);
-										e.printStackTrace();
-										synchronized(statPub) {
-											statPub.add("There was a problem communicating with the controller:");
-											statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-											new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, subs.toString(), 
-												diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-										}
-									}
-							}
-						}
-					});
-					subschannel.add(subs);		
+						System.out.printf("%s Subscsriber %s successfully registered with master%n", this.getClass().getName(), subs);
+					//final int affector = ((ArrayList<Subscriber<Int32MultiArray>>)subschannel).indexOf(subs);
 				}
 				@Override
 				public void onMasterUnregistrationFailure(Subscriber<Int32MultiArray> subs) {			
@@ -752,7 +739,7 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	/**
 	 * Create the MarlinspikeManager and the list of diagnostic responses to publish based on the stopics collection.
-	 * If there is a problem we will try to publish exxception to diagnostic channel if possible and throw a RuntimeException.<p/>
+	 * If there is a problem we will try to publish exception to diagnostic channel if possible and throw a RuntimeException.<p/>
 	 * Here, we configure the critical listNodeDeviceDemuxer that is used in the onStart method above.
 	 * @param connectedNode The Ros node we are currently initializing
 	 * @param statpub the diagnostic status publisher channel
@@ -766,6 +753,11 @@ public void onStart(final ConnectedNode connectedNode) {
 			// if it matched the name of this host the entry is included in the collection. 
 			// In this way only entries that apply to Marlinspikes attached to this host are utilized.
 			listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+			for(NodeDeviceDemuxer ndd: listNodeDeviceDemuxer) {
+				if(DEBUG)
+					System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), ndd.getDeviceName());	
+				isOperating.put(ndd.getDeviceName(), false);
+			}
 			responses = new PublishDiagnosticResponse[stopics.length];
 		} catch (IOException e) {
 			System.out.println("Could not connect to Marlinspike.."+e);

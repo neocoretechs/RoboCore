@@ -2,12 +2,10 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
@@ -16,13 +14,12 @@ import java.util.concurrent.TimeoutException;
 
 import org.ros.internal.node.server.ThreadPoolManager;
 import com.neocoretechs.robocore.config.Robot;
-import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.TopicList;
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
-import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
+
 import com.neocoretechs.robocore.marlinspike.gcodes.G100;
 import com.neocoretechs.robocore.marlinspike.gcodes.G4;
 import com.neocoretechs.robocore.marlinspike.gcodes.G5;
@@ -92,7 +89,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonic;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonicpinsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownG;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownM;
-import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
+
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
 /**
@@ -124,10 +121,9 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static boolean PORTDEBUG = false;
 	private volatile boolean shouldRun = true;
-	private volatile boolean isRunning = false;
 	private DataPortInterface dataPort;
 	public CyclicBarrier mutexWrite = new CyclicBarrier(2);
 	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(1024);
@@ -223,7 +219,7 @@ public class AsynchDemuxer implements Runnable {
 	 * Initialize the topic names for this AsynchDemuxer
 	 */
 	public synchronized void init() {
-		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
+		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
 		//
 		// G4
 		//
@@ -653,7 +649,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.PWMPINSETTING.val(), new pwmpinsetting(this).getTopicList());
 		
 		// spin the main loop to read lines from the Marlinspike and muxx them
-		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
+		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
 		ThreadPoolManager.getInstance().spin(this, "SYSTEM");
 
 		if(DEBUG)
@@ -860,7 +856,7 @@ public class AsynchDemuxer implements Runnable {
 				}
 			}
 		});	
-		isRunning = true;
+
 		while(shouldRun) {
 			String line = dataPort.readLine();
 			boolean overwrite = marlinLines.add(line);
@@ -869,7 +865,7 @@ public class AsynchDemuxer implements Runnable {
 			if(DEBUG || PORTDEBUG)
 				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
 		} // shouldRun
-		isRunning = false;
+
 	}
 	
 	public boolean isLineTerminal(String line) {

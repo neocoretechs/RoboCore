@@ -255,7 +255,7 @@ public class PeripheralController extends AbstractNodeMain {
 		final Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel = new ArrayList<Publisher<std_msgs.Int32MultiArray>>();
 		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
 			if(ndd.getNodeName().equals(serveNode)) {
-				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher("absolute/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
 				pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
 					@Override
 					public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
@@ -268,7 +268,7 @@ public class PeripheralController extends AbstractNodeMain {
 						}
 						pubschannel.add(pub);
 						if(DEBUG)
-							System.out.println("Bringing up publisher absolute/"+ndd.getDeviceName());
+							System.out.println("Bringing up publisher "+ndd.getDeviceName());
 					}
 					@Override
 					public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {

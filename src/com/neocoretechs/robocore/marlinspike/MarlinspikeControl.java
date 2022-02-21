@@ -53,6 +53,8 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	 * @throws IOException
 	 */
 	public synchronized void setDeviceLevel(String deviceName, int deviceLevel) throws IOException {
+		if(DEBUG) 
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel);
 		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
 		String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
 		AsynchDemuxer.addWrite(asynchDemuxer, affectorCommand);

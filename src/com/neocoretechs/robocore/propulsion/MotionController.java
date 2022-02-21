@@ -6,6 +6,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -229,6 +230,10 @@ public class MotionController extends AbstractNodeMain {
 	    }
 	}
 	/**
+	 * The constructor will load but not activate the nodes listed in configuration when {@link MarlinspikeManager}.configureMarlinspike
+	 * is called with first parameter 'override' set to true.<p/>
+	 * We then create collection of {@link NodeDeviceDemuxer} by calling getNodeDeviceDemuxerByType in the MarlinspikeManager.<p/>
+	 * Finally we create the isActive boolean array to hold/control status of devices.
 	 * @throws IOException 
 	 */
 	public MotionController() throws IOException {
@@ -237,7 +242,6 @@ public class MotionController extends AbstractNodeMain {
 		marlinspikeManager.configureMarlinspike(true, false);
 		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
 		isActive = new boolean[listNodeDeviceDemuxer.size()];
-
 	}
 		
 	
@@ -278,10 +282,11 @@ public class MotionController extends AbstractNodeMain {
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		
-		final Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel = new ArrayList<Publisher<std_msgs.Int32MultiArray>>();
+		final HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel = new HashMap<String, Publisher<std_msgs.Int32MultiArray>>();
+		
 		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
 			//if(ndd.getNodeName().equals(serveNode)) {
-				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher("absolute/"+ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
 				pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
 					@Override
 					public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
@@ -292,9 +297,9 @@ public class MotionController extends AbstractNodeMain {
 						if(DEBUG) {
 							System.out.printf("Successful Master Registration for %s%n", pub);
 						}
-						pubschannel.add(pub);
+						pubschannel.put(ndd.getDeviceName(), pub);
 						if(DEBUG)
-							System.out.println("Bringing up publisher absolute/"+ndd.getDeviceName());
+							System.out.println("Bringing up publisher "+ndd.getDeviceName());
 					}
 					@Override
 					public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
@@ -307,7 +312,7 @@ public class MotionController extends AbstractNodeMain {
 						if(DEBUG) {
 							System.out.printf("Successful Master Unregistration for %s%n", pub);
 						}
-						pubschannel.remove(pub);
+						pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
 					}
 					@Override
 					public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
@@ -320,7 +325,7 @@ public class MotionController extends AbstractNodeMain {
 						if(DEBUG) {
 							System.out.printf("Shutdown initiated for %s%n", pub);
 						}
-						pubschannel.remove(pub);
+						pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
 					}	
 				});
 			}
@@ -330,9 +335,8 @@ public class MotionController extends AbstractNodeMain {
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		
 		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
-	
-		
-		Subscriber<sensor_msgs.Joy> subsrange = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
+			
+		Subscriber<sensor_msgs.Joy> substick = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
@@ -360,7 +364,7 @@ public class MotionController extends AbstractNodeMain {
 		ArrayList<String> roboProps = new ArrayList<String>();
 		roboProps.add(robot.toString());
 
-		subsrange.addSubscriberListener(new SubscriberListener<sensor_msgs.Joy>() {
+		substick.addSubscriberListener(new SubscriberListener<sensor_msgs.Joy>() {
 			@Override
 			public void onMasterRegistrationFailure(Subscriber<Joy> subs) {
 				if(DEBUG)
@@ -384,7 +388,7 @@ public class MotionController extends AbstractNodeMain {
 			public void onNewPublisher(Subscriber<Joy> subs, PublisherIdentifier pubs) {
 				if(DEBUG)
 					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);
-				subsrange.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
+				substick.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 					@Override
 					public void onNewMessage(sensor_msgs.Joy message) {
 						processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
@@ -798,36 +802,39 @@ public class MotionController extends AbstractNodeMain {
 	}
 	
 	/**
+	* Process joystick messages. <p/>
+	* The buttons are basically hardwired to predefined functions, and LUN[0] and LUN[1] are typically assigned device names LeftWheel
+	* and RightWheel and the 2 axes of stick specified in the config file are blended into a steering speed and angle based on the 2 axes,
+	* which is published to each wheel channel as a speed in the range -1000 to +1000.<p/>
 	* 
-	* Megapubs.typeNames:
-	* 0 = LeftWheel
-	* 1 = RightWheel
+	* The other device name LUNs can be configured as desired with the values interpolated into a -1000 to +1000 range based on the type
+	* of axis defined and the values(s) published to the DeviceName LUN channel as a Ros int32 multi array.<p/>
 	*
-	* Joystick data will have array of axis and buttons, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
+	* Joystick data will have array of axis and buttons, typically, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
 	* The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
 	* If the joystick chimes in the target point becomes the current course minus relative stick position,
 	* and the speed is modified by the Y value of the stick.
 	* Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
-	* correct for deviation an wheel slippage.
+	* correct for deviation an wheel slippage.<p/>
 	* 
 	* To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
-	* (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0 added to current heading forming theta.
-	* Theta may also be formed by button press and the difference in current heading and ongoing IMU headings for bearing on a forward course.
+	* (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0, added to current heading, forming theta.
+	* Theta may also be formed by button press, and the difference in current heading and ongoing IMU headings for bearing on a forward course.
 	* We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
-	* of speeds of each wheel, time and speed being distance and all, and the fact that both wheels, being attached to the robot,
-	* have to arrive at essentially the same time after covering the desired distance based on desired speed.
+	* of speeds of each wheel, time and speed being distance, and the fact that both wheels, being attached to the robot,
+	* have to arrive at essentially the same time after covering the desired distance based on desired speed.<p/>
 	* 
 	* The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
 	* in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
-	* So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE and we generate 2 arc lengths that are taken
-	* as a ratio that is multiplied by the proper wheel depending on direction to reduce power in one wheel to affect turn.
-	* The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.
+	* So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE, and we generate 2 arc lengths that are taken
+	* as a ratio that is multiplied by the proper wheel depending on direction, to reduce power in one wheel, to affect turn.
+	* The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.<p/>
 	* 
 	* The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
 	* The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
-	* for the inner arc and the hypotenuse computed by the base and chord formed from course deviation and half wheelbase for the outer arc.
+	* for the inner arc, and the hypotenuse computed by the base and chord formed from course deviation, and half wheelbase, for the outer arc.
 	* The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
-	* us into refined tangents to the crosstrack. At final correction a PID algorithm is used to maintain fine control.<p/>
+	* us into refined tangents to the crosstrack. At final correction, a PID algorithm is used to maintain fine control.
 	* axis[6] is POV, it has quantized values to represent its states.<p/>
 	* 
 	* @param message --float[] axis:--
@@ -843,10 +850,10 @@ public class MotionController extends AbstractNodeMain {
 	* [1] - start
 	* [2] - left stick press
 	* [3] - right stick press
-	* [4] - triangle
-	* [5] - circle
-	* [6] - X button
-	* [7] - square
+	* [4] - triangle -- HOLD CURRENT BEARING
+	* [5] - circle -- RIGHT PIVOT
+	* [6] - X button -- EMERGENCY STOP
+	* [7] - square -- LEFT PIVOT
 	* [8] - left bumper
 	* [9] - right bumper
 	* -- joystick only --
@@ -854,8 +861,14 @@ public class MotionController extends AbstractNodeMain {
 	* [11] - extra
 	* [12] - mode
 	* [13] - side
+	* 
+	* @param connectedNode The Ros node we are using here
+	* @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDeviceDemuxer}
+	* @param message The joystick message with all buttons and axes
+	* @param twistspub The twist publisher channel for broadcast messages to all devices for emergency stop, etc.
+	* @param twistmsg The twist message template to populate with data from this method
 	*/
-	private void processJoystickMessages(ConnectedNode connectedNode, Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel, Joy message, 
+	private void processJoystickMessages(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, Joy message, 
 			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg) {
 		if(DEBUG) {
 			System.out.printf("%s Axes:%s Buttons:%s%n", this.getClass().getName(),Arrays.toString(message.getAxes()),Arrays.toString(message.getButtons()));
@@ -868,7 +881,7 @@ public class MotionController extends AbstractNodeMain {
 		// check for emergency stop, on X or A or green or lower button
 		if( buttons[6] != 0 ) {
 			if(DEBUG)
-				System.out.println("**EMERGENCY STOP FROM VELOCITY "+axes[2]);
+				System.out.println("**EMERGENCY STOP **");
 			angular.setX(-1);
 			angular.setY(-1);
 			angular.setZ(-1);
@@ -899,7 +912,7 @@ public class MotionController extends AbstractNodeMain {
 			speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 			speedL = -speedR;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 			// set it up to send
-			publishPropulsion(connectedNode, pubschannel);
+			publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
 			if(DEBUG)
 				System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 			return;
@@ -908,14 +921,14 @@ public class MotionController extends AbstractNodeMain {
 				speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 				speedR = -speedL;
 				// set it up to send
-				publishPropulsion(connectedNode, pubschannel);
+				publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
 				if(DEBUG)
 					System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 				return;
 			}
 		}
 		// get radian measure of left stick x,y
-		float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[0]);
+		float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[robot.getDiffDrive().getControllerAxisX()]);
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 		// horizontal axis is 0 to -180 degrees, we want 0 at the top
 		stickDegrees += 90;
@@ -1012,34 +1025,46 @@ public class MotionController extends AbstractNodeMain {
 		}
 		if(DEBUG)
 			System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
-		publishPropulsion(connectedNode, pubschannel);
+		publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
+		//
+		// process other axis
+		// get the list of axis and or buttons according to LUN and publish to each.
+		// We are going to translate the floating values to integer by scaling them * 1000 as they are typically in the 0-1 range.
+		// We scale the POV trigger to +1000, -1000 based on AxisUp and AxisDown if we want it to act as a simple up/down control
+		//Configuration:
+		//	AXIS[0].AxisType:Stick
+		//	AXIS[0].AxisX:0
+		//	AXIS[0].AxisY:2
+		//---
+		//  AXIS[3].AxisType:Trigger
+		//  AXIS[3].Axis:4
+		//---
+		//  AXIS[4].AxisType:POV
+		//  AXIS[4].Axis:6
+		//  AXIS[4].AxisUp:0.25
+		//  AXIS[4].AxisDown:0.75
+		//
+		// assume diff drive control are LUN0 and LUN1, then process LUN2-end, extracting the axis
+		// definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:
+		// <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
+		
 	}
-	/**
-	 * Return the publisher from the collection of channels
-	 * @param pubschannel Collection of publisher channels
-	 * @param val channel to select
-	 * @return the publisher channel
-	 */
-	protected Publisher<Int32MultiArray> getPublisher(Collection<Publisher<Int32MultiArray>> pubschannel, String val) {
-		if(DEBUG) {
-			System.out.printf("%s %s%n",this.getClass().getName(), val);
-		}
-		return pubschannel.stream().filter(e -> e.getTopicName().toString().contains(val)).findFirst().get();
-	}
+
 	/**
 	 * Send the motor speed values down the wheel channels
 	 * @param connectedNode
 	 * @param pubschannel
 	 */
-	private void publishPropulsion(ConnectedNode connectedNode, Collection<Publisher<Int32MultiArray>> pubschannel) {
-		ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
-		speedVals.add(robot.getLUN("LeftWheel"));
-		speedVals.add((int)speedL);
-		getPublisher(pubschannel, "LeftWheel").publish(setupPub(connectedNode, speedVals));
-		speedVals = new ArrayList<Integer>(2);
-		speedVals.add(robot.getLUN("RightWheel"));
-		speedVals.add((int)speedR);
-		getPublisher(pubschannel,"RightWheel").publish(setupPub(connectedNode, speedVals));
+	private void publishPropulsion(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, int leftSpeed, int rightSpeed) {
+		ArrayList<Integer> speedVals = new ArrayList<Integer>();
+		speedVals.add(leftSpeed);
+		pubschannel.get("LeftWheel").publish(setupPub(connectedNode, speedVals));
+		try {
+			Thread.sleep(5);
+		} catch (InterruptedException e) {}		
+		speedVals.clear();
+		speedVals.add(rightSpeed);
+		pubschannel.get("RightWheel").publish(setupPub(connectedNode, speedVals));
 		try {
 			Thread.sleep(5);
 		} catch (InterruptedException e) {}
@@ -1347,9 +1372,9 @@ public class MotionController extends AbstractNodeMain {
 		MotionController mc = new MotionController();
 		ArrayList<String> pubs = new ArrayList<String>();
 		for(NodeDeviceDemuxer ndd : mc.listNodeDeviceDemuxer) {
-			System.out.println("/"+ndd.getDeviceName());
+			System.out.println(ndd.getDeviceName());
 			if(DEBUG)
-				System.out.println("Bringing up publisher /"+ndd.getDeviceName());
+				System.out.println("Bringing up publisher "+ndd.getDeviceName());
 			pubs.add("/"+ndd.getDeviceName());
 		}
 		System.out.printf("Diffydrive; %d %d %n", mc.robot.getDiffDrive().getControllerAxisX(), mc.robot.getDiffDrive().getControllerAxisY());
