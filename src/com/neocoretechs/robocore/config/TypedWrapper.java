@@ -35,9 +35,8 @@ import java.util.Map;
  *	private TypedWrapper[] PID; <br/>
  *	private TypedWrapper[] AXIS; <br/>
  *	private TypedWrapper[] BUTTON; <br/>
- * And the resulting TypedWrapper is a ConcurrentHashMap array with the elements in the array having key,value pairs
- * like:<p/>
- * LUN[0]: <p/>
+ * And the resulting TypedWrapper is a ConcurrentHashMap collection with the elements having key,value pairs like:<p/>
+ * LUN[0]: <br/>
  * Name, LeftWheel <br/>
  * Slot, 0 <br/>
  * AXIS[0]: <p/>

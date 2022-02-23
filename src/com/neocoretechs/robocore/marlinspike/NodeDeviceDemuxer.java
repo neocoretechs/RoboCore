@@ -8,7 +8,8 @@ import java.util.Set;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 /**
  * deviceName is a descriptor for the device, such as "LeftWheel" etc. The device itself is typically a tty
- * port that the Marlinspike board is attached to.
+ * port that the Marlinspike board is attached to. These demuxers are unique to each device and as such the
+ * hash and equals methods are keyed to device field.
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
@@ -19,51 +20,21 @@ public class NodeDeviceDemuxer implements Serializable {
 	private String deviceName;
 	private String device;
 	transient AsynchDemuxer asynchDemuxer = null;
-	private transient  MarlinspikeControlInterface controlHost;
+	private transient MarlinspikeControlInterface controlHost;
 	
 	/**
-	 * @param nodeName 
+	 * @param nodeName The host name of the computer the device is connected to
 	 * @param deviceName descriptor for the device, such as "LeftWheel" etc.
-	 * @param device the physical device the Marlinspike board is connected to, typically a tty via USB
+	 * @param device the physical device the Marlinspike board is connected to, typically a tty via USB, the Controller
 	 */
 	public NodeDeviceDemuxer(String nodeName, String deviceName, String device)  {
 		this.nodeName = nodeName;
 		this.deviceName = deviceName;
 		this.device = device;
 	}
-	/**
-	 * Active the asynchDemuxer for the given Marlinspike if it has not been previously
-	 * activated. We must ensure that 1 demuxer/device is activated for a particular physical port
-	 * and that subsequent attempts at activation are met with an assignment 
-	 * to an existing instance of asynchDemuxer.
-	 * @param marlinspikeManager 
-	 * @param deviceToType The mapping of all NodeDeviceDemuxer to all the TypeSlotChannels
-	 * @throws IOException If we attempt to re-use a port, we box up the runtime exception with the IOException
-	 */
-	public void activateMarlinspikes(MarlinspikeManager marlinspikeManager, Map<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType) throws IOException {
-		Set<NodeDeviceDemuxer> sndd = deviceToType.keySet();
-		for(NodeDeviceDemuxer ndd : sndd) {
-			if(ndd.device.equals(device)) {
-				if( ndd.asynchDemuxer == null ) {
-					if(DEBUG)
-						System.out.printf("%s.activateMarlinspikes preparing to initialize %n",this.getClass().getName());
-					asynchDemuxer = new AsynchDemuxer(marlinspikeManager);
-					asynchDemuxer.connect(new ByteSerialDataPort(device));
-					asynchDemuxer.init();
-					controlHost = new MarlinspikeControl(asynchDemuxer);
-					return;
-				}
-				if(ndd == this)
-					return;
-				if(DEBUG)
-					System.out.printf("%s.activateMarlinspikes preparing to copy %s %n", this.getClass().getName(), ndd);
-				asynchDemuxer = ndd.asynchDemuxer;
-				controlHost = ndd.controlHost;
-				return;
-			}
-		}
-		throw new IOException("Could not locate device:"+device+" in deviceToType map");
-	
+
+	protected void setMarlinspikeControl(MarlinspikeControlInterface controlHost) {
+		this.controlHost = controlHost;
 	}
 	
 	public MarlinspikeControlInterface getMarlinspikeControl() {
@@ -72,6 +43,10 @@ public class NodeDeviceDemuxer implements Serializable {
 	
 	public AsynchDemuxer getAsynchDemuxer() {
 		return asynchDemuxer;
+	}
+	
+	protected void setAsynchDemuxer(AsynchDemuxer asynchDemuxer) {
+		this.asynchDemuxer = asynchDemuxer;
 	}
 	
 	public String getNodeName() {
@@ -88,6 +63,16 @@ public class NodeDeviceDemuxer implements Serializable {
 	 */
 	public String getDevice() {
 		return device;
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		return device.equals(((NodeDeviceDemuxer)o).getDevice());
+	}
+	
+	@Override
+	public int hashCode() {
+		return device.hashCode();
 	}
 	
 	@Override

@@ -24,7 +24,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  *
  */
 public class MarlinspikeControl implements MarlinspikeControlInterface {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	//float yawIMURads; = twistInfo.imuTheta
 	int yawTargetDegrees;
 	int targetDistance;
@@ -54,12 +54,12 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	 */
 	public synchronized void setDeviceLevel(String deviceName, int deviceLevel) throws IOException {
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel);
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" Thread:"+Thread.currentThread().getId());
 		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
+		if(DEBUG) 
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" slot:"+tsce.slot+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getId());
 		String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
 		AsynchDemuxer.addWrite(asynchDemuxer, affectorCommand);
-		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" slot:"+tsce.slot+" channel:"+tsce.channel+" deviceLevel:"+deviceLevel);
 	}
 
 

@@ -134,7 +134,7 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 	String controllerName = DEFAULT_CONTROLLER;
 	String controllerType = DEFAULT_TYPE;
 	int refresh = DEFAULT_REFRESH;
-	final static double DEADZONE = 0.00007;
+	static double DEADZONE = 0.00007;
 	private static long lastPubTime = System.currentTimeMillis();
 	private static long lastRefreshTime = System.currentTimeMillis();
 	private boolean shouldPublish = false;
@@ -194,6 +194,8 @@ public void onStart(final ConnectedNode connectedNode) {
 	System.out.println("Refresh rate is "+refresh+" ms.");
 	if( remaps.containsKey("__debug") )
 		DEBUG = true;
+	if( remaps.containsKey("__deadzone") )
+		DEADZONE = Double.parseDouble(remaps.get("__deadzone"));
 	// Main controller creation and thread invocation
 	ControllerReader(pubdata, basedata, controllerName);
 	
@@ -229,8 +231,7 @@ public void onStart(final ConnectedNode connectedNode) {
 		@Override
 		protected void setup() {
 			//sequenceNumber = 0;
-			//val = connectedNode.getTopicMessageFactory().newFromType(sensor_msgs.Joy._TYPE);
-			
+			//val = connectedNode.getTopicMessageFactory().newFromType(sensor_msgs.Joy._TYPE);		
 		}
 
 		@Override
@@ -897,7 +898,8 @@ private static class AnalogAxis extends Axis {
 	}
 
 	protected void renderData() {
-		if (getAxis().getDeadZone() >= Math.abs(data)) {
+		float effectiveDeadZone = (float) Math.max(DEADZONE, getAxis().getDeadZone()); 
+		if (Math.abs(data) <= effectiveDeadZone) {
 			//" (DEADZONE)";
 			data = 0;
 		}
@@ -1018,7 +1020,7 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Conc
 
 	if( !shouldRun )
 		System.out.println("NO CONTROLLER MATCHING "+cotype+" FOUND, CONTROL THREAD WILL EXIT.");
-	ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
+	ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
 	org.ros.internal.node.server.ThreadPoolManager.getInstance().spin(new Runnable() {
 		public void run(){
 			try {

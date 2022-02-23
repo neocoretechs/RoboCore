@@ -426,8 +426,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				for(int iarg = 0; iarg < valch.length; iarg++) {
 					int affectorSpeed = valch[iarg];
 					if(DEBUG)
-						System.out.printf("%s Message:%s DeviceName=%s speed:%d operating:%b%n", this.getClass().getName(), message.toString(), 
-								deviceName, affectorSpeed, isOperating.get(deviceName));
+						System.out.printf("%s Message:%s DeviceName=%s arg=%d speed:%d operating:%b%n", this.getClass().getName(), message.toString(), 
+								deviceName, iarg, affectorSpeed, isOperating.get(deviceName));
 					try {
 						MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(deviceName);
 						if(DEBUG)
@@ -456,7 +456,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							}
 						}
 						if(DEBUG)
-							System.out.printf("NewMessage, thread %d recieved Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getId(),deviceName,affectorSpeed);
+							System.out.printf("NewMessage, thread %d received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getId(),deviceName,affectorSpeed);
 					} catch (IOException e) {
 						System.out.println("There was a problem communicating with the controller:"+e);
 						e.printStackTrace();

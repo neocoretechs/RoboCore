@@ -93,7 +93,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownM;
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
 /**
- * This class is the primary interface between real time data and the other subsystems.
+ * This class is the primary interface between real time data and the other subsystems.<p/>
  * Its primary function is to demultiplex the input stream coming from {@code DataPortInterface} 
  * data sources such as the attached Marlinspike enabled microcontroller, I.e. Mega2560 etc, that implement the interface and 
  * utilize a protocol with '<header>',line number, data value.
@@ -115,8 +115,12 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  * The size of each listener circular deque is determined during invocation of the 'init' method of the MachineBridge for that topic.
  * This demuxxer runs in its own thread as well such that it may operate unimpeded while the listeners can take their time
  * processing the data. In this way a near realtime response is preserved.<p/>
+ * The pipeline to start this service is as follows:<br/>
+ * <code>connect(DataPortInterface)</code><br/>
+ * <code>init()</code><br/>
+ * <code>config(List<String> of String Marlinspike commands)</code><br/>
  * This class is designed for horizontal scaling: multiple Marlinspike boards can be attached to different ports, and
- * an instance of this class can be created for each {@see MegaControl}.
+ * an instance of this class can be created for each {@link MarlinspikeControl}.
  * @author Jonathan Groff (C) NeoCoreTechs 2019,2020,2021
  *
  */
@@ -180,10 +184,10 @@ public class AsynchDemuxer implements Runnable {
 	
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
-	public void clearLineBuffer() { marlinLines.clear(); }
-	public void clearWriteBuffer() { toWrite.clear(); }
+	public synchronized void clearLineBuffer() { marlinLines.clear(); }
+	public synchronized void clearWriteBuffer() { toWrite.clear(); }
 	
-	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
+	public synchronized TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
 		try {
 			return marlinSpikeManager.getTypeSlotChannelEnableByName(name);
 		} catch(NoSuchElementException npe) {
@@ -200,7 +204,10 @@ public class AsynchDemuxer implements Runnable {
 	 * @param req The request to be enqueued.
 	 */
 	public static void addWrite(AsynchDemuxer ad, String req) {
-		boolean overwrite = ad.toWrite.addLast(req);
+		boolean overwrite;
+		synchronized(ad) {
+			overwrite = ad.toWrite.addLast(req);
+		}
 		if(overwrite)
 			System.out.println("WARNING - OUTBOUND MARLINSPIKE QUEUE OVERWRITE!");
 	}

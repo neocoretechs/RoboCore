@@ -38,6 +38,7 @@ import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
+import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
@@ -837,35 +838,34 @@ public class MotionController extends AbstractNodeMain {
 	* us into refined tangents to the crosstrack. At final correction, a PID algorithm is used to maintain fine control.
 	* axis[6] is POV, it has quantized values to represent its states.<p/>
 	* 
-	* @param message --float[] axis:--
-	* [0] - left horiz (X)
-	* [1] - left vert (Y)
-	* [2] - right horiz (X)
-	* [3] - right vert (Y) 
-	* [4] - left trigger
-	* [5] - right trigger
-	* [6] - POV
-	* --int[] buttons--
-	* [0] - select
-	* [1] - start
-	* [2] - left stick press
-	* [3] - right stick press
-	* [4] - triangle -- HOLD CURRENT BEARING
-	* [5] - circle -- RIGHT PIVOT
-	* [6] - X button -- EMERGENCY STOP
-	* [7] - square -- LEFT PIVOT
-	* [8] - left bumper
-	* [9] - right bumper
-	* -- joystick only --
-	* [10] - back
-	* [11] - extra
-	* [12] - mode
-	* [13] - side
-	* 
+	* @param message --float[] axis:--			<br/>
+	* [0] - left horiz (X)						<br/>
+	* [1] - left vert (Y)						<br/>
+	* [2] - right horiz (X)						<br/>
+	* [3] - right vert (Y) 						<br/>
+	* [4] - left trigger						<br/>
+	* [5] - right trigger						<br/>
+	* [6] - POV									<br/>
+	* --int[] buttons--							<br/>
+	* [0] - select								<br/>
+	* [1] - start								<br/>
+	* [2] - left stick press					<br/>
+	* [3] - right stick press					<br/>
+	* [4] - triangle -- HOLD CURRENT BEARING	<br/>
+	* [5] - circle -- RIGHT PIVOT				<br/>
+	* [6] - X button -- EMERGENCY STOP			<br/>
+	* [7] - square -- LEFT PIVOT				<br/>
+	* [8] - left bumper							<br/>
+	* [9] - right bumper						<br/>
+	* -- joystick only --						<br/>
+	* [10] - back								<br/>
+	* [11] - extra								<br/>
+	* [12] - mode								<br/>
+	* [13] - side								<br/>
 	* @param connectedNode The Ros node we are using here
 	* @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDeviceDemuxer}
 	* @param message The joystick message with all buttons and axes
-	* @param twistspub The twist publisher channel for broadcast messages to all devices for emergency stop, etc.
+	* @param twistpub The twist publisher channel for broadcast messages to all devices for emergency stop, etc.
 	* @param twistmsg The twist message template to populate with data from this method
 	*/
 	private void processJoystickMessages(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, Joy message, 
@@ -1026,30 +1026,83 @@ public class MotionController extends AbstractNodeMain {
 		if(DEBUG)
 			System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
 		publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
-		//
-		// process other axis
-		// get the list of axis and or buttons according to LUN and publish to each.
-		// We are going to translate the floating values to integer by scaling them * 1000 as they are typically in the 0-1 range.
-		// We scale the POV trigger to +1000, -1000 based on AxisUp and AxisDown if we want it to act as a simple up/down control
-		//Configuration:
-		//	AXIS[0].AxisType:Stick
-		//	AXIS[0].AxisX:0
-		//	AXIS[0].AxisY:2
-		//---
-		//  AXIS[3].AxisType:Trigger
-		//  AXIS[3].Axis:4
-		//---
-		//  AXIS[4].AxisType:POV
-		//  AXIS[4].Axis:6
-		//  AXIS[4].AxisUp:0.25
-		//  AXIS[4].AxisDown:0.75
-		//
-		// assume diff drive control are LUN0 and LUN1, then process LUN2-end, extracting the axis
-		// definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:
-		// <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
+		
+		publishPeripheral(connectedNode, pubschannel, axes);
 		
 	}
-
+	
+	/**
+	* 
+ 	* Process other axis.<p/>
+ 	* Get the list of axis and or buttons according to LUN and publish to each.
+ 	* We are going to translate the floating values to integer by scaling them * 1000 as they are typically in the 0-1 range.
+ 	* We scale the POV trigger to +1000, -1000 based on AxisUp and AxisDown if we want it to act as a simple up/down control.<br/>
+ 	* The DigitalHat POV is 8 positions, left being 1.0, subtracting .125 counterclockwise, so straight up is .25, straight down is .75<p/>
+ 	* Configuration:			<br/>
+	* AXIS[0].AxisType:Stick	<br/>
+	* AXIS[0].AxisX:0			<br/>
+	* AXIS[0].AxisY:2			<br/>
+	* ---						<br/>
+  	* AXIS[3].AxisType:Trigger<br/>
+  	* AXIS[3].Axis:4			<br/>
+	* ---						<br/>
+  	* AXIS[4].AxisType:POV	<br/>
+  	* AXIS[4].Axis:6			<br/>
+ 	* -- optional:				<br/>
+  	* AXIS[4].AxisUp:0.25		<br/>
+  	* AXIS[4].AxisDown:0.75	<br/>
+	*<br/>
+	* Assume we handle propulsion in other method, so ignore the LUN device names that end in 'Wheel' and process all others, extracting the axis
+	* definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:<br/>
+	* <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
+	* @param connectedNode Our Ros node here
+	* @param pubschannel Collection of publisher channels that represent axes
+	* @param axes the values of the stick axes
+	*/
+	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes) {
+		TypedWrapper[] luns = robot.getLUN();
+		Arrays.stream(luns).forEach( lun -> {
+			if(!((String)lun.get("Name")).endsWith("Wheel")) {
+				String axisType = ((String)lun.get("AxisType"));
+				switch(axisType) {
+				case "Stick":
+					String sx = ((String)lun.get("AxisX"));
+					String sy = ((String)lun.get("AxisY"));
+					float x = -axes[Integer.parseInt(sx)] * 1000;
+					float y = -axes[Integer.parseInt(sy)] * 1000;
+					publishAxis(connectedNode, pubschannel, axisType, (int)y, (int)x);
+					break;
+				case "Trigger":
+					String ax = ((String)lun.get("Axis"));
+					float a = -axes[Integer.parseInt(ax)] * 1000;
+					publishAxis(connectedNode, pubschannel, axisType, (int)a);
+					break;
+				case "POV":
+					ax = ((String)lun.get("Axis"));
+					a = axes[Integer.parseInt(ax)] * 1000;
+					String saxUp = ((String)lun.get("AxisUp"));
+					if(saxUp == null) {
+						publishAxis(connectedNode, pubschannel, axisType, (int)a);
+					} else {
+						String saxDown = ((String)lun.get("AxisDown"));
+						float axUp = Float.parseFloat(saxUp) * 1000;
+						float axDown = Float.parseFloat(saxDown) * 1000;
+						if(a == axUp) {
+							publishAxis(connectedNode, pubschannel, axisType, 1000);
+						} else {
+							if(a == axDown) {
+								publishAxis(connectedNode, pubschannel, axisType, -1000);
+							}
+						}
+					}
+					break;
+				default:
+					throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+lun.get("Name"));
+				}
+			}
+		});	
+	}
+	
 	/**
 	 * Send the motor speed values down the wheel channels
 	 * @param connectedNode
@@ -1060,13 +1113,29 @@ public class MotionController extends AbstractNodeMain {
 		speedVals.add(leftSpeed);
 		pubschannel.get("LeftWheel").publish(setupPub(connectedNode, speedVals));
 		try {
-			Thread.sleep(5);
+			Thread.sleep(1);
 		} catch (InterruptedException e) {}		
 		speedVals.clear();
 		speedVals.add(rightSpeed);
 		pubschannel.get("RightWheel").publish(setupPub(connectedNode, speedVals));
 		try {
-			Thread.sleep(5);
+			Thread.sleep(1);
+		} catch (InterruptedException e) {}
+	}
+	/**
+	 * Send the motor speed values down the wheel channels
+	 * @param connectedNode
+	 * @param pubschannel
+	 */
+	private void publishAxis(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, String channel, int... vals) {
+		ArrayList<Integer> axisVals = new ArrayList<Integer>();
+		for(int v : vals)
+			axisVals.add(v);
+		if(DEBUG)
+			System.out.printf("%s Publish axis channel %s sending values %s%n" , this.getClass().getName(), channel, Arrays.toString(vals));
+		pubschannel.get(channel).publish(setupPub(connectedNode, axisVals));
+		try {
+			Thread.sleep(1);
 		} catch (InterruptedException e) {}
 	}
 	/**
