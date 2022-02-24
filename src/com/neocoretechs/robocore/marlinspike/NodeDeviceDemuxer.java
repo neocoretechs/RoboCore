@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 
@@ -19,6 +20,7 @@ public class NodeDeviceDemuxer implements Serializable {
 	private String nodeName;
 	private String deviceName;
 	private String device;
+	private ArrayList<String> startup = new ArrayList<String>();
 	transient AsynchDemuxer asynchDemuxer = null;
 	private transient MarlinspikeControlInterface controlHost;
 	
@@ -63,6 +65,15 @@ public class NodeDeviceDemuxer implements Serializable {
 	 */
 	public String getDevice() {
 		return device;
+	}
+	
+	public void addInit(String init) {
+		startup.add(init);
+	}
+	
+	public void init() throws IOException {
+		if(startup.size() > 0)
+			asynchDemuxer.config(startup);
 	}
 	
 	@Override

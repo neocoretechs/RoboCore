@@ -232,7 +232,9 @@ public class MotionController extends AbstractNodeMain {
 	}
 	/**
 	 * The constructor will load but not activate the nodes listed in configuration when {@link MarlinspikeManager}.configureMarlinspike
-	 * is called with first parameter 'override' set to true.<p/>
+	 * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
+	 * want to get configuration for all available control nodes, but not activate them from this module since this module
+	 * issues directives to the attached controllers rather than control them directly.<p/>
 	 * We then create collection of {@link NodeDeviceDemuxer} by calling getNodeDeviceDemuxerByType in the MarlinspikeManager.<p/>
 	 * Finally we create the isActive boolean array to hold/control status of devices.
 	 * @throws IOException 

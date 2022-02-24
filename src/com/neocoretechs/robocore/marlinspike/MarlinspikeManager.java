@@ -6,6 +6,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -106,12 +107,28 @@ public class MarlinspikeManager {
 				String controller = (String)lun[i].get("Controller");
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
 				// assuming the config is properly done
-				ndd = new NodeDeviceDemuxer((String) lun[i].get("NodeName"), name, controller);
-				Map<String, TypeSlotChannelEnable> nameToTypeMap = deviceToType.get(ndd);
-				// Have we created a demuxer for this device controller already?
-				if(nameToTypeMap == null) {
+				NodeDeviceDemuxer nddx = new NodeDeviceDemuxer((String) lun[i].get("NodeName"), name, controller);
+				Map<String, TypeSlotChannelEnable> nameToTypeMap = null; // map value
+				Iterator<Map.Entry<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>>> iterator = deviceToType.entrySet().iterator();  
+		        boolean isKeyPresent = false; 
+		        // Iterate over the HashMap
+		        while (iterator.hasNext()) {
+		        	Map.Entry<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> entry = iterator.next();
+		            if(nddx.equals(entry.getKey())) {
+		                isKeyPresent = true;
+		                ndd = entry.getKey();
+		                nameToTypeMap = entry.getValue();
+		                break;
+		            }
+		        }
+		        if(!isKeyPresent) { // use new values
+		        	//nameToTypeMap = deviceToType.get(ndd);
+		        	// Have we created a demuxer for this device controller already?
+		        	//if(nameToTypeMap == null) {
 					nameToTypeMap = new ConcurrentHashMap<String, TypeSlotChannelEnable>();
+					ndd = nddx; // our template with key, now permanent
 					deviceToType.put(ndd, nameToTypeMap);
+					// activate the new demuxer, but only once
 					if(activate)
 						activateMarlinspike(ndd);
 				}
@@ -137,12 +154,16 @@ public class MarlinspikeManager {
 						ienable);
 				}
 				nameToTypeMap.put(name, tsce);
+				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				if(activate)
 					configureMarlinspike(ndd, lun[i], tsce);
 			}
 		}
 		if(deviceToType.isEmpty())
 			throw new IOException("No configuration information found for any controller for this node:"+hostName);
+		Enumeration<NodeDeviceDemuxer> k = deviceToType.keys();
+		while(k.hasMoreElements())
+			k.nextElement().init();
 	}
 	/**
 	 * Active the asynchDemuxer for the given Marlinspike if it has not been previously
@@ -164,7 +185,7 @@ public class MarlinspikeManager {
 	}
 	/**
 	 * Internal configuration generator that sets up initial commands to Marlinspike controller
-	 * based on configuration, and sends them to the attached controller.<p/>
+	 * based on configuration, to prepare to send them to the attached controller.<p/>
 	 * Called as final phase of initialization pipeline.
 	 * @param ndd NodeDeviceDemuxer that handles IO
 	 * @param lun Logical unit from configuration file
@@ -172,7 +193,6 @@ public class MarlinspikeManager {
 	 * @throws IOException If commands fail in send or confirmation
 	 */
 	private void configureMarlinspike(NodeDeviceDemuxer ndd, TypedWrapper lun, TypeSlotChannelEnable tsce) throws IOException {
-		ArrayList<String> config = new ArrayList<String>();
 		Optional<Object> pin1 = Optional.ofNullable(lun.get("PWMPin1"));
 		// if pin 1 is NOT present we assume we are using a type with NO pwm pins
 		Optional<Object> pin0 = Optional.ofNullable(lun.get("PWMPin0"));
@@ -193,17 +213,15 @@ public class MarlinspikeManager {
 			if(DEBUG)
 				System.out.printf("%s: Controller tsce:%s generating M10:%s%n",this.getClass().getName(), tsce, M10Gen);
 			if(M10Gen.length() > 0)
-				config.add(M10Gen);
+				ndd.addInit(M10Gen);
 			StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(ipin0, ipin1)).append(tsce.genChannelDirDefaultEncoder(ienc));
 			if(DEBUG) {
-				System.out.printf("%s: Controller tsce:%s generating config%s%n",this.getClass().getName(),tsce,sb.toString());
+				System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,sb.toString());
 			}
 			if(sb.length() > 0)
-				config.add(sb.toString());
+				ndd.addInit(sb.toString());
 		} catch(NoSuchElementException nse) {
 		}
-		if(config.size() > 0)
-			ndd.getAsynchDemuxer().config(config);
 	}
 	/**
 	 * Locate the proper AsynchDemuxer by name of device we want to write to, then add the write to that AsynchDemuxer.
