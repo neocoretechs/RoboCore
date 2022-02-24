@@ -15,10 +15,10 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import diagnostic_msgs.DiagnosticStatus;
 /**
  * Once the response lines have been received from the Marlinspike realtime subsystem in response to an M or G code,
- * the (@see AsynchDemuxer} will demux them onto a thread bearing a waiting handler that consumes the messages
+ * the (@link AsynchDemuxer} will demux them onto a thread bearing a waiting handler that consumes the messages
  * associated with the response (in effect, the 'ack' or 'nak' to the code).<p/>
  * The handler will consume all the lines from the response, thus clearing the inbound AsynchDemuxer message queue of
- * those response lines, and place them on a (@see MachineBridge} queue as a series of {@see MachineReading}.<p/>
+ * those response lines, and place them on a (@link MachineBridge} queue as a series of {@see MachineReading}.<p/>
  * The purpose of the MachineBridge is to categorize and encapsulate and present each topic as MachineReadings 
  * in a common format that can be manipulated for display or analysis, and as such the MachineBridge and MachineReadings 
  * are XML compliant and can be used by JAXB and JQuery or other XML processing.<p/>

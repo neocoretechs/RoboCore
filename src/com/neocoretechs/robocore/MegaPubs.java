@@ -42,7 +42,7 @@ import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
 
 import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
-
+import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -189,9 +189,6 @@ public class MegaPubs extends AbstractNodeMain  {
 	}
 	//final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 	MarlinspikeManager marlinspikeManager = null;
-	// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file, if it matched the name of this host
-	// the the entry is included in the collection. In this way only entries that apply to Marlinspikes attached to this host are utilized.
-	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
 	// Collection of subscriber to node device name
 	HashMap<Subscriber<Int32MultiArray>, String> subscriberDevice = new HashMap<Subscriber<Int32MultiArray>, String>();
 	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
@@ -255,20 +252,17 @@ public void onStart(final ConnectedNode connectedNode) {
 	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager.
 	// for each NodeDeviceDemuxer, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
 	//
-	boolean responseInit = true;
-	for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
-		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE);
-		subscriberDevice.put(subscr, ndd.getDeviceName());
+	for(DeviceEntry ndd : marlinspikeManager.getDevices()) {
+		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
+		subscriberDevice.put(subscr, ndd.getName());
 		configureSubscriberListener(subscr, connectedNode, statpub);
-		// Initialize the collection of DiagnosticStatus response handlers
-		if(responseInit) {
-			for(int i = 0; i < stopics.length; i++) {
-				responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
-				responses[i].takeBridgeAndQueueMessage(stopics[i], ndd.getAsynchDemuxer().getTopic(stopics[i]), publishStatus[i]);
-			}
-			responseInit = false;
-		}
 	}
+	
+	// Initialize the collection of DiagnosticStatus response handlers
+	//for(int i = 0; i < stopics.length; i++) {
+	//	responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
+	//	responses[i].takeBridgeAndQueueMessage(stopics[i], ndd.getAsynchDemuxer().getTopic(stopics[i]), publishStatus[i]);
+	//}
 	//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
 	//		connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
 	//final Subscriber<std_msgs.Int32MultiArray> substrigger = 
@@ -324,7 +318,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			if( targetPitch == -1 && targetDist == -1 && targetYaw == -1) {
 				shouldMove = false;
 				try {
-					for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+					for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
 						ndd.getMarlinspikeControl().commandStop();
 				} catch (IOException e) {
 					e.printStackTrace();
@@ -642,18 +636,18 @@ public void onStart(final ConnectedNode connectedNode) {
 					try {
 						switch(request.getData()) {
 							case "id":
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+								for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
 									sb.append(ndd.getMarlinspikeControl().reportSystemId());
 								response.setData(sb.toString());
 								break;
 							case "reset":
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+								for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
 									sb.append(ndd.getMarlinspikeControl().commandReset());
 								response.setData(sb.toString());
 								break;
 							case "status":
 							default:
-								for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
+								for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
 									sb.append(ndd.getMarlinspikeControl().reportAllControllerStatus());
 								response.setData(sb.toString());
 								break;		
@@ -752,11 +746,10 @@ public void onStart(final ConnectedNode connectedNode) {
 			// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
 			// if it matched the name of this host the entry is included in the collection. 
 			// In this way only entries that apply to Marlinspikes attached to this host are utilized.
-			listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-			for(NodeDeviceDemuxer ndd: listNodeDeviceDemuxer) {
+			for(DeviceEntry ndd: marlinspikeManager.getDevices()) {
 				if(DEBUG)
-					System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), ndd.getDeviceName());	
-				isOperating.put(ndd.getDeviceName(), false);
+					System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), ndd.getName());	
+				isOperating.put(ndd.getName(), false);
 			}
 			responses = new PublishDiagnosticResponse[stopics.length];
 		} catch (IOException e) {

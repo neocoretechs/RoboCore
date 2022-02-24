@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
@@ -43,9 +44,10 @@ public class MarlinspikeManager {
 	//Object[] nodeNames; // one of these for each subscriber to serve AsynchDemuxer and DataPortInterface
 	//Object[] controllers; // one of these for each AsynchDemuxer and DataPort
 	/**
-	 * deviceToType - NodeDeviceDemuxer -> <DeviceName, i.e. "LeftWheel"-> TypeSlotChannelEnable>
+	 * deviceToType - [NodeDeviceDemuxer by Controller i.e. /dev/tty2] -> <Name of device, i.e. "LeftWheel"-> TypeSlotChannelEnable>
 	 */
 	ConcurrentHashMap<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType = new ConcurrentHashMap<NodeDeviceDemuxer, Map<String,TypeSlotChannelEnable>>();
+	ArrayList<DeviceEntry> devices = new ArrayList<DeviceEntry>();
 	
 	/**
 	 * 
@@ -53,12 +55,12 @@ public class MarlinspikeManager {
 	 * @param wheel
 	 * @param pid 
 	 */
-	public MarlinspikeManager(RobotInterface robot2) {
-		this.robot = robot2;
-		this.lun = robot2.getLUN();
-		this.wheel = robot2.getWHEEL();
-		this.pid = robot2.getPID();
-		this.hostName = robot2.getHostName();
+	public MarlinspikeManager(RobotInterface robot) {
+		this.robot = robot;
+		this.lun = robot.getLUN();
+		this.wheel = robot.getWHEEL();
+		this.pid = robot.getPID();
+		this.hostName = robot.getHostName();
 		//nodeNames = aggregate(lun, "NodeName");
 		//controllers = aggregate(lun,"Controller");
 	}
@@ -105,6 +107,7 @@ public class MarlinspikeManager {
 			if(override || hostName.equals(lun[i].get("NodeName"))) {
 				String name = (String)lun[i].get("Name");
 				String controller = (String)lun[i].get("Controller");
+				devices.add(new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controller));
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
 				// assuming the config is properly done
 				NodeDeviceDemuxer nddx = new NodeDeviceDemuxer((String) lun[i].get("NodeName"), name, controller);
@@ -332,8 +335,21 @@ public class MarlinspikeManager {
 			throw new NoSuchElementException("The device "+name+" was not found in the collection");
 		}
 	}
-
+	/**
+	 * Return the NodeDeviceDemuxer KeySet as ArrayList collection
+	 * @return the Collection of unique NodeDeviceDemuxer by Control of LUN
+	 */
+	public Collection<NodeDeviceDemuxer> getNodeDeviceDemuxers() {
+		return new ArrayList<NodeDeviceDemuxer>(deviceToType.keySet());
+	}
 	
+	/**
+	 * @return the devices
+	 */
+	public ArrayList<DeviceEntry> getDevices() {
+		return devices;
+	}
+
 	public String toString() {
 		return String.format("Controller LeftSlot=%d, Left Channel=%d, RightSlot=%d Right Channel=%d\r\n",
 				leftSlot, leftChannel, rightSlot, rightChannel);

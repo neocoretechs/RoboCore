@@ -1,6 +1,5 @@
 package com.neocoretechs.robocore.propulsion;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -9,7 +8,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
@@ -18,24 +16,19 @@ import org.ros.internal.node.topic.PublisherIdentifier;
 import org.ros.internal.node.topic.SubscriberIdentifier;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
-import org.ros.namespace.NameResolver;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
-import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
-import org.ros.node.service.CountDownServiceServerListener;
-import org.ros.node.service.ServiceResponseBuilder;
-import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.PublisherListener;
 import org.ros.node.topic.Subscriber;
 import org.ros.node.topic.SubscriberListener;
 
-import com.neocoretechs.robocore.MegaPubs;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
+import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
@@ -43,11 +36,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
-import com.neocoretechs.robocore.services.ControllerStatusMessage;
-import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
-import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
 
-import diagnostic_msgs.DiagnosticStatus;
 import sensor_msgs.Joy;
 import std_msgs.Int32MultiArray;
 
@@ -218,7 +207,7 @@ public class MotionController extends AbstractNodeMain {
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	MarlinspikeManager marlinspikeManager;
-	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
+	Collection<DeviceEntry> deviceEntries;
 	boolean[] isActive;
 
 	
@@ -243,8 +232,8 @@ public class MotionController extends AbstractNodeMain {
 		robot = new Robot();
 		marlinspikeManager = new MarlinspikeManager(robot);
 		marlinspikeManager.configureMarlinspike(true, false);
-		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-		isActive = new boolean[listNodeDeviceDemuxer.size()];
+		deviceEntries = marlinspikeManager.getDevices();
+		isActive = new boolean[deviceEntries.size()];
 	}
 		
 	
@@ -287,9 +276,9 @@ public class MotionController extends AbstractNodeMain {
 		
 		final HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel = new HashMap<String, Publisher<std_msgs.Int32MultiArray>>();
 		
-		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
+		for(DeviceEntry ndd : deviceEntries) {
 			//if(ndd.getNodeName().equals(serveNode)) {
-				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
 				pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
 					@Override
 					public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
@@ -300,9 +289,9 @@ public class MotionController extends AbstractNodeMain {
 						if(DEBUG) {
 							System.out.printf("Successful Master Registration for %s%n", pub);
 						}
-						pubschannel.put(ndd.getDeviceName(), pub);
+						pubschannel.put(ndd.getName(), pub);
 						if(DEBUG)
-							System.out.println("Bringing up publisher "+ndd.getDeviceName());
+							System.out.println("Bringing up publisher "+ndd.getName());
 					}
 					@Override
 					public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
@@ -630,7 +619,6 @@ public class MotionController extends AbstractNodeMain {
 				}
 								
 				if( isOverPressure ) { // check for dropping
-						diagnostic_msgs.DiagnosticStatus statmsg = statpub.newMessage();
 							//long meas = System.currentTimeMillis()-lastPressureNotification;
 							//if( meas > 1000000) {
 							//	isPress = true;
@@ -1442,13 +1430,13 @@ public class MotionController extends AbstractNodeMain {
 	public static void main(String[] args) throws IOException {
 		MotionController mc = new MotionController();
 		ArrayList<String> pubs = new ArrayList<String>();
-		for(NodeDeviceDemuxer ndd : mc.listNodeDeviceDemuxer) {
-			System.out.println(ndd.getDeviceName());
+		for(DeviceEntry ndd : mc.deviceEntries) {
+			System.out.println(ndd.getName());
 			if(DEBUG)
-				System.out.println("Bringing up publisher "+ndd.getDeviceName());
-			pubs.add("/"+ndd.getDeviceName());
+				System.out.println("Bringing up publisher "+ndd.getName());
+			pubs.add("/"+ndd.getName());
 		}
-		System.out.printf("Diffydrive; %d %d %n", mc.robot.getDiffDrive().getControllerAxisX(), mc.robot.getDiffDrive().getControllerAxisY());
+		System.out.printf("Diffydrive; %d %d %n", robot.getDiffDrive().getControllerAxisX(), robot.getDiffDrive().getControllerAxisY());
 		System.out.println("----");
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))
 		.findFirst().get());
