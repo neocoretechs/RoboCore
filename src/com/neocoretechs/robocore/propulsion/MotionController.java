@@ -1050,44 +1050,53 @@ public class MotionController extends AbstractNodeMain {
 	* @param axes the values of the stick axes
 	*/
 	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes) {
-		TypedWrapper[] luns = robot.getLUN();
-		Arrays.stream(luns).forEach( lun -> {
-			if(!((String)lun.get("Name")).endsWith("Wheel")) {
-				String axisType = ((String)lun.get("AxisType"));
+		deviceEntries.forEach( lun -> {
+			if(!(lun.getName().endsWith("Wheel"))) {
+				int luni = lun.getLUN();
+				String axisType = (String) robot.getAXIS()[luni].get("AxisType");
+				if(axisType == null) {
+					if(DEBUG) {
+						System.out.printf("%s NO axis type attribute device %s%n", this.getClass().getName(), lun);
+					}
+					return; // continue with next iteration
+				}
+				if(DEBUG) {
+					System.out.printf("%s axis type %s attribute device %s%n", this.getClass().getName(), axisType, lun);
+				}
 				switch(axisType) {
-				case "Stick":
-					String sx = ((String)lun.get("AxisX"));
-					String sy = ((String)lun.get("AxisY"));
-					float x = -axes[Integer.parseInt(sx)] * 1000;
-					float y = -axes[Integer.parseInt(sy)] * 1000;
-					publishAxis(connectedNode, pubschannel, axisType, (int)y, (int)x);
+					case "Stick":
+						String sx = (String) robot.getAXIS()[luni].get("AxisX");
+						String sy = (String) robot.getAXIS()[luni].get("AxisY");
+						float x = -axes[Integer.parseInt(sx)] * 1000;
+						float y = -axes[Integer.parseInt(sy)] * 1000;
+						publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x);
 					break;
-				case "Trigger":
-					String ax = ((String)lun.get("Axis"));
-					float a = -axes[Integer.parseInt(ax)] * 1000;
-					publishAxis(connectedNode, pubschannel, axisType, (int)a);
+					case "Trigger":
+						String ax = (String) robot.getAXIS()[luni].get("Axis");
+						float a = -axes[Integer.parseInt(ax)] * 1000;
+						publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
 					break;
-				case "POV":
-					ax = ((String)lun.get("Axis"));
-					a = axes[Integer.parseInt(ax)] * 1000;
-					String saxUp = ((String)lun.get("AxisUp"));
-					if(saxUp == null) {
-						publishAxis(connectedNode, pubschannel, axisType, (int)a);
-					} else {
-						String saxDown = ((String)lun.get("AxisDown"));
-						float axUp = Float.parseFloat(saxUp) * 1000;
-						float axDown = Float.parseFloat(saxDown) * 1000;
-						if(a == axUp) {
-							publishAxis(connectedNode, pubschannel, axisType, 1000);
+					case "POV":
+						ax = (String) robot.getAXIS()[luni].get("Axis");
+						a = axes[Integer.parseInt(ax)] * 1000;
+						String saxUp = (String) robot.getAXIS()[luni].get(("AxisUp"));
+						if(saxUp == null) {
+							publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
 						} else {
-							if(a == axDown) {
-								publishAxis(connectedNode, pubschannel, axisType, -1000);
+							String saxDown = (String) robot.getAXIS()[luni].get(("AxisDown"));
+							float axUp = Float.parseFloat(saxUp) * 1000;
+							float axDown = Float.parseFloat(saxDown) * 1000;
+							if(a == axUp) {
+								publishAxis(connectedNode, pubschannel, lun.getName(), 1000);
+							} else {
+								if(a == axDown) {
+									publishAxis(connectedNode, pubschannel, lun.getName(), -1000);
+								}
 							}
 						}
-					}
 					break;
-				default:
-					throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+lun.get("Name"));
+					default:
+						throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+lun.getName());
 				}
 			}
 		});	

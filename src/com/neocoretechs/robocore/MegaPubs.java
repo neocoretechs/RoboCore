@@ -258,11 +258,12 @@ public void onStart(final ConnectedNode connectedNode) {
 		configureSubscriberListener(subscr, connectedNode, statpub);
 	}
 	
+	NodeDeviceDemuxer demux = (NodeDeviceDemuxer) marlinspikeManager.getNodeDeviceDemuxers().toArray()[0];
 	// Initialize the collection of DiagnosticStatus response handlers
-	//for(int i = 0; i < stopics.length; i++) {
-	//	responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
-	//	responses[i].takeBridgeAndQueueMessage(stopics[i], ndd.getAsynchDemuxer().getTopic(stopics[i]), publishStatus[i]);
-	//}
+	for(int i = 0; i < stopics.length; i++) {
+		responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
+		responses[i].takeBridgeAndQueueMessage(stopics[i], demux.getAsynchDemuxer().getTopic(stopics[i]), publishStatus[i]);
+	}
 	//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
 	//		connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
 	//final Subscriber<std_msgs.Int32MultiArray> substrigger = 

@@ -79,4 +79,8 @@ public class DeviceEntry {
 	public int hashCode() {
 		return Name.hashCode();
 	}
+	@Override
+	public String toString() {
+		return String.format("%s %s %s %d %s%n", this.getClass().getName(), Name, NodeName, LUN, Controller);
+	}
 }

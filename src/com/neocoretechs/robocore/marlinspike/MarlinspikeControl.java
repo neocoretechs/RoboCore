@@ -54,10 +54,10 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	 */
 	public synchronized void setDeviceLevel(String deviceName, int deviceLevel) throws IOException {
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" Thread:"+Thread.currentThread().getId());
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getId());
 		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" slot:"+tsce.slot+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getId());
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" slot:"+tsce.slot+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getId());
 		String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
 		AsynchDemuxer.addWrite(asynchDemuxer, affectorCommand);
 	}
