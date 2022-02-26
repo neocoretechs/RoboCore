@@ -46,6 +46,9 @@ public class MarlinspikeManager {
 	 * deviceToType - [NodeDeviceDemuxer by Controller i.e. /dev/tty2] -> <Name of device, i.e. "LeftWheel"-> TypeSlotChannelEnable>
 	 */
 	ConcurrentHashMap<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType = new ConcurrentHashMap<NodeDeviceDemuxer, Map<String,TypeSlotChannelEnable>>();
+	/**
+	 * devices - canonical list of devices by properties file device name, such as "LeftWheel". Will also carry NodeDeviceDemuxer ref
+	 */
 	ArrayList<DeviceEntry> devices = new ArrayList<DeviceEntry>();
 	
 	/**
@@ -106,7 +109,8 @@ public class MarlinspikeManager {
 			if(override || hostName.equals(lun[i].get("NodeName"))) {
 				String name = (String)lun[i].get("Name");
 				String controller = (String)lun[i].get("Controller");
-				devices.add(new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controller));
+				DeviceEntry deviceEntry = new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controller);
+				devices.add(deviceEntry);
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
 				// assuming the config is properly done
 				NodeDeviceDemuxer nddx = new NodeDeviceDemuxer((String) lun[i].get("NodeName"), name, controller);
@@ -134,6 +138,7 @@ public class MarlinspikeManager {
 					if(activate)
 						activateMarlinspike(ndd);
 				}
+		        deviceEntry.setNodeDeviceDemuxer(ndd);
 				// map within a map, nameToTypeMap, 
 				// has deviceName, demuxer, indexed by name of device so "LeftWheel" can retrieve 
 				// pins. etc. 
@@ -247,14 +252,8 @@ public class MarlinspikeManager {
 	 * @return the MarlinspikeControlInterface with methods to communicate with the board
 	 */
 	public synchronized MarlinspikeControlInterface getMarlinspikeControl(String name) throws NoSuchElementException {
-		Stream<Object> nddx = deviceToType.entrySet().stream().
-				filter(entry -> name.equals(entry.getKey().getDeviceName())).map(Map.Entry::getKey);
-		try {
-			NodeDeviceDemuxer ndd = (NodeDeviceDemuxer) nddx.findAny().get();
+			NodeDeviceDemuxer ndd = (NodeDeviceDemuxer) getNodeDeviceDemuxer(name);
 			return ndd.getMarlinspikeControl();
-		} catch(NullPointerException npe) {
-			throw new NoSuchElementException("The device "+name+" was not found in the collection");
-		}
 	}
 	
 	/**
@@ -336,11 +335,9 @@ public class MarlinspikeManager {
 	 * @return
 	 */
 	public synchronized NodeDeviceDemuxer getNodeDeviceDemuxer(String name) throws NoSuchElementException  {
-		Stream<Object> nddx = deviceToType.entrySet().stream().
-				filter(entry -> name.equals(entry.getKey().getDeviceName())).map(Map.Entry::getKey);
 		try {
-			return (NodeDeviceDemuxer) nddx.findAny().get();
-		} catch(NullPointerException | NoSuchElementException nse) {
+			return devices.get(devices.indexOf(new DeviceEntry(name))).getNodeDeviceDemuxer();
+		} catch(NullPointerException | NoSuchElementException | IndexOutOfBoundsException nse) {
 			throw new NoSuchElementException("The device "+name+" was not found in the collection");
 		}
 	}

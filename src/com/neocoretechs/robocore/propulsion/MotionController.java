@@ -1065,11 +1065,17 @@ public class MotionController extends AbstractNodeMain {
 				}
 				switch(axisType) {
 					case "Stick":
-						String sx = (String) robot.getAXIS()[luni].get("AxisX");
-						String sy = (String) robot.getAXIS()[luni].get("AxisY");
-						float x = -axes[Integer.parseInt(sx)] * 1000;
-						float y = -axes[Integer.parseInt(sy)] * 1000;
-						publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x);
+						if(robot.getAXIS()[luni].get("AxisX") != null) {
+							String sx = (String) robot.getAXIS()[luni].get("AxisX");
+							String sy = (String) robot.getAXIS()[luni].get("AxisY");
+							float x = -axes[Integer.parseInt(sx)] * 1000;
+							float y = -axes[Integer.parseInt(sy)] * 1000;
+							publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x);
+						} else {
+							String sy = (String) robot.getAXIS()[luni].get("AxisY");
+							float y = -axes[Integer.parseInt(sy)] * 1000;
+							publishAxis(connectedNode, pubschannel, lun.getName(), (int)y);
+						}
 					break;
 					case "Trigger":
 						String ax = (String) robot.getAXIS()[luni].get("Axis");

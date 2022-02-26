@@ -1,26 +1,37 @@
 package com.neocoretechs.robocore.config;
+
+import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
+
 /**
  * List of unique devices from RoboCore.properties. Assembled into collection in {@link MarlinspikeManager}
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  *
  */
 public class DeviceEntry {
-	private String Name; // name entry in properties configuration file
-	private String NodeName; // the node attached to
-	private int LUN; // integer LUN position, points to LUN array in Robot
-	private String Controller; // the physical device port microcontroller for this entry is attached to
+	private String Name; // name entry in properties configuration file, such as "LeftWheel"
+	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
+	private int LUN; // integer LUN position, points to LUN array in Robot, such as 1
+	private String Controller; // the physical device port microcontroller for this entry is attached to, such as /dev/ttyACM0
+	private NodeDeviceDemuxer ndd; // Demuxer for above properties, carries some redundant info, will appear many in this collection, added after constructor
 	/**
 	 * 
-	 * @param Name
-	 * @param NodeName
-	 * @param LUN
-	 * @param Controller
+	 * @param Name name entry in properties configuration file, such as "LeftWheel"
+	 * @param NodeName the node attached to, the host computer name of the Ros node, such as "CONTROL1"
+	 * @param LUN integer LUN position, points to LUN array in Robot, such as 1
+	 * @param Controller the physical device port microcontroller for this entry is attached to, such as /dev/ttyACM0
 	 */
 	public DeviceEntry(String Name, String NodeName, int LUN, String Controller) {
 		this.Name = Name;
 		this.NodeName = NodeName;
 		this.LUN = LUN;
 		this.Controller = Controller;
+	}
+	/**
+	 * Form a template for locating in collection via name
+	 * @param name
+	 */
+	public DeviceEntry(String name) {
+		this.Name = name;
 	}
 	/**
 	 * @return the name
@@ -69,6 +80,20 @@ public class DeviceEntry {
 	 */
 	public void setController(String controller) {
 		this.Controller = controller;
+	}
+	
+	/**
+	 * @return the ndd
+	 */
+	public NodeDeviceDemuxer getNodeDeviceDemuxer() {
+		return ndd;
+	}
+	
+	/**
+	 * @param ndd the ndd to set
+	 */
+	public void setNodeDeviceDemuxer(NodeDeviceDemuxer ndd) {
+		this.ndd = ndd;
 	}
 	
 	@Override
