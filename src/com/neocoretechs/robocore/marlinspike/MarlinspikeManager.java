@@ -1,19 +1,13 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -22,7 +16,6 @@ import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
-import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 /**
@@ -312,6 +305,7 @@ public class MarlinspikeManager {
 		while(it.hasNext()){
 			Map<String,TypeSlotChannelEnable> tsces = it.next();
 			TypeSlotChannelEnable ret = tsces.get(name);
+			if(ret != null)
 				return ret;
 		}
 		throw new NoSuchElementException("The name "+name+" was not found in the collection of device to type");
