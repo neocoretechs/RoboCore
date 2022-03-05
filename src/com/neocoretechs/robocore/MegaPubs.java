@@ -63,8 +63,9 @@ import diagnostic_msgs.DiagnosticStatus;
  * such Motor controller status, ultrasonic sensor, voltage reading, etc and all that is acquired from the attached UART/USB of an aux 
  * board such as Mega2560 via asynchronous bidirectional serial protocol such as RS-232. Since serial ports are monolithic and atomic
  * the actual communications are centralized in the {@code MegaControl} class and its contained {@code ByteSerialDataPort} low level
- * access module.
- * 
+ * access module.<p/>
+ * Certain command line remappings are used to affect behavior as follows:<br/>
+ * determine debugging directives __debug:=publisher,demuxer,marlinspike any of these 3 arguments are optional to turn on debugging<br/>
  * __pwm:=controller<br/>
  * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
  * initialized with a previous M-code<p/>
@@ -72,7 +73,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * Indicates that PWM directives sent as a service are to be directly applied as a set of values working
  * on a PWM pin<p/>
  * GPIO service invocation always works directly on a pin.<p/>  
- * In addition, control functions are 
+ * 
  * As input from the attached board is received, the {@code AsynchDemuxer} decodes the header and prepares the data for publication
  * to the Ros bus. Publish various warnings over the 'robocore/status' topic.<p/>
  * <h3>AsynchDemuxer:</h3>
@@ -88,17 +89,19 @@ import diagnostic_msgs.DiagnosticStatus;
  * Anything attached to the microcontroller: UART aux port or low level motor driver H bridge, issued a series of M codes 
  * to activate the functions of the PWM and GPIO pins on the Mega. 
  * Controller M and G code examples:
- * G5 Z<slot> C<channel> P<power> - Issue move command to controller in slot Z<slot> on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
+ * <code> G5 Z<slot> C<channel> P<power> </code>- Issue move command to controller in slot Z<slot> on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
  * H Bridge Driver:
- * M45 P<pin> S<0-255> - start PWM on pin P with value S, many optional arguments for timer setup
- * M41 P<pin> - Set digital pin P high forward
- * M42 P<pin> - Set digital pin P low reverse
+ * <code><br/>
+ * M45 P<pin> S<0-255> - start PWM on pin P with value S, many optional arguments for timer setup<br/>
+ * M41 P<pin> - Set digital pin P high forward <br/>
+ * M42 P<pin> - Set digital pin P low reverse <br/>
+ * </code>
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String host;
@@ -179,6 +182,8 @@ public class MegaPubs extends AbstractNodeMain  {
 		
 	//
 	// Initialize various types of responses that will be published to the various outgoing message busses.
+	// Generate base {@link Robot} that bootstraps configs from RoboCore.properties via VM command line directive
+	//
 	static RobotInterface robot;
 	static {
 		try {

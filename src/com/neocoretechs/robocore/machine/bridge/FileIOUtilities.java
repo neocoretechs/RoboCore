@@ -20,7 +20,7 @@ import java.util.Locale;
 * @author Jonathan Groff 
 */
 public class FileIOUtilities {
-		private static boolean DEBUG = true;
+		private static boolean DEBUG = false;
 		private static final String propsFile = "startup.gcode";
 		private static String propfile = null;
 		private static ArrayList<String> config = new ArrayList<String>();
@@ -192,8 +192,4 @@ public class FileIOUtilities {
 			fw.close();
 		}
 		
-		public static void writeFromList(String string, List<List<String>> hTable) {
-			// TODO Auto-generated method stub
-			
-		}
 }

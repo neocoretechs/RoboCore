@@ -51,7 +51,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public class Robot implements RobotInterface, Serializable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
 	private int temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F

@@ -19,15 +19,11 @@ import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.bigsack.session.BigSackAdapter;
-import com.neocoretechs.bigsack.session.TransactionalHashSet;
 import com.neocoretechs.relatrix.DuplicateKeyException;
-import com.neocoretechs.relatrix.Relatrix;
-import com.neocoretechs.relatrix.client.RelatrixClient;
 
-import org.ros.internal.node.server.ThreadPoolManager;
-import com.neocoretechs.robocore.services.ControllerStatusMessage;
-import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
-import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
+import com.neocoretechs.relatrix.client.RelatrixClient;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -72,7 +68,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	CountDownLatch latch;
 	RelatrixClient session = null;
 	static {
-		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, false);
+		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDERCLIENT"});
 	}
 	
 	@Override
@@ -140,7 +136,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	*/
 		latch = new CountDownLatch(1);
 		
-		ThreadPoolManager.getInstance().spin(new Runnable() {
+		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			@Override
 			public void run() {
 				if(DEBUG)
@@ -184,7 +180,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 				
 				System.exit(1);
 			}
-		}, "SYSTEM");
+		}, "VIDEORECORDERCLIENT");
 		
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.

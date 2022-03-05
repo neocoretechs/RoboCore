@@ -12,7 +12,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.ros.internal.node.server.ThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
@@ -126,7 +126,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  */
 public class AsynchDemuxer implements Runnable {
 	public static boolean DEBUG = false;
-	private static boolean PORTDEBUG = false;
+	private static boolean PORTDEBUG = true;
 	private volatile boolean shouldRun = true;
 	private DataPortInterface dataPort;
 	public CyclicBarrier mutexWrite = new CyclicBarrier(2);
@@ -221,12 +221,14 @@ public class AsynchDemuxer implements Runnable {
 	public synchronized void connect(DataPortInterface dataPort) throws IOException {
 		this.dataPort = dataPort;
 		dataPort.connect(true);
+		init();
 	}
 	/**
 	 * Initialize the topic names for this AsynchDemuxer
 	 */
-	public synchronized void init() {
-		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
+	private synchronized void init() {
+		// initialize the fixed thread pool manager
+		SynchronizedFixedThreadPoolManager.init(3, Integer.MAX_VALUE, new String[]{dataPort.getPortName()});
 		//
 		// G4
 		//
@@ -656,8 +658,7 @@ public class AsynchDemuxer implements Runnable {
 		topics.put(topicNames.PWMPINSETTING.val(), new pwmpinsetting(this).getTopicList());
 		
 		// spin the main loop to read lines from the Marlinspike and muxx them
-		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
-		ThreadPoolManager.getInstance().spin(this, "SYSTEM");
+		SynchronizedFixedThreadPoolManager.spin(this, dataPort.getPortName());
 
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init END OF INITIALIZATION of Marlinspike topic listeners");
@@ -767,7 +768,7 @@ public class AsynchDemuxer implements Runnable {
 		// spin another worker thread to take queued write requests and send them on to the Marlinspike
 		// Take requests from write queue and send them to the serial port of marlinspike. Wait for the same
 		// response as request to be ack from our corresponding retrieveData with a notifyAll on mutexWrite.
-		ThreadPoolManager.getInstance().spin(new Runnable() {
+		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			@Override
 			public void run() {
 				String writeReq = null;
@@ -775,13 +776,13 @@ public class AsynchDemuxer implements Runnable {
 					while(shouldRun) {
 						try {
 							writeReq = toWrite.takeFirst();
-							if(DEBUG || PORTDEBUG)
+							if(DEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" writeLine:"+writeReq);
 							if(writeReq == null || writeReq.isEmpty())
 								continue;
 							dataPort.writeLine(writeReq);
 							mutexWrite.await(750, TimeUnit.MILLISECONDS);
-							if(DEBUG || PORTDEBUG)
+							if(DEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+writeReq);
 						} catch (TimeoutException e) {
 							if(DEBUG || PORTDEBUG)
@@ -789,7 +790,7 @@ public class AsynchDemuxer implements Runnable {
 										" NO RESPONSE FROM PORT "+dataPort.getPortName()+"IN TIME FOR DIRECTIVE:"+writeReq);
 						} finally {
 							mutexWrite.reset();
-							if(DEBUG || PORTDEBUG)
+							if(DEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" reset");
 						}
 					}
@@ -797,9 +798,9 @@ public class AsynchDemuxer implements Runnable {
 					e.printStackTrace();
 				}
 			}	
-		});
+		}, dataPort.getPortName());
 		// spin another worker thread to take Marlinspike lines from circular blocking deque and demux them
-		ThreadPoolManager.getInstance().spin(new Runnable() {
+		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			String line,fop;
 			@Override
 			public void run() {
@@ -811,7 +812,9 @@ public class AsynchDemuxer implements Runnable {
 							continue;
 						}
 						if( line.length() == 0 ) {
-							System.out.println("AsynchDemux Cannot demux directive from line:"+line);
+							if(DEBUG || PORTDEBUG)
+								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+									" RESPONSE FROM PORT "+dataPort.getPortName()+" CANNOT DEMUX DIRECTIVE:"+line);
 							// consume line
 							marlinLines.takeFirst();
 							continue;
@@ -843,14 +846,18 @@ public class AsynchDemuxer implements Runnable {
 									System.out.println(this.getClass().getName()+" payload size:"+payload.size()+" retrieveData:"+tl);
 								tl.retrieveData(payload);
 							} else {
-								System.out.println("AsynchDemux Cannot retrieve topic "+fop+" from raw directive for line:"+line);
+								if(DEBUG || PORTDEBUG)
+									System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+										" RESPONSE FROM PORT "+dataPort.getPortName()+" CANNOT RETRIEVE TOPIC:"+fop+" CANNOT DEMUX DIRECTIVE:"+line);
 								// consume line
 								marlinLines.takeFirst();
 								continue;
 							}
 						}			
 					} catch(IndexOutOfBoundsException ioob) {
-						System.out.println("AsynchDemux Empty or malformed directive from line:"+line);
+						if(DEBUG || PORTDEBUG)
+							System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+								" RESPONSE FROM PORT "+dataPort.getPortName()+" MALFORMED OR EMPTY LINE, CANNOT DEMUX DIRECTIVE:"+line);
 						// consume line
 						try {
 							marlinLines.takeFirst();
@@ -862,14 +869,15 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 			}
-		});	
+		},dataPort.getPortName());	
 
 		while(shouldRun) {
 			String line = dataPort.readLine();
 			boolean overwrite = marlinLines.add(line);
 			if(overwrite)
-				System.out.println("AsynchDemux WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
-			if(DEBUG || PORTDEBUG)
+				System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+						" RESPONSE FROM PORT "+dataPort.getPortName()+" WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
+			if(DEBUG)
 				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
 		} // shouldRun
 

@@ -30,7 +30,7 @@ import diagnostic_msgs.DiagnosticStatus;
  *
  */
 public class PublishDiagnosticResponse extends PublishResponses<DiagnosticStatus> {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static int MAXMESSAGESIZE = 1024; // upper bound to keep endless loops from hanging status
 	List<diagnostic_msgs.KeyValue> li = null;	
 	/**

@@ -19,7 +19,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Enumeration;
 
-import org.ros.internal.node.server.ThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+
 
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
@@ -62,7 +63,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private CommPortIdentifier portId = null;
 	    
 	    static {
-            ThreadPoolManager.getInstance().init(new String[] {"IMU"}, true);
+            SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
 	    }
 	    
 	    //BNO055
@@ -258,7 +259,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	            
 	            //(new Thread(new SerialReader(inStream))).start();
 	            SerialReader readThread = new SerialReader(inStream);
-	            ThreadPoolManager.getInstance().spin(readThread, "IMU");
+	            SynchronizedFixedThreadPoolManager.spin(readThread, "IMU"+portName);
 	            while(!readThread.isRunning)
 					try {
 						Thread.sleep(1);
@@ -272,7 +273,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		            }
 		            //(new Thread(new SerialWriter(outStream))).start();
 		            SerialWriter writeThread = new SerialWriter(outStream);
-		            ThreadPoolManager.getInstance().spin(writeThread, "IMU");
+		            SynchronizedFixedThreadPoolManager.spin(writeThread, "IMU"+portName);
 		            while(!writeThread.isRunning)
 						try {
 							Thread.sleep(1);

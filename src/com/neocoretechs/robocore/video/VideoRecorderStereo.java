@@ -4,28 +4,18 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import java.util.Map;
-import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
-import org.ros.node.service.CountDownServiceServerListener;
-import org.ros.node.service.ServiceResponseBuilder;
-import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.bigsack.session.BigSackAdapter;
 import com.neocoretechs.bigsack.session.TransactionalHashSet;
-import com.neocoretechs.relatrix.DuplicateKeyException;
-import com.neocoretechs.relatrix.Relatrix;
-import org.ros.internal.node.server.ThreadPoolManager;
-import com.neocoretechs.robocore.services.ControllerStatusMessage;
-import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
-import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -69,7 +59,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	CountDownLatch latch;
 	TransactionalHashSet session = null;
 	static {
-		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, false);
+		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDER"});
 	}
 	
 	@Override
@@ -134,7 +124,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	*/
 		latch = new CountDownLatch(1);
 		
-		ThreadPoolManager.getInstance().spin(new Runnable() {
+		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			@Override
 			public void run() {
 				if(DEBUG)
@@ -169,7 +159,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 		        	e.printStackTrace();
 		        }
 			}
-		}, "SYSTEM");
+		}, "VIDEORECORDER");
 		
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.

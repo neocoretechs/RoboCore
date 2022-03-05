@@ -27,7 +27,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  *
  */
 public class MarlinspikeManager {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	RobotInterface robot;
 	String hostName;
 	TypedWrapper[] lun;
@@ -183,7 +183,6 @@ public class MarlinspikeManager {
 			System.out.printf("%s.activateMarlinspikes preparing to initialize %s%n",this.getClass().getName(), ndd);
 		AsynchDemuxer asynchDemuxer = new AsynchDemuxer(this);
 		asynchDemuxer.connect(new ByteSerialDataPort(ndd.getDevice()));
-		asynchDemuxer.init();
 		ndd.setAsynchDemuxer(asynchDemuxer);
 		ndd.setMarlinspikeControl(new MarlinspikeControl(asynchDemuxer));
 	}

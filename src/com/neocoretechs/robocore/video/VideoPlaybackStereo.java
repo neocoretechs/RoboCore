@@ -2,31 +2,20 @@ package com.neocoretechs.robocore.video;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.image.BufferedImage;
-import java.awt.image.WritableRaster;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.ServerSocket;
+
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Spliterator;
-import java.util.Spliterators;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -34,25 +23,11 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
-import javax.swing.WindowConstants;
-import javax.swing.border.Border;
-import javax.swing.border.TitledBorder;
 
-import com.neocoretechs.bigsack.iterator.Entry;
-import com.neocoretechs.bigsack.session.BigSackAdapter;
-import com.neocoretechs.bigsack.session.TransactionalHashSet;
-import com.neocoretechs.relatrix.DuplicateKeyException;
-import com.neocoretechs.relatrix.Relatrix;
 import com.neocoretechs.relatrix.client.RelatrixClient;
-import com.neocoretechs.relatrix.client.RelatrixClientInterface;
-import com.neocoretechs.relatrix.client.RelatrixKVClient;
-import com.neocoretechs.relatrix.client.RemoteEntrySetIterator;
 import com.neocoretechs.relatrix.client.RemoteStream;
 
-import org.ros.internal.node.server.ThreadPoolManager;
-
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
-
 
 /**
  * Create a panel and retrieve video images from the image database, then

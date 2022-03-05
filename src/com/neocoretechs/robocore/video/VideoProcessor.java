@@ -49,7 +49,6 @@ import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
 import com.neocoretechs.robocore.machine.bridge.RadixTree;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-import org.ros.internal.node.server.ThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 /**
  * Create a disparity map for the left and right images taken from stereo cameras published to bus.
@@ -374,7 +373,7 @@ public class VideoProcessor extends AbstractNodeMain
 		SynchronizedFixedThreadPoolManager.getInstance().init(16, camHeight, "BUILDOCTREEA");
 		SynchronizedFixedThreadPoolManager.getInstance().init(16, 64, "MATCHREGIONA");
 		final int execLimit = camHeight;
-		ThreadPoolManager.getInstance().spin(new Runnable() {
+		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 				@Override
 				public void run() {
 					while(true) {
@@ -478,7 +477,7 @@ public class VideoProcessor extends AbstractNodeMain
 		 * notify waiting worker threads to process them.
 		 * Wait at synch barrier for completion of all processing threads, then display disparity 
 		 */
-		ThreadPoolManager.getInstance().spin(new Runnable() {			
+		SynchronizedFixedThreadPoolManager.spin(new Runnable() {			
 				public void run() {
 					//double meanRMS = 0;
 					//double varianceRMS = 0;
@@ -2683,7 +2682,7 @@ public class VideoProcessor extends AbstractNodeMain
 			public void spinGen() {
 				if(DEBUG)
 					System.out.println("Spinning Left Pixels to Model Generator");
-				ThreadPoolManager.getInstance().spin(new Runnable() {
+				SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 					@Override
 					public void run() {			
 						while(true) {
@@ -2704,7 +2703,7 @@ public class VideoProcessor extends AbstractNodeMain
 				});
 				if(DEBUG)
 					System.out.println("Spinning Right Pixels to Model Generator");
-				ThreadPoolManager.getInstance().spin(new Runnable() {
+				SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 					@Override
 					public void run() {	
 						while(true) {

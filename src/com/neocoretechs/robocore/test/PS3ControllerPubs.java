@@ -7,11 +7,8 @@ import net.java.games.input.ControllerEnvironment;
 import net.java.games.input.Version;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileReader;
-import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -21,16 +18,15 @@ import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.namespace.GraphName;
-import org.ros.namespace.NameResolver;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
-import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
-import org.ros.internal.loader.CommandLineLoader;
 
-import org.ros.internal.node.server.ThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+
+import org.ros.internal.loader.CommandLineLoader;
 
 
 /**
@@ -360,12 +356,18 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2) {
 		System.out.println("Controller version: " + Version.getVersion());
 	ControllerEnvironment ce = ControllerEnvironment.getDefaultEnvironment();
 	Controller[] ca = ce.getControllers();
-	for(int i =0;i<ca.length;i++){
-		if( ca[i].getName().contains("USB Joystick"))
+	int i = 0;
+	boolean foundController = false;
+	for(;i < ca.length; i++){
+		if( ca[i].getName().contains("USB Joystick")) {
 			makeController(pubdata2, ca[i]);
+			foundController = true;
+		}
 	}
-	ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
-	ThreadPoolManager.getInstance().spin(new Runnable() {
+	if(!foundController)
+		throw new RuntimeException("USB Joystick not found");
+	SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {ca[i].getName()});
+	SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 		public void run(){
 			try {
 				while(true){
@@ -383,7 +385,7 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2) {
 				e.printStackTrace();
 			}
 		}
-	}, "SYSTEM");
+	}, ca[i].getName());
 }
 
 private void makeController(ConcurrentHashMap<Identifier, Float> pubdata2, Controller c) {

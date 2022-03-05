@@ -1,34 +1,24 @@
 package com.neocoretechs.robocore.services;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
-import org.ros.concurrent.CancellableLoop;
 import org.ros.exception.RemoteException;
-import org.ros.exception.RosRuntimeException;
-import org.ros.exception.ServiceNotFoundException;
 import org.ros.namespace.GraphName;
-import org.ros.namespace.NameResolver;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
-import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.service.ServiceClient;
 import org.ros.node.service.ServiceResponseListener;
-import org.ros.node.topic.Publisher;
+
 import org.ros.internal.loader.CommandLineLoader;
-import org.ros.internal.node.server.ThreadPoolManager;
 
 import com.neocoretechs.robocore.RosArrayUtilities;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
@@ -65,7 +55,6 @@ public class GPIOControlClient extends AbstractNodeMain  {
 	}
 
 
-
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();	
@@ -78,9 +67,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	switch(command) {
 		case "gpio":
 			// spinup reader that will place PWM commands on queue
-			ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
+			SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"pubdataGPIO"});
 			fileReader<Integer> reader = new fileReader<Integer>(pubdataGPIO,"/home/pi/gpio", Integer.class);
-			org.ros.internal.node.server.ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
+			SynchronizedFixedThreadPoolManager.spin(reader, "pubdataGPIO");
 			break;
 		case "direct":
 			if( remaps.containsKey("__pin") ) {

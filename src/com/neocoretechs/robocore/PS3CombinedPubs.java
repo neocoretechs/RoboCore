@@ -10,7 +10,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.net.InetSocketAddress;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -21,21 +20,15 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
-import org.apache.commons.math3.fitting.PolynomialCurveFitter;
-import org.apache.commons.math3.fitting.WeightedObservedPoints;
 import org.ros.concurrent.CancellableLoop;
 import org.ros.message.Time;
 import org.ros.namespace.GraphName;
-import org.ros.namespace.NameResolver;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
-import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
-import org.ros.internal.node.server.ThreadPoolManager;
-
 
 /**
  * Publishes user constructed Joystick or Gamepad messages on the /sensor_msgs/Joy topic. 
@@ -1020,8 +1013,8 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Conc
 
 	if( !shouldRun )
 		System.out.println("NO CONTROLLER MATCHING "+cotype+" FOUND, CONTROL THREAD WILL EXIT.");
-	ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
-	org.ros.internal.node.server.ThreadPoolManager.getInstance().spin(new Runnable() {
+	SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"PS3CombinedPubs"});
+	SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 		public void run(){
 			try {
 				while(shouldRun){
@@ -1039,7 +1032,7 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Conc
 				e.printStackTrace();
 			}
 		}
-	}, "SYSTEM");
+	}, "PS3CombinedPubs");
 }
 
 private void makeController(ConcurrentHashMap<Identifier, Float> pubdata2, 	ConcurrentHashMap<Identifier,Float> basedata2, Controller c) {

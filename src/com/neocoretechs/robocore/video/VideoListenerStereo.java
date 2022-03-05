@@ -36,7 +36,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import org.ros.internal.node.server.ThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -80,7 +80,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
 	static {
-		ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, false);
+		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"VIDEOLISTENERSTEREO"} );
 	}
 	
 	@Override
@@ -121,7 +121,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 			        displayPanel2.paintPanel();
 			    }
 			});
-			ThreadPoolManager.getInstance().spin(new Runnable() {
+			SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 				@Override
 				public void run() {
 					if(DEBUG)
@@ -152,13 +152,13 @@ public class VideoListenerStereo extends AbstractNodeMain
 			        	}
 			        }
 				}
-			}, "SYSTEM");
+			}, "VIDEOLISTENERSTEREO");
 		} else {
 			// Spin up a server to server multipart image types
 			if( mode.equals("display_server") ) {
 				if( DEBUG )
 					System.out.println("Pumping frames as MJPEG via HTTP on 127.0.0.1:"+port);
-				ThreadPoolManager.getInstance().spin(new Runnable() {
+				SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 					@Override
 					public void run() {
 				        while(true) {
@@ -169,7 +169,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 				        			Socket client_socket = ssocket.accept();
 				        			if( DEBUG )
 				        				System.out.println("Connection established from "+client_socket);
-				        			ThreadPoolManager.getInstance().spin(new StandardImageConnection(client_socket), "SYSTEM");
+				        			SynchronizedFixedThreadPoolManager.spin(new StandardImageConnection(client_socket), "VIDEOLISTENERSTEREO");
 				        		}
 				        	} catch (Exception e) {
 				        		System.err.println("Exception occurred: " + e);
@@ -182,7 +182,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 				        	}
 				        }
 					}
-				}, "SYSTEM");		
+				}, "VIDEOLISTENERSTEREO");		
 			}// else { // mode has output directory
 				
 				//if( mode.equals("rtsp_server") ) {

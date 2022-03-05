@@ -24,7 +24,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  *
  */
 public class MarlinspikeControl implements MarlinspikeControlInterface {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	//float yawIMURads; = twistInfo.imuTheta
 	int yawTargetDegrees;
 	int targetDistance;

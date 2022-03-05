@@ -10,16 +10,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
@@ -41,12 +37,6 @@ import com.neocoretechs.machinevision.hough3d.hough_settings;
 import com.neocoretechs.machinevision.hough3d.octree_t;
 import com.neocoretechs.machinevision.hough3d.writer_file;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-import org.ros.internal.node.server.ThreadPoolManager;
-import com.neocoretechs.robocore.video.VideoProcessor.AbstractDepth;
-import com.neocoretechs.robocore.video.VideoProcessor.envInterface;
-
-import diagnostic_msgs.DiagnosticStatus;
-import diagnostic_msgs.KeyValue;
 
 /**
  * Listen for pointcloud messages.
@@ -229,7 +219,7 @@ public class PointCloudSubs extends AbstractNodeMain {
 		SynchronizedFixedThreadPoolManager.getInstance().init(16, camHeight, "BUILDOCTREEA");
 		SynchronizedFixedThreadPoolManager.getInstance().init(16, 64, "PROCESSREGIONA");
 		final int execLimit = camHeight;
-		ThreadPoolManager.getInstance().spin(new Runnable() {
+		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 				@Override
 				public void run() {
 					while(true) {

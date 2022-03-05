@@ -12,7 +12,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Enumeration;
 
-import org.ros.internal.node.server.ThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+
 /**
  * Class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
  * to effect transmission and reception.
@@ -81,7 +82,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port whose ownership has already been requested by "+portId.getCurrentOwner());
 	    	}
 	        try {
-	        	ThreadPoolManager.getInstance().init(new String[] {"SYSTEM"}, true);
+	        	SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"SYSTEM"+portName});
 	            // Obtain a CommPortIdentifier object for the port you want to open
 	        	portId = CommPortIdentifier.getPortIdentifier(portName);
 	            if( portId == null ) {
@@ -118,7 +119,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	            }   
 	            //(new Thread(new SerialReader(inStream))).start();
 	            SerialReader readThread = new SerialReader(inStream);
-	            ThreadPoolManager.getInstance().spin(readThread, "SYSTEM");
+	            SynchronizedFixedThreadPoolManager.spin(readThread, "SYSTEM"+portName);
 	            while(!readThread.isRunning)
 					try {
 						Thread.sleep(1);
@@ -132,7 +133,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 		            }
 		            //(new Thread(new SerialWriter(outStream))).start();
 		            SerialWriter writeThread = new SerialWriter(outStream);
-		            ThreadPoolManager.getInstance().spin(writeThread, "SYSTEM");
+		            SynchronizedFixedThreadPoolManager.spin(writeThread, "SYSTEM"+portName);
 		            while(!writeThread.isRunning)
 						try {
 							Thread.sleep(1);
