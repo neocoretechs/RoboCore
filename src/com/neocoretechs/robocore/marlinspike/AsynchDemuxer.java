@@ -135,6 +135,7 @@ public class AsynchDemuxer implements Runnable {
 	private MarlinspikeManager marlinSpikeManager;
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
+	protected long RESPONSE_WAIT_MS = 2000; // Number of MS to wait for response from Marlinspike port
 
 	public enum topicNames {
 		STATUS("status"),
@@ -745,7 +746,7 @@ public class AsynchDemuxer implements Runnable {
 	
 	public synchronized void config(List<String> starts) throws IOException {
 		for(String s : starts) {
-			System.out.println("Startup GCode:"+s);
+			System.out.printf("%s Thread:%s Port:%s Startup GCode:%s%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName(),s);
 			addWrite(this,s);
 		}
 		while(!toWrite.isEmpty() || mutexWrite.getNumberWaiting() > 0)
@@ -781,13 +782,13 @@ public class AsynchDemuxer implements Runnable {
 							if(writeReq == null || writeReq.isEmpty())
 								continue;
 							dataPort.writeLine(writeReq);
-							mutexWrite.await(750, TimeUnit.MILLISECONDS);
+							mutexWrite.await(RESPONSE_WAIT_MS, TimeUnit.MILLISECONDS);
 							if(DEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+writeReq);
 						} catch (TimeoutException e) {
 							if(DEBUG || PORTDEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-										" NO RESPONSE FROM PORT "+dataPort.getPortName()+"IN TIME FOR DIRECTIVE:"+writeReq);
+										" NO RESPONSE FROM PORT "+dataPort.getPortName()+" IN TIME FOR DIRECTIVE:"+writeReq);
 						} finally {
 							mutexWrite.reset();
 							if(DEBUG)
