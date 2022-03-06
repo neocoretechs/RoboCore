@@ -198,13 +198,18 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	float[] sonicDist= new float[]{0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
 	// Dynamically defined analog pins
 	//int analogRanges[2][16];
-	//Pwm[] panalogs= new Pwm[10];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	PWM[] panalogs= new PWM[10];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	// Dynamically defined digital pins
 	int[] digitalTarget = new int[32];
 	Pin[] pdigitals= new Pin[32];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	// PWM control block
-	//Pwm[] ppwms= new Pwm[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
+	PWM[] ppwms= new PWM[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
+	private int MAX_CMD_SIZE = 1024;
+	private volatile boolean shouldRun = true;
 
+	// &roboteqDevice, new HBridgeDriver, new SplitBridgeDriver...
+	AbstractMotorControl[] motorControl = new AbstractMotorControl[10];
+	AbstractPWMControl[] pwmControl= new AbstractPWMControl[10];
 	int channel;
 	  
 	int digitarg;
@@ -217,6 +222,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	int dist;
 	int timer_res = 8; // resolution in bits
 	int timer_pre = 1; // 1 is no prescale
+	
 	// Messages outputting data
 	String errormagic= "Error:";
 	String echomagic= "echo:";
@@ -281,13 +287,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	String MSG_MOTORCONTROL_7= "MOSFET failure";
 	String MSG_MOTORCONTROL_8= "Startup configuration fault";
 	String MSG_MOTORCONTROL_9= "Stall";
-	private int MAX_CMD_SIZE;
-	private boolean shouldRun;
 
-
-	// &roboteqDevice, new HBridgeDriver, new SplitBridgeDriver...
-	AbstractMotorControl[] motorControl = new AbstractMotorControl[10];
-	AbstractPWMControl[] pwmControl= new AbstractPWMControl[10];
 	
 	@Override
 	public void connect(boolean writeable) throws IOException {
@@ -346,10 +346,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	@Override
 	public void run() {
 		while(shouldRun) {
-		  //get_command();
-		  if(!comment_mode)
-		  {
-		    //process_commands();
+		  try {
+			get_command();
+		  } catch (InterruptedException e) {
+			shouldRun = false;
+		  }
+		  if(!comment_mode) {
+		    process_commands();
 		  }
 		  //manage_inactivity();
 		}
@@ -414,7 +417,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	void process_commands() { 
 		if(code_seen('G')) {
 			  int cval = (int)code_value();
-			 // processGCode(cval);
+			  processGCode(cval);
 		} else {
 			 if(code_seen('M') ) {
 				  int cval = (int)code_value();
