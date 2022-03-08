@@ -59,7 +59,7 @@ public abstract class AbstractMotorControl {
 	protected int[] currentDirection = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] defaultDirection = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] minMotorPower = new int[]{0,0,0,0,0,0,0,0,0,0}; // Offset to add to G5, use with care, meant to compensate for mechanical differences
-	//protected CounterInterruptService[] wheelEncoderService = new CounterInterrupService[10]; // encoder service
+	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[10]; // encoder service
 	//protected PCInterrupts[] wheelEncoder = new PCInterrupts[10];
 	protected int MOTORPOWERSCALE = 0; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
 	protected int MOTORSHUTDOWN = 0; // Override of motor controls, puts it up on blocks
@@ -101,7 +101,7 @@ public abstract class AbstractMotorControl {
 	public int getCurrentDirection(int ch) { return currentDirection[ch-1]; }
 	public int getDefaultDirection(int ch) { return defaultDirection[ch-1]; }
 	//public PCInterrupts getWheelEncoder(int ch) { return wheelEncoder[ch-1]; }
-	//public CounterInterruptService getWheelEncoderService(int ch) { return wheelEncoderService[ch-1]; }
+	public CounterInterruptService getWheelEncoderService(int ch) { return wheelEncoderService[ch-1]; }
 	public void setChannels(int ch) { channels = ch; }
 	public int getChannels() { return channels; }
 	public abstract void resetSpeeds();

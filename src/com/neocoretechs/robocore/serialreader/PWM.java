@@ -3,6 +3,7 @@ package com.neocoretechs.robocore.serialreader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+
 /**
  * Handle the hardware PWM pins on microcontroller of Odroid, RPi, etc
  * since support for the hardware PWM under Odroid is inexplicably absent from the Hardkernel WiringPi
@@ -15,26 +16,39 @@ import java.io.RandomAccessFile;
  *
  */
 public class PWM {
+	private static volatile PWM pwm = null;
 	private static final String duty0 = "/sys/devices/platform/pwm-ctrl/duty0"; // 0-1023
 	private static final String freq0 = "/sys/devices/platform/pwm-ctrl/freq0"; // in Hz 0 - 1000000
 	private static final String enable0 = "/sys/devices/platform/pwm-ctrl/enable0"; // 0 or 1
 	private static final String duty1 = "/sys/devices/platform/pwm-ctrl/duty1";
 	private static final String freq1 = "/sys/devices/platform/pwm-ctrl/freq1"; // in Hz 0 - 1000000
 	private static final String enable1 = "/sys/devices/platform/pwm-ctrl/enable1"; // 0 or 1
-	static {
-		try {
-			pwmDuty0 = new RandomAccessFile(duty0,"rw");
-			pwmFreq0 = new RandomAccessFile(freq0,"rw");
-			pwmEnable0 = new RandomAccessFile(enable0,"rw");
-			pwmDuty1 = new RandomAccessFile(duty1,"rw");
-			pwmFreq1 = new RandomAccessFile(freq1,"rw");
-			pwmEnable1 = new RandomAccessFile(enable1,"rw");
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-			throw new RuntimeException(e);
-		}
-	}
 	static RandomAccessFile pwmDuty0, pwmFreq0, pwmEnable0, pwmDuty1, pwmFreq1, pwmEnable1;
+	
+	private PWM() {
+			try {
+				pwmDuty0 = new RandomAccessFile(duty0,"rw");
+				pwmFreq0 = new RandomAccessFile(freq0,"rw");
+				pwmEnable0 = new RandomAccessFile(enable0,"rw");
+				pwmDuty1 = new RandomAccessFile(duty1,"rw");
+				pwmFreq1 = new RandomAccessFile(freq1,"rw");
+				pwmEnable1 = new RandomAccessFile(enable1,"rw");
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+	}
+	
+	public static PWM getInstance() {
+		if( pwm == null )
+			synchronized(PWM.class) {
+				if(pwm == null) {
+					pwm = new PWM();
+				}
+			}
+		return pwm;
+	}
+	
 	public void write(int ch, int level) throws IOException {
 		switch(ch) {
 			case 1:
@@ -97,6 +111,5 @@ public class PWM {
 				System.out.println("Must specify channel 1 or 2 for hardware PWM frequency!");
 				return;
 		}
-
 	}
 }
