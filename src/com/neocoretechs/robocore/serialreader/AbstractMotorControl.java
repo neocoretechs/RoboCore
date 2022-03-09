@@ -1,4 +1,7 @@
 package com.neocoretechs.robocore.serialreader;
+
+import java.io.IOException;
+
 /**
 * AbstractMotorControl
 * Class to maintain the abstract collection of propulsion channels that comprise the traction power.
@@ -60,13 +63,13 @@ public abstract class AbstractMotorControl {
 	protected int[] defaultDirection = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] minMotorPower = new int[]{0,0,0,0,0,0,0,0,0,0}; // Offset to add to G5, use with care, meant to compensate for mechanical differences
 	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[10]; // encoder service
-	//protected PCInterrupts[] wheelEncoder = new PCInterrupts[10];
+	protected PCInterrupts[] wheelEncoder = new PCInterrupts[10];
 	protected int MOTORPOWERSCALE = 0; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
 	protected int MOTORSHUTDOWN = 0; // Override of motor controls, puts it up on blocks
 	protected int MAXMOTORPOWER = 255; // Max motor power in PWM final timer units
 	protected int fault_flag = 0;
 	public abstract int commandMotorPower(int ch, int p);//make AbstractMotorControl not instantiable
-	public abstract int commandEmergencyStop(int status);
+	public abstract int commandEmergencyStop(int status) throws IOException;
 	public abstract int isConnected();
 	public abstract void getDriverInfo(int ch, char outStr);
 	public abstract int queryFaultFlag();
@@ -81,7 +84,6 @@ public abstract class AbstractMotorControl {
 	public void setDuration(int ch, int durx) { maxMotorDuration[ch-1] = durx; }
 	public void setMinMotorPower(int ch, int mpow) { 
 		minMotorPower[ch-1] = mpow; 	
-		if( mpow != 0 ) minMotorPower[ch-1] /= 4; 
 	}
 	public abstract int getEncoderCount(int ch);
 	public int totalUltrasonics() {  
@@ -96,11 +98,11 @@ public abstract class AbstractMotorControl {
 	public int getUltrasonicIndex(int ch) { return ultrasonicIndex[ch-1][0]; }
 	public int getMaxMotorDuration(int ch) { return maxMotorDuration[ch-1]; }
 	public int getMinMotorPower(int ch) { return minMotorPower[ch-1] ; }
-	public void setMaxMotorPower(int p) { MAXMOTORPOWER = p; if( p != 0 ) MAXMOTORPOWER /= 4; }
+	public void setMaxMotorPower(int p) { MAXMOTORPOWER = p; }
 	public int getMotorSpeed(int ch) { return motorSpeed[ch-1]; }
 	public int getCurrentDirection(int ch) { return currentDirection[ch-1]; }
 	public int getDefaultDirection(int ch) { return defaultDirection[ch-1]; }
-	//public PCInterrupts getWheelEncoder(int ch) { return wheelEncoder[ch-1]; }
+	public PCInterrupts getWheelEncoder(int ch) { return wheelEncoder[ch-1]; }
 	public CounterInterruptService getWheelEncoderService(int ch) { return wheelEncoderService[ch-1]; }
 	public void setChannels(int ch) { channels = ch; }
 	public int getChannels() { return channels; }
@@ -109,5 +111,5 @@ public abstract class AbstractMotorControl {
 	public void setMotorShutdown() { commandEmergencyStop(1); MOTORSHUTDOWN = 1;}
 	public void setMotorRun() { commandEmergencyStop(0); MOTORSHUTDOWN = 0;}
 	public int getMotorShutdown() { return MOTORSHUTDOWN; }
-	public void setMotorPowerScale(int p) { MOTORPOWERSCALE = p; if( p != 0 ) MOTORPOWERSCALE /= 4;}
+	public void setMotorPowerScale(int p) { MOTORPOWERSCALE = p;}
 }

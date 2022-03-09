@@ -158,7 +158,7 @@ import com.pi4j.util.ConsoleColor;
 * @author: Jonathan Neville Groff  Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements Runnable, DataPortInterface {
-	CircularBlockingDeque<String> inDeque = new CircularBlockingDeque<String>(1024);
+	CircularBlockingDeque<String> inDeque = new CircularBlockingDeque<String>(1);
 	CircularBlockingDeque<String> outDeque = new CircularBlockingDeque<String>(1024);
 	static int gcode_N, gcode_LastN, Stopped_gcode_LastN = 0;
 
