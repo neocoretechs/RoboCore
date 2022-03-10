@@ -5,5 +5,4 @@ public abstract class AbstractSmartMotorControl extends AbstractMotorControl {
 	public AbstractSmartMotorControl(int maxPower) {
 		MAXMOTORPOWER = maxPower;
 	}
-	public abstract void resetMaxMotorPower();
 }

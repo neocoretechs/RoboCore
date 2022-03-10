@@ -29,7 +29,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	volatile int[] PCintLast = new int[3];
 	// PlatformManager.setPlatform(Platform.ODROID);
 	private GpioController gpio = Pins.gpioController;//GpioFactory.getInstance();
-	public static PCInterrupts getInstance(GpioController gpio) {
+	public static PCInterrupts getInstance() {
 		if( pcInterrupts == null )
 			synchronized(PCInterrupts.class) {
 				if(pcInterrupts == null) {

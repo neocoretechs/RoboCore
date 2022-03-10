@@ -6,6 +6,8 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
+import com.pi4j.io.gpio.GpioPinDigitalInput;
+import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.OdroidC1Pin;
 import com.pi4j.io.gpio.Pin;
 import com.pi4j.io.gpio.GpioPinPwm;
@@ -506,7 +508,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				break;
 				
 			case 100: // G100 reset watchog timer before time interval is expired, otherwise a reset occurs
-				//if( watchdog_timer != NULL ) {
+				//if( watchdog_timer != null ) {
 				//	watchdog_timer.watchdog_reset();
 				//}
 				outDeque.add(String.format("%sG100%s%n",MSG_BEGIN,MSG_TERMINATE));
@@ -586,7 +588,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				}
 			 // motorControl = (AbstractMotorControl*)&hBridgeDriver;
 			 if(motorControl[motorController] != null) {
-			  ((HBridgeDriver)motorControl[motorController]).setMotors((PWM)ppwms);
+			  ((HBridgeDriver)motorControl[motorController]).setMotors(ppwms);
 			  ((HBridgeDriver)motorControl[motorController]).setDirectionPins((Digital)pdigitals);
 			  if(code_seen('P')) {
 		          pin_number = (int) code_value();
@@ -617,7 +619,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if( code_seen('R')) {
 					timer_res = (int) code_value();
 				}
-				((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, timer_pre, timer_res);
+				((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, 10000);
 				if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				}
@@ -641,8 +643,8 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  }
 			  if(motorControl[motorController]  != null) {
 			  //motorControl = (AbstractMotorControl*)&splitBridgeDriver;
-			  ((SplitBridgeDriver)motorControl[motorController]).setMotors((PWM)ppwms);
-			  ((SplitBridgeDriver)motorControl[motorController]).setDirectionPins((Digital)pdigitals);
+			  ((SplitBridgeDriver)motorControl[motorController]).setMotors(ppwms);
+			  ((SplitBridgeDriver)motorControl[motorController]).setDirectionPins(pdigitals);
 			  if(code_seen('P')) {
 				pin_number = (int) code_value();
 			  } else {
@@ -677,7 +679,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				  if( code_seen('R')) {
 						timer_res = (int) code_value();
 				  }
-				  ((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_default, timer_pre, timer_res);
+				  ((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_default, 10000);
 				  if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				  }
@@ -693,10 +695,10 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				pin_numberB = -1;
 				encode_pin = 0;
 				  if(code_seen('Z')) {
-					  motorController = code_value();
+					  motorController = (int)code_value();
 				  }
 				  if(motorControl[motorController] != null) {
-					  ((SwitchBridgeDriver)motorControl[motorController]).setPins((Digital)pdigitals);
+					  ((SwitchBridgeDriver)motorControl[motorController]).setPins(pdigitals);
 					  if(code_seen('P')) {
 						  pin_number = (int) code_value();
 					  } else {
@@ -799,8 +801,8 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					  PWMDriver = (int) code_value();
 				}
 				if(pwmControl[PWMDriver] != null) {
-				 ((VariablePWMDriver)pwmControl[PWMDriver]).setPWMs((PWM)ppwms);
-				 ((VariablePWMDriver)pwmControl[PWMDriver]).setEnablePins((Digital)pdigitals);
+				 ((VariablePWMDriver)pwmControl[PWMDriver]).setPWMs(ppwms);
+				 ((VariablePWMDriver)pwmControl[PWMDriver]).setEnablePins(pdigitals);
 				 if(code_seen('P')) {
 					  pin_number = code_value();
 				 } else {
@@ -822,7 +824,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					if( code_seen('R')) {
 						timer_res = (int) code_value();
 					}
-					((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, timer_pre, timer_res);
+					((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, 10000);
 					outDeque.add(String.format("%sM9%s%n",MSG_BEGIN,MSG_TERMINATE));
 				 }
 				}
@@ -1252,7 +1254,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						}
 					}
 					for(int i = 0; i < 12; i++) {
-						if(ppwms[i] == NULL) {
+						if(ppwms[i] == null) {
 							ppin = new PWM(pin_number);
 							ppin.init(pin_number);
 							ppin.setPWMPrescale(timer_pre);
@@ -1301,12 +1303,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			   pin_number = -1;
 			   if (code_seen('P')) {
 				   pin_number = code_value();
-				   digitarg = code_seen('T') ? code_value() : 0;
+				   digitarg = code_seen('T') ? (int)code_value() : 0;
 				   if( assignPin(pin_number) ) {
-					   apin = new Analog(pin_number);
+					   apin = new GpioPinAnalogInput(pin_number);
 					   int res = apin.analogRead();
-					   res = apin.analogRead(); // de-jitter
-					   unassignPin(pin_number);
+					   res = apin.read(); // de-jitter
+					   Pins.unassignPin(pin_number);
 					   if( res < digitarg ) { // result < threshold is 0 by default
 						   publishBatteryVolts(res);
 					   } else {
@@ -2042,7 +2044,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		* reject the reading. This allows us to define a center or rest point for a joystick etc.
 		* If no values were specified on the M code invocation, ignore and process regardless of value.
 		*/
-		void printAnalog(Analog apin, int index) {
+		void printAnalog(GpioPinAnalogInput apin, int index) {
 			//pin = new Analog(upin);
 			int nread = apin.analogRead();
 			// jitter comp.
@@ -2068,7 +2070,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		/**
 		* 'target' represents the expected value. Two elements returned in sequence. 1 - Pin, 2 - reading
 		*/
-		void printDigital(Digital dpin, int target) {
+		void printDigital(GpioPinDigitalInput dpin, int target) {
 			//dpin = new Digital(upin);
 			//dpin->pinMode(INPUT);
 			int nread = dpin.digitalRead();

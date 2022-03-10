@@ -97,7 +97,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	}
 	
 	@Override
-	public int commandMotorPower(int channel, int motorPower) {
+	public int commandMotorPower(int channel, int motorPower) throws IOException {
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return 0;
@@ -110,7 +110,10 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			if( motorPower < 0 ) { // and we want to go backward
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
-				(getDefaultDirection(channel) > 0) ? pdigitals[dirPinIndex].high(); : pdigitals[dirPinIndex].low();
+				if(getDefaultDirection(channel) > 0) 
+					pdigitals[dirPinIndex].high();
+				else 
+					pdigitals[dirPinIndex].low();
 				setCurrentDirection(channel, 0); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
@@ -118,7 +121,10 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			if( motorPower > 0 ) { // we are going 'backward' as defined by our initial default direction and we want 'forward'
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
-				(gefaultDirection(channel) > 0) ? pdigitals[dirPinIndex].low(); : pdigitals[dirPinIndex].high();
+				if(getDefaultDirection(channel) > 0)  
+					pdigitals[dirPinIndex].low();
+				else
+					pdigitals[dirPinIndex].high();
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
@@ -129,8 +135,8 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		// scale motor power from 0-1000 
 		if( motorPower != 0 && motorPower < getMinMotorPower(channel))
 				motorPower = getMinMotorPower(channel);
-		if( motorPower > getMaxMotorPower(channel) ) // cap it at max
-				motorPower = getMaxMotorPower(channel);
+		if( motorPower > getMaxMotorPower() ) // cap it at max
+				motorPower = getMaxMotorPower();
 		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
 		if( getMotorPowerScale() != 0 )
 				motorPower /= getMotorPowerScale();
@@ -143,7 +149,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			// find the PWM pin and get the object we set up in M3 to write to power level
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff
-			setMotorshutdown(); // sends commandEmergencyStop(1);
+			setMotorShutdown(); // sends commandEmergencyStop(1);
 		}
 		fault_flag = 0;
 		return 0;
@@ -166,50 +172,15 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 
 	@Override
 	public int isConnected() {
-		// TODO Auto-generated method stub
-		return 0;
+		return 1;
 	}
 
 	@Override
-	public void getDriverInfo(int ch, char outStr) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public boolean checkUltrasonicShutdown() {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
-	public boolean checkEncoderShutdown() {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
-	public void createEncoder(int channel, int encode_pin) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public int getEncoderCount(int ch) {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public void resetSpeeds() {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void resetEncoders() {
-		// TODO Auto-generated method stub
-		
+	public String getDriverInfo(int ch) {
+		if( motorDrive[ch-1][0] == 255 ) {
+			return String.format("HB-PWM UNINITIALIZED Channel %d%n",ch);
+		}
+		return String.format("HB-PWM Channel %d Pin:%d, Dir Pin:%s%n",ch, ppwms[motorDrive[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]].getPin());	
 	}
 
 }

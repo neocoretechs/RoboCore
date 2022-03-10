@@ -2,6 +2,8 @@ package com.neocoretechs.robocore.serialreader;
 
 import java.io.IOException;
 
+import com.pi4j.io.gpio.PinState;
+
 /**
 * AbstractMotorControl
 * Class to maintain the abstract collection of propulsion channels that comprise the traction power.
@@ -50,13 +52,13 @@ import java.io.IOException;
 public abstract class AbstractMotorControl {
 	private int channels = 0;
 	// Ultrasonic arrays by channel:
-	//private Ultrasonic usensor;
+	private Ultrasonic[] usensor = new Ultrasonic[10];
 	private int[] minMotorDist = new int[]{0,0,0,0,0,0,0,0,0,0}; // Ranging device motor shutdown range, by channel
 	// Ultrasonic array by channel:
 	// 0-index in 'usensor' to ultrasonic distance sensor for minimum distance safety shutdown.
 	// 1-forward or reverse facing ultrasonic (1 forward)
 	private int[][] ultrasonicIndex = new int[][]{{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1}};
-	private int[] maxMotorDuration = new int[]{4,4,4,4,4,4,4,4,4,4}; // number of pin change interrupts from wheel encoder before safety interlock
+	private int[] maxMotorDuration = new int[]{1,1,1,1,1,1,1,1,1,1}; // number of pin change interrupts from wheel encoder before safety interlock
 	// 10 channels of last motor speed
 	protected int[] motorSpeed = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] currentDirection = new int[]{0,0,0,0,0,0,0,0,0,0};
@@ -68,16 +70,92 @@ public abstract class AbstractMotorControl {
 	protected boolean MOTORSHUTDOWN = true; // Override of motor controls, puts it up on blocks
 	protected int MAXMOTORPOWER = 1000; // Max motor power in PWM final timer units
 	protected int fault_flag = 0;
-	public abstract int commandMotorPower(int ch, int p);//make AbstractMotorControl not instantiable
+	public abstract int commandMotorPower(int ch, int p) throws IOException;//make AbstractMotorControl not instantiable
 	public abstract int commandEmergencyStop(int status) throws IOException;
 	public abstract int isConnected();
-	public abstract void getDriverInfo(int ch, char outStr);
+	public abstract String getDriverInfo(int ch);
 	public abstract int queryFaultFlag();
 	public abstract int queryStatusFlag();
-	//public abstract void linkDistanceSensor(Ultrasonic us, int upin, int distance, int facing);
-	public abstract boolean checkUltrasonicShutdown();
-	public abstract boolean checkEncoderShutdown();
-	public abstract void createEncoder(int channel, int encode_pin);
+	public void linkDistanceSensor(int channel, Ultrasonic us, int distance, int facing) {
+		int i;
+		for(i = 0; i < 10; i++) {
+			if(usensor[i] == null)
+				break;
+		}
+		usensor[i] = us;
+		ultrasonicIndex[channel-1][0] = i;
+		ultrasonicIndex[channel-1][1] = facing;
+		minMotorDist[channel-1] = distance;
+	}
+	/**
+	 * check all linked ultrasonic sensors, if something is in minimum range, and it is in the direction
+	 * of current travel as defined by the currentDirection array and the direction the sensor is facing, shut down all channels.
+	 * First check to see if any channels are active.
+	 * The premise is that the distance from the sensor to 'front' of robot is set to prevent impact
+	 * @return
+	 * @throws IOException
+	 */
+	public boolean checkUltrasonicShutdown() throws IOException {
+		boolean shutdown = false;
+		for(int i = 0; i < 10; i++)
+			if( motorSpeed[i] != 0 ) {
+				break;
+			}
+		if( shutdown )
+			return shutdown;
+		// If we have a linked distance sensor. check range and possibly skip
+		// ultrasonicIndex corresponds to ultrasonic object pointer array, element 0 points to Ultrasonic array element
+		for(int i = 0; i < 10; i++) {
+			if( ultrasonicIndex[i][0] != 255 ) {
+				// does the direction of sensor match movement direction?
+				// we stop if Moving backwards with backward facing sensor or forward with forward facing
+				// If motor is mirrored such the speed commands are reversed, then default direction should initially be 1
+				// So the decision to stop is based on distance from obstacle, the current direction of travel,
+				// the desired direction of travel, and the way the sensor is facing.
+				if( currentDirection[i] != 0 && ultrasonicIndex[i][1] != 0 ||
+					 currentDirection[i] == 0 && ultrasonicIndex[i][1] == 0 ) {
+					if( usensor[ultrasonicIndex[i][0]].getRange() < minMotorDist[i] ) {
+						//commandEmergencyStop();
+						shutdown = true;
+						break;
+					}
+				}
+			}
+		}
+		if( shutdown ) commandEmergencyStop(8);
+		return shutdown;
+	}
+	/**
+	* If we are using an encoder check the interval since last command.
+	* Interrupt service counter counts number of timer compare match resets.
+	* If number is exceeded issue shutdown and await next G5.
+	* This shutdown is to prevent unchecked freewheeling.
+	*/
+	public boolean checkEncoderShutdown() throws IOException {
+		boolean running = false;
+		for(int i = 0; i < 10; i++)
+			if( motorSpeed[i] != 0 ) {
+				running = true;
+				break;
+			}
+		if( !running )
+			return running;
+		for(int j = 0; j < 10; j++) { // by channel
+			if( wheelEncoderService[j] != null ) {
+				  int cntxmd = wheelEncoderService[j].get_counter();
+				  if( cntxmd >= maxMotorDuration[j] ) {
+						commandEmergencyStop(10);
+						return true;
+				  }
+			}
+		}
+		return false;
+	}
+	public void createEncoder(int channel, int encode_pin) {
+		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
+		wheelEncoder[channel-1] = PCInterrupts.getInstance();
+		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], PinState.HIGH);
+	}
 	public void setCurrentDirection(int ch, int val) { currentDirection[ch-1] = val; }
 	// If the wheel is mirrored to speed commands or commutation, 0 - normal, 1 - mirror
 	public void setDefaultDirection(int ch, int val) { defaultDirection[ch-1] = val; }
@@ -85,7 +163,11 @@ public abstract class AbstractMotorControl {
 	public void setMinMotorPower(int ch, int mpow) { 
 		minMotorPower[ch-1] = mpow; 	
 	}
-	public abstract int getEncoderCount(int ch);
+	public int getEncoderCount(int ch) {
+		if( wheelEncoderService[ch-1] != null )
+			return wheelEncoderService[ch-1].get_counter();
+		return -1;
+	}
 	public int totalUltrasonics() {  
 		int j = 0; 
 		for(int i = 0; i < 10; i++) 
@@ -108,8 +190,17 @@ public abstract class AbstractMotorControl {
 	public CounterInterruptService getWheelEncoderService(int ch) { return wheelEncoderService[ch-1]; }
 	public void setChannels(int ch) { channels = ch; }
 	public int getChannels() { return channels; }
-	public abstract void resetSpeeds();
-	public abstract void resetEncoders();
+	public void resetSpeeds() {
+		for(int i = 0; i < 10; i++) 
+			motorSpeed[i] = 0; // all channels down
+	}
+	public void resetEncoders() {
+		for(int i = 0; i < 10; i++) {
+			if( wheelEncoderService[i] != null) {
+				wheelEncoderService[i].set_counter(0);
+			}
+		}
+	}
 	public void setMotorShutdown() throws IOException { 
 		commandEmergencyStop(1); 
 		MOTORSHUTDOWN = true;
