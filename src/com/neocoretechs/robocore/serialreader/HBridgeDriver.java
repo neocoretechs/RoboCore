@@ -3,6 +3,7 @@ package com.neocoretechs.robocore.serialreader;
 import java.io.IOException;
 
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
+import com.pi4j.io.gpio.PinMode;
 
 /**
  * Generic driver for a collection of H bridge driven brushed DC motor channels.
@@ -40,6 +41,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	void setMotors(PWM[] pwm) { ppwms = pwm; }
 	int getMotorPWMPin(int channel) { return motorDrive[channel-1][0]; }
 	int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
+	int getPWMFrequency(int channel) {return motorDrive[channel-1][2]; }
 	/**
 	* Add a new PWM instance to this motor controller.
 	* @param channel - the controller channel from 1 to 10, each successively higher channel will reset maximum channel count. Each channel is an axle/motor.
@@ -51,7 +53,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	public void createPWM(int channel, int pin_number, int dir_pin, int dir_default, int timer_freq) {
 		// Attempt to assign PWM pin
 		if( getChannels() < channel ) setChannels(channel);
-		GpioPinDigitalOutput opin =  Pins.assignPin(dir_pin);
+		GpioPinDigitalOutput opin = Pins.assignPin(dir_pin);
 		int dirpin;
 		for(dirpin = 0;dirpin < 10; dirpin++) {
 			if(pdigitals[dirpin] == null) {
@@ -65,13 +67,11 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 					break;
 			}
 		}
-		if( ppwms[pindex] != null  )
-				return;
-		currentDirection[channel-1] = dir_default;
-		defaultDirection[channel-1] = dir_default;
-				
+		setCurrentDirection(channel, dir_default);
+		setDefaultDirection(channel, dir_default);
+		setMotorSpeed(channel, 0);	
 		motorDrive[channel-1][0] = pindex;
-		motorDrive[channel-1][1] = dir_pin;
+		motorDrive[channel-1][1] = dirpin;
 		motorDrive[channel-1][2] = timer_freq;
 		PWM ppin = new PWM(pin_number);
 		ppwms[pindex] = ppin;
@@ -97,8 +97,55 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	}
 	
 	@Override
-	public int commandMotorPower(int ch, int p) {
-		// TODO Auto-generated method stub
+	public int commandMotorPower(int channel, int motorPower) {
+		// check shutdown override
+		if( MOTORSHUTDOWN )
+			return 0;
+		int pwmIndex = motorDrive[channel][0]; // index to PWM array
+		int dirPinIndex = motorDrive[channel][1]; // index to dir pin array
+		int freq = motorDrive[channel][2]; // value of freq, no index;
+		// get mapping of channel to pin
+		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
+		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
+			if( motorPower < 0 ) { // and we want to go backward
+				// reverse dir, send dir change to pin
+				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
+				(getDefaultDirection(channel) > 0) ? pdigitals[dirPinIndex].high(); : pdigitals[dirPinIndex].low();
+				setCurrentDirection(channel, 0); // set new direction value
+				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
+			}
+		} else { // dir is 0
+			if( motorPower > 0 ) { // we are going 'backward' as defined by our initial default direction and we want 'forward'
+				// reverse, send dir change to pin
+				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
+				(gefaultDirection(channel) > 0) ? pdigitals[dirPinIndex].low(); : pdigitals[dirPinIndex].high();
+				setCurrentDirection(channel, 1);
+			} else { // backward with more backwardness
+				// If less than 0 take absolute value, if zero dont play with sign
+				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
+			}
+		}
+
+		// scale motor power from 0-1000 
+		if( motorPower != 0 && motorPower < getMinMotorPower(channel))
+				motorPower = getMinMotorPower(channel);
+		if( motorPower > getMaxMotorPower(channel) ) // cap it at max
+				motorPower = getMaxMotorPower(channel);
+		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
+		if( getMotorPowerScale() != 0 )
+				motorPower /= getMotorPowerScale();
+		//
+		// Reset encoders on new speed setting
+		resetEncoders();
+		// If we have a linked distance sensor. check range and possibly skip
+		// If we are setting power 0, we are stopping anyway
+		if( !checkUltrasonicShutdown()) {
+			// find the PWM pin and get the object we set up in M3 to write to power level
+			// element 0 of motorDrive has index to PWM array
+			// writing power 0 sets mode 0 and timer turnoff
+			setMotorshutdown(); // sends commandEmergencyStop(1);
+		}
+		fault_flag = 0;
 		return 0;
 	}
 

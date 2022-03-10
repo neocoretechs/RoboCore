@@ -65,8 +65,8 @@ public abstract class AbstractMotorControl {
 	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[10]; // encoder service
 	protected PCInterrupts[] wheelEncoder = new PCInterrupts[10];
 	protected int MOTORPOWERSCALE = 0; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
-	protected int MOTORSHUTDOWN = 0; // Override of motor controls, puts it up on blocks
-	protected int MAXMOTORPOWER = 255; // Max motor power in PWM final timer units
+	protected boolean MOTORSHUTDOWN = true; // Override of motor controls, puts it up on blocks
+	protected int MAXMOTORPOWER = 1000; // Max motor power in PWM final timer units
 	protected int fault_flag = 0;
 	public abstract int commandMotorPower(int ch, int p);//make AbstractMotorControl not instantiable
 	public abstract int commandEmergencyStop(int status) throws IOException;
@@ -98,7 +98,9 @@ public abstract class AbstractMotorControl {
 	public int getUltrasonicIndex(int ch) { return ultrasonicIndex[ch-1][0]; }
 	public int getMaxMotorDuration(int ch) { return maxMotorDuration[ch-1]; }
 	public int getMinMotorPower(int ch) { return minMotorPower[ch-1] ; }
+	public int getMaxMotorPower() { return MAXMOTORPOWER; }
 	public void setMaxMotorPower(int p) { MAXMOTORPOWER = p; }
+	public void setMotorSpeed(int ch, int speed) { motorSpeed[ch-1] = speed;};
 	public int getMotorSpeed(int ch) { return motorSpeed[ch-1]; }
 	public int getCurrentDirection(int ch) { return currentDirection[ch-1]; }
 	public int getDefaultDirection(int ch) { return defaultDirection[ch-1]; }
@@ -108,8 +110,15 @@ public abstract class AbstractMotorControl {
 	public int getChannels() { return channels; }
 	public abstract void resetSpeeds();
 	public abstract void resetEncoders();
-	public void setMotorShutdown() { commandEmergencyStop(1); MOTORSHUTDOWN = 1;}
-	public void setMotorRun() { commandEmergencyStop(0); MOTORSHUTDOWN = 0;}
-	public int getMotorShutdown() { return MOTORSHUTDOWN; }
+	public void setMotorShutdown() throws IOException { 
+		commandEmergencyStop(1); 
+		MOTORSHUTDOWN = true;
+	}
+	public void setMotorRun() throws IOException { 
+		commandEmergencyStop(0); 
+		MOTORSHUTDOWN = false;
+	}
+	public boolean getMotorShutdown() { return MOTORSHUTDOWN; }
 	public void setMotorPowerScale(int p) { MOTORPOWERSCALE = p;}
+	public int getMotorPowerScale() { return MOTORPOWERSCALE; }
 }
