@@ -29,4 +29,5 @@ public class Ultrasonic {
 			port.readDistance();
 		throw new IOException("Only UART based Ultrasonic sensor currently supported, and none found");
 	}
+	
 }

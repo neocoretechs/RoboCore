@@ -29,7 +29,7 @@ public abstract class HardwarePWM {
 		this.pin = pin;
 	}
 	
-	public void init(int pin) {
+	public void init(int pin, int timer_freq) throws IOException {
 		try {
 			switch(pin) {
 				case 19:
@@ -37,6 +37,8 @@ public abstract class HardwarePWM {
 						pwmDuty1 = new RandomAccessFile(duty1,"rw");
 						pwmFreq1 = new RandomAccessFile(freq1,"rw");
 						pwmEnable1 = new RandomAccessFile(enable1,"rw");
+						pwmFreq1.writeBytes(String.valueOf(timer_freq));
+						pwmFreq1.seek(0);
 					}
 				break;
 				case 33:
@@ -44,6 +46,8 @@ public abstract class HardwarePWM {
 						pwmDuty0 = new RandomAccessFile(duty0,"rw");
 						pwmFreq0 = new RandomAccessFile(freq0,"rw");
 						pwmEnable0 = new RandomAccessFile(enable0,"rw");
+						pwmFreq0.writeBytes(String.valueOf(timer_freq));
+						pwmFreq0.seek(0);
 					}
 				break;
 				default:
@@ -54,8 +58,8 @@ public abstract class HardwarePWM {
 			throw new RuntimeException(e);
 		}
 	}
-	public abstract void pwmWrite(int val, int outputMode) throws IOException;
-	public void pwmOff() throws IOException { pwmWrite(0, 0); };
+	public abstract void pwmWrite(int val) throws IOException;
+	public void pwmOff() throws IOException { pwmWrite(0); };
 	public abstract void setCounter(int cntx);
 	public abstract int getCounter();
 	public abstract void digitalWrite(int val) throws IOException;

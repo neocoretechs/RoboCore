@@ -10,8 +10,7 @@ import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.OdroidC1Pin;
 import com.pi4j.io.gpio.Pin;
-import com.pi4j.io.gpio.GpioPinPwm;
-import com.pi4j.io.gpio.GpioPinPwmOutput;
+import com.pi4j.io.gpio.GpioPin;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
 import com.pi4j.io.gpio.event.GpioPinListenerDigital;
@@ -204,7 +203,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	PWM[] panalogs = new PWM[10];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	// Dynamically defined digital pins
 	int[] digitalTarget = new int[32];
-	Pin[] pdigitals= new Pin[32];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	GpioPinDigitalOutput[] pdigitals= new GpioPinDigitalOutput[32];
 	// PWM control block
 	PWM[] ppwms = new PWM[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
 	private int MAX_CMD_SIZE = 1024;
@@ -303,7 +302,6 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	
 	@Override
 	public void connect(boolean writeable) throws IOException {
-		pwm = PWM.getInstance();
 	}
 
 	@Override
@@ -362,7 +360,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		  try {
 			get_command();
 			if(!comment_mode) {
-				process_commands();
+				try {
+					process_commands();
+				} catch(IOException ioe) {
+					throw new RuntimeException(ioe);
+				}
 			}
 			//manage_inactivity();
 		  } catch (InterruptedException e) {
@@ -429,7 +431,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	/**
 	 * Process command line
 	 */
-	void process_commands() { 
+	void process_commands() throws IOException { 
 		if(code_seen('G')) {
 			  int cval = (int)code_value();
 			  processGCode(cval);
@@ -447,7 +449,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	 * Processing of G-code command sequence
 	 * @param cval
 	 */
-	void processGCode(int cval) {	
+	void processGCode(int cval) throws IOException {	
 		switch(cval) {    
 		    case 4: // G4 dwell
 		      codenum = 0;
@@ -589,7 +591,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			 // motorControl = (AbstractMotorControl*)&hBridgeDriver;
 			 if(motorControl[motorController] != null) {
 			  ((HBridgeDriver)motorControl[motorController]).setMotors(ppwms);
-			  ((HBridgeDriver)motorControl[motorController]).setDirectionPins((Digital)pdigitals);
+			  ((HBridgeDriver)motorControl[motorController]).setDirectionPins(pdigitals);
 			  if(code_seen('P')) {
 		          pin_number = (int) code_value();
 			  } else {
@@ -639,7 +641,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  pin_numberB = -1;
 			  encode_pin = 0;
 			  if(code_seen('Z')) {
-				motorController = code_value();
+				motorController = (int)code_value();
 			  }
 			  if(motorControl[motorController]  != null) {
 			  //motorControl = (AbstractMotorControl*)&splitBridgeDriver;
@@ -1033,7 +1035,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
-			if(motorControl[motorController]) {
+			if(motorControl[motorController] != null) {
 			  pin_number = 0;
 			  if(code_seen('P')) {
 		        pin_number = (int) code_value();
@@ -1055,7 +1057,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  case 35: //M35 - Clear all digital pins
 				for(int i = 0; i < 32; i++) {
 					 if(pdigitals[i] != null) {
-						unassignPin(pdigitals[i].pin);
+						Pins.unassignPin(pdigitals[i].pin);
 						//delete pdigitals[i];
 						pdigitals[i] = null;
 					 }
@@ -1066,7 +1068,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  case 36: //M36 - Clear all analog pins
 				  	 for(int i = 0; i < 16; i++) {
 					  	  if(panalogs[i] != null) {
-							unassignPin(panalogs[i].pin);
+							Pins.unassignPin(panalogs[i].pin);
 						  	//delete panalogs[i];
 							panalogs[i] = null;
 					  	  }
@@ -1077,7 +1079,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  case 37: //M37 - Clear all PWM pins, ALL MOTOR AND PWM DISABLED, perhaps not cleanly
 				for(int i = 0; i < 12; i++) {
 				  if(ppwms[i] != null) {
-					  unassignPin(ppwms[i].pin);
+					  Pins.unassignPin(ppwms[i].pin);
 					  //delete ppwms[i];
 					  ppwms[i] = null;
 				  }
@@ -1105,7 +1107,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  	  pin_number = -1;
 			  	  if (code_seen('P')) {
 				  	  pin_number = (int)code_value();
-				  	  if(unassignPin(pin_number) ) {
+				  	  if(Pins.unassignPin(pin_number) ) {
 					  	  for(int i = 0; i < 16; i++) {
 						  	  if(panalogs[i]  != null && panalogs[i].pin == pin_number) {
 							  	//delete panalogs[i];
@@ -1122,7 +1124,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			       pin_number = -1;
 			       if (code_seen('P')) {
 				       pin_number = (int)code_value();
-				       if(unassignPin(pin_number) ) {
+				       if(Pins.unassignPin(pin_number) ) {
 					       for(int i = 0; i < 32; i++) {
 						       if(pdigitals[i] != null && pdigitals[i].pin == pin_number) {
 							       //delete pdigitals[i];
@@ -1138,9 +1140,9 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  case 41: //M41 - Create persistent digital pin, Write digital pin HIGH P<pin> (this gives you a 5v source on pin)
 			     pin_number = -1;
 			     if (code_seen('P')) {
-				     pin_number = code_value();
-				     if( assignPin(pin_number) ) {
-					     dpin = new Digital(pin_number);
+				     pin_number = (int)code_value();
+				     if( Pins.assignPin(pin_number) ) {
+					     dpin = Pins.assign(pin_number);
 						 dpin.setPin(pin_number);
 					     dpin.pinMode(OUTPUT);
 					     dpin.digitalWrite(HIGH);
@@ -1169,7 +1171,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  pin_number = -1;
 			  if (code_seen('P')) {
 		        pin_number = (int)code_value();
-				if( assignPin(pin_number) ) {
+				if( Pins.assignPin(pin_number) ) {
 					dpin = new Digital(pin_number);
 					dpin.pinMode(OUTPUT);
 					dpin.digitalWrite(LOW);
@@ -1201,12 +1203,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		          pin_number = (int)code_value();
 				}
 		    	if( assignPin(pin_number) ) {
-					dpin = new Digital(pin_number);
+					dpin = Pins.assignPin(pin_number);
 					if(code_seen('U')) {
 						dpin.pinMode(INPUT_PULLUP);
 					}
 					int res = dpin.digitalRead();
-					unassignPin(pin_number); // reset it since this is a one-shot
+					Pins.unassignPin(pin_number); // reset it since this is a one-shot
 					outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
 				}
 				break;
@@ -1217,12 +1219,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		     case 45: // M45 - set up PWM P<pin> S<power val 0-255> [T<timer mode 0-3>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
 			  pin_number = -1;
 			  if(code_seen('P') ) {
-		          pin_number = code_value();
+		          pin_number = (int)code_value();
 			  } else {
 				 break;
 			  }
 		      if (code_seen('S')) {
-		        int pin_status = code_value();
+		        int pin_status = (int)code_value();
 				int timer_mode = 2;
 				timer_res = 8;
 				timer_pre = 1;
@@ -1231,35 +1233,33 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					pin_status = 0;
 				}
 				// this is a semi-permanent pin assignment so dont add if its already assigned
-				if( assignPin(pin_number) ) {
+				if( Pins.assignPin(pin_number) ) {
 					// timer mode 0-3: 0 stop, 1 toggle on compare match, 2 clear on match, 3 set on match (see HardwareTimer)
 					if( code_seen('T') ) {
-						timer_mode = code_value();
+						timer_mode = (int)code_value();
 						if( timer_mode < 0 || timer_mode > 3 ) {
 							timer_mode = 0;
 						}
 					}
 					// timer bit resolution 8,9, or 10 bits
 					if( code_seen('R')) {
-						timer_res = code_value();
+						timer_res = (int)code_value();
 						if( timer_res < 8 || timer_res > 10 ) {
 							timer_res = 8;
 						}
 					}
 					// X - prescale 0-7 for power of 2
 					if( code_seen('X') ) {
-						timer_pre = code_value();
+						timer_pre = (int)code_value();
 						if( timer_pre < 0 || timer_pre > 7 ) {
 							timer_pre = 0;
 						}
 					}
 					for(int i = 0; i < 12; i++) {
 						if(ppwms[i] == null) {
-							ppin = new PWM(pin_number);
-							ppin.init(pin_number);
-							ppin.setPWMPrescale(timer_pre);
-							ppin.setPWMResolution(timer_res);
-							ppin.pwmWrite(pin_status,timer_mode); // default is 2, clear on match. to turn off, use 0
+							PWM ppin = new PWM(pin_number);
+							ppin.init(pin_number, 10000);
+							ppin.pwmWrite(pin_status); // default is 2, clear on match. to turn off, use 0
 							ppwms[i] = ppin;
 							outDeque.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
@@ -1267,16 +1267,16 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					}
 				 } else { // reassign pin with new mode and value
 					 for(int i = 0; i < 12; i++) {
-						 if(ppwms[i] && ppwms[i].pin == pin_number) {
+						 if(ppwms[i] != null  && ppwms[i].pin == pin_number) {
 							 // timer mode 0-3: 0 stop, 1 toggle on compare match, 2 clear on match, 3 set on match (see HardwareTimer)
 							 if( code_seen('T') ) {
-								 timer_mode = code_value();
+								 timer_mode = (int)code_value();
 								 if( timer_mode < 0 || timer_mode > 3 ) {
 									timer_mode = 2; // mess up the code get clear on match default
 								 }
 							 }
 							 //ppwms[i]->init();
-							 ppwms[i].pwmWrite(pin_status, timer_mode);
+							 ppwms[i].pwmWrite(pin_status);
 							 outDeque.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
 							 break;
 						 }
@@ -1885,7 +1885,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		* Arrive here at the end of each command processing iteration to check for status related events
 		* ---------------------------------------------------
 		*/
-		void manage_inactivity() {
+		void manage_inactivity() throws IOException {
 		  // check motor controllers
 		  for(int j =0; j < 10; j++) {
 			  if(motorControl[j] != null) {
@@ -1901,13 +1901,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		  }
 		}
 
-		void kill() {
+		void kill() throws IOException {
 		  for(int j = 0; j < 10; j++) {
 			motorControl[j].commandEmergencyStop(-2);
 		  }
 		}
 
-		void Stop() {
+		void Stop() throws IOException {
 		  if(!Stopped) {
 		    Stopped = true;
 		    Stopped_gcode_LastN = gcode_LastN; // Save last g_code for restart
@@ -1998,46 +1998,60 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			StringBuilder sb = new StringBuilder();
 			sb.append(MSG_BEGIN);
 			sb.append(batteryCntrlHdr);
-			SERIAL_PGMLN(MSG_DELIMIT);
+			sb.append(MSG_DELIMIT);
+			sb.append("\r\n");
 			sb.append("1 ");
-			sb.appendln(volts);
+			sb.append(volts);
+			sb.append("\r\n");
 			sb.append(MSG_BEGIN);
 			sb.append(batteryCntrlHdr);
-			SERIAL_PGMLN(MSG_TERMINATE);
+			sb.append(MSG_TERMINATE);
+			sb.append("\r\n");
+			outDeque.add(sb.toString());
 		}
 		// **********************************************************************
 		// only call this if we know code is stall                              
 		// **********************************************************************
 		void publishMotorStatCode(int stat) {
+			StringBuilder sb = new StringBuilder();
 			sb.append(MSG_BEGIN);
 			sb.append(motorFaultCntrlHdr);
-			SERIAL_PGMLN(MSG_DELIMIT);
+			sb.append(MSG_DELIMIT);
+			sb.append("\r\n");
 			sb.append("1 ");
-			SERIAL_PGMLN(MSG_MOTORCONTROL_9);
+			sb.append(MSG_MOTORCONTROL_9);
+			sb.append("\r\n");
 			sb.append(MSG_BEGIN);
 			sb.append(motorFaultCntrlHdr);
-			SERIAL_PGMLN(MSG_TERMINATE);
+			sb.append(MSG_TERMINATE);
+			sb.append("\r\n");
+			outDeque.add(sb.toString());
 		}
 
 		/**
 		* Print the ultrasonic range
 		*/
-		void printUltrasonic(Ultrasonic us, int index) {
+		void printUltrasonic(Ultrasonic us, int index) throws IOException {
 				float range = us.getRange();
-				uint8_t ultpin = us.getPin();
+				StringBuilder sb = new StringBuilder();
 				if( range != sonicDist[index] ) {
 					sonicDist[index] = range;
 					sb.append(MSG_BEGIN);
 					sb.append(sonicCntrlHdr);
-					SERIAL_PGMLN(MSG_DELIMIT);
+					sb.append(MSG_DELIMIT);
+					sb.append("\r\n");
 					sb.append("1 "); // pin
-					sb.appendln(ultpin);
+					sb.append(us);
+					sb.append("\r\n");
 					sb.append("2 "); // sequence
-					sb.appendln(range); // range
+					sb.append(range); // range
+					sb.append("\r\n");
 					sb.append(MSG_BEGIN);
 					sb.append(sonicCntrlHdr);
-					SERIAL_PGMLN(MSG_TERMINATE);
+					sb.append(MSG_TERMINATE);
+					sb.append("\r\n");
 				}
+				System.out.println(sb.toString());
 		}
 		/**
 		* If we have values in analogRanges for this pin, check the reading and if it is between these ranges
@@ -2054,18 +2068,22 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			sb.append(MSG_BEGIN);
 			sb.append(analogPinHdr);
 			SERIAL_PGMLN(MSG_DELIMIT);
+			sb.append("\r\n");
 			sb.append('1'); // sequence
 			sb.append(' ');
 			// 0 element is pin number
-			sb.appendln(apin.pin);
+			sb.append(apin.pin);
+			sb.append("\r\n");
 			sb.append('2'); // sequence
 			sb.append(' ');
 			sb.append(nread);
-			sb.appendln();
+			sb.append("\r\n");
 			sb.append(MSG_BEGIN);
 			sb.append(analogPinHdr);
 			sb.append(MSG_TERMINATE);
+			sb.append("\r\n");
 			//delete pin;
+			System.out.println(sb.toString());
 		}
 		/**
 		* 'target' represents the expected value. Two elements returned in sequence. 1 - Pin, 2 - reading
@@ -2095,6 +2113,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
 			}
+			System.out.println(sb.toString());
 		}
 
 }

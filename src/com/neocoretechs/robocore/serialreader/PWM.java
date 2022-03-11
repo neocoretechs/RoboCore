@@ -70,7 +70,7 @@ public class PWM extends HardwarePWM {
 	}
 
 	@Override
-	public void pwmWrite(int val, int outputMode) throws IOException {
+	public void pwmWrite(int val) throws IOException {
 		switch(pin) {
 			case 19:
 				pwmDuty1.writeBytes(String.valueOf(val));
@@ -102,9 +102,9 @@ public class PWM extends HardwarePWM {
 	@Override
 	public void digitalWrite(int val) throws IOException {
 		if(val == 0)
-			pwmWrite(0,0);
+			pwmWrite(0);
 		else
-			pwmWrite(1000,0);
+			pwmWrite(1000);
 	}
 
 

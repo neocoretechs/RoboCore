@@ -50,22 +50,22 @@ import com.pi4j.io.gpio.PinState;
 * @author: Jonathan Groff Copyright (C) NeoCoreTechs 2022
 */
 public abstract class AbstractMotorControl {
-	private int channels = 0;
+	public static int channels = 10;
 	// Ultrasonic arrays by channel:
-	private Ultrasonic[] usensor = new Ultrasonic[10];
-	private int[] minMotorDist = new int[]{0,0,0,0,0,0,0,0,0,0}; // Ranging device motor shutdown range, by channel
+	private Ultrasonic[] usensor = new Ultrasonic[channels];
+	private int[] minMotorDist = new int[]{0,0,0,0,0,0,0,0,0,0,0}; // Ranging device motor shutdown range, by channel
 	// Ultrasonic array by channel:
 	// 0-index in 'usensor' to ultrasonic distance sensor for minimum distance safety shutdown.
 	// 1-forward or reverse facing ultrasonic (1 forward)
 	private int[][] ultrasonicIndex = new int[][]{{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1},{255,1}};
-	private int[] maxMotorDuration = new int[]{1,1,1,1,1,1,1,1,1,1}; // number of pin change interrupts from wheel encoder before safety interlock
+	private int[] maxMotorDuration = new int[]{1,1,1,1,1,1,1,1,1,1,1}; // number of pin change interrupts from wheel encoder before safety interlock
 	// 10 channels of last motor speed
 	protected int[] motorSpeed = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] currentDirection = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] defaultDirection = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] minMotorPower = new int[]{0,0,0,0,0,0,0,0,0,0}; // Offset to add to G5, use with care, meant to compensate for mechanical differences
-	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[10]; // encoder service
-	protected PCInterrupts[] wheelEncoder = new PCInterrupts[10];
+	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[channels]; // encoder service
+	protected PCInterrupts[] wheelEncoder = new PCInterrupts[channels];
 	protected int MOTORPOWERSCALE = 0; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
 	protected boolean MOTORSHUTDOWN = true; // Override of motor controls, puts it up on blocks
 	protected int MAXMOTORPOWER = 1000; // Max motor power in PWM final timer units
@@ -78,7 +78,7 @@ public abstract class AbstractMotorControl {
 	public abstract int queryStatusFlag();
 	public void linkDistanceSensor(int channel, Ultrasonic us, int distance, int facing) {
 		int i;
-		for(i = 0; i < 10; i++) {
+		for(i = 0; i < channels; i++) {
 			if(usensor[i] == null)
 				break;
 		}
@@ -97,7 +97,7 @@ public abstract class AbstractMotorControl {
 	 */
 	public boolean checkUltrasonicShutdown() throws IOException {
 		boolean shutdown = false;
-		for(int i = 0; i < 10; i++)
+		for(int i = 0; i < channels; i++)
 			if( motorSpeed[i] != 0 ) {
 				break;
 			}
@@ -105,7 +105,7 @@ public abstract class AbstractMotorControl {
 			return shutdown;
 		// If we have a linked distance sensor. check range and possibly skip
 		// ultrasonicIndex corresponds to ultrasonic object pointer array, element 0 points to Ultrasonic array element
-		for(int i = 0; i < 10; i++) {
+		for(int i = 0; i < channels; i++) {
 			if( ultrasonicIndex[i][0] != 255 ) {
 				// does the direction of sensor match movement direction?
 				// we stop if Moving backwards with backward facing sensor or forward with forward facing
@@ -133,14 +133,14 @@ public abstract class AbstractMotorControl {
 	*/
 	public boolean checkEncoderShutdown() throws IOException {
 		boolean running = false;
-		for(int i = 0; i < 10; i++)
+		for(int i = 0; i < channels; i++)
 			if( motorSpeed[i] != 0 ) {
 				running = true;
 				break;
 			}
 		if( !running )
 			return running;
-		for(int j = 0; j < 10; j++) { // by channel
+		for(int j = 0; j < channels; j++) { // by channel
 			if( wheelEncoderService[j] != null ) {
 				  int cntxmd = wheelEncoderService[j].get_counter();
 				  if( cntxmd >= maxMotorDuration[j] ) {
@@ -170,7 +170,7 @@ public abstract class AbstractMotorControl {
 	}
 	public int totalUltrasonics() {  
 		int j = 0; 
-		for(int i = 0; i < 10; i++) 
+		for(int i = 0; i < channels; i++) 
 			if(ultrasonicIndex[i][0] != 255)
 				++j; 
 		return j; 
@@ -191,11 +191,11 @@ public abstract class AbstractMotorControl {
 	public void setChannels(int ch) { channels = ch; }
 	public int getChannels() { return channels; }
 	public void resetSpeeds() {
-		for(int i = 0; i < 10; i++) 
+		for(int i = 0; i < channels; i++) 
 			motorSpeed[i] = 0; // all channels down
 	}
 	public void resetEncoders() {
-		for(int i = 0; i < 10; i++) {
+		for(int i = 0; i < channels; i++) {
 			if( wheelEncoderService[i] != null) {
 				wheelEncoderService[i].set_counter(0);
 			}

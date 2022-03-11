@@ -25,15 +25,7 @@ import com.pi4j.io.gpio.PinMode;
  *
  */
 public class HBridgeDriver extends AbstractPWMMotorControl {
-	PWM[] ppwms = new PWM[10];
-	GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[10];
-	// 10 possible drive wheels, index is by channel-1. 
-	// motorDrive[channel] {{PWM array index],[dir pin],[timer freq}}
-	// PWM params array by channel:
-	// 0-pin index to pwm array(default 255)
-	// 1-direction pin
-	// 2-timer frequency Hz
-	int[][] motorDrive=new int[][]{{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000}};
+
 	int status_flag = 0;
 	public HBridgeDriver(int maxPower) {
 		super(maxPower);
@@ -42,45 +34,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	int getMotorPWMPin(int channel) { return motorDrive[channel-1][0]; }
 	int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
 	int getPWMFrequency(int channel) {return motorDrive[channel-1][2]; }
-	/**
-	* Add a new PWM instance to this motor controller.
-	* @param channel - the controller channel from 1 to 10, each successively higher channel will reset maximum channel count. Each channel is an axle/motor.
-	* @param pin_number - the index in the PWM array defined in 'setMotors', this is the next blank slot available
-	* @param dir_pin - the direction pin for this channel
-	* @param dir_default - the default direction the motor starts in
-	* @param timer_freq - timer frequency 0 - 1000000 Hz
-	*/ 
-	public void createPWM(int channel, int pin_number, int dir_pin, int dir_default, int timer_freq) {
-		// Attempt to assign PWM pin
-		if( getChannels() < channel ) setChannels(channel);
-		GpioPinDigitalOutput opin = Pins.assignPin(dir_pin);
-		int dirpin;
-		for(dirpin = 0;dirpin < 10; dirpin++) {
-			if(pdigitals[dirpin] == null) {
-				pdigitals[dirpin] = opin;
-				break;
-			}
-		}
-		int pindex;
-		for(pindex = 0; pindex < 10; pindex++) {
-			if( ppwms[pindex] == null ) {
-					break;
-			}
-		}
-		setCurrentDirection(channel, dir_default);
-		setDefaultDirection(channel, dir_default);
-		setMotorSpeed(channel, 0);	
-		motorDrive[channel-1][0] = pindex;
-		motorDrive[channel-1][1] = dirpin;
-		motorDrive[channel-1][2] = timer_freq;
-		PWM ppin = new PWM(pin_number);
-		ppwms[pindex] = ppin;
-		ppwms[pindex].init(pin_number);
-					
-	}
-	public void getDriverInfo(int ch, String outStr) {
-		
-	}
+
 	@Override
 	public int queryFaultFlag() { return fault_flag; }
 	
@@ -103,7 +57,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			return 0;
 		int pwmIndex = motorDrive[channel][0]; // index to PWM array
 		int dirPinIndex = motorDrive[channel][1]; // index to dir pin array
-		int freq = motorDrive[channel][2]; // value of freq, no index;
+		//int freq = motorDrive[channel][2]; // value of freq, no index;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
 		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
@@ -150,14 +104,17 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff
 			setMotorShutdown(); // sends commandEmergencyStop(1);
+			return fault_flag;
 		}
 		fault_flag = 0;
+		//ppwms[pwmIndex].freq(freq);
+		ppwms[pwmIndex].pwmWrite(motorPower);
 		return 0;
 	}
 
 	@Override
 	public int commandEmergencyStop(int status) throws IOException {
-		for(int j=0; j < 10; j++) {
+		for(int j=0; j < channels; j++) {
 			int pindex = motorDrive[j][0];
 			if(pindex != 255) {
 				//ppwms[pindex].init(ppwms[pindex].pin);
