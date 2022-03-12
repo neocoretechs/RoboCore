@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.serialreader;
 
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
+import com.pi4j.io.gpio.GpioPin;
 import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
@@ -127,6 +128,10 @@ public class Pins {
 		GpioPinDigitalOutput opin = Pins.gpioController.provisionDigitalOutputPin(getPin(pin),String.valueOf(pin));
 		opin.setMode(PinMode.DIGITAL_OUTPUT);
 		return opin;
+	}
+	
+	public static void unassignPin(GpioPin pin) {
+		pin.removeAllListeners();
 	}
 	
 	public static GpioPinDigitalInput assignInputPin(int pin) {

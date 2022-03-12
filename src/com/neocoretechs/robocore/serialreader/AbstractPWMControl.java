@@ -57,7 +57,7 @@ public abstract class AbstractPWMControl {
 	protected abstract int commandPWMLevel(int ch, int p);
 	protected abstract int commandEmergencyStop(int status);
 	protected abstract int isConnected();
-	protected abstract void getDriverInfo(int ch, String outStr);
+	protected abstract String getDriverInfo(int ch);
 	protected abstract int queryFaultFlag();
 	protected abstract int queryStatusFlag();
 	protected abstract void setMaxPWMLevel(int p);

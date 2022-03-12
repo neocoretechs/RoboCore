@@ -10,6 +10,7 @@ import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.OdroidC1Pin;
 import com.pi4j.io.gpio.Pin;
+import com.pi4j.io.gpio.PinMode;
 import com.pi4j.io.gpio.GpioPin;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
@@ -159,6 +160,9 @@ import com.pi4j.util.ConsoleColor;
 * @author: Jonathan Neville Groff  Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements Runnable, DataPortInterface {
+	public static boolean DEBUG = true;
+	public static int DEFAULT_PWM_FREQUENCY = 10000;
+	public static int MAX_MOTOR_POWER = 1000;
 	CircularBlockingDeque<String> inDeque = new CircularBlockingDeque<String>(1);
 	CircularBlockingDeque<String> outDeque = new CircularBlockingDeque<String>(1024);
 	static int gcode_N, gcode_LastN, Stopped_gcode_LastN = 0;
@@ -168,8 +172,8 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	static String cmdbuffer;
 	static String[] cmdtokens = new String[25];
 	static String outbuffer;
+	char serial_char;
 
-	static char serial_char;
 	static int serial_read;
 	static int serial_count = 0;
 	static boolean comment_mode = false;
@@ -185,9 +189,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	boolean target_direction;
 	
 	PWM pwm = null;
-	//Pwm apin;
-	Pin dpin;
-	//Pwm ppin;
+	GpioPinDigitalOutput dpin;
 	int nread = 0;
 	long micros = 0;
 	int[] values;
@@ -195,17 +197,19 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	int status;
 	int fault = 0;
 	// Dynamically defined ultrasonic rangers
-	//Ultrasonic[] psonics = new Ultrasonic[10];
+	Ultrasonic[] psonics = new Ultrasonic[10];
 	// Last distance published per sensor
 	float[] sonicDist = new float[]{0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
 	// Dynamically defined analog pins
-	//int analogRanges[2][16];
+	double[][] analogRanges = new double[2][16];
 	PWM[] panalogs = new PWM[10];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	// Dynamically defined digital pins
 	int[] digitalTarget = new int[32];
 	GpioPinDigitalOutput[] pdigitals= new GpioPinDigitalOutput[32];
 	// PWM control block
 	PWM[] ppwms = new PWM[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
+	static int pwm_freq = DEFAULT_PWM_FREQUENCY;
+	
 	private int MAX_CMD_SIZE = 1024;
 	private volatile boolean shouldRun = true;
 
@@ -222,8 +226,6 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	int encode_pin = 0;
 	int dir_face;
 	int dist;
-	int timer_res = 8; // resolution in bits
-	int timer_pre = 1; // 1 is no prescale
 	
 	int result;
 	int motorController = 0;
@@ -232,72 +234,75 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	int motorPower;
 	int PWMLevel;
 	int codenum;
-	char starpos;
 	
 	// Messages outputting data
-	String errormagic= "Error:";
-	String echomagic= "echo:";
-	String datasetHdr= "dataset";
-	String motorCntrlHdr= "motorcontrol";
-	String sonicCntrlHdr ="ultrasonic";
-	String timeCntrlHdr = "time";
-	String posCntrlHdr=  "position";
-	String motorFaultCntrlHdr= "motorfault";
-	String PWMFaultCntrlHdr= "pwmfault";
-	String batteryCntrlHdr= "battery";
-	String digitalPinHdr= "digitalpin";
-	String analogPinHdr="analogpin";
-	String digitalPinSettingHdr ="digitalpinsetting";
-	String analogPinSettingHdr= "analogpinsetting";
-	String ultrasonicPinSettingHdr= "ultrasonicpinsetting";
-	String pwmPinSettingHdr= "pwmpinsetting";
-	String motorControlSettingHdr= "motorcontrolsetting";
-	String pwmControlSettingHdr ="pwmcontrolsetting";
-	String pinSettingHdr ="assignedpins";
-	String controllerStatusHdr= "controllerstatus";
-	String eepromHdr ="eeprom";
+	final static String FIRMWARE_URL = "http://www.neocoretechs.com";
+	final static String PROTOCOL_VERSION = "Marlinspike Java 1.0";
+	final static String MACHINE_NAME = "";
+	final static String MACHINE_UUID = "";
+	final static String errormagic= "Error:";
+	final static String echomagic= "echo:";
+	final static String datasetHdr= "dataset";
+	final static String motorCntrlHdr= "motorcontrol";
+	final static String sonicCntrlHdr ="ultrasonic";
+	final static String timeCntrlHdr = "time";
+	final static String posCntrlHdr=  "position";
+	final static String motorFaultCntrlHdr= "motorfault";
+	final static String PWMFaultCntrlHdr= "pwmfault";
+	final static String batteryCntrlHdr= "battery";
+	final static String digitalPinHdr= "digitalpin";
+	final static String analogPinHdr="analogpin";
+	final static String digitalPinSettingHdr ="digitalpinsetting";
+	final static String analogPinSettingHdr= "analogpinsetting";
+	final static String ultrasonicPinSettingHdr= "ultrasonicpinsetting";
+	final static String pwmPinSettingHdr= "pwmpinsetting";
+	final static String motorControlSettingHdr= "motorcontrolsetting";
+	final static String pwmControlSettingHdr ="pwmcontrolsetting";
+	final static String pinSettingHdr ="assignedpins";
+	final static String controllerStatusHdr= "controllerstatus";
+	final static String eepromHdr ="eeprom";
 		
 	// Message delimiters, quasi XML
-	String MSG_BEGIN ="<";
-	String MSG_DELIMIT= ">";
-	String MSG_END ="</";
-	String MSG_TERMINATE ="/>";
+	final static String MSG_BEGIN ="<";
+	final static String MSG_DELIMIT= ">";
+	final static String MSG_END ="</";
+	final static String MSG_TERMINATE ="/>";
 
 	// Serial Console informational Messages
-	String MSG_STATUS ="status";
-	String MSG_POWERUP = "PowerUp";
-	String MSG_EXTERNAL_RESET= "External Reset";
-	String MSG_BROWNOUT_RESET= "Brown out Reset";
-	String MSG_WATCHDOG_RESET ="Watchdog Reset";
-	String MSG_SOFTWARE_RESET ="Software Reset";
-	String MSG_AUTHOR = " | Author: ";
-	String MSG_CONFIGURATION_VER= " Last Updated: ";
-	String MSG_FREE_MEMORY= " Free Memory: ";
-	String MSG_ERR_LINE_NO ="Line Number is not Last Line Number+1, Last Line: ";
-	String MSG_ERR_CHECKSUM_MISMATCH ="checksum mismatch, Last Line: ";
-	String MSG_ERR_NO_CHECKSUM= "No Checksum with line number, Last Line: ";
-	String MSG_ERR_NO_LINENUMBER_WITH_CHECKSUM= "No Line Number with checksum, Last Line: ";
-	String MSG_M115_REPORT ="FIRMWARE_NAME:Marlinspike RoboCore";
-	//String MSG_115_REPORT2 ="FIRMWARE_URL:"+ FIRMWARE_URL+ "\r\nPROTOCOL_VERSION:" +PROTOCOL_VERSION +"\r\nMACHINE_TYPE:"+ MACHINE_NAME +"\r\nUUID:"+ MACHINE_UUID;
-	String MSG_ERR_KILLED ="Controller halted. kill() called!";
-	String MSG_ERR_STOPPED ="Controller stopped due to errors";
-	String MSG_RESEND= "Resend: ";
-	String MSG_UNKNOWN_COMMAND= "Neither G nor M code found ";
-	String MSG_UNKNOWN_GCODE= "Unknown G code ";
-	String MSG_UNKNOWN_MCODE= "Unknown M code ";
-	String MSG_BAD_MOTOR ="Bad Motor command ";
-	String MSG_BAD_PWM= "Bad PWM Driver command ";
+	final static String MSG_STATUS ="status";
+	final static String MSG_POWERUP = "PowerUp";
+	final static String MSG_EXTERNAL_RESET= "External Reset";
+	final static String MSG_BROWNOUT_RESET= "Brown out Reset";
+	final static String MSG_WATCHDOG_RESET ="Watchdog Reset";
+	final static String MSG_SOFTWARE_RESET ="Software Reset";
+	final static String MSG_AUTHOR = " | Author: ";
+	final static String MSG_CONFIGURATION_VER= " Last Updated: ";
+	final static String MSG_FREE_MEMORY= " Free Memory: ";
+	final static String MSG_ERR_LINE_NO ="Line Number is not Last Line Number+1, Last Line: ";
+	final static String MSG_ERR_CHECKSUM_MISMATCH ="checksum mismatch, Last Line: ";
+	final static String MSG_ERR_NO_CHECKSUM= "No Checksum with line number, Last Line: ";
+	final static String MSG_ERR_NO_LINENUMBER_WITH_CHECKSUM= "No Line Number with checksum, Last Line: ";
+	final static String MSG_M115_REPORT ="FIRMWARE_NAME:Marlinspike RoboCore";
+	final static String MSG_115_REPORT2 ="FIRMWARE_URL:"+ FIRMWARE_URL+ "\r\nPROTOCOL_VERSION:" +PROTOCOL_VERSION +"\r\nMACHINE_TYPE:"+ MACHINE_NAME +"\r\nUUID:"+ MACHINE_UUID;
+	final static String MSG_ERR_KILLED ="Controller halted. kill() called!";
+	final static String MSG_ERR_STOPPED ="Controller stopped due to errors";
+	final static String MSG_RESEND= "Resend: ";
+	final static String MSG_UNKNOWN_COMMAND= "Neither G nor M code found ";
+	final static String MSG_UNKNOWN_GCODE= "Unknown G code ";
+	final static String MSG_UNKNOWN_MCODE= "Unknown M code ";
+	final static String MSG_BAD_MOTOR ="Bad Motor command ";
+	final static String MSG_BAD_PWM= "Bad PWM Driver command ";
 	
 	// These correspond to the controller faults return by 'queryFaultCode'
-	String MSG_MOTORCONTROL_1= "Overheat";
-	String MSG_MOTORCONTROL_2= "Overvoltage";
-	String MSG_MOTORCONTROL_3= "Undervoltage";
-	String MSG_MOTORCONTROL_4= "Short circuit";
-	String MSG_MOTORCONTROL_5= "Emergency stop";
-	String MSG_MOTORCONTROL_6= "Sepex excitation fault";
-	String MSG_MOTORCONTROL_7= "MOSFET failure";
-	String MSG_MOTORCONTROL_8= "Startup configuration fault";
-	String MSG_MOTORCONTROL_9= "Stall";
+	final static String MSG_MOTORCONTROL_1= "Overheat";
+	final static String MSG_MOTORCONTROL_2= "Overvoltage";
+	final static String MSG_MOTORCONTROL_3= "Undervoltage";
+	final static String MSG_MOTORCONTROL_4= "Short circuit";
+	final static String MSG_MOTORCONTROL_5= "Emergency stop";
+	final static String MSG_MOTORCONTROL_6= "Sepex excitation fault";
+	final static String MSG_MOTORCONTROL_7= "MOSFET failure";
+	final static String MSG_MOTORCONTROL_8= "Startup configuration fault";
+	final static String MSG_MOTORCONTROL_9= "Stall";
 
 	
 	@Override
@@ -580,11 +585,10 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			// 2 - Clear on match
 			// 3 - Set on match
 			// For motor operation and general purpose PWM, mode 2 the most universally applicable.
-			case 3: // M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
-				timer_res = 8; // resolution in bits
-				timer_pre = 1; // 1 is no prescale
+			case 3: // M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F PWM frequency]
 				pin_number = -1;
 				encode_pin = 0;
+				pwm_freq = DEFAULT_PWM_FREQUENCY;
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -615,13 +619,10 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if( code_seen('W')) {
 					encode_pin = (int) code_value();
 				}
-				if(code_seen('X')) {
-					timer_pre = (int) code_value();
+				if(code_seen('F')) {
+					pwm_freq = (int) code_value();
 				}
-				if( code_seen('R')) {
-					timer_res = (int) code_value();
-				}
-				((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, 10000);
+				((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, pwm_freq);
 				if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				}
@@ -634,11 +635,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			// and then D, an enable pin. Finally, W<encoder pin>  to receive hall wheel sensor signals and 
 			// optionally PWM timer setup [R<resolution 8,9,10 bits>] [X<prescale 0-7>].
 			// Everything derived from HBridgeDriver can be done here.
-			case 4:// M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
-			  timer_res = 8; // resolution in bits
-			  timer_pre = 1; // 1 is no prescale
+			case 4:// M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> B<enable pin b> E<default dir> [W<encoder pin>] [F<frequency 1-1000000>]
+			  pwm_freq = DEFAULT_PWM_FREQUENCY; // frequency
 			  pin_number = -1;
 			  pin_numberB = -1;
+			  int dir_pinb = -1;
 			  encode_pin = 0;
 			  if(code_seen('Z')) {
 				motorController = (int)code_value();
@@ -667,6 +668,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				  } else {
 					break;
 				  }
+				  if( code_seen('B')) {
+						dir_pinb = (int) code_value();
+				  } else {
+						break;
+				  }
 				  if( code_seen('E')) {
 					dir_default = (int) code_value();
 				  } else {
@@ -675,13 +681,10 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				  if( code_seen('W')) {
 					encode_pin = (int) code_value();
 				  }
-				  if(code_seen('X')) {
-						timer_pre = (int) code_value();
+				  if( code_seen('F')) {
+						pwm_freq = (int) code_value();
 				  }
-				  if( code_seen('R')) {
-						timer_res = (int) code_value();
-				  }
-				  ((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_default, 10000);
+				  ((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default, pwm_freq);
 				  if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				  }
@@ -700,7 +703,6 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					  motorController = (int)code_value();
 				  }
 				  if(motorControl[motorController] != null) {
-					  ((SwitchBridgeDriver)motorControl[motorController]).setPins(pdigitals);
 					  if(code_seen('P')) {
 						  pin_number = (int) code_value();
 					  } else {
@@ -721,6 +723,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						  } else {
 							  break;
 						  }
+						  if( code_seen('B')) {
+							  dir_pinb = (int) code_value();
+						  } else {
+							  break;
+						  }
 						  if( code_seen('E')) {
 							  dir_default = (int) code_value();
 						  } else {
@@ -729,7 +736,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						  if( code_seen('W')) {
 							 encode_pin = (int) code_value();
 						  }
-						  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_default);
+						  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default);
 						  if(encode_pin != 0) {
 							  motorControl[motorController].createEncoder(channel, encode_pin);
 						  }
@@ -794,19 +801,17 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			// Activate a previously created PWM controller of type AbstractPWMControl - a non propulsion PWM device such as LED or pump
 			// Note there is no encoder or direction pin, and no possibility of reverse. What would be reverse in a motor control is the first
 			// half of the power scale instead.
-			case 9: // M9 [Z<slot>] P<pin> C<channel> D<enable pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>] - PWM control
-				timer_res = 8; // resolution in bits
-				timer_pre = 1; // 1 is no prescale
+			case 9: // M9 [Z<slot>] P<pin> C<channel> D<enable pin> [R<resolution 8,9,10 bits>] [F<PWM frequency>] - PWM control
+				pwm_freq = DEFAULT_PWM_FREQUENCY; // resolution in bits
 				pin_number = -1;
 				encode_pin = 0;
 				if(code_seen('Z')) {
 					  PWMDriver = (int) code_value();
 				}
 				if(pwmControl[PWMDriver] != null) {
-				 ((VariablePWMDriver)pwmControl[PWMDriver]).setPWMs(ppwms);
 				 ((VariablePWMDriver)pwmControl[PWMDriver]).setEnablePins(pdigitals);
 				 if(code_seen('P')) {
-					  pin_number = code_value();
+					  pin_number = (int)code_value();
 				 } else {
 					  break;
 				 }
@@ -820,13 +825,10 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					} else {
 						break;
 					}
-					if(code_seen('X')) {
-						timer_pre = (int) code_value();
+					if(code_seen('F')) {
+						pwm_freq = (int) code_value();
 					}
-					if( code_seen('R')) {
-						timer_res = (int) code_value();
-					}
-					((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, 10000);
+					((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, pwm_freq);
 					outDeque.add(String.format("%sM9%s%n",MSG_BEGIN,MSG_TERMINATE));
 				 }
 				}
@@ -860,18 +862,16 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 											int pMotor1 = ((HBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
 											int pMotor2 = ((HBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 											if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
-												//delete pdigitals[pMotor2];
-												pdigitals[pMotor2] = 0;
+												pdigitals[pMotor2] = null;
 											}
 											if(pMotor1 != 255 && ppwms[pMotor1] != null) {
-												//delete ppwms[pMotor1];
-												ppwms[pMotor1] = 0;
+												ppwms[pMotor1] = null;
 											}
 									}
 									//delete motorControl[motorController];
-									motorControl[motorController] = 0; // in case assignment below fails
+									motorControl[motorController] = null; // in case assignment below fails
 								}
-								motorControl[motorController] = new HBridgeDriver();
+								motorControl[motorController] = new HBridgeDriver(MAX_MOTOR_POWER);
 								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							case 2: // type 2 Split bridge, each channel has 2 PWM pins and an enable pin, so up to 5 channels
@@ -882,24 +882,21 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 												int pMotor1 = ((SplitBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
 												int pMotor2 = ((SplitBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 												if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
-													//delete pdigitals[pMotor2];
-													pdigitals[pMotor2] = 0;
+													pdigitals[pMotor2] = null;
 												}
 												if(pMotor1 != 255 && ppwms[pMotor1] != null) {
-													//delete ppwms[pMotor1];
-													ppwms[pMotor1] = 0;
+													ppwms[pMotor1] = null;
 												}
 												pMotor1 = ((SplitBridgeDriver)motorControl[motorController]).getMotorPWMPinB(i);
 												if(pMotor1 != 255 && ppwms[pMotor1] != null) {
-													//delete ppwms[pMotor1];
-													ppwms[pMotor1] = 0;
+													ppwms[pMotor1] = null;
 												}
 												
 										}
 										//delete motorControl[motorController];
-										motorControl[motorController] = 0; // in case assignment below fails
+										motorControl[motorController] = null; // in case assignment below fails
 								}
-								motorControl[motorController] = new SplitBridgeDriver();
+								motorControl[motorController] = new SplitBridgeDriver(MAX_MOTOR_POWER);
 								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							case 3: // type 3 Switch bridge, each channel has 2 PWM pins and an enable pin, so up to 5 channels
@@ -908,23 +905,20 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 									// each controller can have up to 10 channels, each with its own PWM and direction pin
 									for(int i = 0; i < motorControl[motorController].getChannels(); i++) {
 										int pMotor1 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorDigitalPin(i);
-										int8 pMotor2 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
+										int pMotor2 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 										if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
-											//delete pdigitals[pMotor2];
 											pdigitals[pMotor2] = null;
 										}
 										if(pMotor1 != 255 && pdigitals[pMotor1] != null) {
-											//delete pdigitals[pMotor1];
 											pdigitals[pMotor1] = null;
 										}
 										pMotor1 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorDigitalPinB(i);
 										if(pMotor1 != 255 && pdigitals[pMotor1] != null) {
-											//delete pdigitals[pMotor1];
 											pdigitals[pMotor1] = null;
 										}
 									}
 									//delete motorControl[motorController];
-									motorControl[motorController] = 0; // in case assignment below fails
+									motorControl[motorController] = null; // in case assignment below fails
 								}
 								motorControl[motorController] = new SwitchBridgeDriver();
 								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
@@ -936,17 +930,15 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 									for(int i = 0; i < pwmControl[motorController].getChannels(); i++) {
 										int pMotor1 = ((VariablePWMDriver)pwmControl[motorController]).getPWMEnablePin(i);
 											if(pMotor1 != 255 && pdigitals[pMotor1] != null) {
-												//delete pdigitals[pMotor1];
 												pdigitals[pMotor1] = null;
 											}
 											pMotor1 = ((VariablePWMDriver)pwmControl[motorController]).getPWMLevelPin(i);
 											if(pMotor1 != 255 && ppwms[pMotor1] != null) {
-												//delete ppwms[pMotor1];
 												ppwms[pMotor1] = null;
 											}
 									}
 									//delete pwmControl[motorController];
-									motorControl[motorController] = 0; // in case assignment below fails
+									motorControl[motorController] = null; // in case assignment below fails
 								}
 								pwmControl[motorController] = new VariablePWMDriver();
 								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
@@ -972,14 +964,14 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					}
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
-							pwmControl[motorController].setDuration(channel, code_value());
+							pwmControl[motorController].setDuration(channel, (int)code_value());
 							outDeque.add(String.format("%sM11%s%n",MSG_BEGIN,MSG_TERMINATE));
 						}
 					} else {
 						if(code_seen('D')) {
 							if(motorControl[motorController] != null) {
-								motorControl[motorController].setDuration(channel, code_value());
-								outDeque.add(String.format("%sM11%s%n",MSG_BEGIN,MSG_TERMINATE));
+								motorControl[motorController].setDuration(channel, (int)code_value());
+								outDeque.add(String.format("%s M11%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
 						}
 					}
@@ -997,13 +989,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					}
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
-							pwmControl[motorController].setMinPWMLevel(channel, code_value());
+							pwmControl[motorController].setMinPWMLevel(channel, (int)code_value());
 							outDeque.add(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
 						}
 					} else {
 						if( code_seen('P')) {
 							if(motorControl[motorController] != null) {
-								motorControl[motorController].setMinMotorPower(channel, code_value());
+								motorControl[motorController].setMinMotorPower(channel, (int)code_value());
 								outDeque.add(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
 						}
@@ -1017,14 +1009,14 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				}
 				if( code_seen('P') ) {
 				  if(motorControl[motorController] != null) {
-					  motorControl[motorController].setMaxMotorPower(code_value());
+					  motorControl[motorController].setMaxMotorPower((int)code_value());
 					  outDeque.add(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
-				  }
 				  } else {
-				  if(code_seen('X')) {
-					  if(pwmControl[motorController] != null) {
-						  pwmControl[motorController].setMaxPWMLevel(code_value());
-						  outDeque.add(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  if(code_seen('X')) {
+						  if(pwmControl[motorController] != null) {
+							  pwmControl[motorController].setMaxPWMLevel((int)code_value());
+							  outDeque.add(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+						  }
 					  }
 				  }
 				}
@@ -1035,48 +1027,37 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
-			if(motorControl[motorController] != null) {
-			  pin_number = 0;
-			  if(code_seen('P')) {
-		        pin_number = (int) code_value();
-				if( code_seen('D')) {
-					dist = (int) code_value();
-				} else {
-					break;
+				if(motorControl[motorController] != null) {
+					pin_number = 0;
+					if(code_seen('P')) {
+						pin_number = (int) code_value();
+						if( code_seen('D')) {
+							dist = (int) code_value();
+						} else {
+							break;
+						}
+						dir_face = 1; // default forward
+						if( code_seen('E')) {
+							dir_face = (int) code_value(); // optional
+						}
+						Ultrasonic psonics = new Ultrasonic();
+						motorControl[motorController].linkDistanceSensor( pin_number, (Ultrasonic)psonics, dist, dir_face);
+						outDeque.add(String.format("%sM33%s%n",MSG_BEGIN,MSG_TERMINATE));
+					} // code_seen = 'P'
 				}
-				dir_face = 1; // default forward
-				if( code_seen('E')) {
-					dir_face = (int) code_value(); // optional
-				}
-				motorControl[motorController].linkDistanceSensor((Ultrasonic)psonics, pin_number, dist, dir_face);
-				outDeque.add(String.format("%sM33%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  } // code_seen = 'P'
-			}
 			  break;
 			  
 			  case 35: //M35 - Clear all digital pins
-				for(int i = 0; i < 32; i++) {
-					 if(pdigitals[i] != null) {
-						Pins.unassignPin(pdigitals[i].pin);
-						//delete pdigitals[i];
-						pdigitals[i] = null;
-					 }
-				}
 				outDeque.add(String.format("%sM35%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  break;
-				  
+			  
 			  case 36: //M36 - Clear all analog pins
-				  	 for(int i = 0; i < 16; i++) {
-					  	  if(panalogs[i] != null) {
-							Pins.unassignPin(panalogs[i].pin);
-						  	//delete panalogs[i];
-							panalogs[i] = null;
-					  	  }
-				  	 }
+					//Pins.unassignPins();
 				  	outDeque.add(String.format("%sM36%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  break;
 			  
 			  case 37: //M37 - Clear all PWM pins, ALL MOTOR AND PWM DISABLED, perhaps not cleanly
+				  /*
 				for(int i = 0; i < 12; i++) {
 				  if(ppwms[i] != null) {
 					  Pins.unassignPin(ppwms[i].pin);
@@ -1084,6 +1065,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					  ppwms[i] = null;
 				  }
 				}
+				*/
 				outDeque.add(String.format("%sM37%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  break;
 			  
@@ -1091,15 +1073,15 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  	  pin_number = -1;
 			  	  if (code_seen('P')) {
 				  	  pin_number = (int) code_value();
-				  	  if(unassignPin(pin_number) ) {
-					  	  for(int i = 0; i < 12; i++) {
-						  	  if(ppwms[i] != null && ppwms[i].pin == pin_number) {
+				  	  //if(unassignPin(pin_number) ) {
+					  	  //for(int i = 0; i < 12; i++) {
+						  	  //if(ppwms[i] != null && ppwms[i].pin == pin_number) {
 							  	  //delete ppwms[i];
-								  ppwms[i] = null;
-						  	  } // pwms == pin_number
-					  	  } // i iterate pwm array
+								  //ppwms[i] = null;
+						  	  //} // pwms == pin_number
+					  	  //} // i iterate pwm array
 					  	outDeque.add(String.format("%sM38%s%n",MSG_BEGIN,MSG_TERMINATE));
-				  	  } // unassign pin
+				  	 // } // unassign pin
 			  	  } // code P
 			  break;
 			  
@@ -1107,16 +1089,16 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  	  pin_number = -1;
 			  	  if (code_seen('P')) {
 				  	  pin_number = (int)code_value();
-				  	  if(Pins.unassignPin(pin_number) ) {
-					  	  for(int i = 0; i < 16; i++) {
-						  	  if(panalogs[i]  != null && panalogs[i].pin == pin_number) {
+				  	  //if(Pins.unassignPin(pin_number) ) {
+					  	 // for(int i = 0; i < 16; i++) {
+						  	  //if(panalogs[i]  != null && panalogs[i].pin == pin_number) {
 							  	//delete panalogs[i];
-								panalogs[i] = null;
-							    break;
-						  	  }
-					  	  }
+								//panalogs[i] = null;
+							   // break;
+						  	  //}
+					  	  //}
 					  	outDeque.add(String.format("%sM39%s%n",MSG_BEGIN,MSG_TERMINATE));
-				  	  }
+				  	  //}
 			  	  }
 			  break;
 					
@@ -1124,16 +1106,16 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			       pin_number = -1;
 			       if (code_seen('P')) {
 				       pin_number = (int)code_value();
-				       if(Pins.unassignPin(pin_number) ) {
-					       for(int i = 0; i < 32; i++) {
-						       if(pdigitals[i] != null && pdigitals[i].pin == pin_number) {
+				       //if(Pins.unassignPin(pin_number) ) {
+					      // for(int i = 0; i < 32; i++) {
+						       //if(pdigitals[i] != null && pdigitals[i].pin == pin_number) {
 							       //delete pdigitals[i];
-								   pdigitals[i] = null;
-							       break;
-						       }
-					       }
+								   //pdigitals[i] = null;
+							      // break;
+						       //}
+					       //}
 					       outDeque.add(String.format("%sM40%s%n",MSG_BEGIN,MSG_TERMINATE));
-					   }
+					   //}
 				   }
 			  break;
 				
@@ -1141,29 +1123,15 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			     pin_number = -1;
 			     if (code_seen('P')) {
 				     pin_number = (int)code_value();
-				     if( Pins.assignPin(pin_number) ) {
-					     dpin = Pins.assign(pin_number);
-						 dpin.setPin(pin_number);
-					     dpin.pinMode(OUTPUT);
-					     dpin.digitalWrite(HIGH);
-					     for(int i = 0; i < 32; i++) {
-						     if(!pdigitals[i]) {
+					 dpin = Pins.assignPin(pin_number);
+					 dpin.high();
+					 for(int i = 0; i < 32; i++) {
+						     if(pdigitals[i] != null) {
 							     pdigitals[i] = dpin;
 							     break;
 						     }
-					     }
-					     outDeque.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
-					 } else {
-					     for(int i = 0; i < 32; i++) {
-						     if(pdigitals[i] && pdigitals[i].pin == pin_number) {
-								 pdigitals[i].setPin(pin_number);
-								 pdigitals[i].pinMode(OUTPUT);
-							     pdigitals[i].digitalWrite(HIGH);
-							     break;
-						     }
-					     }
-					     outDeque.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
-				     }
+					 }
+					 outDeque.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
 			     }
 			break;
 			     
@@ -1171,151 +1139,75 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  pin_number = -1;
 			  if (code_seen('P')) {
 		        pin_number = (int)code_value();
-				if( Pins.assignPin(pin_number) ) {
-					dpin = new Digital(pin_number);
-					dpin.pinMode(OUTPUT);
-					dpin.digitalWrite(LOW);
-					for(int i = 0; i < 32; i++) {
-						if(pdigitals[i] == null) {
-							pdigitals[i] = dpin;
-							break;
-						}
-					}
+				dpin = Pins.assignPin(pin_number);
+				dpin.low();
 					outDeque.add(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
-				} else {
-					for(int i = 0; i < 32; i++) {
-						if(pdigitals[i] && pdigitals[i].pin == pin_number) {
-							pdigitals[i].setPin(pin_number);
-							pdigitals[i].pinMode(OUTPUT);
-							pdigitals[i].digitalWrite(LOW);
-							break;
-						}
-					}
-					outDeque.add(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
-				}
 			  }
 		     break;
 			 
 			
 			case 44: // M44 P<pin> [U] - -Read digital pin with optional pullup
 		        pin_number = -1;
+		        int res;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
 				}
-		    	if( assignPin(pin_number) ) {
-					dpin = Pins.assignPin(pin_number);
-					if(code_seen('U')) {
-						dpin.pinMode(INPUT_PULLUP);
-					}
-					int res = dpin.digitalRead();
-					Pins.unassignPin(pin_number); // reset it since this is a one-shot
-					outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
-				}
+				outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
 				break;
 				
 			 // PWM value between 0 and 255, default timer mode is 2; clear on match, default resolution is 8 bits, default prescale is 1
 			 // Prescale: 1,2,4,6,7,8,9 = none, 8, 64, 256, 1024, external falling, external rising
 			 // Use M445 to disable pin permanently or use timer more 0 to stop pulse without removing pin assignment
-		     case 45: // M45 - set up PWM P<pin> S<power val 0-255> [T<timer mode 0-3>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
+		     case 45: // M45 - set up PWM P<pin> S<power val 0-255> [F<frequency>]
 			  pin_number = -1;
 			  if(code_seen('P') ) {
 		          pin_number = (int)code_value();
 			  } else {
 				 break;
 			  }
+		      int pin_status;
 		      if (code_seen('S')) {
-		        int pin_status = (int)code_value();
-				int timer_mode = 2;
-				timer_res = 8;
-				timer_pre = 1;
-				
-				if( pin_status < 0 || pin_status > 255) {
-					pin_status = 0;
-				}
-				// this is a semi-permanent pin assignment so dont add if its already assigned
-				if( Pins.assignPin(pin_number) ) {
-					// timer mode 0-3: 0 stop, 1 toggle on compare match, 2 clear on match, 3 set on match (see HardwareTimer)
-					if( code_seen('T') ) {
-						timer_mode = (int)code_value();
-						if( timer_mode < 0 || timer_mode > 3 ) {
-							timer_mode = 0;
-						}
-					}
-					// timer bit resolution 8,9, or 10 bits
-					if( code_seen('R')) {
-						timer_res = (int)code_value();
-						if( timer_res < 8 || timer_res > 10 ) {
-							timer_res = 8;
-						}
-					}
-					// X - prescale 0-7 for power of 2
-					if( code_seen('X') ) {
-						timer_pre = (int)code_value();
-						if( timer_pre < 0 || timer_pre > 7 ) {
-							timer_pre = 0;
-						}
-					}
-					for(int i = 0; i < 12; i++) {
+		    	  pin_status = (int)code_value();
+			      if( pin_status < 0 || pin_status > 255) {
+						pin_status = 0;
+			      }
+		      }
+		      if( code_seen('F')) {
+				pwm_freq = (int)code_value();
+		      }
+		      for(int i = 0; i < 12; i++) {
 						if(ppwms[i] == null) {
 							PWM ppin = new PWM(pin_number);
-							ppin.init(pin_number, 10000);
+							ppin.freq(pwm_freq);
 							ppin.pwmWrite(pin_status); // default is 2, clear on match. to turn off, use 0
 							ppwms[i] = ppin;
 							outDeque.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
-					}
-				 } else { // reassign pin with new mode and value
-					 for(int i = 0; i < 12; i++) {
-						 if(ppwms[i] != null  && ppwms[i].pin == pin_number) {
-							 // timer mode 0-3: 0 stop, 1 toggle on compare match, 2 clear on match, 3 set on match (see HardwareTimer)
-							 if( code_seen('T') ) {
-								 timer_mode = (int)code_value();
-								 if( timer_mode < 0 || timer_mode > 3 ) {
-									timer_mode = 2; // mess up the code get clear on match default
-								 }
-							 }
-							 //ppwms[i]->init();
-							 ppwms[i].pwmWrite(pin_status);
-							 outDeque.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
-							 break;
-						 }
-					 }
-				 }
 		      }
 			  break;
 			  
 			  case 46: // M46 -Read analog pin P<pin>
 		        pin_number = -1;
 		        if (code_seen('P')) {
-		          pin_number = code_value();
-					if( assignPin(pin_number) ) {
-						apin = new Analog(pin_number);
-						int res = apin.analogRead();
-						res = apin.analogRead(); // de-jitter
-						unassignPin(pin_number);
-						outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
-					}
+		          pin_number = (int)code_value();
+		          outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
 				}
 		     break;
 			 
 			 case 47: // M47 -Read analog pin P<pin> T<threshold> compare to battery threshold, if below, print battery message
 			   pin_number = -1;
 			   if (code_seen('P')) {
-				   pin_number = code_value();
+				   pin_number = (int)code_value();
 				   digitarg = code_seen('T') ? (int)code_value() : 0;
-				   if( assignPin(pin_number) ) {
-					   apin = new GpioPinAnalogInput(pin_number);
-					   int res = apin.analogRead();
-					   res = apin.read(); // de-jitter
-					   Pins.unassignPin(pin_number);
-					   if( res < digitarg ) { // result < threshold is 0 by default
-						   publishBatteryVolts(res);
-					   } else {
+				   //GpioPinAnalogInput apin = new GpioPinAnalogInput(pin_number);
+				   //double res = apin.getValue();
+				   //if( res < digitarg ) { // result < threshold is 0 by default
+					//	   publishBatteryVolts(res);
+					//} else {
 						   outDeque.add(String.format("%sM47%s%n",MSG_BEGIN,MSG_TERMINATE));
-					   }
-				   }
-			 }
+					//}
+			   }
 			 break;
 			 
 		     case 80: //
@@ -1325,38 +1217,29 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		     case 81: // M81 [Z<slot>] X - Turn off Power Z shut down motorcontroller in slot, X shut down PWM, slot -1 do all
 			  int scode;
 			  if( code_seen('Z')) {
-				scode = code_value();
+				scode = (int)code_value();
 				if(scode == -1) {
 					if(code_seen('X')) {
 						for(int k = 0; k < 10; k++) {
-							if(pwmControl[k]) {
-								if(pwmControl[k].isConnected()) {
-									pwmControl[k].commandEmergencyStop(81);
-								}
-							}
+							if(pwmControl[k] != null)
+								pwmControl[k].commandEmergencyStop(81);
 						}
 					} else {
 						for(int k = 0; k < 10; k++) {
-							if(motorControl[k]) {
-								if(motorControl[k].isConnected()) {
+							if(motorControl[k] != null) {
 									motorControl[k].commandEmergencyStop(81);
-								}
 							}
 						}
 					}
 				} else {
 					motorController = scode; // slot seen
 					if(code_seen('X')) {
-						if(pwmControl[motorController]) {
-							if(pwmControl[motorController].isConnected()) {
+						if(pwmControl[motorController] != null) {
 								pwmControl[motorController].commandEmergencyStop(81);
-							}
 						}
 					} else {			
-						if(motorControl[motorController]) {
-							if( motorControl[motorController].isConnected()) {
+						if(motorControl[motorController] != null) {
 								motorControl[motorController].commandEmergencyStop(81);
-							}
 						}
 					}
 				}
@@ -1371,36 +1254,32 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  
 			
 		    case 300: // M300 - emit ultrasonic pulse on given pin and return duration P<pin number>
-		      uspin = code_seen('P') ? code_value() : 0;
+		      uspin = code_seen('P') ? (int)code_value() : 0;
 		      if (uspin > 0) {
 				Ultrasonic upin = new Ultrasonic(uspin);
-				pin_number = upin.getPin();
-				outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_DELIMIT,pin_number,upin.getRange(),MSG_BEGIN,sonicCtrlHdr,MSG_TERMINATE));
+				outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_DELIMIT,upin,MSG_BEGIN,sonicCntrlHdr,MSG_TERMINATE));
 		      }
 		    break;
 				
 		    case 301: // M301 P<pin> - attach ultrasonic device to pin
 				// wont assign pin 0 as its sensitive
-				uspin = code_seen('P') ? code_value() : 0;
+				uspin = code_seen('P') ? (int)code_value() : 0;
 				// this is a permanent pin assignment so dont add if its already assigned
-				if( assignPin(uspin) ) {
-					for(int i = 0; i < 10; i++) {
-						if(!psonics[i]) {
+				for(int i = 0; i < 10; i++) {
+						if(psonics[i] != null) {
 							psonics[i] = new Ultrasonic(uspin);
 							outDeque.add(String.format("%sM301%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
-					}
 				}
 				break;
 			
 			case 302: // M302 P<pin> - remove ultrasonic pin
-				uspin = code_seen('P') ? code_value() : 0;
-				unassignPin(uspin);
+				uspin = code_seen('P') ? (int)code_value() : 0;
 				for(int i = 0; i < 10; i++) {
-						if(psonics[i] && psonics[i].pin.pin == uspin) {
+						if(psonics[i] != null) {
 							//delete psonics[i];
-							psonics[i] = 0;
+							psonics[i] = null;
 							outDeque.add(String.format("%sM302%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
@@ -1408,87 +1287,78 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		      break;
 			
 			case 303: // M303 - Check the analog inputs for all pins defined by successive M304 directives. Generate a read and output data if in range.
-				for(int i = 0 ; i < 16; i++) {
-					if( panalogs[i] && panalogs[i].mode == INPUT) {
-						printAnalog(panalogs[i], i);
-					}
-				}
 		      break;
 			  
 			case 304:// M304 P<pin> [L<min>] [H<max>] [U] - toggle analog read optional INPUT_PULLUP with optional exclusion range 0-1024 via L<min> H<max>
 				// if optional L and H values exclude readings in that range
-				uspin = code_seen('P') ? code_value() : 0;
+				uspin = code_seen('P') ? (int)code_value() : 0;
 				// this is a permanent pin assignment so dont add if its already assigned
-				if( assignPin(uspin) ) {
 					for(int i = 0; i < 16; i++) {
-						if(!panalogs[i]) {
+						if(panalogs[i] != null) {
 							analogRanges[0][i] = code_seen('L') ? code_value() : 0;
 							analogRanges[1][i] = code_seen('H') ? code_value() : 0;
-							panalogs[i] = new Analog(uspin);
+							//panalogs[i] = new Analog(uspin);
 							if(code_seen('U'))  {
-								panalogs[i].pinMode(INPUT_PULLUP);
+								//panalogs[i].pinMode(INPUT_PULLUP);
 								outDeque.add(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
 							break;
 						}
 					}
-				} else { // reassign values for assigned pin
 					for(int i = 0; i < 16; i++) {
-						if(panalogs[i] && panalogs[i].pin == uspin) {
+						//if(panalogs[i] && panalogs[i].pin == uspin) {
 							analogRanges[0][i] = code_seen('L') ? code_value() : 0;
 							analogRanges[1][i] = code_seen('H') ? code_value() : 0;
 							outDeque.add(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
-						}
+						//}
 					}
-				}
 		      break;
 			
 			case 305: // M305 - Read the pins defined in M306 and output them if they are of the defined target value
 				for(int i = 0 ; i < 32; i++) {
-					if( pdigitals[i] && (pdigitals[i].mode == INPUT || pdigitals[i].mode == INPUT_PULLUP)) {
-						printDigital(pdigitals[i], digitalTarget[i]);
+					if( pdigitals[i] != null && (pdigitals[i].isMode(PinMode.ANALOG_INPUT) || pdigitals[i].isMode(PinMode.DIGITAL_INPUT))) {
+						//printDigital(pdigitals[i], digitalTarget[i]);
 					}
 				}
 		      break;
 			
 			case 306://  M306 P<pin> T<target> [U] - toggle digital read, 0 or 1 for target value, default 0 optional INPUT_PULLUP 
 				// Looks for target value, if so publish with <digitalpin> header and 1 - pin 2 - value
-				uspin = code_seen('P') ? code_value() : 0;
-				digitarg = code_seen('T') ? code_value() : 0;
+				uspin = code_seen('P') ? (int)code_value() : 0;
+				digitarg = code_seen('T') ? (int)code_value() : 0;
 				// this is a permanent pin assignment so dont add if its already assigned
-				if( assignPin(uspin) ) {
+				//if( assignPin(uspin) ) {
 					for(int i = 0; i < 32; i++) {
-						if(!pdigitals[i]) {
-							pdigitals[i] = new Digital(uspin);
+						if(pdigitals[i] != null) {
+							pdigitals[i] = Pins.assignPin(uspin);
 							if(code_seen('U')) {
-								pdigitals[i].pinMode(INPUT_PULLUP);
+								pdigitals[i].setMode(PinMode.DIGITAL_INPUT);
 							}
 							digitalTarget[i] = digitarg;
 							outDeque.add(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
 					}
-				} else {
-					for(int i = 0; i < 32; i++) {
-						if(pdigitals[i] && pdigitals[i].pin == uspin) {
-							digitalTarget[i] = digitarg;
-							outDeque.add(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
-							break;
-						}
-					}
-				}
+				//} else {
+				//	for(int i = 0; i < 32; i++) {
+				//		if(pdigitals[i] && pdigitals[i].pin == uspin) {
+				//			digitalTarget[i] = digitarg;
+				//			outDeque.add(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
+				//			break;
+				//		}
+				//	}
+				//}
 				break;
 				
 			case 445: // M445 P<pin> - Turn off pulsed write pin - disable PWM
 		      if(code_seen('P')) {
-		        pin_number = code_value();
-				unassignPin(pin_number);
+		        pin_number =(int) code_value();
 				for(int i = 0; i < 12; i++) {
-					if(ppwms[i] && ppwms[i].pin == pin_number) {
-						ppwms[i].pwmWrite(0,0); // default is 2, clear on match. to turn off, use 0 
+					if(ppwms[i] != null && ppwms[i].pin == pin_number) {
+						ppwms[i].pwmWrite(0); // default is 2, clear on match. to turn off, use 0 
 						//delete ppwms[i];
-						ppwms[i] = 0;
+						ppwms[i] = null;
 						outDeque.add(String.format("%sM445%s%n",MSG_BEGIN,MSG_TERMINATE));
 						break;
 					}
@@ -1497,31 +1367,34 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  break;
 			  
 		    case 500: // M500 Store settings in EEPROM
-		        Config_StoreSettings();
+		        //Config_StoreSettings();
 		        StringBuilder sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append("M500");
 				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 		    break;
 			
 		    case 501: // M501 Read settings from EEPROM
-		        Config_RetrieveSettings();
+		        //Config_RetrieveSettings();
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append("M501");
 				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 		    break;
 			
 		    case 502: // M502 Revert to default settings
-		        Config_ResetDefault();
+		        //Config_ResetDefault();
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append("M502");
 				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 		    break;
 			
 		    case 503: // M503 print settings currently in memory
-		        Config_PrintSettings();
+		        //Config_PrintSettings();
 		    break;
 			
 			  
@@ -1529,135 +1402,110 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		      sb = new StringBuilder();
 			  sb.append(MSG_BEGIN);
 			  sb.append(MSG_STATUS);
-			  SERIAL_PGMLN(MSG_DELIMIT);
+			  sb.append(MSG_DELIMIT);
+			  sb.append("\r\n");
 			  // Check startup - does nothing if bootloader sets MCUSR to 0
-			  sb.append(VERSION_STRING);
+			  //sb.append(VERSION_STRING);
 			  sb.append(MSG_CONFIGURATION_VER);
-			  sb.append(STRING_VERSION_CONFIG_H);
+			  //sb.append(STRING_VERSION_CONFIG_H);
 			  sb.append(MSG_AUTHOR);
-			  SERIAL_PGMLN(STRING_CONFIG_H_AUTHOR);
+			  //sb.append(STRING_CONFIG_H_AUTHOR);
 			  sb.append(MSG_FREE_MEMORY);
-			  sb.appendln(freeMemory());
+			  //sb.appendln(freeMemory());
 			  sb.append(MSG_BEGIN);
 			  sb.append(MSG_STATUS);
-			  SERIAL_PGMLN(MSG_TERMINATE);
+			  sb.append(MSG_TERMINATE);
+			  outDeque.add(sb.toString());
 			  break; 
 			  
 			case 701: // Report digital pins in use
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(digitalPinSettingHdr);
-				SERIAL_PGMLN(MSG_DELIMIT);
+				sb.append(MSG_DELIMIT);
+				sb.append("\r\n");
 				for(int i = 0; i < 32; i++) {
 					if( pdigitals[i] != null) {
-						sb.append(pdigitals[i].pin);
-						switch(pdigitals[i].mode) {
-							case INPUT:
-								SERIAL_PGMLN(" INPUT");
-								break;
-							case INPUT_PULLUP:
-								SERIAL_PGMLN(" INPUT_PULLUP");
-								break;
-							case OUTPUT:
-								SERIAL_PGMLN(" OUTPUT");
-								break;
-							default:
-								SERIAL_PGMLN(" ERROR - UNKNOWN");
-								break;
-						}
+						sb.append(pdigitals[i]);
+						sb.append("\r\n");
 					}
 				}
 				sb.append(MSG_BEGIN);
 				sb.append(digitalPinSettingHdr);
-				SERIAL_PGMLN(MSG_TERMINATE);
+				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 				break;
 				
 			case 702: // Report analog pins in use
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinSettingHdr);
-				SERIAL_PGMLN(MSG_DELIMIT);
+				sb.append(MSG_DELIMIT);
+				 sb.append("\r\n");
 				for(int i = 0; i < 16; i++) {
 					if( panalogs[i]  != null ) {
-						sb.append(panalogs[i].pin);
-						switch(panalogs[i].mode) {
-							case INPUT:
-								SERIAL_PGMLN(" INPUT");
-								break;
-							case INPUT_PULLUP:
-								SERIAL_PGMLN(" INPUT_PULLUP");
-								break;
-							case OUTPUT:
-								SERIAL_PGMLN(" OUTPUT");
-								break;
-							default:
-								SERIAL_PGMLN(" ERROR - UNKNOWN");
-								break;
-						}
+						sb.append(panalogs[i]);
+						sb.append("\r\n");
 					}
 				}
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinSettingHdr);
-				SERIAL_PGMLN(MSG_TERMINATE);
+				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 				break;
 				
 			case 703: // Report ultrasonic pins in use
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(ultrasonicPinSettingHdr);
-				SERIAL_PGMLN(MSG_DELIMIT);
+				sb.append(MSG_DELIMIT);
+				sb.append("\r\n");
 				for(int i = 0; i < 10; i++) {
-					if( psonics[i] ) {
+					if( psonics[i] != null) {
 						sb.append("Pin:");
-						sb.appendln(psonics[i].getPin());
+						sb.append(psonics[i]);
+						sb.append("\r\n");
 					}
 				}
 				sb.append(MSG_BEGIN);
 				sb.append(ultrasonicPinSettingHdr);
-				SERIAL_PGMLN(MSG_TERMINATE);
+				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 				break;
 				
 			case 704: // Report PWM pins in use
+				sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(pwmPinSettingHdr);
-				SERIAL_PGMLN(MSG_DELIMIT);
+				sb.append(MSG_DELIMIT);
+				sb.append("\r\n");
 				for(int i = 0; i < 12; i++) {
-					if( ppwms[i] ) {
+					if( ppwms[i] != null) {
 						sb.append("Pin:");
 						sb.append(ppwms[i].pin);
 						sb.append(" Timer channel:");
-						sb.append(ppwms[i].channel);
-						switch(ppwms[i].mode) {
-							case INPUT:
-								sb.append(" INPUT");
-								break;
-							case INPUT_PULLUP:
-								sb.append(" INPUT_PULLUP");
-								break;
-							case OUTPUT:
-								sb.append(" OUTPUT");
-								break;
-							default:
-								sb.append(" ERROR - UNKNOWN");
-								break;
-						}
-						sb.appendln();
+						sb.append(ppwms[i]);
+						sb.append("\r\n");
 					}
 				}
 				sb.append(MSG_BEGIN);
 				sb.append(pwmPinSettingHdr);
-				SERIAL_PGMLN(MSG_TERMINATE);
+				sb.append(MSG_TERMINATE);
+				sb.append("\r\n");
+				System.out.println(sb.toString());
 				break;
 				
 			case 705:
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(motorControlSettingHdr);
-				SERIAL_PGMLN(MSG_DELIMIT);
+				sb.append(MSG_DELIMIT);
+				sb.append("\r\n");
 				for(int j = 0; j < 10; j++) {
-						if( motorControl[j] ) {
+						if( motorControl[j] != null) {
 							for(int i = 0 ; i < motorControl[j].getChannels(); i++) { //per channel
 								sb.append("Motor channel:");
+								sb.append("\r\n");
 								sb.append(i+1);
 								sb.append(" Min Power:");
 								sb.append(motorControl[j].getMinMotorPower(i+1));
@@ -1666,144 +1514,157 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								sb.append(" Curr. Dir:");
 								sb.append(motorControl[j].getCurrentDirection(i+1));
 								sb.append(" Default. Dir:");
-								sb.appendln(motorControl[j].getDefaultDirection(i+1));
+								sb.append(motorControl[j].getDefaultDirection(i+1));
 								sb.append(" Encoder Pin:");
-								if(motorControl[j].getWheelEncoder(i+1)) {
-									sb.append(motorControl[j].getWheelEncoder(i+1).pin);
+								if(motorControl[j].getWheelEncoder(i+1) != null) {
+									sb.append(motorControl[j].getWheelEncoder(i+1));
 									sb.append(" Count:");
 									sb.append(motorControl[j].getEncoderCount(i+1));
 									sb.append(" Duration:");
-									sb.appendln(motorControl[j].getMaxMotorDuration(i+1));
+									sb.append(motorControl[j].getMaxMotorDuration(i+1));
+									sb.append("\r\n");
 									//sb.append(motorControl[j].getDriverInfo(i+1));
 								} else {
-									SERIAL_PGMLN("None.");
+									sb.append("None.");
 								}
+								sb.append("\r\n");
 							}
 							sb.append("Ultrasonic pins:");
-							if( motorControl[j].totalUltrasonics() ) {
-								sb.appendln(motorControl[j].totalUltrasonics());
+							sb.append("\r\n");
+							if( motorControl[j].totalUltrasonics() > 0) {
+								sb.append(motorControl[j].totalUltrasonics());
+								sb.append("\r\n");
 								for(int k = 0; k < motorControl[j].totalUltrasonics(); k++) {
 									sb.append("Pin:");
-									sb.append(psonics[motorControl[j].getUltrasonicIndex(k+1)].getPin());
+									sb.append(psonics[motorControl[j].getUltrasonicIndex(k+1)]);
 									sb.append(" Facing:");
 									sb.append(motorControl[j].getUltrasonicFacing(k+1));
 									sb.append(" Shutdown cm:");
-									sb.appendln(motorControl[j].getMinMotorDist(k+1));
+									sb.append(motorControl[j].getMinMotorDist(k+1));
+									sb.append("\r\n");
 								}
 							} else {
-								SERIAL_PGMLN("None.");
+								sb.append("None.");
+								sb.append("\r\n");
 							}
 						} // if motorControl[j]
 					} // j each motor controller
 					sb.append(MSG_BEGIN);
 					sb.append(motorControlSettingHdr);
-					SERIAL_PGMLN(MSG_TERMINATE);
+					sb.append(MSG_TERMINATE);
+					sb.append("\r\n");
 					//
 					// PWM control
 					//
 					sb.append(MSG_BEGIN);
 					sb.append(pwmControlSettingHdr);
-					SERIAL_PGMLN(MSG_DELIMIT);
+					sb.append(MSG_DELIMIT);
+					sb.append("\r\n");
 					for(int j = 0; j < 10; j++) {
-						if(pwmControl[j]) {
+						if(pwmControl[j] != null) {
 							for(int i = 0 ; i < pwmControl[j].getChannels(); i++) { //per channel
 								sb.append("PWM channel:");
 								sb.append(i+1);
 								sb.append(" Min Level:");
 								sb.append(pwmControl[j].getMinPWMLevel(i+1));
 								sb.append(" Duration:");
-								sb.appendln(pwmControl[j].getMaxPWMDuration(i+1));
+								sb.append(pwmControl[j].getMaxPWMDuration(i+1));
+								sb.append("\r\n");
 							}
 						}
 					} // j each PWM controller
 					sb.append(MSG_BEGIN);
 					sb.append(pwmControlSettingHdr);
-					SERIAL_PGMLN(MSG_TERMINATE);
+					sb.append(MSG_TERMINATE);
+					sb.append("\r\n");
+					System.out.println(sb.toString());
 					break;
 					
 			case 706: // Report all pins in use
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(pinSettingHdr);
-				SERIAL_PGMLN(MSG_DELIMIT);
-				for(int i = 0; i < 100; i++) {
-					if( pinAssignment(i) == PIN_ASSIGNED ) {
-						sb.append(i);
-						sb.append(',');
-					}
-				}
-				Serial.println();
+				sb.append(MSG_DELIMIT);
+				sb.append("\r\n");
 				sb.append(MSG_BEGIN);
 				sb.append(pinSettingHdr);
-				SERIAL_PGMLN(MSG_TERMINATE);
+				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 				break;
 				
 			case 798: // M798 Z<motor control> [X] Report controller status for given controller. If X, slot is PWM
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(controllerStatusHdr);
-				SERIAL_PGMLN(MSG_DELIMIT);
+				sb.append(MSG_DELIMIT);
 				if (code_seen('Z')) {
-					motorController = code_value();
+					motorController = (int)code_value();
 				}
 				
 				if(code_seen('X')) {
-						if(pwmControl[motorController]) {
+						if(pwmControl[motorController] != null) {
 							for(int i = 0; i < pwmControl[motorController].getChannels() ; i++ ) {
 								sb.append("PWM Channel:");
-								sb.appendln(i+1);
+								sb.append(i+1);
+								sb.append("\r\n");
 								sb.append(pwmControl[motorController].getDriverInfo(i+1));
+								sb.append("\r\n");
 								//sb.appendln(outbuffer);
 							}
 						}
 				} else {
-					if( motorControl[motorController] && motorControl[motorController].isConnected() ) {
+					if( motorControl[motorController] != null  ) {
 						for(int i = 0; i < motorControl[motorController].getChannels() ; i++ ) {
 							sb.append("Motor Channel:");
-							sb.appendln(i+1);
+							sb.append(i+1);
+							sb.append("\r\n");
 							sb.append(motorControl[motorController].getDriverInfo(i+1));
+							sb.append("\r\n");
 						}
 					}
 				} // code_seen('X')
 				sb.append(MSG_BEGIN);
 				sb.append(controllerStatusHdr);
-				SERIAL_PGMLN(MSG_TERMINATE);
+				sb.append(MSG_TERMINATE);
+				outDeque.add(sb.toString());
 				break;	
 				
 			case 799: // M799 [Z<controller>][X] Reset controller, if no argument, reset all. If X, slot is PWM
 		        sb = new StringBuilder();
 				if (code_seen('Z')) {
-					motorController = code_value();
+					motorController = (int)code_value();
 					if(code_seen('X')) {
-						if(pwmControl[motorController]) {
+						if(pwmControl[motorController] != null) {
 							pwmControl[motorController].commandEmergencyStop(799);
 							sb.append(MSG_BEGIN);
 							sb.append("M799");
-							SERIAL_PGMLN(MSG_TERMINATE);
+							sb.append(MSG_TERMINATE);
 						}
 					} else {
-						if(motorControl[motorController]) {
+						if(motorControl[motorController] != null) {
 							motorControl[motorController].commandEmergencyStop(799);
 							sb.append(MSG_BEGIN);
 							sb.append("M799");
-							SERIAL_PGMLN(MSG_TERMINATE);
+							sb.append(MSG_TERMINATE);
 						}
 					}
 				} else { // no slot defined, do them all if present
 					for(int j = 0;j < 10; j++) {
 						if(code_seen('X')) {
-							if(pwmControl[j]) {
+							if(pwmControl[j] != null) {
 								pwmControl[j].commandEmergencyStop(-1);
 							}
 						} else {
-							if(motorControl[j]) {
+							if(motorControl[j] != null) {
 								motorControl[j].commandEmergencyStop(-1);
 							}
 						}
+						sb.append("\r\n");
 					}
 					sb.append(MSG_BEGIN);
 					sb.append("M799");
-					SERIAL_PGMLN(MSG_TERMINATE);
+					sb.append(MSG_TERMINATE);
+					outDeque.add(sb.toString());
 				}
 				break;		
 				
@@ -1812,25 +1673,26 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				// Publish <dataset> 1 - pin, 2 - reading
 		        sb = new StringBuilder();
 				if( code_seen('P')) {
-					apin = new Analog((uint8_t)code_value());
-					if( code_seen('X') ) {
-						apin.pinMode(INPUT_PULLUP);
-					} else {
-						apin.pinMode(INPUT);
-					}
+					//apin = new Analog((uint8_t)code_value());
+					//if( code_seen('X') ) {
+					//	apin.pinMode(INPUT_PULLUP);
+					//} else {
+					//	apin.pinMode(INPUT);
+					//}
 				}
 				nread = 0;
 				if( code_seen('S') ) {
-					nread = code_value();
+					nread = (int)code_value();
 				}
 				micros = 0;
 				if( code_seen('M')) {
-					micros = (uint32_t)code_value();
+					micros = (int)code_value();
 				}
 				values = new int[nread];
 				for(int i = 0; i < nread; i++) {
-					(values+i) = apin.analogRead();
-					for(int j = 0; j < micros; j++) _delay_us(1);
+					//(values+i) = apin.analogRead();
+					for(int j = 0; j < micros; j++) 
+						Thread.sleep(0,1000);
 				}
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinHdr);
@@ -1840,11 +1702,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					sb.append(i+1); // sequence
 					sb.append(' ');
 					// 0 element is pin number
-					if( i == 0 ) {
-						sb.append(apin.pin);
-					} else {
-						sb.append((values+i)); // value
-					}
+					//if( i == 0 ) {
+					//	sb.append(apin.pin);
+					//} else {
+					//	sb.append((values+i)); // value
+					//}
 					sb.append("\r\n");
 				}
 				//delete values;
@@ -1852,6 +1714,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(analogPinHdr);
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
+				outDeque.add(sb.toString());
 				break;				
 				
 		    case 999: // M999: Reset
@@ -1860,12 +1723,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				//lcd_reset_alert_level();
 				gcode_LastN = Stopped_gcode_LastN;
 				//FlushSerialRequestResend();
-				watchdog_timer = new WatchdogTimer();
+				//watchdog_timer = new WatchdogTimer();
 				sb.append(MSG_BEGIN);
 				sb.append("M999");
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
-				watchdog_timer.watchdog_init(15); // 15 ms
+				//watchdog_timer.watchdog_init(15); // 15 ms
+				outDeque.add(sb.toString());
 				break;
 				
 			default:
@@ -2060,19 +1924,19 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		*/
 		void printAnalog(GpioPinAnalogInput apin, int index) {
 			//pin = new Analog(upin);
-			int nread = apin.analogRead();
+			double nread = apin.getValue();
 			// jitter comp.
-			nread = apin.analogRead();
 			if( analogRanges[0][index] != 0 && nread >= analogRanges[0][index] && nread <= analogRanges[1][index])
 				return;
+			StringBuilder sb = new StringBuilder();
 			sb.append(MSG_BEGIN);
 			sb.append(analogPinHdr);
-			SERIAL_PGMLN(MSG_DELIMIT);
+			sb.append(MSG_DELIMIT);
 			sb.append("\r\n");
 			sb.append('1'); // sequence
 			sb.append(' ');
 			// 0 element is pin number
-			sb.append(apin.pin);
+			sb.append(apin.getPin());
 			sb.append("\r\n");
 			sb.append('2'); // sequence
 			sb.append(' ');
@@ -2088,10 +1952,10 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		/**
 		* 'target' represents the expected value. Two elements returned in sequence. 1 - Pin, 2 - reading
 		*/
-		void printDigital(GpioPinDigitalInput dpin, int target) {
+		void printDigital(GpioPinDigitalInput dpin, boolean target) {
 			//dpin = new Digital(upin);
 			//dpin->pinMode(INPUT);
-			int nread = dpin.digitalRead();
+			boolean nread = dpin.isHigh();
 			//delete dpin;
 			// look for activated value
 			StringBuilder sb = new StringBuilder();
@@ -2102,7 +1966,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append("\r\n");
 				sb.append('1'); // sequence
 				sb.append(' ');
-				sb.append(dpin.pin);
+				sb.append(dpin.getPin());
 				sb.append("\r\n");
 				sb.append('2'); // sequence
 				sb.append(' ');
