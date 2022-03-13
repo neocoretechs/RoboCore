@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
 public interface InterruptService {
 	public int getPin();

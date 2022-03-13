@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;

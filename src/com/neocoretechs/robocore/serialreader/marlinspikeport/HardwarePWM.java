@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -29,7 +29,7 @@ public abstract class HardwarePWM {
 		this.pin = pin;
 	}
 	
-	public void init(int pin, int timer_freq) throws IOException {
+	public synchronized void init(int pin, int timer_freq) throws IOException {
 		try {
 			switch(pin) {
 				case 19:

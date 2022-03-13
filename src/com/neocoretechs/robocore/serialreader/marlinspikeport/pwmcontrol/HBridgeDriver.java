@@ -1,7 +1,8 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.PinMode;
 
@@ -30,9 +31,9 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	public HBridgeDriver(int maxPower) {
 		super(maxPower);
 	}
-	void setMotors(PWM[] pwm) { ppwms = pwm; }
-	int getMotorPWMPin(int channel) { return motorDrive[channel-1][0]; }
-	int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
+	public void setMotors(PWM[] pwm) { ppwms = pwm; }
+	public int getMotorPWMPin(int channel) { return motorDrive[channel-1][0]; }
+	public int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
 	int getPWMFrequency(int channel) {return motorDrive[channel-1][2]; }
 
 	@Override
@@ -46,7 +47,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		MAXMOTORPOWER = 1000;	
 	}
 
-	void setDirectionPins(GpioPinDigitalOutput[] dpins) {
+	public void setDirectionPins(GpioPinDigitalOutput[] dpins) {
 		pdigitals = dpins;
 	}
 	

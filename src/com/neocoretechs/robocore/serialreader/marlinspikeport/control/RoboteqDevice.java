@@ -1,6 +1,8 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 
 import java.io.IOException;
+
+import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 public class RoboteqDevice extends AbstractSmartMotorControl {
 

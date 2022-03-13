@@ -3,6 +3,15 @@ package com.neocoretechs.robocore.serialreader;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.control.RoboteqDevice;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SplitBridgeDriver;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SwitchBridgeDriver;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.AbstractPWMControl;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.VariablePWMDriver;
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;

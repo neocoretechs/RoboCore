@@ -1,7 +1,10 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 /**
  * Abstract driver for a collection of H bridge driven brushed DC motor channels.
@@ -19,15 +22,15 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
  *
  */
 public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
-	PWM[] ppwms = new PWM[channels];
-	GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels];
+	protected PWM[] ppwms = new PWM[channels];
+	protected GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels];
 	// 10 possible drive wheels, index is by channel-1. 
 	// motorDrive[channel] {{PWM array index],[dir pin],[timer freq}}
 	// PWM params array by channel:
 	// 0-pin index to pwm array(default 255)
 	// 1-direction pin
 	// 2-timer frequency Hz
-	int[][] motorDrive=new int[][]{{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000}};
+	protected int[][] motorDrive=new int[][]{{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000}};
 	public AbstractPWMMotorControl(int maxPower) {
 		MAXMOTORPOWER = maxPower;
 	}

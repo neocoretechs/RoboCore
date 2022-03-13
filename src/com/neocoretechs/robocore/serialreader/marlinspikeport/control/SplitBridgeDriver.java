@@ -1,7 +1,9 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 
 /**
@@ -53,7 +55,7 @@ public class SplitBridgeDriver extends HBridgeDriver {
 	public SplitBridgeDriver(int maxPower) {
 		super(maxPower);
 	}
-	int getMotorPWMPinB(int channel) { return motorDriveB[channel-1][0]; }
+	public int getMotorPWMPinB(int channel) { return motorDriveB[channel-1][0]; }
 	/**
 	 * Add a new PWM instance to this motor controller.
 	 * @param channel - the controller channel from 1 to 10

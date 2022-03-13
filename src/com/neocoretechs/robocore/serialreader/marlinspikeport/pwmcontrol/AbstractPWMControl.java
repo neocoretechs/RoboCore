@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 
 import java.io.IOException;
 
@@ -52,22 +52,22 @@ public abstract class AbstractPWMControl {
 	//functions
 	public void setDuration(int ch, int durx) { maxPWMDuration[ch-1] = durx; }
 	public void setPWMLevel(int ch, int lvl) { pwmLevel[ch-1] = lvl; }
-	protected void setMinPWMLevel(int ch, int mpow) { minPWMLevel[ch-1] = mpow;}
-	protected abstract int commandPWMLevel(int ch, int p);
-	protected abstract int commandEmergencyStop(int status) throws IOException;
+	public void setMinPWMLevel(int ch, int mpow) { minPWMLevel[ch-1] = mpow;}
+	public abstract int commandPWMLevel(int ch, int p);
+	public abstract int commandEmergencyStop(int status) throws IOException;
 	protected abstract int isConnected();
-	protected abstract String getDriverInfo(int ch);
+	public abstract String getDriverInfo(int ch);
 	protected abstract int queryFaultFlag();
 	protected abstract int queryStatusFlag();
-	protected abstract void setMaxPWMLevel(int p);
-	protected  int getMaxPWMDuration(int ch) { return maxPWMDuration[ch-1]; }
-	protected int getMinPWMLevel(int ch) { return minPWMLevel[ch-1] ; }
+	public abstract void setMaxPWMLevel(int p);
+	public  int getMaxPWMDuration(int ch) { return maxPWMDuration[ch-1]; }
+	public int getMinPWMLevel(int ch) { return minPWMLevel[ch-1] ; }
 	protected int getPWMLevel(int ch) { return pwmLevel[ch-1]; }
 	protected void setChannels(int ch) { channels = ch; }
-	protected int getChannels() { return channels; }
+	public int getChannels() { return channels; }
 	protected abstract void resetLevels();
-	protected void setPWMShutdown() throws IOException { commandEmergencyStop(1); PWMSHUTDOWN = 1;}
-	protected void setPWMRun() throws IOException { commandEmergencyStop(0); PWMSHUTDOWN = 0;}
+	public void setPWMShutdown() throws IOException { commandEmergencyStop(1); PWMSHUTDOWN = 1;}
+	public void setPWMRun() throws IOException { commandEmergencyStop(0); PWMSHUTDOWN = 0;}
 	protected int getPWMShutdown() { return PWMSHUTDOWN; }
-	protected void setPWMPowerScale(int p) { PWMPOWERSCALE = p; }
+	public void setPWMPowerScale(int p) { PWMPOWERSCALE = p; }
 }

@@ -1,7 +1,9 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 
 /**
@@ -33,8 +35,8 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	public static int MAXPWMLEVEL = 2000;
 	PWM[] ppwms = new PWM[channels];
 	GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels];
-	int getPWMLevelPin(int channel) { return pwmDrive[channel-1][0]; }
-	int getPWMEnablePin(int channel) {return pwmDrive[channel-1][1]; }
+	public int getPWMLevelPin(int channel) { return pwmDrive[channel-1][0]; }
+	public int getPWMEnablePin(int channel) {return pwmDrive[channel-1][1]; }
 		
 	@Override
 	protected int queryFaultFlag() { return fault_flag; }
@@ -53,7 +55,7 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	* @param timer_freq - timer prescale default 1 = no prescale
 	* @throws IOException 
 	*/
-	void createPWM(int channel, int pin_number, int enable_pin, int dir_default, int timer_freq) throws IOException {
+	public void createPWM(int channel, int pin_number, int enable_pin, int dir_default, int timer_freq) throws IOException {
 		// Attempt to assign PWM pin
 		if( getChannels() < channel ) setChannels(channel);
 		GpioPinDigitalOutput opin = Pins.assignPin(enable_pin);
@@ -79,13 +81,13 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	}	
 	
 	@Override
-	protected int commandPWMLevel(int ch, int p) {
+	public int commandPWMLevel(int ch, int p) {
 		// TODO Auto-generated method stub
 	return 0;
 	}
 
 	@Override
-	protected int commandEmergencyStop(int status) throws IOException {
+	public int commandEmergencyStop(int status) throws IOException {
 		for(int j=0; j < 10; j++) {
 			int pindex = pwmDrive[j][0];
 			if(pindex != 255) {
@@ -107,13 +109,13 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	}
 
 	@Override
-	protected String getDriverInfo(int ch) {
+	public String getDriverInfo(int ch) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
-	protected void setMaxPWMLevel(int p) {
+	public void setMaxPWMLevel(int p) {
 		MAXPWMLEVEL = p;
 	}
 

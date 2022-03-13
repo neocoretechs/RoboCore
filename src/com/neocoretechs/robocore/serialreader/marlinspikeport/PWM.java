@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
 import java.io.IOException;
 
@@ -19,7 +19,7 @@ public class PWM extends HardwarePWM {
 		super(pin);
 	}
 	
-	public String read() throws IOException {
+	public synchronized String read() throws IOException {
 		String level = null;
 		switch(pin) {
 			case 19:
@@ -36,7 +36,7 @@ public class PWM extends HardwarePWM {
 		}
 	}
 	
-	public void enable(boolean enable) throws IOException {
+	public synchronized void enable(boolean enable) throws IOException {
 		switch(pin) {
 			case 19:
 				pwmEnable1.writeBytes(enable ? "1" : "0");
@@ -53,7 +53,7 @@ public class PWM extends HardwarePWM {
 
 	}
 	
-	public void freq(int hZ) throws IOException {
+	public synchronized void freq(int hZ) throws IOException {
 		switch(pin) {
 			case 19:
 				pwmFreq1.writeBytes(String.valueOf(hZ));
@@ -70,7 +70,7 @@ public class PWM extends HardwarePWM {
 	}
 
 	@Override
-	public void pwmWrite(int val) throws IOException {
+	public synchronized void pwmWrite(int val) throws IOException {
 		switch(pin) {
 			case 19:
 				pwmDuty1.writeBytes(String.valueOf(val));
@@ -88,19 +88,19 @@ public class PWM extends HardwarePWM {
 
 
 	@Override
-	public void setCounter(int cntx) {
+	public synchronized void setCounter(int cntx) {
 		((CounterInterruptService)interruptService).set_counter(cntx);
 	}
 
 
 	@Override
-	public int getCounter() {
+	public synchronized int getCounter() {
 		return ((CounterInterruptService)interruptService).get_counter();
 	}
 
 
 	@Override
-	public void digitalWrite(int val) throws IOException {
+	public synchronized void digitalWrite(int val) throws IOException {
 		if(val == 0)
 			pwmWrite(0);
 		else
@@ -109,19 +109,19 @@ public class PWM extends HardwarePWM {
 
 
 	@Override
-	public void pinModeOut() {
+	public synchronized void pinModeOut() {
 		
 	}
 
 
 	@Override
-	public void attachInterrupt(InterruptService cins, boolean overflow) {
+	public synchronized void attachInterrupt(InterruptService cins, boolean overflow) {
 		this.interruptService = cins;	
 	}
 
 
 	@Override
-	public void detachInterrupt(boolean overflow) {
+	public synchronized void detachInterrupt(boolean overflow) {
 		this.interruptService = null;
 		
 	}

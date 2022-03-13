@@ -1,7 +1,8 @@
-package com.neocoretechs.robocore.serialreader;
+package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.pi4j.io.gpio.GpioPinDigital;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 /**
@@ -36,11 +37,11 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	int[][] motorDriveB= new int[][]{{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0}};
 	int status_flag = 0;
 	
-	int getMotorDigitalPin(int channel) { return motorDrive[channel-1][0]; }
+	public int getMotorDigitalPin(int channel) { return motorDrive[channel-1][0]; }
 	
-	int getMotorDigitalPinB(int channel) { return motorDriveB[channel-1][0]; }
+	public int getMotorDigitalPinB(int channel) { return motorDriveB[channel-1][0]; }
 
-	int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
+	public int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
 	
 	int getMotorEnablePinB(int channel) {return motorDriveB[channel-1][1]; }
 	/**
@@ -52,7 +53,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	 * @param dir_pinB enable for B
 	 * @param dir_default the default direction the motor starts in
 	 */
-	void createDigital(int channel, int pin_number, int pin_numberB, int dir_pin, int dir_pinB, int dir_default) {
+	public void createDigital(int channel, int pin_number, int pin_numberB, int dir_pin, int dir_pinB, int dir_default) {
 		int i;
 		for(i = 0; i < channels*4; i++) {
 			if(pdigitals[i] == null)
