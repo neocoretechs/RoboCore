@@ -622,7 +622,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if(code_seen('F')) {
 					pwm_freq = (int) code_value();
 				}
-				((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, pwm_freq);
+				try {
+					((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, pwm_freq);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 				if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				}
@@ -684,7 +688,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				  if( code_seen('F')) {
 						pwm_freq = (int) code_value();
 				  }
-				  ((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default, pwm_freq);
+				  try {
+					((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default, pwm_freq);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 				  if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				  }
@@ -770,12 +778,20 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				}
 				if(code_seen('X')) {
 					if(pwmControl[motorController] != null) {
-						pwmControl[motorController].setPWMShutdown();
+						try {
+							pwmControl[motorController].setPWMShutdown();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
 						outDeque.add(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				} else {
 					if(motorControl[motorController] != null) {
-						motorControl[motorController].setMotorShutdown();
+						try {
+							motorControl[motorController].setMotorShutdown();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
 						outDeque.add(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				}
@@ -787,12 +803,20 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				}
 				if(code_seen('X')) {
 					if(pwmControl[motorController] != null) {
-						pwmControl[motorController].setPWMRun();
+						try {
+							pwmControl[motorController].setPWMRun();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
 						outDeque.add(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				} else {
 					if(motorControl[motorController] != null ) {
-						motorControl[motorController].setMotorRun();
+						try {
+							motorControl[motorController].setMotorRun();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
 						outDeque.add(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				}
@@ -801,7 +825,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			// Activate a previously created PWM controller of type AbstractPWMControl - a non propulsion PWM device such as LED or pump
 			// Note there is no encoder or direction pin, and no possibility of reverse. What would be reverse in a motor control is the first
 			// half of the power scale instead.
-			case 9: // M9 [Z<slot>] P<pin> C<channel> D<enable pin> [R<resolution 8,9,10 bits>] [F<PWM frequency>] - PWM control
+			case 9: // M9 [Z<slot>] P<pin> C<channel> D<enable pin> E<dir default> [F<PWM frequency>] - PWM control
 				pwm_freq = DEFAULT_PWM_FREQUENCY; // resolution in bits
 				pin_number = -1;
 				encode_pin = 0;
@@ -809,7 +833,6 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					  PWMDriver = (int) code_value();
 				}
 				if(pwmControl[PWMDriver] != null) {
-				 ((VariablePWMDriver)pwmControl[PWMDriver]).setEnablePins(pdigitals);
 				 if(code_seen('P')) {
 					  pin_number = (int)code_value();
 				 } else {
@@ -825,10 +848,19 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					} else {
 						break;
 					}
+					if( code_seen('E')) {
+						  dir_default = (int) code_value();
+					} else {
+						  break;
+					}
 					if(code_seen('F')) {
 						pwm_freq = (int) code_value();
 					}
-					((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, pwm_freq);
+					try {
+						((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, dir_default, pwm_freq);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
 					outDeque.add(String.format("%sM9%s%n",MSG_BEGIN,MSG_TERMINATE));
 				 }
 				}
@@ -848,9 +880,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 							case 0: // type 0 smart controller
 								if( motorControl[motorController]  != null) {
 									//delete motorControl[motorController];
-									motorControl[motorController] = 0; // in case assignment below fails
+									motorControl[motorController] = null; // in case assignment below fails
 								}
-								motorControl[motorController] = new RoboteqDevice();
+								try {
+									motorControl[motorController] = new RoboteqDevice(MAX_MOTOR_POWER);
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
 								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							case 1: // type 1 Hbridge
@@ -1148,7 +1184,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			
 			case 44: // M44 P<pin> [U] - -Read digital pin with optional pullup
 		        pin_number = -1;
-		        int res;
+		        int res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
 				}
@@ -1165,7 +1201,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  } else {
 				 break;
 			  }
-		      int pin_status;
+		      int pin_status = 0;
 		      if (code_seen('S')) {
 		    	  pin_status = (int)code_value();
 			      if( pin_status < 0 || pin_status > 255) {
@@ -1178,8 +1214,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		      for(int i = 0; i < 12; i++) {
 						if(ppwms[i] == null) {
 							PWM ppin = new PWM(pin_number);
-							ppin.freq(pwm_freq);
-							ppin.pwmWrite(pin_status); // default is 2, clear on match. to turn off, use 0
+							try {
+								ppin.freq(pwm_freq);
+								ppin.pwmWrite(pin_status); // default is 2, clear on match. to turn off, use 0
+							} catch (IOException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
 							ppwms[i] = ppin;
 							outDeque.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
@@ -1189,6 +1230,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  
 			  case 46: // M46 -Read analog pin P<pin>
 		        pin_number = -1;
+		        res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
 		          outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
@@ -1222,12 +1264,20 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					if(code_seen('X')) {
 						for(int k = 0; k < 10; k++) {
 							if(pwmControl[k] != null)
-								pwmControl[k].commandEmergencyStop(81);
+								try {
+									pwmControl[k].commandEmergencyStop(81);
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
 						}
 					} else {
 						for(int k = 0; k < 10; k++) {
 							if(motorControl[k] != null) {
-									motorControl[k].commandEmergencyStop(81);
+									try {
+										motorControl[k].commandEmergencyStop(81);
+									} catch (IOException e) {
+										e.printStackTrace();
+									}
 							}
 						}
 					}
@@ -1235,11 +1285,19 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					motorController = scode; // slot seen
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
-								pwmControl[motorController].commandEmergencyStop(81);
+								try {
+									pwmControl[motorController].commandEmergencyStop(81);
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
 						}
 					} else {			
 						if(motorControl[motorController] != null) {
-								motorControl[motorController].commandEmergencyStop(81);
+								try {
+									motorControl[motorController].commandEmergencyStop(81);
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
 						}
 					}
 				}
@@ -1356,7 +1414,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		        pin_number =(int) code_value();
 				for(int i = 0; i < 12; i++) {
 					if(ppwms[i] != null && ppwms[i].pin == pin_number) {
-						ppwms[i].pwmWrite(0); // default is 2, clear on match. to turn off, use 0 
+						try {
+							ppwms[i].pwmWrite(0);
+						} catch (IOException e) {
+							e.printStackTrace();
+						} // default is 2, clear on match. to turn off, use 0 
 						//delete ppwms[i];
 						ppwms[i] = null;
 						outDeque.add(String.format("%sM445%s%n",MSG_BEGIN,MSG_TERMINATE));
@@ -1635,14 +1697,22 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					motorController = (int)code_value();
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
-							pwmControl[motorController].commandEmergencyStop(799);
+							try {
+								pwmControl[motorController].commandEmergencyStop(799);
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
 							sb.append(MSG_BEGIN);
 							sb.append("M799");
 							sb.append(MSG_TERMINATE);
 						}
 					} else {
 						if(motorControl[motorController] != null) {
-							motorControl[motorController].commandEmergencyStop(799);
+							try {
+								motorControl[motorController].commandEmergencyStop(799);
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
 							sb.append(MSG_BEGIN);
 							sb.append("M799");
 							sb.append(MSG_TERMINATE);
@@ -1652,11 +1722,19 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					for(int j = 0;j < 10; j++) {
 						if(code_seen('X')) {
 							if(pwmControl[j] != null) {
-								pwmControl[j].commandEmergencyStop(-1);
+								try {
+									pwmControl[j].commandEmergencyStop(-1);
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
 							}
 						} else {
 							if(motorControl[j] != null) {
-								motorControl[j].commandEmergencyStop(-1);
+								try {
+									motorControl[j].commandEmergencyStop(-1);
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
 							}
 						}
 						sb.append("\r\n");
@@ -1691,8 +1769,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				values = new int[nread];
 				for(int i = 0; i < nread; i++) {
 					//(values+i) = apin.analogRead();
-					for(int j = 0; j < micros; j++) 
-						Thread.sleep(0,1000);
+					for(int j = 0; j < micros; j++)
+						try {
+							Thread.sleep(0,1000);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
 				}
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinHdr);

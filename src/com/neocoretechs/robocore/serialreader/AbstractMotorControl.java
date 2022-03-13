@@ -72,7 +72,7 @@ public abstract class AbstractMotorControl {
 	protected int fault_flag = 0;
 	public abstract int commandMotorPower(int ch, int p) throws IOException;//make AbstractMotorControl not instantiable
 	public abstract int commandEmergencyStop(int status) throws IOException;
-	public abstract int isConnected();
+	public abstract int isConnected() throws IOException;
 	public abstract String getDriverInfo(int ch);
 	public abstract int queryFaultFlag();
 	public abstract int queryStatusFlag();
