@@ -17,6 +17,7 @@ import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
+import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
 
 /**
  * Each individual robot uses this class to manage its collection of attributes initially parsed from config file, including
@@ -182,7 +183,10 @@ public class MarlinspikeManager {
 		if(DEBUG)
 			System.out.printf("%s.activateMarlinspikes preparing to initialize %s%n",this.getClass().getName(), ndd);
 		AsynchDemuxer asynchDemuxer = new AsynchDemuxer(this);
-		asynchDemuxer.connect(new ByteSerialDataPort(ndd.getDevice()));
+		if(ndd.getDevice().equals("MarlinspikePort"))
+			asynchDemuxer.connect(new MarlinspikeDataPort());
+		else
+			asynchDemuxer.connect(new ByteSerialDataPort(ndd.getDevice()));
 		ndd.setAsynchDemuxer(asynchDemuxer);
 		ndd.setMarlinspikeControl(new MarlinspikeControl(asynchDemuxer));
 	}

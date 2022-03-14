@@ -16,9 +16,10 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 
 /**
  * Class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
- * to effect transmission and reception.
+ * to effect transmission and reception. Two asynchronous threads run; one for transmit, one for receive.<p/>
+ * After creating the port with proper parameters such as baud rate, parity, data and stop bits, call
+ * the connect method to begin communication.<p/>
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
- *
  */
 public class ByteSerialDataPort implements DataPortInterface {
 		private static boolean DEBUG = false;

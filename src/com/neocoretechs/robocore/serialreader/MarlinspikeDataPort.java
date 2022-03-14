@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.serialreader;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
@@ -12,8 +13,6 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SwitchBrid
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.AbstractPWMControl;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.VariablePWMDriver;
-import com.pi4j.io.gpio.GpioController;
-import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinAnalogInput;
@@ -22,14 +21,7 @@ import com.pi4j.io.gpio.Pin;
 import com.pi4j.io.gpio.PinMode;
 import com.pi4j.io.gpio.GpioPin;
 import com.pi4j.io.gpio.PinState;
-import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
-import com.pi4j.io.gpio.event.GpioPinListenerDigital;
-import com.pi4j.platform.Platform;
-import com.pi4j.platform.PlatformAlreadyAssignedException;
-import com.pi4j.platform.PlatformManager;
-import com.pi4j.util.CommandArgumentParser;
-import com.pi4j.util.Console;
-import com.pi4j.util.ConsoleColor;
+
 /**
  * RoboCore robotic controller platform simulator.
  * Implementation of arduino type microcontroller firmware in PI4J Java asynchronous process.<p/>
@@ -316,6 +308,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	
 	@Override
 	public void connect(boolean writeable) throws IOException {
+		SynchronizedFixedThreadPoolManager.spin(this);
 	}
 
 	@Override
@@ -334,6 +327,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 
 	@Override
 	public void close() {
+		try {
+			stop();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		shouldRun = false;
 	}
 
@@ -376,11 +374,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			if(!comment_mode) {
 				try {
 					process_commands();
+					manage_inactivity();
 				} catch(IOException ioe) {
 					throw new RuntimeException(ioe);
 				}
 			}
-			//manage_inactivity();
 		  } catch (InterruptedException e) {
 			shouldRun = false;
 		  }
@@ -1813,6 +1811,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				Stopped = false;
 				//lcd_reset_alert_level();
 				gcode_LastN = Stopped_gcode_LastN;
+				try {
+					stop();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 				//FlushSerialRequestResend();
 				//watchdog_timer = new WatchdogTimer();
 				sb.append(MSG_BEGIN);
@@ -1849,20 +1852,15 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					motorControl[j].checkUltrasonicShutdown();
 					if( motorControl[j].queryFaultFlag() != fault ) {
 						fault = motorControl[j].queryFaultFlag();
-						publishMotorFaultCode(fault);
+						if(fault != 10) // dont publish normal encoder shutdown
+							publishMotorFaultCode(fault);
 					}
 				}
 			  }
 		  }
 		}
 
-		void kill() throws IOException {
-		  for(int j = 0; j < 10; j++) {
-			motorControl[j].commandEmergencyStop(-2);
-		  }
-		}
-
-		void Stop() throws IOException {
+		void stop() throws IOException {
 		  if(!Stopped) {
 		    Stopped = true;
 		    Stopped_gcode_LastN = gcode_LastN; // Save last g_code for restart
@@ -1873,6 +1871,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		    //SERIAL_ERRORLNPGM(MSG_ERR_STOPPED);
 		  }
 		}
+		
 		//
 		// The fault code is bit-ordered for 8 cases
 		//
