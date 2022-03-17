@@ -307,8 +307,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 
 	
 	@Override
+	/**
+	 * initialize the fixed thread pool manager, start thread running main loop
+	 */
 	public void connect(boolean writeable) throws IOException {
-		SynchronizedFixedThreadPoolManager.spin(this);
+		SynchronizedFixedThreadPoolManager.init(3, Integer.MAX_VALUE, new String[]{getPortName()});
+		SynchronizedFixedThreadPoolManager.spin(this, getPortName());
 	}
 
 	@Override
@@ -322,7 +326,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 
 	@Override
 	public void write(int c) throws IOException {
-		outDeque.addLast(String.valueOf((char)c));
+		inDeque.addLast(String.valueOf((char)c));
 	}
 
 	@Override
@@ -338,7 +342,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	@Override
 	public String readLine() {
 		try {
-			return inDeque.take();
+			return outDeque.take();
 		} catch (InterruptedException e) {
 			return null;
 		}
@@ -353,7 +357,9 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 
 	@Override
 	public void writeLine(String output) throws IOException {
-		outDeque.addLast(output);
+		if(DEBUG)
+			System.out.printf("%s queuing command %s%n", this.getClass().getName(), output);
+		inDeque.addLast(output);
 	}
 
 	@Override
@@ -415,6 +421,8 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	     }
 	  serial_count = 0;
 	  cmdtokens = cmdbuffer.split(" ");
+	  if(DEBUG)
+			System.out.printf("%s get_command %d tokens%n", this.getClass().getName(), cmdtokens.length);
 	}
 
 	float code_value() {
@@ -450,9 +458,9 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		} else {
 			 if(code_seen('M') ) {
 				  int cval = (int)code_value();
-				  //processMCode(cval);
+				  processMCode(cval);
 			 } else { // if neither G nor M code
-				 System.out.println("Neitch G nor M code encountered");
+				 System.out.println("Neither G nor M code encountered in command:"+cmdbuffer);
 			 }
 		}
 	}
@@ -461,7 +469,9 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	 * Processing of G-code command sequence
 	 * @param cval
 	 */
-	void processGCode(int cval) throws IOException {	
+	void processGCode(int cval) throws IOException {
+		if(DEBUG)
+			System.out.printf("%s processGCode %s%n", this.getClass().getName(), String.valueOf(cval));
 		switch(cval) {    
 		    case 4: // G4 dwell
 		      codenum = 0;
@@ -539,10 +549,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 	 * @param cval
 	 */
 	void processMCode(int cval) {
-			  int motorController = 0; 
-			  int PWMDriver = 0;
-			  
-		    switch( cval ) {
+		if(DEBUG)
+			System.out.printf("%s processMCode %s%n", this.getClass().getName(), String.valueOf(cval));
+		int motorController = 0; 
+		int PWMDriver = 0;  
+		switch( cval ) {
 			case 0: // M0 - Set real time output off
 				realtime_output = false;
 				outDeque.add(String.format("%sM0%s%n",MSG_BEGIN,MSG_TERMINATE));
@@ -901,7 +912,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								if(motorControl[motorController] != null) {
 									// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 									// each controller can have up to 10 channels, each with its own PWM and direction pin
-									for(int i = 0; i < motorControl[motorController].getChannels(); i++) {
+									for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
 											int pMotor1 = ((HBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
 											int pMotor2 = ((HBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 											if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
@@ -921,7 +932,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								if(motorControl[motorController] != null) {
 										// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 										// each controller can have up to 10 channels, each with its own PWM and direction pin
-										for(int i = 0; i < motorControl[motorController].getChannels(); i++) {
+										for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
 												int pMotor1 = ((SplitBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
 												int pMotor2 = ((SplitBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 												if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
@@ -946,7 +957,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								if(motorControl[motorController] != null) {
 									// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 									// each controller can have up to 10 channels, each with its own PWM and direction pin
-									for(int i = 0; i < motorControl[motorController].getChannels(); i++) {
+									for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
 										int pMotor1 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorDigitalPin(i);
 										int pMotor2 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 										if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
@@ -970,7 +981,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								if(pwmControl[motorController] != null) {
 									// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 									// each controller can have up to 10 channels, each with its own PWM and direction pin
-									for(int i = 0; i < pwmControl[motorController].getChannels(); i++) {
+									for(int i = 1; i <= pwmControl[motorController].getChannels(); i++) {
 										int pMotor1 = ((VariablePWMDriver)pwmControl[motorController]).getPWMEnablePin(i);
 											if(pMotor1 != 255 && pdigitals[pMotor1] != null) {
 												pdigitals[pMotor1] = null;
@@ -991,8 +1002,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								break;
 						}
 					} else {
+						outDeque.add(String.format("%sBAD CONTROLLER TYPE:CONTROLLER TYPE DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
 						break;
-					}
+					}			
+				} else {
+					outDeque.add(String.format("%sBAD CONTROLLER TYPE:CONTROLLER SLOT DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
 				}
 				break;
 				

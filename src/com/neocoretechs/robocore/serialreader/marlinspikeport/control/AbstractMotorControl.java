@@ -157,7 +157,7 @@ public abstract class AbstractMotorControl {
 	public void createEncoder(int channel, int encode_pin) {
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
 		wheelEncoder[channel-1] = PCInterrupts.getInstance();
-		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], PinState.HIGH);
+		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 5.0); // trigger at 5v analog
 	}
 	public void setCurrentDirection(int ch, int val) { currentDirection[ch-1] = val; }
 	// If the wheel is mirrored to speed commands or commutation, 0 - normal, 1 - mirror

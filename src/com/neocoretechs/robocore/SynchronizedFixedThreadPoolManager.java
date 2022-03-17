@@ -58,10 +58,17 @@ public class SynchronizedFixedThreadPoolManager {
 	 */
 	public static void init(int maxThreads, int executionLimit, String[] threadGroupNames) {
 		for(String tgn : threadGroupNames) {
+			FactoryThreadsLimit ftl = executor.get(tgn);
+			if( ftl != null ) {
+				//ftl.exs.shutdownNow();
+				//executor.remove(ftl.group);
+				System.out.println("Group "+tgn+" already initialized, use reinit to alter.");
+				continue;
+			}
 			//executor.put(tgn, getInstance(maxExecution, executionLimit).new ExtendedExecutor(maxExecution, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit)));
 			DaemonThreadFactory dtf = (getInstance().new DaemonThreadFactory(tgn));
 			ExecutorService tpx = (getInstance().new ExtendedExecutor(maxThreads, executionLimit, new LinkedBlockingQueue<Runnable>(), dtf));
-			executor.put(tgn,getInstance().new FactoryThreadsLimit(tgn, dtf, tpx, maxThreads, executionLimit));
+			executor.put(tgn, getInstance().new FactoryThreadsLimit(tgn, dtf, tpx, maxThreads, executionLimit));
 			((ExtendedExecutor)tpx).prestartAllCoreThreads();
 		}
 	}
@@ -71,7 +78,7 @@ public class SynchronizedFixedThreadPoolManager {
 	 * @param executionLimit - maximumPoolSize set to Integer.MAX_VALUE for unbounded, otherwise fixed sized pool.
 	 * @param group The group name
 	 */
-	public void init(int maxThreads, int executionLimit, String group) {
+	public void reinit(int maxThreads, int executionLimit, String group) {
 		FactoryThreadsLimit ftl = executor.get(group);
 		if( ftl != null ) {
 			ftl.exs.shutdownNow();
@@ -83,15 +90,17 @@ public class SynchronizedFixedThreadPoolManager {
 		((ExtendedExecutor)tpx).prestartAllCoreThreads();
 	}
 	/**
-	 * 
+	 * Initialize default group SYSTEMSYNC<p/>
 	 * @param maxThreads CorePoolSize - number of threads to keep in pool, even if idle
 	 * @param executionLimit MaximumPoolSize - 
 	 */
 	public void init(int maxThreads, int executionLimit) {
 		FactoryThreadsLimit ftl = executor.get("SYSTEMSYNC");
 		if( ftl != null ) {
-			ftl.exs.shutdownNow();
-			executor.remove(ftl.group);
+			//ftl.exs.shutdownNow();
+			//executor.remove(ftl.group);
+			System.out.println("Default group SYSTEMSYNC already initialized, use reinit to alter.");
+			return;
 		}
 		DaemonThreadFactory dtf = new DaemonThreadFactory("SYSTEMSYNC");
 		ExecutorService tpx = new ExtendedExecutor(maxThreads, executionLimit, new LinkedBlockingQueue<Runnable>(), dtf);

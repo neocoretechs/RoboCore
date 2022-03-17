@@ -9,11 +9,39 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.OdroidC1Pin;
 import com.pi4j.io.gpio.Pin;
 import com.pi4j.io.gpio.PinMode;
+import com.pi4j.io.gpio.PinState;
+import com.pi4j.platform.Platform;
+import com.pi4j.platform.PlatformAlreadyAssignedException;
+import com.pi4j.platform.PlatformManager;
 import com.pi4j.util.CommandArgumentParser;
-
+/**
+ * If we are not using the default Raspberry Pi platform, we should
+ * explicitly assign the platform as the Odroid platform.<p/>
+ * Note that some pins, such as pin 7, will give a device not found or device busy runtime exception
+ * when provisioning. These pins are, for whatever reason, inaccessible even with command line tools.<p/>
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
+ *
+ */
 public class Pins {
-	public static final GpioController gpioController = GpioFactory.getInstance();
+	public static boolean DEBUG = true;
+	public static GpioController gpioController = null;
+	/**
+	 * Get the logical pin from the physical header pin
+	 * @param pin
+	 * @return
+	 */
 	public static Pin getPin(int pin) {
+		if(gpioController == null) {
+			try {
+				PlatformManager.setPlatform(Platform.ODROID);
+			} catch (PlatformAlreadyAssignedException e) {
+				throw new RuntimeException(e);
+			}
+			gpioController = GpioFactory.getInstance();
+		}
+		//Pin[] allPins = OdroidC1Pin.allPins();
+		//for(Pin p: allPins)
+			//System.out.println("Pin "+p);
 		Pin pipin = null;
 	    // ####################################################################
         //
@@ -22,8 +50,7 @@ public class Pins {
         //
         // ####################################################################
 		switch(pin) {
-        // by default we will use gpio pin #01; however, if an argument
-        // has been provided, then lookup the pin by address
+        // lookup the pin by address
 			case 0:
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
@@ -123,10 +150,18 @@ public class Pins {
 		}
 		return pipin;
 	}
-	
+	/**
+	 * Assign pin as output
+	 * @param pin
+	 * @return
+	 */
 	public static GpioPinDigitalOutput assignPin(int pin) {
-		GpioPinDigitalOutput opin = Pins.gpioController.provisionDigitalOutputPin(getPin(pin),String.valueOf(pin));
-		opin.setMode(PinMode.DIGITAL_OUTPUT);
+		Pin xpin = getPin(pin);
+		GpioPinDigitalOutput opin = gpioController.provisionDigitalOutputPin(xpin,String.valueOf(pin),PinState.LOW);
+		//opin.setMode(PinMode.DIGITAL_OUTPUT);
+		opin.setShutdownOptions(false, PinState.LOW);
+		if(DEBUG)
+			System.out.printf("Pins.assignPin output pin set %d to %s%n", pin, opin);
 		return opin;
 	}
 	
@@ -135,14 +170,25 @@ public class Pins {
 	}
 	
 	public static GpioPinDigitalInput assignInputPin(int pin) {
-		GpioPinDigitalInput ipin = Pins.gpioController.provisionDigitalInputPin(getPin(pin),String.valueOf(pin));
-		ipin.setMode(PinMode.DIGITAL_INPUT);
+		Pin xpin = getPin(pin);
+		GpioPinDigitalInput ipin = gpioController.provisionDigitalInputPin(xpin,String.valueOf(pin));
+		//ipin.setMode(PinMode.DIGITAL_INPUT);
+		if(DEBUG)
+			System.out.printf("Pins.assignInputPin input pin set %d to %s%n", pin, ipin);
 		return ipin;
 	}
 	
 	public static GpioPinAnalogInput assignAnalogInputPin(int pin) {
 			Pin pipin = null;
 			GpioPinAnalogInput apin;
+			if(gpioController == null) {
+				try {
+					PlatformManager.setPlatform(Platform.ODROID);
+				} catch (PlatformAlreadyAssignedException e) {
+					throw new RuntimeException(e);
+				}
+				gpioController = GpioFactory.getInstance();
+			}
 			switch(pin) {
 				case 39:
 					pipin = CommandArgumentParser.getPin(
@@ -159,7 +205,9 @@ public class Pins {
 				default:
 					throw new RuntimeException("Analog pin values limited to 39, 40 for AIN1, AIN0");
 			}
-			apin.setMode(PinMode.ANALOG_INPUT);
+			//apin.setMode(PinMode.ANALOG_INPUT);
+			if(DEBUG)
+				System.out.printf("Pins.assignAnalogInputPin input pin set %d to %s%n", pin, apin);
 			return apin;
 	}
 }

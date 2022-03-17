@@ -183,7 +183,7 @@ public class MarlinspikeManager {
 		if(DEBUG)
 			System.out.printf("%s.activateMarlinspikes preparing to initialize %s%n",this.getClass().getName(), ndd);
 		AsynchDemuxer asynchDemuxer = new AsynchDemuxer(this);
-		if(ndd.getDevice().equals("MarlinspikePort"))
+		if(ndd.getDevice().equals("MarlinspikeDataPort"))
 			asynchDemuxer.connect(new MarlinspikeDataPort());
 		else
 			asynchDemuxer.connect(new ByteSerialDataPort(ndd.getDevice()));

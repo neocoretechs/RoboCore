@@ -66,6 +66,8 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	}
 	
 	public void attachInterrupt(int pin, InterruptService userFunc, PinState mode) {
+		if(pin >= PCintMode.length)
+			throw new RuntimeException("Pin number "+pin+" out of range to provision as digital input to attach interrupt, are you trying to attach a digital pin state to an analog pin?");
 		PCintMode[pin] = mode;
 		Pin pipin = Pins.getPin(pin);
 		PCintFunc.put(pipin,userFunc);
