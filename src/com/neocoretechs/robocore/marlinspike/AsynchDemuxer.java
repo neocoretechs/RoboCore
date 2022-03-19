@@ -767,8 +767,9 @@ public class AsynchDemuxer implements Runnable {
 	@Override
 	public void run() {
 		// spin another worker thread to take queued write requests and send them on to the Marlinspike
-		// Take requests from write queue and send them to the serial port of marlinspike. Wait for the same
-		// response as request to be ack from our corresponding retrieveData with a notifyAll on mutexWrite.
+		// Take requests from write queue and send them to the serial port of marlinspike or the queue of
+		// the waiting MarlinspikeDataPort thread. Wait for the same
+		// response as request to be ack from our corresponding retrieveData with a barrier synch on mutexWrite.
 		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			@Override
 			public void run() {
@@ -799,8 +800,10 @@ public class AsynchDemuxer implements Runnable {
 					e.printStackTrace();
 				}
 			}	
-		}, dataPort.getPortName());
-		// spin another worker thread to take Marlinspike lines from circular blocking deque and demux them
+		}, dataPort.getPortName()); // transmit data to dataport thread
+		
+		// spin another worker thread to take Marlinspike lines from circular blocking deque and demux them.
+		// this will process the responses from the dataport that have placed on the deque.
 		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			String line,fop;
 			@Override
@@ -870,17 +873,29 @@ public class AsynchDemuxer implements Runnable {
 					}
 				}
 			}
-		},dataPort.getPortName());	
+		},dataPort.getPortName());	// process data received from dataport thread
 
+		// Read responses from dataport and add them to processing queue
 		while(shouldRun) {
-			String line = dataPort.readLine();
-			boolean overwrite = marlinLines.add(line);
-			if(overwrite)
-				System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+			try {
+				String line = dataPort.readLine();
+				boolean overwrite = marlinLines.add(line);
+				if(overwrite)
+					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
 						" RESPONSE FROM PORT "+dataPort.getPortName()+" WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
-			if(DEBUG)
-				System.out.println(this.getClass().getName()+" main read loop readLine:"+line);
-		} // shouldRun
+				mutexWrite.await(RESPONSE_WAIT_MS, TimeUnit.MILLISECONDS);
+				if(DEBUG)
+					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+line);
+			} catch (TimeoutException | InterruptedException | BrokenBarrierException e) {
+				if(DEBUG || PORTDEBUG)
+					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+						" NO RESPONSE IN TIME FROM PORT "+dataPort.getPortName());
+			} finally {
+				mutexWrite.reset();
+				if(DEBUG)
+					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" reset");
+			}
+		} // receive data from dataport thread
 
 	}
 	

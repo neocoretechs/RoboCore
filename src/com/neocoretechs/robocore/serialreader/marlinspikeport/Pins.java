@@ -190,7 +190,7 @@ public class Pins {
 				gpioController = GpioFactory.getInstance();
 			}
 			switch(pin) {
-				case 39:
+				case 37:
 					pipin = CommandArgumentParser.getPin(
 			                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 			                OdroidC1Pin.AIN1);  // default pin if no pin argument found
@@ -203,7 +203,7 @@ public class Pins {
 					apin =  gpioController.provisionAnalogInputPin(pipin, String.valueOf(pin));
 					break;
 				default:
-					throw new RuntimeException("Analog pin values limited to 39, 40 for AIN1, AIN0");
+					throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0, but got pin:"+pin);
 			}
 			//apin.setMode(PinMode.ANALOG_INPUT);
 			if(DEBUG)

@@ -6,22 +6,17 @@ import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
 /**
- * The MEGA control endpoint that controls serial data.
+ * The realtime control endpoint.<p/>
  * The 2 critical elements that must be provided to sustain the operations of this class are;
  * 1.) An {@code AsynchDemuxer} asynchronous demuxxer that can process the messages coming from 
- * the Marlinspike realtime subsystem.
+ * the Marlinspike realtime subsystem.<p/>
  * 2.) A {@code DataportInterface} source of data to be demuxxed.
  * The data port also serves, when writable, to receive directives that initiate responses to be demuxxed.<p/>
- * This class talks to the serial drivers that communicate with the attached USB SBC. 
- * In fact, this is code that talks to the
- * RS232 board that converts to TTL that talks to the SBC that runs the embedded code that manages
- * the comm to the motor controller in the Marlinspike realtime subsystem, for example.<p/>
- * The relevant methods generate Twist messages that can be multiplexed to the Ros bus
- * and sent further on.
- * Increasing levels of complexity of motion control with options to move in polar arcs, set absolute speeds, etc.
- * Absolute and relative motion with the fusion of IMU data if desired.
+ * This class talks to the serial drivers that communicate with the attached USB SBC  
+ * that runs the embedded code that manages the motor controller in the Marlinspike realtime subsystem.<p/>
+ * Alternatively, a MarlinspikeDataPort may substitute for an attached SBC. The MarlinspikeDataPort uses the
+ * GPIO functions under Linux SBC and the header attached to the board serving the Ros node.<p/>
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2020
- *
  */
 public class MarlinspikeControl implements MarlinspikeControlInterface {
 	public static boolean DEBUG = false;

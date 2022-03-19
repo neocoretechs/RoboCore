@@ -42,15 +42,23 @@ public class NodeDeviceDemuxer implements Serializable {
 	public MarlinspikeControlInterface getMarlinspikeControl() {
 		return controlHost;
 	}
-	
+	/**
+	 * Get the {@link AsynchDemuxer} that services this NodeDeviceDemuxer
+	 */
 	public AsynchDemuxer getAsynchDemuxer() {
 		return asynchDemuxer;
 	}
-	
+	/**
+	 * Set the {@link AsynchDemuxer} that services this NodeDeviceDemuxer
+	 * @param asynchDemuxer
+	 */
 	protected void setAsynchDemuxer(AsynchDemuxer asynchDemuxer) {
 		this.asynchDemuxer = asynchDemuxer;
 	}
-	
+	/**
+	 * The node name of the computer we are operating upon.
+	 * @return
+	 */
 	public String getNodeName() {
 		return nodeName;
 	}
@@ -61,14 +69,19 @@ public class NodeDeviceDemuxer implements Serializable {
 		return deviceName;
 	}
 	/**
-	 * @return The physical device descriptor, such as /dev/ttyACM0.
+	 * @return The physical device descriptor, such as /dev/ttyACM0 or MarlinspikeDataPort.
 	 */
 	public String getDevice() {
 		return device;
 	}
-	
+	/**
+	 * Add the parameter to the startup collection, if the entry already exists, reject it such that
+	 * all entries are unique. There is currently no known use case where a duplicate startup directive needs issued.
+	 * @param init
+	 */
 	public void addInit(String init) {
-		startup.add(init);
+		if(!startup.contains(init))
+			startup.add(init);
 	}
 	
 	public void init() throws IOException {

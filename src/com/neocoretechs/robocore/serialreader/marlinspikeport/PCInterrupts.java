@@ -45,7 +45,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	public void attachInterrupt(int pin, InterruptService userFunc, double value) {
 		Pin pipin = null;
 		switch(pin) {
-			case 39:
+			case 37:
 				PCintValue[1] = value;
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
@@ -60,7 +60,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 				apins[0] = gpio.provisionAnalogInputPin(pipin, String.valueOf(pin));
 				break;
 			default:
-				throw new RuntimeException("Analog pin values limited to 39, 40 for AIN1, AIN0");
+				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to attach interrupt, but got pin:"+pin);
 		}
 		PCintFunc.put(pipin,userFunc);	
 	}
@@ -84,7 +84,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	public void detachAnalogInterrupt(int pin) {
 		Pin pipin = null;
 		switch(pin) {
-			case 39:
+			case 37:
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.AIN1);  // default pin if no pin argument found
@@ -97,7 +97,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 				apins[0] = null;
 				break;
 			default:
-				throw new RuntimeException("Analog pin values limited to 39, 40 for AIN1, AIN0");
+				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to detach interrupt, but got pin:"+pin);
 		}
 		PCintFunc.remove(pipin);	
 	}
