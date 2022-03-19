@@ -76,7 +76,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		//	p = MAXMOTORPOWER;
 		//if( MOTORPOWERSCALE != 0 )
 		//	p /= MOTORPOWERSCALE;
-		motorSpeed[ch-1] = p;
+		setMotorSpeed(ch, p);
 			
 		if( p < 0 )  // and we want to go backward
 				currentDirection[ch-1] = 0; // set new direction value

@@ -92,6 +92,7 @@ public class SplitBridgeDriver extends HBridgeDriver {
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return 0;
+		setMotorSpeed(channel, motorPower);
 		int pwmIndex = motorDrive[channel][0]; // index to PWM array
 		int dirPinIndex = motorDrive[channel][1]; // index to dir pin array
 		//int freq = motorDrive[channel][2]; // value of freq, no index;

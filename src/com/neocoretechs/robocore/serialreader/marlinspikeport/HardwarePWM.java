@@ -58,8 +58,13 @@ public abstract class HardwarePWM {
 			throw new RuntimeException(e);
 		}
 	}
+	public abstract void enable(boolean enable) throws IOException;
+	public abstract void freq(int hZ) throws IOException;
 	public abstract void pwmWrite(int val) throws IOException;
-	public void pwmOff() throws IOException { pwmWrite(0); };
+	public void pwmOff() throws IOException {
+		enable(false);
+		pwmWrite(0); 
+	};
 	public abstract void setCounter(int cntx);
 	public abstract int getCounter();
 	public abstract void digitalWrite(int val) throws IOException;

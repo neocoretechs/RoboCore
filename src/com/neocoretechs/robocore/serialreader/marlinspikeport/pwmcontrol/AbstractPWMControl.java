@@ -47,13 +47,13 @@ public abstract class AbstractPWMControl {
 	protected int[] pwmLevel = new int[]{0,0,0,0,0,0,0,0,0,0};
 	protected int[] minPWMLevel = new int[]{0,0,0,0,0,0,0,0,0,0}; // Offset to add to G6, use with care, meant to compensate for electrical differences
 	protected int PWMPOWERSCALE = 0; // scale, divisor for PWM level to reduce 0-1000 scale if non zero
-	protected int PWMSHUTDOWN = 0; // Override of PWM controls, puts it in irons
+	protected boolean PWMSHUTDOWN = false; // Override of PWM controls, puts it in irons
 	protected int fault_flag = 0;
 	//functions
 	public void setDuration(int ch, int durx) { maxPWMDuration[ch-1] = durx; }
 	public void setPWMLevel(int ch, int lvl) { pwmLevel[ch-1] = lvl; }
 	public void setMinPWMLevel(int ch, int mpow) { minPWMLevel[ch-1] = mpow;}
-	public abstract int commandPWMLevel(int ch, int p);
+	public abstract int commandPWMLevel(int ch, int p) throws IOException;
 	public abstract int commandEmergencyStop(int status) throws IOException;
 	protected abstract int isConnected();
 	public abstract String getDriverInfo(int ch);
@@ -66,8 +66,8 @@ public abstract class AbstractPWMControl {
 	protected void setChannels(int ch) { channels = ch; }
 	public int getChannels() { return channels; }
 	protected abstract void resetLevels();
-	public void setPWMShutdown() throws IOException { commandEmergencyStop(1); PWMSHUTDOWN = 1;}
-	public void setPWMRun() throws IOException { commandEmergencyStop(0); PWMSHUTDOWN = 0;}
-	protected int getPWMShutdown() { return PWMSHUTDOWN; }
+	public void setPWMShutdown() throws IOException { commandEmergencyStop(1); PWMSHUTDOWN = true;}
+	public void setPWMRun() throws IOException { commandEmergencyStop(0); PWMSHUTDOWN = false;}
+	protected boolean getPWMShutdown() { return PWMSHUTDOWN; }
 	public void setPWMPowerScale(int p) { PWMPOWERSCALE = p; }
 }

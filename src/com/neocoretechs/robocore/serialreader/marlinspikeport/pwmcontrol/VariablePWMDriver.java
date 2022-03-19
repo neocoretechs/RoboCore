@@ -5,6 +5,7 @@ import java.io.IOException;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
+import com.pi4j.io.gpio.PinMode;
 
 /**
 * VariablePWMDriver
@@ -81,9 +82,53 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	}	
 	
 	@Override
-	public int commandPWMLevel(int ch, int p) {
-		// TODO Auto-generated method stub
-	return 0;
+	/**
+	 * Command the driver power level. Manage enable pin. If necessary limit min and max power and
+	 * scale to the SCALE if > 0. After calculation and saved values in the 0-2000 range scale it to 0-255 for 8 bit PWM.
+	 * Instead of our -1000 to 1000 range from stick we change it to 0-2000 by adding 1000 since no reverse is relevant.
+	 * In the case of Ps3 controller the axis will have the zero point of the stick as halfway, and full stick back
+	 * as 0, in the case of a trigger, the output is from -1 to 1 with no output being -1, so it will function as desired and expected.
+	 * Each channel is a PWM driven device.
+	 * @throws IOException 
+	 */
+	public int commandPWMLevel(int pwmChannel, int pwmPower) throws IOException {
+		// check shutdown override
+		if( PWMSHUTDOWN )
+			return 0;
+		boolean foundPin = false;
+		pwmPower += 1000;
+		pwmLevel[pwmChannel-1] = pwmPower;
+		// get mapping of channel to pin
+		int ePin = getPWMEnablePin(pwmChannel);
+		if(pdigitals[ePin] != null  ) {
+				pdigitals[ePin].setMode(PinMode.DIGITAL_OUTPUT);
+				pdigitals[ePin].high();
+				foundPin = true;
+		}
+		if(!foundPin) {
+			return commandEmergencyStop(7);
+		}                                                                                                                                                     
+		// scale motor power from 0-2000 to our 0-255 8 bit timer val
+		pwmPower /= 8;
+		//
+		if( pwmPower != 0 && pwmPower < minPWMLevel[pwmChannel-1])
+			pwmPower = minPWMLevel[pwmChannel-1];
+		if( pwmPower > MAXPWMLEVEL ) // cap it at max
+			pwmPower = MAXPWMLEVEL;
+		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
+		if( PWMPOWERSCALE != 0 )
+			pwmPower /= PWMPOWERSCALE;
+		//
+		// find the PWM pin and get the object we set up in M3 to write to power level
+		int timer_freq = pwmDrive[pwmChannel-1][3]; // timer resolution in bits from M3
+		// element 0 of motorDrive has index to PWM array
+		int pindex = pwmDrive[pwmChannel-1][0];
+		// writing power 0 sets mode 0 and timer turnoff
+		ppwms[pindex].init(ppwms[pindex].pin, timer_freq);
+		//ppwms[pindex]->attachInterrupt(motorDurationService[motorChannel-1]);// last param TRUE indicates an overflow interrupt
+		ppwms[pindex].pwmWrite(pwmPower);
+		fault_flag = 0;
+		return 0;
 	}
 
 	@Override
@@ -110,8 +155,10 @@ public class VariablePWMDriver extends AbstractPWMControl {
 
 	@Override
 	public String getDriverInfo(int ch) {
-		// TODO Auto-generated method stub
-		return null;
+		if( pwmDrive[ch-1][0] == 255 ) {
+			return String.format("Variable-PWM UNINITIALIZED Channel %d%n",ch);
+		}
+		return String.format("Variable-PWM Channel %d Pin:%d, Dir Pin:%s%n",ch, ppwms[pwmDrive[ch-1][0]].pin, pdigitals[pwmDrive[ch-1][0]].getPin());	
 	}
 
 	@Override
@@ -121,8 +168,16 @@ public class VariablePWMDriver extends AbstractPWMControl {
 
 	@Override
 	protected void resetLevels() {
-		// TODO Auto-generated method stub
-
+		int pindex;
+		for(pindex = 0; pindex < channels; pindex++) {
+			if( ppwms[pindex] != null ) {
+					try {
+						ppwms[pindex].pwmWrite(0);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+			}
+		}
 	}
 
 }

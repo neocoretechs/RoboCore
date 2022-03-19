@@ -98,6 +98,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return 0;
+		setMotorSpeed(channel, motorPower);
 		int gioIndex = motorDrive[channel][0]; // index to gpio array
 		int dirPinIndex = motorDrive[channel][1]; // index to dir pin array
 		//int freq = motorDrive[channel][2]; // value of freq, no index;

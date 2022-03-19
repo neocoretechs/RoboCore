@@ -70,7 +70,7 @@ public abstract class AbstractMotorControl {
 	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[channels]; // encoder service
 	protected PCInterrupts[] wheelEncoder = new PCInterrupts[channels];
 	protected int MOTORPOWERSCALE = 0; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
-	protected boolean MOTORSHUTDOWN = true; // Override of motor controls, puts it up on blocks
+	protected boolean MOTORSHUTDOWN = false; // Override of motor controls, puts it up on blocks
 	protected int MAXMOTORPOWER = 1000; // Max motor power in PWM final timer units
 	protected int fault_flag = 0;
 	public abstract int commandMotorPower(int ch, int p) throws IOException;//make AbstractMotorControl not instantiable
@@ -185,7 +185,10 @@ public abstract class AbstractMotorControl {
 	public int getMinMotorPower(int ch) { return minMotorPower[ch-1] ; }
 	public int getMaxMotorPower() { return MAXMOTORPOWER; }
 	public void setMaxMotorPower(int p) { MAXMOTORPOWER = p; }
-	public void setMotorSpeed(int ch, int speed) { motorSpeed[ch-1] = speed;};
+	public void setMotorSpeed(int ch, int speed) {
+		MOTORSHUTDOWN = false;
+		motorSpeed[ch-1] = speed;
+	}
 	public int getMotorSpeed(int ch) { return motorSpeed[ch-1]; }
 	public int getCurrentDirection(int ch) { return currentDirection[ch-1]; }
 	public int getDefaultDirection(int ch) { return defaultDirection[ch-1]; }

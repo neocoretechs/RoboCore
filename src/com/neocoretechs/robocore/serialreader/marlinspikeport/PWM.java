@@ -14,6 +14,8 @@ import java.io.IOException;
  *
  */
 public class PWM extends HardwarePWM {
+	public static boolean DEBUG = true;
+	private boolean enabled = false;
 	
 	public PWM(int pin) {
 		super(pin);
@@ -37,6 +39,7 @@ public class PWM extends HardwarePWM {
 	}
 	
 	public synchronized void enable(boolean enable) throws IOException {
+		enabled = enable;
 		switch(pin) {
 			case 19:
 				pwmEnable1.writeBytes(enable ? "1" : "0");
@@ -71,6 +74,8 @@ public class PWM extends HardwarePWM {
 
 	@Override
 	public synchronized void pwmWrite(int val) throws IOException {
+		if(!enabled)
+			enable(true);
 		switch(pin) {
 			case 19:
 				pwmDuty1.writeBytes(String.valueOf(val));
@@ -84,6 +89,8 @@ public class PWM extends HardwarePWM {
 				System.out.println("Must specify 19 or 33 for hardware PWM write!");
 				return;
 		}
+		if(DEBUG)
+			System.out.printf("%s pwmWrite pin %d value %d%n", this.getClass().getName(), pin, val);
 	}
 
 

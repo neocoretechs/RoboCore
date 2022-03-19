@@ -55,6 +55,7 @@ public class Pins {
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.GPIO_00);  // default pin if no pin argument found
+				break;
 			case 1:
 				pipin = CommandArgumentParser.getPin(
 						OdroidC1Pin.class,    // pin provider class to obtain pin instance from

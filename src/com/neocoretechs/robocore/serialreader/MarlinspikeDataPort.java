@@ -161,7 +161,7 @@ import com.pi4j.io.gpio.PinState;
 * @author: Jonathan Neville Groff  Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements Runnable, DataPortInterface {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	public static int DEFAULT_PWM_FREQUENCY = 10000;
 	public static int MAX_MOTOR_POWER = 1000;
 	CircularBlockingDeque<String> inDeque = new CircularBlockingDeque<String>(1);
@@ -448,6 +448,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		return false;
 	}
 
+	void queueResponse(String response) {
+		if(DEBUG)
+			System.out.printf("%s queuing response:%s size:%d%n", this.getClass().getName(), response, outDeque.length());
+		outDeque.addLast(response);
+	}
+	
 	/**
 	 * Process command line
 	 */
@@ -488,7 +494,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					e.printStackTrace();
 				}
 		      }
-			  outDeque.add(String.format("%sG4%s%n",MSG_BEGIN,MSG_TERMINATE));
+			  queueResponse(String.format("%sG4%s%n",MSG_BEGIN,MSG_TERMINATE));
 		      break;
 			  
 			case 5: // G5 - Absolute command motor [Z<controller>] C<Channel> [P<motor power -1000 to 1000>] [X<PWM power -1000 to 1000>(scaled 0-2000)]
@@ -502,9 +508,9 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 							motorPower = (int) code_value(); // motor power -1000,1000
 							fault = 0; // clear fault flag
 							if( (status=motorControl[motorController].commandMotorPower(motorChannel, motorPower)) != 0) {
-								outDeque.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_MOTOR,status,motorChannel,motorPower,MSG_TERMINATE));
+								queueResponse(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_MOTOR,status,motorChannel,motorPower,MSG_TERMINATE));
 							} else {
-								outDeque.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
 						} else {// code P or X
 							if(code_seen('X')) {
@@ -512,9 +518,9 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								fault = 0; // clear fault flag
 								// use motor related index and value, as we have them
 								if( (status=pwmControl[motorController].commandPWMLevel(motorChannel, PWMLevel)) != 0) {
-									outDeque.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,motorChannel,PWMLevel,MSG_TERMINATE));
+									queueResponse(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,motorChannel,PWMLevel,MSG_TERMINATE));
 								} else {
-									outDeque.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
+									queueResponse(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
 								}
 							} // code X
 						}
@@ -526,7 +532,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if( code_seen('T') ) {
 					//int time_val = (int) code_value();
 					//watchdog_timer = new WatchdogTimer();
-					outDeque.add(String.format("%sG99%s%n",MSG_BEGIN,MSG_TERMINATE));
+					queueResponse(String.format("%sG99%s%n",MSG_BEGIN,MSG_TERMINATE));
 					//watchdog_timer.watchdog_init(time_val);
 				}
 				break;
@@ -535,11 +541,11 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				//if( watchdog_timer != null ) {
 				//	watchdog_timer.watchdog_reset();
 				//}
-				outDeque.add(String.format("%sG100%s%n",MSG_BEGIN,MSG_TERMINATE));
+				queueResponse(String.format("%sG100%s%n",MSG_BEGIN,MSG_TERMINATE));
 				break;
 				
 			default:
-				outDeque.add(String.format("%s%s%s%s%n",MSG_BEGIN,MSG_UNKNOWN_GCODE,cmdbuffer,MSG_TERMINATE));
+				queueResponse(String.format("%s%s%s%s%n",MSG_BEGIN,MSG_UNKNOWN_GCODE,cmdbuffer,MSG_TERMINATE));
 				break;		
 		} // switch
 	}
@@ -556,12 +562,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		switch( cval ) {
 			case 0: // M0 - Set real time output off
 				realtime_output = false;
-				outDeque.add(String.format("%sM0%s%n",MSG_BEGIN,MSG_TERMINATE));
+				queueResponse(String.format("%sM0%s%n",MSG_BEGIN,MSG_TERMINATE));
 				break;
 				
 			case 1: // M1 - Set real time output on 
 				realtime_output = true;
-				outDeque.add(String.format("%sM1%s%n",MSG_BEGIN,MSG_TERMINATE));
+				queueResponse(String.format("%sM1%s%n",MSG_BEGIN,MSG_TERMINATE));
 				break;
 				
 			//CHANNEL 1-10, NO CHANNEL ZERO!	
@@ -581,7 +587,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					if(code_seen('E')) {
 						motorControl[motorController].setDefaultDirection(channel, (int) code_value());
 					}
-					outDeque.add(String.format("%sM2%s%n",MSG_BEGIN,MSG_TERMINATE));
+					queueResponse(String.format("%sM2%s%n",MSG_BEGIN,MSG_TERMINATE));
 	
 				}
 				break;
@@ -648,7 +654,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				}
-				outDeque.add(String.format("%sM3%s%n",MSG_BEGIN,MSG_TERMINATE));
+				queueResponse(String.format("%sM3%s%n",MSG_BEGIN,MSG_TERMINATE));
 			   } // code_seen['C']
 		      } // if motorControl[motorController]
 			  break;
@@ -714,7 +720,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				  if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				  }
-				  outDeque.add(String.format("%sM4%s%n",MSG_BEGIN,MSG_TERMINATE));
+				  queueResponse(String.format("%sM4%s%n",MSG_BEGIN,MSG_TERMINATE));
 				} // code C
 				} //motorcontrol[motorcontroller]
 				break;
@@ -766,7 +772,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						  if(encode_pin != 0) {
 							  motorControl[motorController].createEncoder(channel, encode_pin);
 						  }
-						  outDeque.add(String.format("%sM5%s%n",MSG_BEGIN,MSG_TERMINATE));
+						  queueResponse(String.format("%sM5%s%n",MSG_BEGIN,MSG_TERMINATE));
 					  } // code C
 				  } //motorcontrol[motorcontroller]
 				break;
@@ -778,13 +784,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if( code_seen('S') ) {
 					if(motorControl[motorController] != null) {
 						motorControl[motorController].setMotorPowerScale((int) code_value());
-						outDeque.add(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				} else {
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
 							pwmControl[motorController].setPWMPowerScale((int) code_value());
-							outDeque.add(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
 						}
 					}
 				}
@@ -801,7 +807,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						outDeque.add(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				} else {
 					if(motorControl[motorController] != null) {
@@ -810,7 +816,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						outDeque.add(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				}
 				break;
@@ -826,7 +832,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						outDeque.add(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				} else {
 					if(motorControl[motorController] != null ) {
@@ -835,7 +841,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						outDeque.add(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				}
 				break;
@@ -879,7 +885,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
-					outDeque.add(String.format("%sM9%s%n",MSG_BEGIN,MSG_TERMINATE));
+					queueResponse(String.format("%sM9%s%n",MSG_BEGIN,MSG_TERMINATE));
 				 }
 				}
 				break;
@@ -905,7 +911,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								} catch (IOException e) {
 									e.printStackTrace();
 								}
-								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							case 1: // type 1 Hbridge
 								// up to 10 channels, each channel has a direction pin (1), and a PWM pin (0)
@@ -926,7 +932,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 									motorControl[motorController] = null; // in case assignment below fails
 								}
 								motorControl[motorController] = new HBridgeDriver(MAX_MOTOR_POWER);
-								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							case 2: // type 2 Split bridge, each channel has 2 PWM pins and an enable pin, so up to 5 channels
 								if(motorControl[motorController] != null) {
@@ -951,7 +957,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 										motorControl[motorController] = null; // in case assignment below fails
 								}
 								motorControl[motorController] = new SplitBridgeDriver(MAX_MOTOR_POWER);
-								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							case 3: // type 3 Switch bridge, each channel has 2 PWM pins and an enable pin, so up to 5 channels
 								if(motorControl[motorController] != null) {
@@ -975,7 +981,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 									motorControl[motorController] = null; // in case assignment below fails
 								}
 								motorControl[motorController] = new SwitchBridgeDriver();
-								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							case 4: // Type 4 non-propulsion PWM driver 
 								if(pwmControl[motorController] != null) {
@@ -995,18 +1001,18 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 									motorControl[motorController] = null; // in case assignment below fails
 								}
 								pwmControl[motorController] = new VariablePWMDriver();
-								outDeque.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								break;
 							default:
-								outDeque.add(String.format("%sBAD CONTROLLER TYPE:%d%s%n",MSG_BEGIN,controllerType,MSG_TERMINATE));
+								queueResponse(String.format("%sBAD CONTROLLER TYPE:%d%s%n",MSG_BEGIN,controllerType,MSG_TERMINATE));
 								break;
 						}
 					} else {
-						outDeque.add(String.format("%sBAD CONTROLLER TYPE:CONTROLLER TYPE DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sBAD CONTROLLER TYPE:CONTROLLER TYPE DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
 						break;
 					}			
 				} else {
-					outDeque.add(String.format("%sBAD CONTROLLER TYPE:CONTROLLER SLOT DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
+					queueResponse(String.format("%sBAD CONTROLLER TYPE:CONTROLLER SLOT DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
 				}
 				break;
 				
@@ -1022,13 +1028,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
 							pwmControl[motorController].setDuration(channel, (int)code_value());
-							outDeque.add(String.format("%sM11%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM11%s%n",MSG_BEGIN,MSG_TERMINATE));
 						}
 					} else {
 						if(code_seen('D')) {
 							if(motorControl[motorController] != null) {
 								motorControl[motorController].setDuration(channel, (int)code_value());
-								outDeque.add(String.format("%s M11%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%s M11%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
 						}
 					}
@@ -1047,13 +1053,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
 							pwmControl[motorController].setMinPWMLevel(channel, (int)code_value());
-							outDeque.add(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
 						}
 					} else {
 						if( code_seen('P')) {
 							if(motorControl[motorController] != null) {
 								motorControl[motorController].setMinMotorPower(channel, (int)code_value());
-								outDeque.add(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
 						}
 					}
@@ -1067,12 +1073,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				if( code_seen('P') ) {
 				  if(motorControl[motorController] != null) {
 					  motorControl[motorController].setMaxMotorPower((int)code_value());
-					  outDeque.add(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  queueResponse(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
 				  } else {
 					  if(code_seen('X')) {
 						  if(pwmControl[motorController] != null) {
 							  pwmControl[motorController].setMaxPWMLevel((int)code_value());
-							  outDeque.add(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+							  queueResponse(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
 						  }
 					  }
 				  }
@@ -1099,18 +1105,18 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						}
 						Ultrasonic psonics = new Ultrasonic();
 						motorControl[motorController].linkDistanceSensor( pin_number, (Ultrasonic)psonics, dist, dir_face);
-						outDeque.add(String.format("%sM33%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sM33%s%n",MSG_BEGIN,MSG_TERMINATE));
 					} // code_seen = 'P'
 				}
 			  break;
 			  
 			  case 35: //M35 - Clear all digital pins
-				outDeque.add(String.format("%sM35%s%n",MSG_BEGIN,MSG_TERMINATE));
+				queueResponse(String.format("%sM35%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  break;
 			  
 			  case 36: //M36 - Clear all analog pins
 					//Pins.unassignPins();
-				  	outDeque.add(String.format("%sM36%s%n",MSG_BEGIN,MSG_TERMINATE));
+				  	queueResponse(String.format("%sM36%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  break;
 			  
 			  case 37: //M37 - Clear all PWM pins, ALL MOTOR AND PWM DISABLED, perhaps not cleanly
@@ -1123,7 +1129,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				  }
 				}
 				*/
-				outDeque.add(String.format("%sM37%s%n",MSG_BEGIN,MSG_TERMINATE));
+				queueResponse(String.format("%sM37%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  break;
 			  
 			  case 38: //M38  P<pin> - Remove PWM pin, MOTOR AND PWM DISABLED, perhaps not cleanly
@@ -1137,7 +1143,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								  //ppwms[i] = null;
 						  	  //} // pwms == pin_number
 					  	  //} // i iterate pwm array
-					  	outDeque.add(String.format("%sM38%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  	queueResponse(String.format("%sM38%s%n",MSG_BEGIN,MSG_TERMINATE));
 				  	 // } // unassign pin
 			  	  } // code P
 			  break;
@@ -1154,7 +1160,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 							   // break;
 						  	  //}
 					  	  //}
-					  	outDeque.add(String.format("%sM39%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  	queueResponse(String.format("%sM39%s%n",MSG_BEGIN,MSG_TERMINATE));
 				  	  //}
 			  	  }
 			  break;
@@ -1171,7 +1177,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 							      // break;
 						       //}
 					       //}
-					       outDeque.add(String.format("%sM40%s%n",MSG_BEGIN,MSG_TERMINATE));
+					       queueResponse(String.format("%sM40%s%n",MSG_BEGIN,MSG_TERMINATE));
 					   //}
 				   }
 			  break;
@@ -1188,7 +1194,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 							     break;
 						     }
 					 }
-					 outDeque.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
+					 queueResponse(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
 			     }
 			break;
 			     
@@ -1198,7 +1204,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		        pin_number = (int)code_value();
 				dpin = Pins.assignPin(pin_number);
 				dpin.low();
-					outDeque.add(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
+					queueResponse(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  }
 		     break;
 			 
@@ -1209,7 +1215,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
 				}
-				outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
+				queueResponse(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
 				break;
 				
 			 // PWM value between 0 and 255, default timer mode is 2; clear on match, default resolution is 8 bits, default prescale is 1
@@ -1243,7 +1249,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								e.printStackTrace();
 							}
 							ppwms[i] = ppin;
-							outDeque.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
 		      }
@@ -1254,7 +1260,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		        res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
-		          outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
+		          queueResponse(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
 				}
 		     break;
 			 
@@ -1268,13 +1274,13 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				   //if( res < digitarg ) { // result < threshold is 0 by default
 					//	   publishBatteryVolts(res);
 					//} else {
-						   outDeque.add(String.format("%sM47%s%n",MSG_BEGIN,MSG_TERMINATE));
+						   queueResponse(String.format("%sM47%s%n",MSG_BEGIN,MSG_TERMINATE));
 					//}
 			   }
 			 break;
 			 
 		     case 80: //
-		    	 outDeque.add(String.format("%sM80%s%n",MSG_BEGIN,MSG_TERMINATE));
+		    	 queueResponse(String.format("%sM80%s%n",MSG_BEGIN,MSG_TERMINATE));
 		    	 break;
 
 		     case 81: // M81 [Z<slot>] X - Turn off Power Z shut down motorcontroller in slot, X shut down PWM, slot -1 do all
@@ -1323,12 +1329,12 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					}
 				}
 			  }
-			  outDeque.add(String.format("%sM81%s%n",MSG_BEGIN,MSG_TERMINATE));
+			  queueResponse(String.format("%sM81%s%n",MSG_BEGIN,MSG_TERMINATE));
 			  break;
 
 			  
 		    case 115: // M115
-		    	outDeque.add(String.format("%s%s%s%s%s%s%s%n",MSG_BEGIN,MSG_M115_REPORT,MSG_DELIMIT,MSG_115_REPORT2,MSG_BEGIN,MSG_M115_REPORT,MSG_TERMINATE));
+		    	queueResponse(String.format("%s%s%s%s%s%s%s%n",MSG_BEGIN,MSG_M115_REPORT,MSG_DELIMIT,MSG_115_REPORT2,MSG_BEGIN,MSG_M115_REPORT,MSG_TERMINATE));
 		      break;
 			  
 			
@@ -1336,7 +1342,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 		      uspin = code_seen('P') ? (int)code_value() : 0;
 		      if (uspin > 0) {
 				Ultrasonic upin = new Ultrasonic(uspin);
-				outDeque.add(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_DELIMIT,upin,MSG_BEGIN,sonicCntrlHdr,MSG_TERMINATE));
+				queueResponse(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_DELIMIT,upin,MSG_BEGIN,sonicCntrlHdr,MSG_TERMINATE));
 		      }
 		    break;
 				
@@ -1347,7 +1353,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				for(int i = 0; i < 10; i++) {
 						if(psonics[i] != null) {
 							psonics[i] = new Ultrasonic(uspin);
-							outDeque.add(String.format("%sM301%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM301%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
 				}
@@ -1359,7 +1365,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						if(psonics[i] != null) {
 							//delete psonics[i];
 							psonics[i] = null;
-							outDeque.add(String.format("%sM302%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM302%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
 				}
@@ -1379,7 +1385,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 							//panalogs[i] = new Analog(uspin);
 							if(code_seen('U'))  {
 								//panalogs[i].pinMode(INPUT_PULLUP);
-								outDeque.add(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
+								queueResponse(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
 							break;
 						}
@@ -1388,7 +1394,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						//if(panalogs[i] && panalogs[i].pin == uspin) {
 							analogRanges[0][i] = code_seen('L') ? code_value() : 0;
 							analogRanges[1][i] = code_seen('H') ? code_value() : 0;
-							outDeque.add(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						//}
 					}
@@ -1415,7 +1421,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 								pdigitals[i].setMode(PinMode.DIGITAL_INPUT);
 							}
 							digitalTarget[i] = digitarg;
-							outDeque.add(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
+							queueResponse(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
 							break;
 						}
 					}
@@ -1423,7 +1429,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				//	for(int i = 0; i < 32; i++) {
 				//		if(pdigitals[i] && pdigitals[i].pin == uspin) {
 				//			digitalTarget[i] = digitarg;
-				//			outDeque.add(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
+				//			queueResponse(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
 				//			break;
 				//		}
 				//	}
@@ -1442,7 +1448,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 						} // default is 2, clear on match. to turn off, use 0 
 						//delete ppwms[i];
 						ppwms[i] = null;
-						outDeque.add(String.format("%sM445%s%n",MSG_BEGIN,MSG_TERMINATE));
+						queueResponse(String.format("%sM445%s%n",MSG_BEGIN,MSG_TERMINATE));
 						break;
 					}
 				}
@@ -1455,7 +1461,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append("M500");
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 		    break;
 			
 		    case 501: // M501 Read settings from EEPROM
@@ -1464,7 +1470,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append("M501");
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 		    break;
 			
 		    case 502: // M502 Revert to default settings
@@ -1473,7 +1479,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append("M502");
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 		    break;
 			
 		    case 503: // M503 print settings currently in memory
@@ -1498,7 +1504,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			  sb.append(MSG_BEGIN);
 			  sb.append(MSG_STATUS);
 			  sb.append(MSG_TERMINATE);
-			  outDeque.add(sb.toString());
+			  queueResponse(sb.toString());
 			  break; 
 			  
 			case 701: // Report digital pins in use
@@ -1516,7 +1522,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append(digitalPinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;
 				
 			case 702: // Report analog pins in use
@@ -1534,7 +1540,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;
 				
 			case 703: // Report ultrasonic pins in use
@@ -1553,7 +1559,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append(ultrasonicPinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;
 				
 			case 704: // Report PWM pins in use
@@ -1672,7 +1678,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append(pinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;
 				
 			case 798: // M798 Z<motor control> [X] Report controller status for given controller. If X, slot is PWM
@@ -1709,7 +1715,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_BEGIN);
 				sb.append(controllerStatusHdr);
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;	
 				
 			case 799: // M799 [Z<controller>][X] Reset controller, if no argument, reset all. If X, slot is PWM
@@ -1763,7 +1769,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 					sb.append(MSG_BEGIN);
 					sb.append("M799");
 					sb.append(MSG_TERMINATE);
-					outDeque.add(sb.toString());
+					queueResponse(sb.toString());
 				}
 				break;		
 				
@@ -1817,7 +1823,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(analogPinHdr);
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;				
 				
 		    case 999: // M999: Reset
@@ -1837,7 +1843,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
 				//watchdog_timer.watchdog_init(15); // 15 ms
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;
 				
 			default:
@@ -1846,7 +1852,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 				sb.append(MSG_UNKNOWN_MCODE);
 				sb.append(cmdbuffer);
 				sb.append(MSG_TERMINATE);
-				outDeque.add(sb.toString());
+				queueResponse(sb.toString());
 				break;
 			
 		  } // switch m code
@@ -1957,7 +1963,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			sb.append(motorFaultCntrlHdr);
 			sb.append(MSG_TERMINATE);
 			sb.append("\r\n");
-			outDeque.add(sb.toString());
+			queueResponse(sb.toString());
 		}
 		//
 		// Deliver the battery voltage from smart controller
@@ -1975,7 +1981,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			sb.append(batteryCntrlHdr);
 			sb.append(MSG_TERMINATE);
 			sb.append("\r\n");
-			outDeque.add(sb.toString());
+			queueResponse(sb.toString());
 		}
 		// **********************************************************************
 		// only call this if we know code is stall                              
@@ -1993,7 +1999,7 @@ public class MarlinspikeDataPort implements Runnable, DataPortInterface {
 			sb.append(motorFaultCntrlHdr);
 			sb.append(MSG_TERMINATE);
 			sb.append("\r\n");
-			outDeque.add(sb.toString());
+			queueResponse(sb.toString());
 		}
 
 		/**

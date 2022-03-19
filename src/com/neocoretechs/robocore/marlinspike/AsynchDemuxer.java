@@ -786,7 +786,7 @@ public class AsynchDemuxer implements Runnable {
 							mutexWrite.await(RESPONSE_WAIT_MS, TimeUnit.MILLISECONDS);
 							if(DEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+writeReq);
-						} catch (TimeoutException e) {
+						} catch (TimeoutException | BrokenBarrierException e) {
 							if(DEBUG || PORTDEBUG)
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
 										" NO RESPONSE FROM PORT "+dataPort.getPortName()+" IN TIME FOR DIRECTIVE:"+writeReq);
@@ -796,7 +796,7 @@ public class AsynchDemuxer implements Runnable {
 								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" reset");
 						}
 					}
-				} catch (IOException | BrokenBarrierException | InterruptedException e) {
+				} catch (IOException | InterruptedException e) {
 					e.printStackTrace();
 				}
 			}	
@@ -879,10 +879,10 @@ public class AsynchDemuxer implements Runnable {
 		while(shouldRun) {
 			try {
 				String line = dataPort.readLine();
-				boolean overwrite = marlinLines.add(line);
-				if(overwrite)
-					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-						" RESPONSE FROM PORT "+dataPort.getPortName()+" WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
+				/*boolean overwrite =*/ marlinLines.add(line);
+				//if(overwrite)
+				//	System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
+				//		" RESPONSE FROM PORT "+dataPort.getPortName()+" WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
 				mutexWrite.await(RESPONSE_WAIT_MS, TimeUnit.MILLISECONDS);
 				if(DEBUG)
 					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+line);
