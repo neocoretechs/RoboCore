@@ -53,6 +53,7 @@ import com.pi4j.io.gpio.PinState;
 * @author: Jonathan Groff Copyright (C) NeoCoreTechs 2022
 */
 public abstract class AbstractMotorControl {
+	private static boolean DEBUG = true;
 	public static int channels = 10;
 	// Ultrasonic arrays by channel:
 	private Ultrasonic[] usensor = new Ultrasonic[channels];
@@ -73,12 +74,15 @@ public abstract class AbstractMotorControl {
 	protected boolean MOTORSHUTDOWN = false; // Override of motor controls, puts it up on blocks
 	protected int MAXMOTORPOWER = 1000; // Max motor power in PWM final timer units
 	protected int fault_flag = 0;
+
 	public abstract int commandMotorPower(int ch, int p) throws IOException;//make AbstractMotorControl not instantiable
 	public abstract int commandEmergencyStop(int status) throws IOException;
 	public abstract int isConnected() throws IOException;
 	public abstract String getDriverInfo(int ch);
 	public abstract int queryFaultFlag();
 	public abstract int queryStatusFlag();
+	public abstract String getMotorFaultDescriptor(int fault);
+	public abstract String getMotorStatusDescriptor(int status);
 	public void linkDistanceSensor(int channel, Ultrasonic us, int distance, int facing) {
 		int i;
 		for(i = 0; i < channels; i++) {
@@ -100,12 +104,6 @@ public abstract class AbstractMotorControl {
 	 */
 	public boolean checkUltrasonicShutdown() throws IOException {
 		boolean shutdown = false;
-		for(int i = 0; i < channels; i++)
-			if( motorSpeed[i] != 0 ) {
-				break;
-			}
-		if( shutdown )
-			return shutdown;
 		// If we have a linked distance sensor. check range and possibly skip
 		// ultrasonicIndex corresponds to ultrasonic object pointer array, element 0 points to Ultrasonic array element
 		for(int i = 0; i < channels; i++) {
@@ -118,6 +116,8 @@ public abstract class AbstractMotorControl {
 				if( currentDirection[i] != 0 && ultrasonicIndex[i][1] != 0 ||
 					 currentDirection[i] == 0 && ultrasonicIndex[i][1] == 0 ) {
 					if( usensor[ultrasonicIndex[i][0]].getRange() < minMotorDist[i] ) {
+						if(DEBUG)
+							System.out.printf("%s Ultrasonic shutdown initiated with range:%d%n", this.getClass().getName(), usensor[ultrasonicIndex[i][0]].getRange());
 						//commandEmergencyStop();
 						shutdown = true;
 						break;
@@ -125,7 +125,7 @@ public abstract class AbstractMotorControl {
 				}
 			}
 		}
-		if( shutdown ) commandEmergencyStop(8);
+		//if( shutdown ) commandEmergencyStop(8);
 		return shutdown;
 	}
 	/**
@@ -148,17 +148,38 @@ public abstract class AbstractMotorControl {
 				  int cntxmd = wheelEncoderService[j].get_counter();
 				  if( cntxmd >= maxMotorDuration[j] ) {
 						commandEmergencyStop(10);
+						if(DEBUG)
+							System.out.printf("%s Encoder shutdown initiated with counter:%d%n", this.getClass().getName(), cntxmd);
 						return true;
 				  }
 			}
 		}
 		return false;
 	}
+	/**
+	 * Create an analog Pin Change counter encoder hardwired to trigger at 5.0v<p/>
+	 * The count will be based on the value in maxMotorDuration[channel-1]
+	 * @param channel
+	 * @param encode_pin
+	 */
 	public void createEncoder(int channel, int encode_pin) {
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
 		wheelEncoder[channel-1] = PCInterrupts.getInstance();
 		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 5.0); // trigger at 5v analog
 	}
+	/**
+	 * Create a digital Pin change counter encoder that triggers at the given pin state<p/>
+	 * The count will be based on the value in maxMotorDuration[channel-1]
+	 * @param channel
+	 * @param encode_pin
+	 * @param ps PinState.HIGH or PinState.LOW
+	 */
+	public void createDigitalEncoder(int channel, int encode_pin, PinState ps) {
+		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
+		wheelEncoder[channel-1] = PCInterrupts.getInstance();
+		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], ps); // trigger at digital pin state
+	}
+	
 	public void setCurrentDirection(int ch, int val) { currentDirection[ch-1] = val; }
 	// If the wheel is mirrored to speed commands or commutation, 0 - normal, 1 - mirror
 	public void setDefaultDirection(int ch, int val) { defaultDirection[ch-1] = val; }
@@ -208,7 +229,7 @@ public abstract class AbstractMotorControl {
 		}
 	}
 	public void setMotorShutdown() throws IOException { 
-		commandEmergencyStop(1); 
+		commandEmergencyStop(16); 
 		MOTORSHUTDOWN = true;
 	}
 	public void setMotorRun() throws IOException { 

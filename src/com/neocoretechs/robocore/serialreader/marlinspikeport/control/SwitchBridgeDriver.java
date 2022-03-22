@@ -27,6 +27,7 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
 *
 */
 public class SwitchBridgeDriver extends AbstractMotorControl {
+	final static String MSG_MOTORCONTROL_5= "Emergency stop";
 	GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels*4];
 	// 5 possible drive wheels, index is by channel-1.
 	// motorDrive[channel] [[Digitals array index][dir pin]
@@ -134,7 +135,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		resetEncoders();
 		// If we have a linked distance sensor. check range and possibly skip
 		// If we are setting power 0, we are stopping anyway
-		if( !checkUltrasonicShutdown()) {
+		if(checkUltrasonicShutdown()) {
 			// find the PWM pin and get the object we set up in M3 to write to power level
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff
@@ -179,7 +180,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		resetEncoders();
 		// If we have a linked distance sensor. check range and possibly skip
 		// If we are setting power 0, we are stopping anyway
-		if( !checkUltrasonicShutdown()) {
+		if( checkUltrasonicShutdown()) {
 			// find the PWM pin and get the object we set up in M3 to write to power level
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff
@@ -230,6 +231,18 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 				sb.append(getDriverInfo(i+1));
 		}
 		return sb.toString();
+	}
+
+	@Override
+	public String getMotorFaultDescriptor(int fault) {
+		if(fault != 0)
+			return MSG_MOTORCONTROL_5;
+		return "";
+	}
+
+	@Override
+	public String getMotorStatusDescriptor(int status) {
+		return "";
 	}
 
 }

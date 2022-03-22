@@ -137,7 +137,7 @@ public class SplitBridgeDriver extends HBridgeDriver {
 		resetEncoders();
 		// If we have a linked distance sensor. check range and possibly skip
 		// If we are setting power 0, we are stopping anyway
-		if( !checkUltrasonicShutdown()) {
+		if(checkUltrasonicShutdown()) {
 			// find the PWM pin and get the object we set up in M3 to write to power level
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff
@@ -191,7 +191,7 @@ public class SplitBridgeDriver extends HBridgeDriver {
 		resetEncoders();
 		// If we have a linked distance sensor. check range and possibly skip
 		// If we are setting power 0, we are stopping anyway
-		if( !checkUltrasonicShutdown()) {
+		if(checkUltrasonicShutdown()) {
 			// find the PWM pin and get the object we set up in M3 to write to power level
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff

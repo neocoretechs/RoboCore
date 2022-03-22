@@ -51,6 +51,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.AIN1);  // default pin if no pin argument found
 				apins[1] = gpio.provisionAnalogInputPin(pipin, String.valueOf(pin));
+				apins[1].addListener(this);
 				break;
 			case 40:
 				PCintValue[0] = value;
@@ -58,6 +59,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.AIN0);  // default pin if no pin argument found
 				apins[0] = gpio.provisionAnalogInputPin(pipin, String.valueOf(pin));
+				apins[0].addListener(this);
 				break;
 			default:
 				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to attach interrupt, but got pin:"+pin);
@@ -72,12 +74,14 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 		Pin pipin = Pins.getPin(pin);
 		PCintFunc.put(pipin,userFunc);
 		pins[pin] = gpio.provisionDigitalInputPin(pipin,String.valueOf(pin));
+		pins[pin].addListener(this);
 
 	}
 
 	public void detachDigitalInterrupt(int pin) {
 		Pin pipin = Pins.getPin(pin);
 		PCintFunc.remove(pipin);
+		pins[pin].removeListener(this);
 		pins[pin] = null;
 	}
 	
@@ -88,12 +92,14 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.AIN1);  // default pin if no pin argument found
+				apins[1].removeListener(this);
 				apins[1] = null;
 				break;
 			case 40:
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.AIN0);  // default pin if no pin argument found
+				apins[0].removeListener(this);
 				apins[0] = null;
 				break;
 			default:
@@ -132,6 +138,13 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			ints.service();
 		}
 		
+	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder("Pin Change Interrupts:\r\n");
+		PCintFunc.forEach((k,v) -> sb.append(String.format("Pin:%s Interrupt:%s%n",k,v)));
+		return sb.toString();
 	}
 
 }

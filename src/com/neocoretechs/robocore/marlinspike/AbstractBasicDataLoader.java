@@ -59,12 +59,12 @@ public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 				//mb.add(MachineReading.EMPTYREADING);
 				mb.notifyAll();
 			}
-			try {
-				asynchDemuxer.mutexWrite.await();
-			} catch(IllegalMonitorStateException | InterruptedException | BrokenBarrierException ims) {
-					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" "+
-							ims+" "+topicName);
-					ims.printStackTrace();
-			} 
+			//try {
+			//	asynchDemuxer.mutexWrite.await();
+			//} catch(IllegalMonitorStateException | InterruptedException | BrokenBarrierException ims) {
+			//		System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" "+
+			//				ims+" "+topicName);
+			//		ims.printStackTrace();
+			//} 
 	}
 }

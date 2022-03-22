@@ -26,12 +26,13 @@ import com.pi4j.io.gpio.PinMode;
  *
  */
 public class HBridgeDriver extends AbstractPWMMotorControl {
-
+	final static String MSG_MOTORCONTROL_5= "Emergency stop";
 	int status_flag = 0;
+	
 	public HBridgeDriver(int maxPower) {
 		super(maxPower);
 	}
-	public void setMotors(PWM[] pwm) { ppwms = pwm; }
+	
 	public int getMotorPWMPin(int channel) { return motorDrive[channel-1][0]; }
 	public int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
 	int getPWMFrequency(int channel) {return motorDrive[channel-1][2]; }
@@ -45,10 +46,6 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	@Override
 	public void resetMaxMotorPower() {
 		MAXMOTORPOWER = 1000;	
-	}
-
-	public void setDirectionPins(GpioPinDigitalOutput[] dpins) {
-		pdigitals = dpins;
 	}
 	
 	@Override
@@ -101,7 +98,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		resetEncoders();
 		// If we have a linked distance sensor. check range and possibly skip
 		// If we are setting power 0, we are stopping anyway
-		if( !checkUltrasonicShutdown()) {
+		if(checkUltrasonicShutdown()) {
 			// find the PWM pin and get the object we set up in M3 to write to power level
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff
@@ -123,7 +120,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 				ppwms[pindex].pwmOff();
 			}
 		}
-		fault_flag = 16;
+		fault_flag = status;
 		resetSpeeds();
 		resetEncoders();
 		return status;
@@ -134,6 +131,17 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		return 1;
 	}
 
+	@Override
+	public String getMotorFaultDescriptor(int fault) {
+		if(fault != 0)
+			return MSG_MOTORCONTROL_5;
+		return "";
+	}
+
+	@Override
+	public String getMotorStatusDescriptor(int status) {
+		return "";
+	}
 	@Override
 	public String getDriverInfo(int ch) {
 		if( motorDrive[ch-1][0] == 255 ) {

@@ -89,7 +89,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonic;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.ultrasonicpinsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownG;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.unknownM;
-
+import com.neocoretechs.robocore.serialreader.DataPortCommandInterface;
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
 /**
@@ -125,11 +125,11 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static boolean PORTDEBUG = true;
 	private volatile boolean shouldRun = true;
-	private DataPortInterface dataPort;
-	public CyclicBarrier mutexWrite = new CyclicBarrier(2);
+	private DataPortCommandInterface dataPort;
+	//public CyclicBarrier mutexWrite = new CyclicBarrier(3);
 	private CircularBlockingDeque<String> marlinLines = new CircularBlockingDeque<String>(1024);
 	private CircularBlockingDeque<String> toWrite = new CircularBlockingDeque<String>(1024);
 	private MarlinspikeManager marlinSpikeManager;
@@ -205,12 +205,9 @@ public class AsynchDemuxer implements Runnable {
 	 * @param req The request to be enqueued.
 	 */
 	public static void addWrite(AsynchDemuxer ad, String req) {
-		boolean overwrite;
 		synchronized(ad) {
-			overwrite = ad.toWrite.addLast(req);
+			ad.toWrite.addLast(req);
 		}
-		if(overwrite)
-			System.out.println("WARNING - OUTBOUND MARLINSPIKE QUEUE OVERWRITE!");
 	}
 
 	public MachineBridge getMachineBridge(String group) {
@@ -219,13 +216,13 @@ public class AsynchDemuxer implements Runnable {
 	
 	public CircularBlockingDeque<String> getMarlinLines() { return marlinLines;}
 	
-	public synchronized void connect(DataPortInterface dataPort) throws IOException {
+	public synchronized void connect(DataPortCommandInterface dataPort) throws IOException {
 		this.dataPort = dataPort;
 		dataPort.connect(true);
 		init();
 	}
 	/**
-	 * Initialize the topic names for this AsynchDemuxer
+	 * Initialize the topic names for this AsynchDemuxer, then spin the main thread that runs this demuxer.
 	 */
 	private synchronized void init() {
 		// initialize the fixed thread pool manager
@@ -749,156 +746,71 @@ public class AsynchDemuxer implements Runnable {
 			System.out.printf("%s Thread:%s Port:%s Startup GCode:%s%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName(),s);
 			addWrite(this,s);
 		}
-		while(!toWrite.isEmpty() || mutexWrite.getNumberWaiting() > 0)
-			try {
-				Thread.sleep(0,10);
-			} catch (InterruptedException e) {
-				throw new IOException(e);
-			}
+		if(DEBUG)
+			addWrite(this,"M705\r"); // comprehensive motor driver and pin assignment M-code
+		//while(!toWrite.isEmpty() || mutexWrite.getNumberWaiting() > 0)
+		//	try {
+		//		Thread.sleep(0,10);
+		//	} catch (InterruptedException e) {
+		//		throw new IOException(e);
+		//	}
 	}
 	
 	/**
 	 * Asynchronous demuxxing main loop.
-	 * Using {@see ByteSerialDataPort}, read a line from the Marlinspike and check the incoming header
+	 * Using {@see DataPortInterface}, read a line from the Marlinspike and check the incoming header
 	 * format. If it complies with the expected header, dispatch it to the proper {@code TopicListInterface#retrieveData(String)}
 	 * by first looking it up in the {@link TopicList}.
 	 * {@see java.lang.Runnable#run()}
 	 */
 	@Override
 	public void run() {
-		// spin another worker thread to take queued write requests and send them on to the Marlinspike
-		// Take requests from write queue and send them to the serial port of marlinspike or the queue of
-		// the waiting MarlinspikeDataPort thread. Wait for the same
-		// response as request to be ack from our corresponding retrieveData with a barrier synch on mutexWrite.
-		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
-			@Override
-			public void run() {
-				String writeReq = null;
-				try {
-					while(shouldRun) {
-						try {
-							writeReq = toWrite.takeFirst();
-							if(DEBUG)
-								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" writeLine:"+writeReq);
-							if(writeReq == null || writeReq.isEmpty())
-								continue;
-							dataPort.writeLine(writeReq);
-							mutexWrite.await(RESPONSE_WAIT_MS, TimeUnit.MILLISECONDS);
-							if(DEBUG)
-								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+writeReq);
-						} catch (TimeoutException | BrokenBarrierException e) {
-							if(DEBUG || PORTDEBUG)
-								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-										" NO RESPONSE FROM PORT "+dataPort.getPortName()+" IN TIME FOR DIRECTIVE:"+writeReq);
-						} finally {
-							mutexWrite.reset();
-							if(DEBUG)
-								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" reset");
-						}
-					}
-				} catch (IOException | InterruptedException e) {
-					e.printStackTrace();
-				}
-			}	
-		}, dataPort.getPortName()); // transmit data to dataport thread
-		
-		// spin another worker thread to take Marlinspike lines from circular blocking deque and demux them.
+		// Take Marlinspike lines from circular blocking deque and demux them.
 		// this will process the responses from the dataport that have placed on the deque.
-		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
-			String line,fop;
-			@Override
-			public void run() {
-				while(shouldRun) {
-					try {
-						line = marlinLines.peekFirst();
-						if(line == null) {
-							Thread.sleep(1);
-							continue;
-						}
-						if( line.length() == 0 ) {
-							if(DEBUG || PORTDEBUG)
-								System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-									" RESPONSE FROM PORT "+dataPort.getPortName()+" CANNOT DEMUX DIRECTIVE:"+line);
-							// consume line
-							marlinLines.takeFirst();
-							continue;
-						}
-					} catch(InterruptedException e) {
-						shouldRun = false;
-						break;
-					}
-					try {
-						fop = parseDirective(line);
-						if(fop != null) {
-							if(DEBUG)
-								System.out.println("AsynchDemux Parsed directive:"+fop);
-							TopicListInterface tl = topics.get(fop);
-							if( tl != null ) {
-								if(DEBUG)
-									System.out.println("AsynchDemux call out to topic:"+tl.getMachineBridge().getGroup());
-								ArrayList<String> payload = new ArrayList<String>();
-								while(line != null) {
-									line = marlinLines.takeFirst();
-									payload.add(line);
-									if(DEBUG)
-										System.out.println(this.getClass().getName()+" "+tl+" payload:"+line);
-									String sload = parseDirective(line);
-									if(sload != null && sload.length() > 0 && isLineTerminal(line) && sload.equals(fop)) 
-										break;
-								}
-								if(DEBUG)
-									System.out.println(this.getClass().getName()+" payload size:"+payload.size()+" retrieveData:"+tl);
-								tl.retrieveData(payload);
-							} else {
-								if(DEBUG || PORTDEBUG)
-									System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-										" RESPONSE FROM PORT "+dataPort.getPortName()+" CANNOT RETRIEVE TOPIC:"+fop+" CANNOT DEMUX DIRECTIVE:"+line);
-								// consume line
-								marlinLines.takeFirst();
-								continue;
-							}
-						}			
-					} catch(IndexOutOfBoundsException ioob) {
-						if(DEBUG || PORTDEBUG)
-							System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-								" RESPONSE FROM PORT "+dataPort.getPortName()+" MALFORMED OR EMPTY LINE, CANNOT DEMUX DIRECTIVE:"+line);
-						// consume line
-						try {
-							marlinLines.takeFirst();
-						} catch (InterruptedException e) {}
-						continue;
-					} catch (InterruptedException e) {
-						shouldRun = false;
-						break;
-					}
-				}
-			}
-		},dataPort.getPortName());	// process data received from dataport thread
-
-		// Read responses from dataport and add them to processing queue
+		String line = null,fop;
 		while(shouldRun) {
-			try {
-				String line = dataPort.readLine();
-				/*boolean overwrite =*/ marlinLines.add(line);
-				//if(overwrite)
-				//	System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-				//		" RESPONSE FROM PORT "+dataPort.getPortName()+" WARNING - INBOUND MARLINSPIKE QUEUE OVERWRITE!");
-				mutexWrite.await(RESPONSE_WAIT_MS, TimeUnit.MILLISECONDS);
-				if(DEBUG)
-					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" await done:"+line);
-			} catch (TimeoutException | InterruptedException | BrokenBarrierException e) {
-				if(DEBUG || PORTDEBUG)
-					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
-						" NO RESPONSE IN TIME FROM PORT "+dataPort.getPortName());
-			} finally {
-				mutexWrite.reset();
-				if(DEBUG)
-					System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" reset");
-			}
-		} // receive data from dataport thread
-
+				try {
+					line = dataPort.sendCommand(toWrite.takeFirst());
+					if(line == null || line.length() == 0 ) {
+						throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
+								" RESPONSE FROM PORT "+dataPort.getPortName()+" NULL DIRECTIVE:"+line);
+					}
+					fop = parseDirective(line);
+					if(fop != null) {
+						if(DEBUG)
+							System.out.println("AsynchDemux Parsed directive:"+fop);
+						TopicListInterface tl = topics.get(fop);
+						if( tl != null ) {
+							if(DEBUG)
+								System.out.println("AsynchDemux call out to topic:"+tl.getMachineBridge().getGroup());
+							ArrayList<String> payload = new ArrayList<String>();
+							// consume the lines from the Marlinspike response until we see a terminal directive
+							// once this happens we pass it to the proper TopicList {@link AbstractBasicResponse}
+							// retrieveData method that consumes the payload line(s) and issues the await on mutexWrite cyclicbarrier
+							// so that read/write cycle to port can resume
+							payload.add(line);
+							if(DEBUG)
+								System.out.println(this.getClass().getName()+" "+tl+" payload:"+line);
+							// triggers mutexWrite.await when entire message retrieved for given topic, should be 3rd cyclic barrier awaiter
+							tl.retrieveData(payload);
+						} else {
+							throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
+									" RESPONSE FROM PORT "+dataPort.getPortName()+" NO TOPIC FOR:"+fop+", CANNOT DEMUX DIRECTIVE:"+line);
+						}
+					}		
+				} catch(IndexOutOfBoundsException | IOException ioob) {
+					if(DEBUG || PORTDEBUG)
+						System.out.println(ioob.getMessage());
+				} catch (InterruptedException e) {
+					shouldRun = false;
+				}				
+		}
 	}
-	
+	/**
+	 * Determine if this line contains a message acknowledgement such as <G5/>
+	 * @param line
+	 * @return true if terminal message
+	 */
 	public boolean isLineTerminal(String line) {
 		int endDelim;
 		String fop;
@@ -926,7 +838,11 @@ public class AsynchDemuxer implements Runnable {
 			return false;
 		}
 	}
-	
+	/**
+	 * Determine if this line contains a message acknowledgement for a particular directive <G5/>
+	 * @param line
+	 * @return true if terminal message
+	 */
 	private boolean isLineTerminal(String line, String directive) {
 		int endDelim;
 		String fop;
@@ -965,6 +881,11 @@ public class AsynchDemuxer implements Runnable {
 		}
 	}
 	
+	/**
+	 * Parse out the delimiters and headers of a Marlinspike message, returning the message directive portion
+	 * @param line message in the form <message/> or <message x y z/>
+	 * @return payload portion such as: message
+	 */
 	public String parseDirective(String line) {
 		int endDelim = -1;
 		String fop;
@@ -989,8 +910,9 @@ public class AsynchDemuxer implements Runnable {
 						String directive = (String)it.next();
 						endDelim = fop.indexOf(directive);
 						if(endDelim != -1) {
-							fop = fop.substring(endDelim, endDelim+directive.length());
-							return fop;
+							//fop = fop.substring(endDelim, endDelim+directive.length());
+							//return fop;
+							return directive;
 						}
 					}
 					return null;
@@ -1002,7 +924,12 @@ public class AsynchDemuxer implements Runnable {
 		}
 		return null;
 	}
-	
+	/**
+	 * Extract the portion of the message after the directive
+	 * @param line
+	 * @param directive
+	 * @return The portion of the message from after the directive in the message, to the start of the end delimiter
+	 */
 	public String extractPayload(String line, String directive) {
 		int endDelim = -1;
 		String fop;

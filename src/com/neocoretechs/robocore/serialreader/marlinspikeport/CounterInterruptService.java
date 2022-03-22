@@ -17,6 +17,7 @@ public class CounterInterruptService implements InterruptService {
 	private int pin;
 	private int maxcount;
 	public CounterInterruptService(int pin, int tmax) {
+		this.pin = pin;
 		this.maxcount = tmax;
 		counter = 0;
 	}
@@ -38,6 +39,11 @@ public class CounterInterruptService implements InterruptService {
 		if( counter < maxcount ) {
 			++counter;
 		} 
+	}
+	
+	@Override
+	public String toString() {
+		return String.format("CounterInterruptService pin:%d counter:%d max count:%d", pin, counter, maxcount);
 	}
 
 }

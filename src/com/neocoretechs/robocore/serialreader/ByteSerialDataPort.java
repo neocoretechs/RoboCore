@@ -21,7 +21,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
  * the connect method to begin communication.<p/>
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
-public class ByteSerialDataPort implements DataPortInterface {
+public class ByteSerialDataPort implements DataPortCommandInterface {
 		private static boolean DEBUG = false;
 		private static boolean PORTDEBUG = false;
 	    private SerialPort serialPort;
@@ -74,7 +74,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	if( DEBUG ) 
 	    		System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	    }
-	    
+	    @Override	    
 	    public void connect(boolean writeable) throws IOException {
 	    	if(portOwned == CommPortOwnershipListener.PORT_OWNED) {
 	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port already owned by.."+portId.getCurrentOwner());
@@ -150,18 +150,18 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        if( PORTDEBUG ) 
 	        	System.out.println("Connected to "+portName);
 	    }
-	    
+	    @Override	    
 	    public void close() {
 	    	if( serialPort != null)
 	    		serialPort.close();
 	    }
-	    
+	    @Override	    
 	    public int bytesToRead() throws IOException {
 	    	synchronized(readMx) {
 	    		return inStream.available();
 	    	}
 	    }
-	 
+	    @Override
 	    public void write(int c) throws IOException {
 	    	if( PORTDEBUG ) 
 	    		System.out.print("<"+c+">");
@@ -173,7 +173,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		writeMx.notify();
 	    	}
 	    }
-	    
+	    @Override
 	    public void writeLine(String bytesToWrite) throws IOException {
 	    	if( PORTDEBUG ) 
 	    		System.out.println(this.getClass().getName()+".writeLine:"+bytesToWrite);
@@ -204,7 +204,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		}
 	    	}
 	    }
-	    
+	    @Override
 	    public int read() throws IOException {
 	    	if( PORTDEBUG ) 
 	    		System.out.println(this.getClass().getName()+".read");
@@ -248,7 +248,7 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    		return readBuffer[readBufferHead++];
 	    	}
 	    }
-	    	
+	    @Override	
 	    /**
 	     * Mutex wait on inputLine
 	     * @return
@@ -334,6 +334,15 @@ public class ByteSerialDataPort implements DataPortInterface {
 	    	}
 	    }
 	    
+		@Override
+		public String sendCommand(String command) throws IOException {
+			writeLine(command);
+			while(bytesToRead() <= 0)
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {}
+			return readLine();
+		}
 	    public String getPortName() { return portName; }
 	    public int getBaudRate() { return baud; }
 	    public int getDataBits() { return datab; }
@@ -515,5 +524,6 @@ public class ByteSerialDataPort implements DataPortInterface {
 	        				(currPortId.isCurrentlyOwned() ? currPortId.getCurrentOwner() : "NOT owned"));
 	        	}
 	        }
+
 	        
 }

@@ -15,7 +15,7 @@ import java.io.OutputStreamWriter;
  * @author jg
  *
  */
-public class StreamDataPort implements DataPortInterface {
+public class StreamDataPort implements DataPortCommandInterface {
 	protected String port;
 	protected InputStream fin = null;
 	protected OutputStream fout = null;
@@ -120,6 +120,14 @@ public class StreamDataPort implements DataPortInterface {
 	@Override
 	public String stringSettings() {
 		return port;
+	}
+
+	@Override
+	public String sendCommand(String command) throws IOException {
+		if( !writeable )
+			throw new IOException("Attempted write on read-only resource "+port);
+        fout.write(command.getBytes());
+        return null;
 	}
 
 }

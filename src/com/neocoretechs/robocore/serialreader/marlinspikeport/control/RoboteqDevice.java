@@ -37,11 +37,21 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	static final int ROBOTEQ_STATUS_LIMIT      =  0x20;
 	static final int ROBOTEQ_SCRIPT_RUN        =  0x80;
 	
+	// These correspond to the controller faults return by 'queryFaultCode'
+	final static String MSG_MOTORCONTROL_1= "Overheat";
+	final static String MSG_MOTORCONTROL_2= "Overvoltage";
+	final static String MSG_MOTORCONTROL_3= "Undervoltage";
+	final static String MSG_MOTORCONTROL_4= "Short circuit";
+	final static String MSG_MOTORCONTROL_5= "Emergency stop";
+	final static String MSG_MOTORCONTROL_6= "Sepex excitation fault";
+	final static String MSG_MOTORCONTROL_7= "MOSFET failure";
+	final static String MSG_MOTORCONTROL_8= "Startup configuration fault";
+	final static String MSG_MOTORCONTROL_9= "Stall";
+	
 	private ByteSerialDataPort m_Serial;
 	private int m_Timeout;
 	private String command;// = new char[ROBOTEQ_COMMAND_BUFFER_SIZE];
 
-	
 	public RoboteqDevice(int maxPower) throws IOException {
 		super(1000);
 		m_Timeout = ROBOTEQ_DEFAULT_TIMEOUT;
@@ -635,5 +645,74 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	int saveConfiguration() {
 		command = "%%EESAV\r";
 		return this.sendCommand(command);
+	}
+	@Override
+	public String getMotorFaultDescriptor(int fault) {
+		int bfault = 0;
+		int j = 1;
+		StringBuffer sb = new StringBuffer();
+		for(int i = 0; i < 8 ; i++) {
+			bfault = fault & (1<<i);
+			switch(bfault) {
+				default:
+				case 0: // bit not set
+					break;
+				case 1:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_1);
+					sb.append("\r\n");
+					break;
+				case 2:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_2);
+					sb.append("\r\n");
+					break;
+				case 4:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_3);
+					sb.append("\r\n");
+					break;
+				case 8:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_4);
+					sb.append("\r\n");
+					break;
+				case 16:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_5);
+					sb.append("\r\n");
+					break;
+				case 32:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_6);
+					sb.append("\r\n");
+					break;
+				case 64:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_7);
+					sb.append("\r\n");
+					break;
+				case 128:
+					sb.append(j++);
+					sb.append(' ');
+					sb.append(MSG_MOTORCONTROL_8);
+					sb.append("\r\n");
+					break;
+			}
+		}
+		return sb.toString();
+	}
+	
+	@Override
+	public String getMotorStatusDescriptor(int stat) {
+		// we only get stall for status
+		return MSG_MOTORCONTROL_9;
 	}
 }
