@@ -731,7 +731,8 @@ public class AsynchDemuxer implements Runnable {
  
 	/**
 	 * Configure the robot with a series of G-code directives at startup in file startup.gcode.
-	 * Wait until write queue empties and number of waiters on write is 0
+	 * Wait until write queue empties and number of waiters on write is 0. This might augment
+	 * the parsed properties from the main configuration.
 	 * @throws IOException
 	 */
 	public synchronized void config() throws IOException {
@@ -740,7 +741,12 @@ public class AsynchDemuxer implements Runnable {
 		List<String> starts = FileIOUtilities.getConfig();
 		config(starts);
 	}
-	
+	/**
+	 * General method to take any collection of codes and pass them in bulk to the input
+	 * queue for processing.
+	 * @param starts
+	 * @throws IOException
+	 */
 	public synchronized void config(List<String> starts) throws IOException {
 		for(String s : starts) {
 			System.out.printf("%s Thread:%s Port:%s Startup GCode:%s%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName(),s);
@@ -758,7 +764,7 @@ public class AsynchDemuxer implements Runnable {
 	
 	/**
 	 * Asynchronous demuxxing main loop.
-	 * Using {@see DataPortInterface}, read a line from the Marlinspike and check the incoming header
+	 * Using {@link DataPortInterface}, {@link DataPortCommandInterface} read a line from the Marlinspike and check the incoming header
 	 * format. If it complies with the expected header, dispatch it to the proper {@code TopicListInterface#retrieveData(String)}
 	 * by first looking it up in the {@link TopicList}.
 	 * {@see java.lang.Runnable#run()}

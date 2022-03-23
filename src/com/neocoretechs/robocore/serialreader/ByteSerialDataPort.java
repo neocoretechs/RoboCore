@@ -339,7 +339,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 			writeLine(command);
 			while(bytesToRead() <= 0)
 				try {
-					Thread.sleep(1);
+					Thread.sleep(0,50000);
 				} catch (InterruptedException e) {}
 			return readLine();
 		}

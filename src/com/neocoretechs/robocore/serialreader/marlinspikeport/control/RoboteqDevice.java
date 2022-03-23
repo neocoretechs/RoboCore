@@ -49,17 +49,45 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	final static String MSG_MOTORCONTROL_9= "Stall";
 	
 	private ByteSerialDataPort m_Serial;
+	private String port = "/dev/ttyS2";
+	private int baud = 115200;
+	private int dataBits = 8;
+	private int stopBits = 1;
 	private int m_Timeout;
 	private String command;// = new char[ROBOTEQ_COMMAND_BUFFER_SIZE];
-
+	/**
+	 * Init the port to the Roboteq smart controller using passed maxPower and default
+	 * port settings of /dev/ttyS2 at 115200 baud 8 data bits 1 stop bit
+	 * @param maxPower
+	 * @throws IOException if connect fail
+	 */
 	public RoboteqDevice(int maxPower) throws IOException {
-		super(1000);
+		super(maxPower);
 		m_Timeout = ROBOTEQ_DEFAULT_TIMEOUT;
 		setChannels(2);
-		m_Serial = new ByteSerialDataPort("/dev/ttyS2",115200, 8, 1, 0);
+		m_Serial = new ByteSerialDataPort(port, baud, dataBits, stopBits, 0);
 		m_Serial.connect(true);
 	}
-		
+	/**
+	 * Override the default serial port parameters of /dev/ttyS2 at 115200 baud 8 data bits 1 stop bit
+	 * @param port
+	 * @param baud
+	 * @param dataBits
+	 * @param stopBits
+	 * @throws IOException If connect fail
+	 */
+	public RoboteqDevice(int maxPower, String port, int baud, int dataBits, int stopBits) throws IOException {
+		super(maxPower);
+		this.port = port;
+		this.baud = baud;
+		this.dataBits = dataBits;
+		this.stopBits = stopBits;
+		m_Timeout = ROBOTEQ_DEFAULT_TIMEOUT;
+		setChannels(2);
+		m_Serial = new ByteSerialDataPort(port, baud, dataBits, stopBits, 0);
+		m_Serial.connect(true);
+	}
+	
 	@Override
     /**
      * send motor power command (!G)
@@ -151,7 +179,11 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 			return ROBOTEQ_BAD_COMMAND;
 		}
 	}
-	
+	/**
+	 * Read 10 attempts searching for 0x0D end of line, then return ROBOTEQ_TIMEOUT
+	 * @param buf
+	 * @return
+	 */
 	private int readResponse(char[] buf) {
 		int inByte;
 		int index = 0;
@@ -195,13 +227,12 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 
 	@Override
     /**
-     * send emergency stop command (!EX)
-     * note: you have to reset the controller after this sending command
-     *
-     * @return ROBOTEQ_OK if successful
+     * send soft emergency stop command by setting all channels to 0 speed. fault_flag set to 16.
+     * Calls resetSpeeds, and resetEncoders.
+     * @param status pass as ROBOTEQ_OK to return success
+     * @return passed status param
      */
 	public int commandEmergencyStop(int status) throws IOException {
-		//sprintf(command, "!EX\r");
 		for(int ch = 0; ch < getChannels(); ch++) {
 			command = String.format("!G %02d %d\r", ch+1, 0);
 			this.sendCommand(command);
@@ -212,12 +243,28 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		return status;
 	}
 	
-	int commandReset() {
+    /**
+     * send hard emergency stop command (!EX)
+     * note: you have to reset the controller after this sending command.
+     * Calls resetSpeeds, and resetEncoders
+     * fault_flag set to 16
+     * @return status if successful
+     */
+	public int commandHardEmergencyStop(int status) throws IOException {
+		//sprintf(command, "!EX\r");
+		this.sendCommand("!EX\r");
+		fault_flag = 16;
+		resetSpeeds();
+		resetEncoders();
+		return status;
+	}
+	
+	public int commandReset() {
 		command = "%RESET 321654987\r";
 		return this.sendCommand(command);
 	}
 
-	int commandBrushlessCounter() {
+	public int commandBrushlessCounter() {
 		command = "^BLFB 0\r";
 		return this.sendCommand(command);
 	}
@@ -326,7 +373,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		return status;
 	}
 	
-	int queryFirmware() {
+	public int queryFirmware() {
 		// Query: ?FID
 		// Response: FID=<firmware>
 		//memset(buf, NULL, bufSize);
@@ -340,7 +387,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	 * @param ch channel
 	 * @return
 	 */
-	int queryMotorPower(int ch) {
+	public int queryMotorPower(int ch) {
 		int p;
 		int res;
 		// Build Query Command
@@ -366,7 +413,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* Response: BA=<ch1*10>:<ch2*10>
 	* @return total amperage at both channels totaled
 	*/
-	int queryBatteryAmps() {
+	public int queryBatteryAmps() {
 		int ch1, ch2;
 		int res;
 		// Send Query
@@ -392,7 +439,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	 * Query: ?BA [ch]
 	 * Response: BA=<ch*10>
 	 */
-	int queryBatteryAmps(int ch) {
+	public int queryBatteryAmps(int ch) {
 		int amps;
 		int res;
 		// Build Query Command
@@ -416,7 +463,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	 * Response: V=<voltage>*10
 	 * @return
 	 */
-	int queryBatteryVoltage() {
+	public int queryBatteryVoltage() {
 		int voltage = -1;
 		//memset(buffer, NULL, ROBOTEQ_BUFFER_SIZE);
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -441,7 +488,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* Encoder speed in RPM
 	* To report RPM accurately, the correct Pulses per Revolution (PPR) must be stored in the encoder configuration.
 	*/
-	int queryEncoderSpeed(int ch){
+	public int queryEncoderSpeed(int ch){
 		int speed;
 		int res;
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -465,7 +512,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* Response: SR=[speed]
 	* Returns the measured motor speed as a ratio of the Max RPM configuration parameter 
 	*/
-	int queryEncoderRelativeSpeed(int ch) {
+	public int queryEncoderRelativeSpeed(int ch) {
 		int speed;
 		int res;
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -494,7 +541,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* an absolute number. The counter is a 32-bit counter with a range of +/- 2000000000
 	* counts.
 	*/
-	int queryBrushlessCounter(int ch) {
+	public int queryBrushlessCounter(int ch) {
 		int speed;
 		int res;
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -520,7 +567,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* On brushless motor controllers, returns the number of Hall sensor transition value that
 	* have been measured from the last time this query was made.
 	*/
-	int queryBrushlessCounterRelative(int ch) {
+	public int queryBrushlessCounterRelative(int ch) {
 		int speed;
 		int res;
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -546,7 +593,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* To report RPM accurately, the correct number of motor poles must be
 	* loaded in the BLPOL configuration parameter.
 	*/
-	int queryBrushlessSpeed(int ch) {
+	public int queryBrushlessSpeed(int ch) {
 		int speed;
 		int res;
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -572,7 +619,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* Response: BSR=[speed]
 	* On brushless motor controllers, returns the measured motor speed as a ratio of the Max RPM configuration parameter
 	*/
-	int queryBrushlessSpeedRelative(int ch) {
+	public int queryBrushlessSpeedRelative(int ch) {
 		int speed;
 		int res;
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -598,7 +645,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	* Response: TM=[time]
 	* On RTC units, 32 bit seconds
 	*/
-	int queryTime() {
+	public int queryTime() {
 		int speed;
 		int res;
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
@@ -617,32 +664,32 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		return speed;
 	}
 	
-	int setEncoderPulsePerRotation(int ch, int ppr) {
+	public int setEncoderPulsePerRotation(int ch, int ppr) {
 		command = String.format("^EPPR %02d %d\r", ch, ppr);
 		return this.sendCommand(command);
 	}
 
-	int getEncoderPulsePerRotation(int ch) {
+	public int getEncoderPulsePerRotation(int ch) {
 		// TODO: not implmented
 		return ROBOTEQ_OK;
 	}
 
-	int setMotorAmpLimit(int ch, int a){
+	public int setMotorAmpLimit(int ch, int a){
 		command = String.format("^ALIM %d %d", ch, a);
 		return this.sendCommand(command);
 	}
 
-	int getMotorAmpLimit(int ch){
+	public int getMotorAmpLimit(int ch){
 		// TODO: not implmented
 		return ROBOTEQ_OK;
 	}
 
-	int loadConfiguration() {
+	public int loadConfiguration() {
 		command = "%%EELD\r";
 		return this.sendCommand(command);
 	}
 
-	int saveConfiguration() {
+	public int saveConfiguration() {
 		command = "%%EESAV\r";
 		return this.sendCommand(command);
 	}

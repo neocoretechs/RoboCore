@@ -19,6 +19,29 @@ import com.pi4j.util.CommandArgumentParser;
  * explicitly assign the platform as the Odroid platform.<p/>
  * Note that some pins, such as pin 7, will give a device not found or device busy runtime exception
  * when provisioning. These pins are, for whatever reason, inaccessible even with command line tools.<p/>
+ * The 'pins' referred to here are the WiringPi GPIO pin designations which map to the physical 40 pin header as follows:<p/>
+ * Phy | WPi <br/>
+ * 11  | 0		<br/>
+ * 12  | 1		<br/>
+ * 13  | 2		<br/>
+ * 15  | 3		<br/>
+ * 16  | 4		<br/>
+ * 18  | 5		<br/>
+ * 22  | 6		<br/>
+ * 7   | 7	(unusable Odroid)	<br/>
+ * 24  | 10		<br/>
+ * 26  | 11		<br/>
+ * 19  | 12	(PWM1)	<br/>
+ * 21  | 13		<br/>
+ * 23  | 14		<br/>
+ * 29  | 21		<br/>
+ * 31  | 22		<br/>
+ * 33  | 23	(PWM0)	<br/>
+ * 35  | 24		<br/>
+ * 36  | 27		<br/>
+ * When designating pins, use the WPi numbers, except for the analog input pins which are designed as: <p>
+ * 37  | AIN1	<br/>
+ * 40  | AIN0	<br/>
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  *
  */

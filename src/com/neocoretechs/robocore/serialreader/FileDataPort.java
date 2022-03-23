@@ -9,11 +9,15 @@ import java.io.IOException;
  * Functions as any DataPort, but reads from file.
  * Provides raw data to/from and abstracted IO channel.
  * Intent is to read an ascii file and extract vals, putting them to the device
- * @author jg
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 20200
  *
  */
 public class FileDataPort extends StreamDataPort {
-
+	/**
+	 * Use environment variable "home" with filePath and fileName
+	 * @param filePath
+	 * @param fileName
+	 */
 	public FileDataPort(String filePath, String fileName) {
 		super();
 		port = System.getenv("home") + filePath + fileName;

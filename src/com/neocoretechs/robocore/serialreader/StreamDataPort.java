@@ -12,7 +12,7 @@ import java.io.OutputStreamWriter;
  * Functions as any DataPort, but reads from stream.
  * Provides raw data to/from and abstracted IO channel.
  * Intent is to read a file from upload stream and extract vals, putting them to the device
- * @author jg
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 20200
  *
  */
 public class StreamDataPort implements DataPortCommandInterface {
@@ -127,7 +127,11 @@ public class StreamDataPort implements DataPortCommandInterface {
 		if( !writeable )
 			throw new IOException("Attempted write on read-only resource "+port);
         fout.write(command.getBytes());
-        return null;
+		while(bytesToRead() <= 0)
+			try {
+				Thread.sleep(0,50000);
+			} catch (InterruptedException e) {}
+		return readLine();
 	}
 
 }

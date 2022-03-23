@@ -133,7 +133,7 @@ public class VariablePWMDriver extends AbstractPWMControl {
 
 	@Override
 	public int commandEmergencyStop(int status) throws IOException {
-		for(int j=0; j < 10; j++) {
+		for(int j=0; j < channels; j++) {
 			int pindex = pwmDrive[j][0];
 			if(pindex != 255) {
 					pdigitals[pindex].low();
