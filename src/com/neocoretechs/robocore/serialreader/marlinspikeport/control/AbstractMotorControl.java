@@ -164,7 +164,7 @@ public abstract class AbstractMotorControl {
 	 */
 	public void createEncoder(int channel, int encode_pin) {
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
-		wheelEncoder[channel-1] = PCInterrupts.getInstance();
+		wheelEncoder[channel-1] = new PCInterrupts();
 		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 1023); // trigger at 10 bits analog
 	}
 	/**
@@ -176,7 +176,7 @@ public abstract class AbstractMotorControl {
 	 */
 	public void createDigitalEncoder(int channel, int encode_pin, PinState ps) {
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
-		wheelEncoder[channel-1] = PCInterrupts.getInstance();
+		wheelEncoder[channel-1] = new PCInterrupts();
 		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], ps); // trigger at digital pin state
 	}
 	

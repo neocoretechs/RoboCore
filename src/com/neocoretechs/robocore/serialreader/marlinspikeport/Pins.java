@@ -7,6 +7,7 @@ import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.OdroidC1Pin;
+import com.pi4j.io.gpio.OdroidGpioProvider;
 import com.pi4j.io.gpio.Pin;
 import com.pi4j.io.gpio.PinMode;
 import com.pi4j.io.gpio.PinState;
@@ -48,6 +49,7 @@ import com.pi4j.util.CommandArgumentParser;
 public class Pins {
 	public static boolean DEBUG = true;
 	public static GpioController gpioController = null;
+	public static double MAXVOLTS = 5.0; //normally analog in is limited to 1.8 volts, but if you are using a level shifter (as you should) it can be up to 5
 	/**
 	 * Get the logical pin from the physical header pin
 	 * @param pin
@@ -61,6 +63,16 @@ public class Pins {
 				throw new RuntimeException(e);
 			}
 			gpioController = GpioFactory.getInstance();
+			// <OPTIONAL>
+	        // We can optionally override the default polling rate for the analog input monitoring (DEFAULT=50ms)
+	        // ... this is the rate at which the internal analog input monitoring thread will poll for changes
+	        OdroidGpioProvider.setAnalogInputPollingRate(100); // milliseconds
+	        // <OPTIONAL>
+	        // We can optionally override the default listener value change threshold (DEFAULT=0)
+	        // ... this is the threshold delta value that the internal analog input monitoring thread must cross before
+	        //     dispatching a new analog input value change event
+	        // analog value must change in excess of 5 from the last event dispatched before dispatching a new change event
+	        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(5);
 		}
 		//Pin[] allPins = OdroidC1Pin.allPins();
 		//for(Pin p: allPins)
@@ -169,8 +181,18 @@ public class Pins {
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.GPIO_27);  // default pin if no pin argument found
 				break;
+			case 37:
+				pipin = CommandArgumentParser.getPin(
+		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
+		                OdroidC1Pin.AIN1);  // default pin if no pin argument found
+				break;
+			case 40:
+				pipin = CommandArgumentParser.getPin(
+		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
+		                OdroidC1Pin.AIN0);  // default pin if no pin argument found
+				break;
 			default:
-				throw new RuntimeException("Digital Pins limited to numbers 0,1,2,3,4,5,6,7 10,11,12,13,14 21,22,23,24 26,27");
+				throw new RuntimeException("Digital Pins limited to numbers 0,1,2,3,4,5,6,7 10,11,12,13,14 21,22,23,24 26,27 and analog in 37,40");
 		}
 		return pipin;
 	}
@@ -212,6 +234,16 @@ public class Pins {
 					throw new RuntimeException(e);
 				}
 				gpioController = GpioFactory.getInstance();
+				// <OPTIONAL>
+		        // We can optionally override the default polling rate for the analog input monitoring (DEFAULT=50ms)
+		        // ... this is the rate at which the internal analog input monitoring thread will poll for changes
+		        OdroidGpioProvider.setAnalogInputPollingRate(100); // milliseconds
+		        // <OPTIONAL>
+		        // We can optionally override the default listener value change threshold (DEFAULT=0)
+		        // ... this is the threshold delta value that the internal analog input monitoring thread must cross before
+		        //     dispatching a new analog input value change event
+		        // analog value must change in excess of 5 from the last event dispatched before dispatching a new change event
+		        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(5);
 			}
 			switch(pin) {
 				case 37:
@@ -234,4 +266,16 @@ public class Pins {
 				System.out.printf("Pins.assignAnalogInputPin input pin set %d to %s%n", pin, apin);
 			return apin;
 	}
+	
+	 /**
+     * calculate relative analog input voltage based on the 10-bit conversion value
+     * read from the hardware
+     *
+     * @param value 10-bit conversion value for analog input pin
+     * @return relative voltage for analog input pin
+     */
+    private static double getVoltage(double value){
+        // 10-bit == range between 0 and 1023 (1024 possible values)
+        return (value / 1024) * MAXVOLTS; // 1.8VDC maximum allowed voltage per the hardware spec
+    }
 }
