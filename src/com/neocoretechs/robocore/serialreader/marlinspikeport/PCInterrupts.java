@@ -171,7 +171,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			// display pin state on console
 			if(DEBUG )
 				System.out.println(" --> Analog PIN STATE CHANGE: " + event.getPin() + " = "
-	                + event.getValue() +" from pin "+ pin +" linked to interrupt service "+ints+ " with analog value "+PCintValue[pin]);
+	                + event.getValue() +" from pin "+ pin +" linked to interrupt service "+ints+ " with analog value "+PCintValue[ppin]);
 			ints.service();
 		}
 		

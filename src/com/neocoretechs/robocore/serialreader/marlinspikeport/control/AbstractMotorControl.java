@@ -157,7 +157,7 @@ public abstract class AbstractMotorControl {
 		return false;
 	}
 	/**
-	 * Create an analog Pin Change counter encoder hardwired to trigger at 5.0v<p/>
+	 * Create an analog Pin Change counter encoder hardwired to trigger at the max 10 bits resolution 1023<p/>
 	 * The count will be based on the value in maxMotorDuration[channel-1]
 	 * @param channel
 	 * @param encode_pin
@@ -165,7 +165,7 @@ public abstract class AbstractMotorControl {
 	public void createEncoder(int channel, int encode_pin) {
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
 		wheelEncoder[channel-1] = PCInterrupts.getInstance();
-		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 5.0); // trigger at 5v analog
+		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 1023); // trigger at 10 bits analog
 	}
 	/**
 	 * Create a digital Pin change counter encoder that triggers at the given pin state<p/>
