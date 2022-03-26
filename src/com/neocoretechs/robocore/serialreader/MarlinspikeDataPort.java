@@ -2,8 +2,6 @@ package com.neocoretechs.robocore.serialreader;
 
 import java.io.IOException;
 
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
@@ -23,142 +21,50 @@ import com.pi4j.io.gpio.GpioPin;
 import com.pi4j.io.gpio.PinState;
 
 /**
- * RoboCore robotic controller platform simulator.
- * Implementation of arduino type microcontroller firmware in PI4J Java asynchronous process.<p/>
+ * RoboCore robotic controller platform to SBC (Odroid, RPi) GPIO headers interface to object model.
+ * Implementation of arduino type microcontroller firmware in PI4J to Java asynchronous process.<p/>
  *
  * Like the original firmware, processes a variation of M and G code from CNC and 3D printing to control a range of motor controllers and drivers
- * and GPIO pins for smart machine and robotics hardware functionality.
+ * and GPIO pins for smart machine and robotics hardware functionality.<p/>
  *
  * Previously geared toward the Mega2560 microcontroller chip, this code unifies the microcontroller platform and allows it to be easily accessed through
- * the standard CNC-derived 'language'. 
+ * the standard CNC-derived codes. <p/>
  *
- * As an example, it unifies the PWM pins to deliver consistent PWM functions across all available pins, and allows
- * various motor controllers like H-bridge, half bridge, and smart controllers to be controlled through UART, PWM, and GPIO functions.
+ * Unifies the object model with header pins for GPIO, analog inputs, and PWM hardware generation, and allows
+ * various motor controllers like H-bridge, half bridge, and smart controllers to be controlled through UART, PWM, and GPIO functions.<p/>
  *
- * It contains a main processing loop that receives M and G code commands through a deque,
- * then uses dequeued entries for the main CNC-derived M and G code processing loop.
- *
- * motor controllers are all unified and
- * accessible through the main processing loop. In the primary loop, M and G code commands are processed.
+ * Instead of a main processing loop that receives M and G code commands a la USB attached Arduino, we call the command interface
+ * through a method and receive a result response as a return value. The {@code AsynchDemuxer} then processes the return as it would
+ * an attached microcontroller.<p/>
  * 
- * Another example is the way in which ultrasonic sensors can be attached to any motor driver through main loop processing commands and used to
- * set up a minimum distance to detect an object before issuing a command to shut down the motor driver.
+ * Ultrasonic sensors and wheel encoders can be attached to any motor driver through M code and used to
+ * set up a minimum distance to detect an object before issuing a command to shut down the motor driver, or different M codes
+ * can set up encoders to detect a number
+ * of encoder pulses before generating an interrupt. Encoder signals can be defined as analog or digital inputs.<p/>
  *
- * To continue the examples, through the processing loop, hall effect sensors can be attached to any motor driver through pins designated in the main
- * processing loop M and G code commands and used to detect wheel rotations, then set up pin change interrupts for those sensors through other
- * M and G code commands, then perform actions based on the wheel rotations and the interrupts generated and processed through other M and G code commands.
+ * Example encoders are hall effect sensors that can be attached to any motor driver through pins designated in the main
+ * processing loop and used to detect wheel rotations, then set up pin change interrupts for those sensors through other
+ * M code commands, then perform actions based on the wheel rotations and the interrupts generated and processed through the object model.<p/>
  *
- *
-* When 'stopped' is true the Gcodes G0-G5 are ignored as a safety interlock.
-* Implemented Codes
-*-------------------
-* G0  -> G1
-* G4  - Dwell S<seconds> or P<milliseconds>
-* G5  - Command motor or PWM control C<Channel> [P<Motor Power -1000,1000>] [X<PWM level -1000,1000 scaled 0-2000]
-
-* M Codes
-* M0   - Real time output off
-* M1   - Real time output on - (default)
-* M2	- Set smart controller (default) with optional encoder pin [C<channel> E<encoder pin>] per channel.
-* M3	- Configure H-bridge Motor driver with optional encoder pin
-* M4	- Configure BLDC Motor driver with optional encoder pin
-* M5	- Set maximum motor power
-* M6	- Set motor scaling [S<scale>] divisor to divide power level
-* M7	- Override and set motor stop mode until M8 is issued
-* M8	- Set motor to normal run mode after M7
-* M10	- Central configuration directive for creating all types of motor and PWM controls and drivers
-* M11	- Set duration of encoder in interrupt ticks C<channel> D<duration>
-* M12	- Set base power lever for motor C<channel> P<power>, will add this value to each motor command
-* M33	- Link ultrasonic distance sensor to motor channel for safety interlock. P<pin> D<min. distance in cm> [E<direction 1- forward facing, 0 - reverse facing sensor>] 
-* M35	- Clear all persistent digital pins
-* M36	- Clear all persistent analog pins
-* M37	- Clear all persistent PWM pins
-* M38	- Remove persistent PWM pin
-* M39	- Remove persistent analog pin
-* M40	- Remove persistent digital pin
-* M41	- Create persistent digital pin P<pin> set HIGH. (gives you a +5v pin)
-* M42  - Create persistent digital pin P<pin> set LOW. (gives you a grounded pin)
-* M43	- Read temporary one shot digital pin P<pin>, publish <digitalpin> 1 - pin, 2 - value
-* M44	- Read temporary one shot digital pin with pullup, publish <digitalpin> 1 - pin, 2 - value
-* M45	- Activate persistent PWM P<pin> S<power val 0-255> [T<timer mode 0-3>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
-* M80  - Turn on Power Supply
-* M81  - Turn off Power Supply
-* M82  - 
-* M83  - 
-* M84  - 
-* M85  - 
-* M92  - 
-* M104 - 
-* M105 - 
-* M106 - 
-* M107 - 
-* M109 - 
-* M114 - 
-* M115 - Capabilities string
-* M117 - display message
-* M119 - 
-* M126 -
-* M127 - 
-* M128 - 
-* M129 - 
-* M140 - 
-* M150 -
-* M190 - 
-*       
-* M200 
-* M201 - 
-* M202 - 
-* M203 - 
-* M204 - 
-* M205 - 
-* M206 - 
-* M207 - 
-* M208 - 
-* M209 - 
-* M218 - 
-* M220 
-* M221 
-* M226	
-* M227 - Same as M226 with INPUT_PULLUP
-* M240 - Trigger a camera to take a photograph
-* M250 - 
-* M280 - 
-* M300 - Emit one-shot ultrasonic pulse on given pin and return duration P<pin number>
-* M301 - ultrasonic output P<pin>, publish with <ultrasonic> 1 - pin, 2 - reading in cm
-* M302 - Disable ultrasonic 
-* M303 - analog read for P<pin>, with exclusion range 0-1024 optional L<min> H<max> . Publish under <analogpin>
-* M304 - Configure analog read with optional INPUT_PULLUP for P<pin>, with optional exclusion range 0-1024 L<min> H<max> .
-* M305 - Configure digital read upon state 0 or 1, publish <digitalpin> 1 - pin, 2 - value
-* M306 - Activate digital read with optional INPUT_PULLUP upon state  0 or 1, publish <digitalpin> 1 - pin, 2 - value
-* M349 - 
-* M400 - 
-* M401 -
-* M402 - 
-* M445 - Disable PWM pin (compliment to M45), sets motor power to 0, removes PWM pin
-* M500 - Stores parameters in EEPROM
-* M501 - Reads parameters from EEPROM (if you need reset them after you changed them temporarily).
-* M502 - Reverts to the default "factory settings".  You still need to store them in EEPROM afterwards if you want to.
-* M503 - Print the current settings (from memory not from eeprom)
-* M540 - 
-* M600 - 
-* M666 - 
-* M605 - 
-* M700 - RoboCore - Retrieve startup params
-* M701 - Display digital pins in use
-* M702 - Display analog pins in use
-* M703 - Display ultrasonic pins in use
-* M704 - Display PWM pins in use
-* M705 - Display Motor controller and channel attributes
-* M706 - Report all pins currently assigned
-* M798 - Report status of attached controller
-* M799 - Command emergency stop of motor controller
-* M800 - 
-* M802	- Acquire analog pin data M802 Pnn Sxxx Mxxx P=Pin number, S=number readings, M=microseconds per reading
-* M810 - RoboCore - IMU readings
-* M908	- Control digipot
-* M999 - Restart after being stopped by error, clears 'stopped' flag
-* 
-* @author: Jonathan Neville Groff  Copyright (C) NeoCoreTechs 2020
+ * Different global states can be established, like when faults encountered 'stopped' is true, and
+ * the Gcodes G0-G5 are ignored as a safety interlock.<p/>
+ * 
+ * The usual use case is to create a type of controller in the object model using M10 Z<slot> T,controller type> code variations, 
+ * then reference that controller using the Z slot number parameter and C channel option in other M and G codes<p/>
+ * Distinction is made between basic PWM controls and full motor controls. So many commands refer to 'PWM control' vs
+ * 'Motor control' and they occupy different 'slots'. A basic PWM control has no encoders or interrupts and no forward/reverse direction. <p/>
+ * 
+ * Examples:<br/>
+ * G5  - Command motor or PWM control C<Channel> [P<Motor Power -1000,1000>] [X<PWM level -1000,1000 scaled 0-2000>] <br/>
+ * G5 Z0 C1 P500 <br/>
+ * M10 - Central configuration directive for creating all types of motor and PWM controls and drivers M10 Z<slot> T<controller type> <br/>
+ * M10 Z0 T1 <br/>
+ * M700 - RoboCore - Retrieve startup params <br/>
+ * M705 - Display Motor controller and channel attributes <br/>
+ * M798 - Report status of attached controller <br/>
+ * M999 - Restart after being stopped by error, clears 'stopped' flag <br/>
+ * Responses are consumed by the calling process, typically in the form <MCode/> for success and standard error headers with the same </> delimiter for failure.
+ * @author Jonathan Neville Groff Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements DataPortCommandInterface {
 	public static boolean DEBUG = true;
@@ -292,8 +198,6 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	final static String MSG_BAD_MOTOR ="Bad Motor command ";
 	final static String MSG_BAD_PWM= "Bad PWM Driver command ";
 
-
-	
 	@Override
 	/**
 	 * Null method
@@ -446,8 +350,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 		      }
 			  return (String.format("%sG4%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  
-			case 5: // G5 - Absolute command motor [Z<controller>] C<Channel> [P<motor power -1000 to 1000>] [X<PWM power -1000 to 1000>(scaled 0-2000)]
+			//
+			// G5 [Z<controller>] C<Channel> [P<motor power -1000 to 1000>] [X<PWM power -1000 to 1000>(scaled 0-2000)]
+			// Primary code to command power level to a given controller on a given channel.
+			//
+			case 5:
 			     if(!Stopped) {
 					 if(code_seen('Z')) {
 						 motorController = (int) code_value();
@@ -477,8 +384,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					 } // code C
 			     } // stopped
 			     break;
-			  
-			case 99: // G99 start watchdog timer. G99 T<time_in_millis> values are 15,30,60,120,250,500,1000,4000,8000 default 4000
+			//
+			// G99 start watchdog timer. G99 T<time_in_millis> values are 15,30,60,120,250,500,1000,4000,8000 default 4000
+			//
+			case 99:
 				if( code_seen('T') ) {
 					//int time_val = (int) code_value();
 					//watchdog_timer = new WatchdogTimer();
@@ -486,8 +395,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					//watchdog_timer.watchdog_init(time_val);
 				}
 				break;
-				
-			case 100: // G100 reset watchog timer before time interval is expired, otherwise a reset occurs
+			//
+			// G100 reset watchog timer before time interval is expired, otherwise a reset occurs
+			//
+			case 100:
 				//if( watchdog_timer != null ) {
 				//	watchdog_timer.watchdog_reset();
 				//}
@@ -514,9 +425,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			case 1: // M1 - Set real time output on 
 				realtime_output = true;
 				return(String.format("%sM1%s%n",MSG_BEGIN,MSG_TERMINATE));
-				
-			//CHANNEL 1-10, NO CHANNEL ZERO!	
-			case 2: // M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] - set smart controller (default) with optional encoder pin per channel, can be issued multiple times
+			//
+			// M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] 
+			// Set smart controller (default) with optional encoder pin per channel, can be issued multiple times
+			// CHANNEL 1-10, NO CHANNEL ZERO!	
+			case 2: 
 				 if(code_seen('Z')) {
 					 motorController = (int) code_value();
 				 }
@@ -536,25 +449,19 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	
 				}
 				break;
-				
-			// Set HBridge PWM motor driver, map pin to channel, this will check to prevent free running motors during inactivity
-			// For a PWM motor control subsequent G5 commands are affected here.
+			//
+			// M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> [F PWM frequency] [W<encoder pin>] 
+			// Set HBridge PWM motor driver, map pin to channel.
+			// For a motor control subsequent G5 commands are affected here.
 			// and then D a direction pin that determines forward/backward , then E, the default value of the direction pin.
-			// The D and E pins determine whether a HIGH or LOW determines FORWARD/BACK on the given controller channel. This is
+			// The D pin and E direction determine whether a HIGH or LOW determines FORWARD/BACK on the given controller channel. This is
 			// to compensate for 'backward' motors mounted left/right, or differences in controller design. Using a combination of
 			// these 2 parameters you can tune any controller/motor setup properly for forward/back.
-			// Finally, W<encoder pin>  to receive hall wheel sensor signals and
-			// optionally PWM timer setup [R<resolution 8,9,10 bits>] [X<prescale 0-7>].
-			// The Timer mode (0-3) is preset to 2 in the individual driver. Page 129 in datasheet. Technically we are using a 'non PWM'
-			// where the 'compare output mode' is defined by 3 operating modes. Since we are unifying all the timers to use all available PWM
-			// pins, the common mode among them all is the 'non PWM', within which the 3 available operating modes can be chosen from.
-			// There are essentially three main operating modes:
-			// 0 - Stop
-			// 1 - Toggle on compare match
-			// 2 - Clear on match
-			// 3 - Set on match
-			// For motor operation and general purpose PWM, mode 2 the most universally applicable.
-			case 3: // M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F PWM frequency]
+			// Finally, W<encoder pin> to receive hall wheel sensor signals. 
+			// Leave out W option and use M14 later to create a more robust encoder. If W is used, an analog input
+			// that fires at the maximum input level is created.
+			//
+			case 3: 
 				pin_number = -1;
 				encode_pin = 0;
 				pwm_freq = DEFAULT_PWM_FREQUENCY;
@@ -585,11 +492,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						} else {
 							break;
 						}
-						if( code_seen('W')) {
-							encode_pin = (int) code_value();
-						}
 						if(code_seen('F')) {
 							pwm_freq = (int) code_value();
+						}
+						if( code_seen('W')) {
+							encode_pin = (int) code_value();
 						}
 						try {
 							((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, pwm_freq);
@@ -603,12 +510,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					} // code_seen['C']
 				} // if motorControl[motorController]
 			  break;
-			  
+			//
+			// M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> B<enable pin b> E<default dir> [W<encoder pin>] [F<frequency 1-1000000>]
 			// Split bridge or 2 half bridge motor controller. Takes 2 inputs: one for forward,called P, one for backward,called Q, then motor channel, 
 			// and then D, an enable pin. Finally, W<encoder pin>  to receive hall wheel sensor signals and 
 			// optionally PWM timer setup [R<resolution 8,9,10 bits>] [X<prescale 0-7>].
 			// Everything derived from HBridgeDriver can be done here.
-			case 4:// M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> B<enable pin b> E<default dir> [W<encoder pin>] [F<frequency 1-1000000>]
+			//
+			case 4:
 			  pwm_freq = DEFAULT_PWM_FREQUENCY; // frequency
 			  pin_number = -1;
 			  pin_numberB = -1;
@@ -659,9 +568,9 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				  }
 				  try {
 					((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default, pwm_freq);
-				} catch (IOException e) {
+				  } catch (IOException e) {
 					e.printStackTrace();
-				}
+				  }
 				  if(encode_pin != 0) {
 					motorControl[motorController].createEncoder(channel, encode_pin);
 				  }
@@ -669,10 +578,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				} // code C
 				} //motorcontrol[motorcontroller]
 				break;
-				
-			// Switch bridge or 2 digital motor controller. Takes 2 inputs: one digital pin for forward,called P, one for backward,called Q, then motor channel,
-			// and then D, an enable pin, and E default dir, with optional encoder
-			case 5: //M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>]- Create switch bridge Z slot, P forward pin, Q reverse pin, D enable, E default state of enable for dir
+			//
+			// M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>] 
+			// Create switch bridge Z slot, P forward pin, Q reverse pin, D enable, E default state of enable for dir
+			// Switch bridge or 2 digital motor controller. Takes 2 inputs: one digital pin for forward,called P, 
+			// one for backward,called Q, then motor channel,
+			// and then D, an enable pin, and E default dir, with optional encoder.
+			//
+			case 5: 
 				pin_number = -1;
 				pin_numberB = -1;
 				encode_pin = 0;
@@ -721,8 +634,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					  } // code C
 				  } //motorcontrol[motorcontroller]
 				break;
-				
-			case 6: //M6 [Z<slot>] [S<scale>] [X<scale>] - Set motor or PWM scaling, divisor for final power to limit speed or level, set to 0 to cancel. If X, slot is PWM
+			//
+			// M6 [Z<slot>] [S<scale>] [X<scale>] 
+			// Set motor or PWM scaling, divisor for final power to limit speed or level, set to 0 to cancel. If X, slot is PWM
+			//
+			case 6: 
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -740,8 +656,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 				break;
-				
-			case 7: // M7 [Z<slot>] [X]- Set motor override to stop motor operation, or optionally PWM operation, if X, slot is PWM
+			//
+			// M7 [Z<slot>] [X]- Set motor override to stop motor operation, or optionally PWM operation, if X, slot is PWM
+			//
+			case 7:
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -765,8 +683,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 				break;
-				
-			case 8: // M8 [Z<slot>][X] - Set motor override to start motor operation after stop override M7. If X, slot is PWM
+			//
+			// M8 [Z<slot>][X] - Set motor override to start motor operation after stop override M7. If X, slot is PWM
+			//
+			case 8:
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -790,11 +710,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 				break;
-				
+			//
+			// M9 [Z<slot>] P<pin> C<channel> D<enable pin> E<dir default> [F<PWM frequency>]
+			// PWM control <br/>
 			// Activate a previously created PWM controller of type AbstractPWMControl - a non propulsion PWM device such as LED or pump
-			// Note there is no encoder or direction pin, and no possibility of reverse. What would be reverse in a motor control is the first
-			// half of the power scale instead.
-			case 9: // M9 [Z<slot>] P<pin> C<channel> D<enable pin> E<dir default> [F<PWM frequency>] - PWM control
+			// Note there is no encoder or direction pin, and no possibility of reverse. What would be reverse in a motor control is 
+			// the first half of the power scale instead.
+			//
+			case 9:
 				pwm_freq = DEFAULT_PWM_FREQUENCY; // resolution in bits
 				pin_number = -1;
 				encode_pin = 0;
@@ -834,13 +757,15 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				 }
 				}
 				break;
-				
+			//
+			// M10 Z<controller slot> T<controller type>
 			// Dynamically allocate a controller to a control slot. The slot parameter is used to refer
 			// to the dynamically allocated controller in other M codes that relate to motor control functions.
 			// The M10 code merely creates the instance of the proper controller and assigns the slot. Other M codes
 			// refer to the slot and provide further configuration. when creating new type of controllers, this is the code
-			// that can be expanded to instantiate those controllers
-			case 10: // M10 Z<controller slot> T<controller type>
+			// that can be expanded to instantiate those controllers.
+			//
+			case 10:
 				if( code_seen('Z') ) {
 					motorController = (int) code_value();
 					if( code_seen('T') ) {
@@ -939,7 +864,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 											//}
 									}
 									//delete pwmControl[motorController];
-									motorControl[motorController] = null; // in case assignment below fails
+									pwmControl[motorController] = null; // in case assignment below fails
 								}
 								pwmControl[motorController] = new VariablePWMDriver();
 								return(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
@@ -952,8 +877,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				} else {
 					return(String.format("%sBAD CONTROLLER TYPE:CONTROLLER SLOT DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
 				}
-				
-			case 11: // M11 [Z<slot>] C<channel> [D<duration>] [X<duration>] - Set maximum cycle duration for given channel. If X, slot is PWM
+			//
+			// M11 [Z<slot>] C<channel> [D<duration>] [X<duration>] 
+			// Set maximum cycle duration for given channel. If X, slot is PWM
+			//
+			case 11:
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -977,8 +905,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 				break;
-			
-			case 12: // M12 [Z<slot>] C<channel> [P<offset>] [X<offset>] - set amount to add to G5 for min motor power, or X PWM level, If X, slot is PWM
+			//
+			// M12 [Z<slot>] C<channel> [P<offset>] [X<offset>] 
+			// set amount to add to G5 for min motor power, or X PWM level, If X, slot is PWM
+			//
+			case 12:
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -1002,8 +933,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 				break;
-				
-			  case 13: //M13 [Z<slot>] [P<power>] [X<power>]- Set maximum motor power or optionally with X, a PWM control maximum level. If X, slot is PWM
+			  //
+			  // M13 [Z<slot>] [P<power>] [X<power>]
+			  // Set maximum motor power or optionally with X, a PWM control maximum level. If X, slot is PWM
+			  //
+			  case 13: 
 				if(code_seen('Z')) {
 				  motorController = (int) code_value();
 				}
@@ -1021,9 +955,63 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				  }
 				}
 			  break;
-			  
-			case 33: // M33 [Z<slot>] P<ultrasonic pin> D<min. distance in cm> [E<direction 1- forward facing, 0 - reverse facing sensor>] 
+			//  
+			// M14 [Z<slot>] C<channel> P<pin> L<low range active> H<high range active> N<number of counts before interrupt generated>
+			// Create analog encoder for controller at slot and channel.
+			// Activate interrupt between L low and H high range.
+			// Detect range N times before interrupt
+			//
+			case 14:
+				double analogRangeL, analogRangeH;
+				int counts;
+				if(code_seen('Z')) {
+					motorController = (int) code_value();
+				}
+				if( code_seen('C') ) {
+					channel = (int) code_value();
+					if(channel <= 0) {
+						break;
+					}
+					if(code_seen('P')) {
+						int pin = (int) code_value();
+						analogRangeL = code_seen('L') ? code_value() : 0;
+						analogRangeH = code_seen('H') ? code_value() : 0;
+						counts = (int) (code_seen('N') ? code_value() : 1);
+						motorControl[motorController].createEncoder(channel, pin, analogRangeL, analogRangeH, counts);
+						return(String.format("%sM14%s%n",MSG_BEGIN,MSG_TERMINATE));
+					}
+				}
+				break;
+				//  
+				// M15 [Z<slot>] C<channel> P<pin> S<pin state 0 low, 1 high> N<number of counts before interrupt generated>
+				// Create digital encoder for controller at slot and channel.
+				// Activate interrupt at S pin state.
+				// Detect range N times before interrupt
+				//
+				case 15:
+					int digitalState;
+					if(code_seen('Z')) {
+						motorController = (int) code_value();
+					}
+					if( code_seen('C') ) {
+						channel = (int) code_value();
+						if(channel <= 0) {
+							break;
+						}
+						if(code_seen('P')) {
+							int pin = (int) code_value();
+							digitalState = (int) (code_seen('S') ? code_value() : 1);
+							counts = (int) (code_seen('N') ? code_value() : 1);
+							motorControl[motorController].createDigitalEncoder(channel, pin, (digitalState == 0 ? PinState.LOW : PinState.HIGH), counts);
+							return(String.format("%sM15%s%n",MSG_BEGIN,MSG_TERMINATE));
+						}
+					}
+					break;
+			//
+			// M33 [Z<slot>] P<ultrasonic pin> D<min. distance in cm> [E<direction 1- forward facing, 0 - reverse facing sensor>] 
 			// link Motor controller to ultrasonic sensor, the sensor must exist via M301
+			//
+			case 33: 
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -1046,15 +1034,23 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					} // code_seen = 'P'
 				}
 			  break;
-			  
-			  case 35: //M35 - Clear all digital pins
+			  //
+			  // M35
+			  // Clear all digital pins assigned outside motor controller directives
+			  //
+			  case 35:
 				return(String.format("%sM35%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  
-			  case 36: //M36 - Clear all analog pins
+			  //
+			  // M36 
+			  // Clear all analog pins assigned outside motor controller directives
+			  //
+			  case 36: 
 					//Pins.unassignPins();
 				  	return(String.format("%sM36%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  
-			  case 37: //M37 - Clear all PWM pins, ALL MOTOR AND PWM DISABLED, perhaps not cleanly
+			  //
+			  // M37 - Clear all PWM pins, ALL MOTOR AND PWM DISABLED, perhaps not cleanly
+			  //
+			  case 37:
 				  /*
 				for(int i = 0; i < 12; i++) {
 				  if(ppwms[i] != null) {
@@ -1065,8 +1061,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 				*/
 				return(String.format("%sM37%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  
-			  case 38: //M38  P<pin> - Remove PWM pin, MOTOR AND PWM DISABLED, perhaps not cleanly
+			  //
+			  // M38  P<pin> - Remove PWM pin, MOTOR AND PWM DISABLED, perhaps not cleanly
+			  //
+			  case 38:
 			  	  pin_number = -1;
 			  	  if (code_seen('P')) {
 				  	  pin_number = (int) code_value();
@@ -1081,8 +1079,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				  	 // } // unassign pin
 			  	  } // code P
 			  break;
-			  
-			  case 39: //M39 P<pin> - Remove Persistent Analog pin 
+			  //
+			  // M39 P<pin> - Remove Persistent Analog pin
+			  //
+			  case 39:
 			  	  pin_number = -1;
 			  	  if (code_seen('P')) {
 				  	  pin_number = (int)code_value();
@@ -1098,8 +1098,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				  	  //}
 			  	  }
 			  break;
-					
-			  case 40: //M40 P<pin> - Remove persistent digital pin 
+			  //
+			  // M40 P<pin> - Remove persistent digital pin 
+			  //
+			  case 40: 
 			       pin_number = -1;
 			       if (code_seen('P')) {
 				       pin_number = (int)code_value();
@@ -1115,8 +1117,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					   //}
 				   }
 			  break;
-				
-			  case 41: //M41 - Create persistent digital pin, Write digital pin HIGH P<pin> (this gives you a 5v source on pin)
+			  //
+			  // M41 - Create persistent digital pin, Write digital pin HIGH P<pin> (this gives you a 5v source on pin)
+			  //
+			  case 41:
 			     pin_number = -1;
 			     if (code_seen('P')) {
 				     pin_number = (int)code_value();
@@ -1131,8 +1135,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					 return(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
 			     }
 			break;
-			     
-		    case 42: //M42 - Create persistent digital pin, Write digital pin LOW P<pin> (This gives you a grounded pin)
+			//
+			// M42 - Create persistent digital pin, Write digital pin LOW P<pin> (This gives you a grounded pin)
+			//
+		    case 42:
 			  pin_number = -1;
 			  if (code_seen('P')) {
 		        pin_number = (int)code_value();
@@ -1142,19 +1148,23 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			  }
 		     break;
 			 
-			
-			case 44: // M44 P<pin> [U] - -Read digital pin with optional pullup
+			//
+		    // M44 P<pin> [U] - -Read digital pin with optional pullup
+		    //
+			case 44:
 		        pin_number = -1;
 		        int res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
 				}
 				return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
-				
+			 //	
+			 // M45 - set up PWM P<pin> S<power val 0-255> [F<frequency>]
 			 // PWM value between 0 and 255, default timer mode is 2; clear on match, default resolution is 8 bits, default prescale is 1
 			 // Prescale: 1,2,4,6,7,8,9 = none, 8, 64, 256, 1024, external falling, external rising
 			 // Use M445 to disable pin permanently or use timer more 0 to stop pulse without removing pin assignment
-		     case 45: // M45 - set up PWM P<pin> S<power val 0-255> [F<frequency>]
+			 //
+		     case 45:
 			  pin_number = -1;
 			  if(code_seen('P') ) {
 		          pin_number = (int)code_value();
@@ -1184,8 +1194,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						}
 		      }
 		      return(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  
-			  case 46: // M46 -Read analog pin P<pin>
+			  //
+		      // M46 -Read analog pin P<pin>
+		      //
+			  case 46:
 		        pin_number = -1;
 		        res = 0;
 		        if (code_seen('P')) {
@@ -1193,8 +1205,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		          return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
 				}
 		     break;
-			 
-			 case 47: // M47 -Read analog pin P<pin> T<threshold> compare to battery threshold, if below, print battery message
+			 //
+		     // M47 -Read analog pin P<pin> T<threshold> compare to battery threshold, if below, print battery message
+		     //
+			 case 47:
 			   pin_number = -1;
 			   if (code_seen('P')) {
 				   pin_number = (int)code_value();
@@ -1211,8 +1225,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			 
 		     case 80: //
 		    	 return(String.format("%sM80%s%n",MSG_BEGIN,MSG_TERMINATE));
-
-		     case 81: // M81 [Z<slot>] X - Turn off Power Z shut down motorcontroller in slot, X shut down PWM, slot -1 do all
+		     //
+		     // M81 [Z<slot>] X 
+		     // Turn off Power Z shut down motorcontroller in slot, X shut down PWM, slot -1 do all
+		     //
+		     case 81: 
 			  int scode;
 			  if( code_seen('Z')) {
 				scode = (int)code_value();
@@ -1259,19 +1276,28 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 			  }
 			  return(String.format("%sM81%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  
-		    case 115: // M115
+			//
+			// M115
+			// Generate configuration report
+			//
+		    case 115: 
 		    	return(String.format("%s%s%s%s%s%s%s%n",MSG_BEGIN,MSG_M115_REPORT,MSG_DELIMIT,MSG_115_REPORT2,MSG_BEGIN,MSG_M115_REPORT,MSG_TERMINATE));
-			  		
-		    case 300: // M300 - emit ultrasonic pulse on given pin and return duration P<pin number>
+			//
+		    // M300 P<pin number>
+		    // emit ultrasonic pulse on given pin and return duration 
+		    //
+		    case 300:
 		      uspin = code_seen('P') ? (int)code_value() : 0;
 		      if (uspin > 0) {
 				Ultrasonic upin = new Ultrasonic(uspin);
 				return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_DELIMIT,upin,MSG_BEGIN,sonicCntrlHdr,MSG_TERMINATE));
 		      }
 		    break;
-				
-		    case 301: // M301 P<pin> - attach ultrasonic device to pin
+			//
+		    // M301 P<pin>
+		    // attach ultrasonic device to pin
+		    //
+		    case 301: 
 				// wont assign pin 0 as its sensitive
 				uspin = code_seen('P') ? (int)code_value() : 0;
 				// this is a permanent pin assignment so dont add if its already assigned
@@ -1282,8 +1308,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						}
 				}
 				break;
-			
-			case 302: // M302 P<pin> - remove ultrasonic pin
+			//
+			// M302 P<pin>
+			// remove ultrasonic pin
+			//
+			case 302:
 				uspin = code_seen('P') ? (int)code_value() : 0;
 				for(int i = 0; i < psonics.length; i++) {
 						if(psonics[i] != null && psonics[i].txrxPin == uspin) {
@@ -1295,8 +1324,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			
 			//case 303: // M303 - Check the analog inputs for all pins defined by successive M304 directives. Generate a read and output data if in range.
 		      //break;
-			  
-			case 304:// M304 P<pin> [L<min>] [H<max>]  analog read with optional exclusion range 0-1024 via L<min> H<max>
+			//
+			// M304 P<pin> [L<min>] [H<max>]  
+			// analog read with optional exclusion range 0-1024 via L<min> H<max>
+			//
+			case 304:
 				// if optional L and H values exclude readings in that range
 				uspin = code_seen('P') ? (int)code_value() : 0;
 				// this is a permanent pin assignment so dont add if its already assigned
@@ -1307,16 +1339,22 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 				return(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
-			
-			case 305: // M305 - Read the pins defined in M306 and output them if they are of the defined target value
+			//
+			// M305
+			// Read the pins defined in M306 and output them if they are of the defined target value
+			//
+			case 305: 
 				for(int i = 0 ; i < pdigitals.length; i++) {
 					if( pdigitals[i] != null && (pdigitals[i].isMode(PinMode.ANALOG_INPUT) || pdigitals[i].isMode(PinMode.DIGITAL_INPUT))) {
 						printDigital(pdigitals[i], digitalTarget[i]);
 					}
 				}
 		      break;
-			
-			case 306://  M306 P<pin> T<target> [U] - toggle digital read, 0 or 1 for target value, default 0 optional INPUT_PULLUP 
+			//
+		    // M306 P<pin> T<target> [U] 
+		    // toggle digital read, 0 or 1 for target value, default 0 optional INPUT_PULLUP
+		    //
+			case 306: 
 				// Looks for target value, if so publish with <digitalpin> header and 1 - pin 2 - value
 				uspin = code_seen('P') ? (int)code_value() : 0;
 				digitarg = code_seen('T') ? (int)code_value() : 0;
@@ -1342,8 +1380,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				//	}
 				//}
 				return(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
-				
-			case 445: // M445 P<pin> - Turn off pulsed write pin - disable PWM
+			//
+			// M445 P<pin> 
+			// Turn off pulsed write pin - disable PWM
+			//
+			case 445:
 		      if(code_seen('P')) {
 		        pin_number =(int) code_value();
 				for(int i = 0; i < ppwms.length; i++) {
@@ -1360,24 +1401,33 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 			  }
 			return(String.format("%sM445%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  
-		    case 500: // M500 Store settings in EEPROM
+			//
+			// M500 
+			// Make current settings persistent
+			//
+		    case 500: 
 		        //Config_StoreSettings();
 		        StringBuilder sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append("M500");
 				sb.append(MSG_TERMINATE);
 				return(sb.toString());
-			
-		    case 501: // M501 Read settings from EEPROM
+			//
+			// M501 
+			// Read settings from persistence
+			//
+		    case 501:
 		        //Config_RetrieveSettings();
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append("M501");
 				sb.append(MSG_TERMINATE);
 				return(sb.toString());
-			
-		    case 502: // M502 Revert to default settings
+			//
+			// M502 
+			// Revert to default settings
+			//
+		    case 502:
 		        //Config_ResetDefault();
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
@@ -1386,10 +1436,13 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				return(sb.toString());
 			
 		    //case 503: // M503 print settings currently in memory
-		        //Config_PrintSettings();
+		    //Config_PrintSettings();
 		    //break;
-					  
-			case 700: // return stats
+			//
+			// M700
+			// return stats regarding free memory and version
+			//
+			case 700:
 		      sb = new StringBuilder();
 			  sb.append(MSG_BEGIN);
 			  sb.append(MSG_STATUS);
@@ -1407,8 +1460,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			  sb.append(MSG_STATUS);
 			  sb.append(MSG_TERMINATE);
 			  return(sb.toString());
-			  
-			case 701: // Report digital pins in use
+			//
+			// M701
+			// Report digital pins in use
+			//
+			case 701:
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(digitalPinSettingHdr);
@@ -1424,8 +1480,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(digitalPinSettingHdr);
 				sb.append(MSG_TERMINATE);
 				return(sb.toString());
-				
-			case 702: // Report analog pins in use
+			//
+			// M702
+			// Report analog pins in use
+			//
+			case 702:
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinSettingHdr);
@@ -1441,8 +1500,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(analogPinSettingHdr);
 				sb.append(MSG_TERMINATE);
 				return(sb.toString());
-				
-			case 703: // Report ultrasonic pins in use
+			//
+			// M703
+			// Report ultrasonic pins in use
+			//
+			case 703:
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(ultrasonicPinSettingHdr);
@@ -1459,8 +1521,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(ultrasonicPinSettingHdr);
 				sb.append(MSG_TERMINATE);
 				return(sb.toString());
-				
-			case 704: // Report PWM pins in use
+			//
+			// M704
+			// Report PWM pins in use
+			//
+			case 704:
 				sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(pwmPinSettingHdr);
@@ -1481,7 +1546,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append("\r\n");
 				System.out.println(sb.toString());
 				break;
-				
+			//
+			// M705
+			// Definitive comprehensive report on all motor control and pwm controls configured
+			//
 			case 705:
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
@@ -1566,8 +1634,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					sb.append(MSG_TERMINATE);
 					sb.append("\r\n");
 					return(sb.toString());
-					
-			case 706: // Report all pins in use
+			//
+			// M706
+			// Report all pins in use
+			//
+			case 706:
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(pinSettingHdr);
@@ -1577,8 +1648,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(pinSettingHdr);
 				sb.append(MSG_TERMINATE);
 				return(sb.toString());
-				
-			case 798: // M798 Z<motor control> [X] Report controller status for given controller. If X, slot is PWM
+			//
+			// M798 Z<motor control> [X] 
+			// Report controller status for given controller. If X, slot is PWM
+			//
+			case 798:
 		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(controllerStatusHdr);
@@ -1613,8 +1687,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(controllerStatusHdr);
 				sb.append(MSG_TERMINATE);
 				return(sb.toString());	
-				
-			case 799: // M799 [Z<controller>][X] Reset controller, if no argument, reset all. If X, slot is PWM
+			//
+			// M799 [Z<controller>][X] 
+			// Reset controller, if no argument, reset all. If X, slot is PWM
+			//
+			case 799:
 		        sb = new StringBuilder();
 				if (code_seen('Z')) {
 					motorController = (int)code_value();
@@ -1667,8 +1744,12 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					sb.append(MSG_TERMINATE);
 				}
 				return(sb.toString());	
-						
-			case 802: // Acquire analog pin data M802 Pnn Sxxx Mxxx P=Pin number, S=number readings, M=microseconds per reading. X - pullup.
+			//
+			// M802 P<n> S<x> M<x>
+			// Acquire analog pin data 
+			// P=Pin number, S=number readings, M=microseconds per reading. 
+			//
+			case 802:
 				// Publish <dataset> 1 - pin, 2 - reading
 		        sb = new StringBuilder();
 				if( code_seen('P')) {
@@ -1718,8 +1799,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
 				return(sb.toString());			
-				
-		    case 999: // M999: Reset
+			//
+			// M999
+			// Reset
+			//
+		    case 999:
 				sb = new StringBuilder();
 				Stopped = false;
 				//lcd_reset_alert_level();

@@ -202,27 +202,51 @@ public class MarlinspikeManager {
 	 */
 	private synchronized void configureMarlinspike(NodeDeviceDemuxer ndd, TypedWrapper lun, TypeSlotChannelEnable tsce) throws IOException {
 		Optional<Object> pin1 = Optional.ofNullable(lun.get("PWMPin1"));
-		// if pin 1 is NOT present we assume we are using a type with NO pwm pins
 		Optional<Object> pin0 = Optional.ofNullable(lun.get("PWMPin0"));
 		Optional<Object> enc = Optional.ofNullable(lun.get("EncoderPin"));
-		if(DEBUG) {
-			System.out.printf("%s: Controller tsce:%s%n",this.getClass().getName(), tsce);
-		}
+		Optional<Object> encType = Optional.ofNullable(lun.get("EncoderType"));
+		Optional<Object> encCount = Optional.ofNullable(lun.get("EncoderCount"));
+
 		int ipin0=0,ipin1=0,ienc=0;
 		if(pin0.isPresent())
 			ipin0 = Integer.parseInt((String) pin0.get());
 		if(pin1.isPresent())
 			ipin1 = Integer.parseInt((String) pin1.get());
-		if(enc.isPresent())
+		if(enc.isPresent()) {
 			ienc = Integer.parseInt((String) enc.get());
+			tsce.setEncoderPin(ienc);
+			if(encType.isPresent() && encType.get().equals("Analog")) {
+				int iencCount = 1;
+				if(encCount.isPresent())
+					iencCount = Integer.parseInt((String)encCount.get());
+				int iencLoRange = 0, iencHiRange = 0;
+				if(Optional.ofNullable(lun.get("EncoderLoRange")).isPresent())
+					iencLoRange = Integer.parseInt((String) lun.get("EncoderLoRange"));
+				if(Optional.ofNullable(lun.get("EncoderHiRange")).isPresent())
+					iencHiRange = Integer.parseInt((String) lun.get("EncoderHiRange"));
+				tsce.setAnalogEncoder(iencCount, iencLoRange, iencHiRange);
+			} else {
+				if(encType.isPresent() && encType.get().equals("Digital")) {
+					int iencCount = 1;
+					int iencState = 1; // high
+					String encState = null;
+					if(encCount.isPresent())
+						iencCount = Integer.parseInt((String)encCount.get());
+					if(Optional.ofNullable(lun.get("EncoderState")).isPresent()) {
+						encState = (String) lun.get("EncoderState");
+						iencState = encState.equals("LOW") ? 0 : 1;
+					}
+					tsce.setDigitalEncoder(iencCount, iencState);
+				}
+			}
+		}
+
 		String M10Gen = null;
 		try {
 			M10Gen = tsce.genM10();
-			if(DEBUG)
-				System.out.printf("%s: Controller tsce:%s generating M10:%s%n",this.getClass().getName(), tsce, M10Gen);
 			if(M10Gen.length() > 0)
 				ndd.addInit(M10Gen);
-			StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(ipin0, ipin1)).append(tsce.genChannelDirDefaultEncoder(ienc));
+			StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(ipin0, ipin1)).append(tsce.genChannelDirDefaultEncoder()).append(tsce.genChannelEncoder());
 			if(DEBUG) {
 				System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,sb.toString());
 			}

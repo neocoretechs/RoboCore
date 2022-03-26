@@ -15,6 +15,11 @@ import java.util.Arrays;
  * M4 - define Split Bridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>] <br/>
  * M5 - define Switch Bridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>] <br/>
  * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>] <br/>
+ * Additionally, after M10, an M14 or M15 encoder directive may be issued depending on default encoder status.<br/>
+ * Create analog encoder:<br/>
+ * M14 Z<slot> C<channel> P<pin> L<lo> H<hi> N<count>
+ * Create digital encoder:<br/>
+ * M15 Z<slot> C<channel> P<pin> S<state 0-LOW 1-HIGH> N<count>
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
@@ -26,6 +31,13 @@ public class TypeSlotChannelEnable implements Serializable {
 	int enable;
 	int dirdefault = 0;
 	int M10CtrlType = -1;
+	int encoder = 0;
+	boolean isAnalogEncoder = false;
+	boolean isDigitalEncoder = false;
+	int loAnalogEncoderRange = 0;
+	int hiAnalogEncoderRange = 0;
+	int encoderCount = 1;
+	int digitalEncoderState = 0; // low
 	/**
 	 * M10 controller types
 	 */
@@ -69,6 +81,10 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.channel = channel;
 		this.enable = enable;
 		this.dirdefault = dirdefault;
+	}
+	
+	public void setEncoderPin(int ienc) {
+		this.encoder = ienc;	
 	}
 	/**
 	 * CALL THIS FIRST to establish type of controller for further operations.
@@ -117,13 +133,13 @@ public class TypeSlotChannelEnable implements Serializable {
 	}
 	/**
 	 * Generate remaining portion of config
-	 * @param encoder The pin that receives hall effect or other encoder pulses per rotation of wheel.
+	 * @param encoder The pin that receives hall effect or other encoder pulses per rotation of wheel. If 0, possibly add additional config
 	 * @return
 	 */
-	public String genChannelDirDefaultEncoder(int encoder) {
+	public String genChannelDirDefaultEncoder() {
 		StringBuilder sb = new StringBuilder(" C").append(channel);
 		if(M10CtrlType == 0) { // smart controller, may or may not have encoder defined with its firmware, not ours
-			if(encoder != 0)
+			if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
 				sb.append(" W").append(encoder);
 			return sb.append(" E").append(dirdefault).append("\r\n").toString();
 		}
@@ -136,10 +152,41 @@ public class TypeSlotChannelEnable implements Serializable {
 		return sb.append("\r\n").toString();
 	}
 	
+	public String genChannelEncoder() {
+		StringBuilder sb = new StringBuilder();
+		if(isAnalogEncoder)
+			sb.append("M14 Z").append(slot).append(" C").append(channel).append(" P").append(encoder).append(" L").append(loAnalogEncoderRange).append(" H").append(hiAnalogEncoderRange).append(" N").append(encoderCount).append("\r\n");
+		else 
+			if(isDigitalEncoder)
+				sb.append("M15 Z").append(slot).append(" C").append(channel).append(" P").append(encoder).append(" S").append(digitalEncoderState).append(" N").append(encoderCount).append("\r\n");
+		return sb.toString();
+	}
+	
+	public void setAnalogEncoder(int iencCount, int iencLoRange, int iencHiRange) {
+		isAnalogEncoder = true;
+		encoderCount = iencCount;
+		loAnalogEncoderRange = iencLoRange;
+		hiAnalogEncoderRange = iencHiRange;
+	}
+	
+	public void setDigitalEncoder(int iencCount, int iencState) {
+		isDigitalEncoder = true;
+		encoderCount = iencCount;
+		digitalEncoderState = iencState;
+	}
 	@Override
 	public String toString() {
-		return String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d M10 type:%d%n",  
+		String ret = String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d M10 type:%d%n",  
 				cntrltype, slot, channel, enable, dirdefault, M10CtrlType);
+		if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
+			ret += String.format(" Default encoder at pin:%d%n",encoder);
+		else 
+			if(isAnalogEncoder)
+				ret += String.format(" Analog encoder at pin:%d range lo:%d, hi:%d count%d%n",encoder, loAnalogEncoderRange, hiAnalogEncoderRange, encoderCount);
+			else
+				if(isDigitalEncoder)
+					ret += String.format(" Digital encoder at pin:%d stsate:%d count%d%n",encoder, digitalEncoderState, encoderCount);
+		return ret;			
 	}
 	
 	/**
@@ -166,23 +213,26 @@ public class TypeSlotChannelEnable implements Serializable {
 		System.out.println("-----");		
 		TypeSlotChannelEnable tsce = new TypeSlotChannelEnable("SmartController", 0, 1, 22);
 		System.out.print(tsce.genM10());
-		StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(0, 0)).append(tsce.genChannelDirDefaultEncoder(0));
+		StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(0, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");
 		tsce = new TypeSlotChannelEnable("H-Bridge", 0, 1, 24, 1);
 		System.out.print(tsce.genM10());
-		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(8, 0)).append(tsce.genChannelDirDefaultEncoder(68));
+		tsce.setEncoderPin(68);
+		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(8, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");		
 		tsce = new TypeSlotChannelEnable("PWM", 0, 1, 30);
 		System.out.print(tsce.genM10());
-		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(13, 0)).append(tsce.genChannelDirDefaultEncoder(0));
+		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(13, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");		
 		tsce = new TypeSlotChannelEnable("SplitBridge", 2, 1, 32);
 		System.out.print(tsce.genM10());
-		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(6, 7)).append(tsce.genChannelDirDefaultEncoder(0));
+		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(6, 7)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");		
 	}
+
+
 }

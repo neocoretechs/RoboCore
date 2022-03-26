@@ -71,8 +71,8 @@ public class Pins {
 	        // We can optionally override the default listener value change threshold (DEFAULT=0)
 	        // ... this is the threshold delta value that the internal analog input monitoring thread must cross before
 	        //     dispatching a new analog input value change event
-	        // analog value must change in excess of 5 from the last event dispatched before dispatching a new change event
-	        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(5);
+	        // analog value must change in excess of 511 from the last event dispatched before dispatching a new change event
+	        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(511);
 		}
 		//Pin[] allPins = OdroidC1Pin.allPins();
 		//for(Pin p: allPins)
@@ -242,8 +242,8 @@ public class Pins {
 		        // We can optionally override the default listener value change threshold (DEFAULT=0)
 		        // ... this is the threshold delta value that the internal analog input monitoring thread must cross before
 		        //     dispatching a new analog input value change event
-		        // analog value must change in excess of 5 from the last event dispatched before dispatching a new change event
-		        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(5);
+		        // analog value must change in excess of 511 from the last event dispatched before dispatching a new change event
+		        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(511);
 			}
 			switch(pin) {
 				case 37:
