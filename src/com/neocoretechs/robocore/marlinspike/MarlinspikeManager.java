@@ -139,20 +139,29 @@ public class MarlinspikeManager {
 				Optional<Object> dir = Optional.ofNullable(lun[i].get("Direction"));
 				Optional<Object> enable = Optional.ofNullable(lun[i].get("EnablePin"));
 				int ienable = enable.isPresent() ? Integer.parseInt((String)enable.get()) : 0;
+				// standalone controls?
+				Optional<Object> pinIn = Optional.ofNullable(lun[i].get("InputPin"));
+				Optional<Object> pinOut = Optional.ofNullable(lun[i].get("OutputPin"));
 				// if pin2 is present we assume pin1 is present and we are using a 2 PWM pin type
 				// if enable pin is not present we are probably using a smart controller, and we want our own
 				// constructor for TypeSlotChannelEnable
 				TypeSlotChannelEnable tsce = null;
-				if(dir.isPresent()) {
-					tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"), 
-						Integer.parseInt((String)lun[i].get("Slot")), 
-						Integer.parseInt((String)lun[i].get("Channel")), 
-						ienable, Integer.parseInt((String) dir.get()));
+				if(!pinIn.isPresent() && !pinOut.isPresent()) {
+					if(dir.isPresent()) {
+						tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"), 
+								Integer.parseInt((String)lun[i].get("Slot")), 
+								Integer.parseInt((String)lun[i].get("Channel")), 
+								ienable, Integer.parseInt((String) dir.get()));
+					} else {
+						tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"), 
+								Integer.parseInt((String)lun[i].get("Slot")), 
+								Integer.parseInt((String)lun[i].get("Channel")), 
+								ienable);
+					}
 				} else {
-					tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"), 
-						Integer.parseInt((String)lun[i].get("Slot")), 
-						Integer.parseInt((String)lun[i].get("Channel")), 
-						ienable);
+						tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"),
+											Integer.parseInt((String)lun[i].get("Pin")));
+						
 				}
 				nameToTypeMap.put(name, tsce);
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
@@ -243,15 +252,12 @@ public class MarlinspikeManager {
 
 		String M10Gen = null;
 		try {
-			M10Gen = tsce.genM10();
+			M10Gen = tsce.genM10(ipin0, ipin1);
 			if(M10Gen.length() > 0)
 				ndd.addInit(M10Gen);
-			StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(ipin0, ipin1)).append(tsce.genChannelDirDefaultEncoder()).append(tsce.genChannelEncoder());
 			if(DEBUG) {
-				System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,sb.toString());
+				System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);
 			}
-			if(sb.length() > 0)
-				ndd.addInit(sb.toString());
 		} catch(NoSuchElementException nse) {
 		}
 	}

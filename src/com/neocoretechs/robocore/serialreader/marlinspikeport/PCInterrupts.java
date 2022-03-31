@@ -45,8 +45,6 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	static PinState[] PCintMode = new PinState[28];
 	static double[] PCintLoValue = new double[2];
 	static double[] PCintHiValue = new double[2];
-	static GpioPinDigitalInput[] pins = new GpioPinDigitalInput[28];
-	static GpioPinAnalogInput[] apins = new GpioPinAnalogInput[2];
 	static ConcurrentHashMap<Pin, InterruptService> PCintFunc = new ConcurrentHashMap<Pin, InterruptService>();
 	/**
 	 * Attach analog input pin to state change interrupt
@@ -60,12 +58,12 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 		Pin pipin = Pins.getPin(pin);
 		switch(pin) {
 			case 37:
-				apins[1] = ppin;
+				Pins.apins[1] = ppin;
 				PCintLoValue[1] = loValue;
 				PCintHiValue[1] = hiValue;
 				break;
 			case 40:
-				apins[0] = ppin;
+				Pins.apins[0] = ppin;
 				PCintLoValue[0] = loValue;
 				PCintHiValue[0] = hiValue;
 				break;
@@ -87,8 +85,8 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 		PCintMode[pin] = mode;
 		Pin pipin = Pins.getPin(pin);
 		PCintFunc.put(pipin,userFunc);
-		pins[pin] = Pins.assignInputPin(pin);
-		pins[pin].addListener(this);
+		Pins.pinsIn[pin] = Pins.assignInputPin(pin);
+		Pins.pinsIn[pin].addListener(this);
 
 	}
 	
@@ -99,8 +97,8 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	public void detachDigitalInterrupt(int pin) {
 		Pin pipin = Pins.getPin(pin);
 		PCintFunc.remove(pipin);
-		pins[pin].removeListener(this);
-		pins[pin] = null;
+		Pins.pinsIn[pin].removeListener(this);
+		Pins.pinsIn[pin] = null;
 	}
 	
 	/**
@@ -114,15 +112,15 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.AIN1);  // default pin if no pin argument found
-				apins[1].removeListener(this);
-				apins[1] = null;
+				Pins.apins[1].removeListener(this);
+				Pins.apins[1] = null;
 				break;
 			case 40:
 				pipin = CommandArgumentParser.getPin(
 		                OdroidC1Pin.class,    // pin provider class to obtain pin instance from
 		                OdroidC1Pin.AIN0);  // default pin if no pin argument found
-				apins[0].removeListener(this);
-				apins[0] = null;
+				Pins.apins[0].removeListener(this);
+				Pins.apins[0] = null;
 				break;
 			default:
 				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to detach interrupt, but got pin:"+pin);

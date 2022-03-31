@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
+import java.util.Arrays;
+
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPin;
@@ -48,7 +50,10 @@ import com.pi4j.util.CommandArgumentParser;
  */
 public class Pins {
 	public static boolean DEBUG = true;
-	public static GpioController gpioController = null;
+	private static GpioController gpioController = null;
+	static GpioPinDigitalInput[] pinsIn = new GpioPinDigitalInput[28];
+	static GpioPinDigitalOutput[] pinsOut = new GpioPinDigitalOutput[28];
+	static GpioPinAnalogInput[] apins = new GpioPinAnalogInput[2];
 	public static double MAXVOLTS = 5.0; //normally analog in is limited to 1.8 volts, but if you are using a level shifter (as you should) it can be up to 5
 	/**
 	 * Get the logical pin from the physical header pin
@@ -205,7 +210,8 @@ public class Pins {
 		Pin xpin = getPin(pin);
 		GpioPinDigitalOutput opin = gpioController.provisionDigitalOutputPin(xpin,String.valueOf(pin),PinState.LOW);
 		//opin.setMode(PinMode.DIGITAL_OUTPUT);
-		opin.setShutdownOptions(false, PinState.LOW);
+		opin.setShutdownOptions(false, PinState.LOW); // false = unexport
+		pinsOut[pin] = opin;
 		if(DEBUG)
 			System.out.printf("Pins.assignPin output pin set %d to %s%n", pin, opin);
 		return opin;
@@ -213,12 +219,14 @@ public class Pins {
 	
 	public static void unassignPin(GpioPin pin) {
 		pin.removeAllListeners();
+		gpioController.unprovisionPin(pin);
 	}
 	
 	public static GpioPinDigitalInput assignInputPin(int pin) {
 		Pin xpin = getPin(pin);
 		GpioPinDigitalInput ipin = gpioController.provisionDigitalInputPin(xpin,String.valueOf(pin));
 		//ipin.setMode(PinMode.DIGITAL_INPUT);
+		pinsIn[pin] = ipin;
 		if(DEBUG)
 			System.out.printf("Pins.assignInputPin input pin set %d to %s%n", pin, ipin);
 		return ipin;
@@ -267,6 +275,38 @@ public class Pins {
 			return apin;
 	}
 	
+	public static GpioPinDigitalInput getInputPin(int pin) {
+		return pinsIn[pin];
+	}
+	
+	public static GpioPinDigitalOutput getOutputPin(int pin) {
+		return pinsOut[pin];
+	}
+	
+	public static GpioPinAnalogInput getAnalogInputPin(int pin) {
+		switch(pin) {
+		case 37:
+			return apins[1];
+		case 40:
+			return apins[0];
+		default:
+			throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0, but got pin:"+pin);
+		}
+	}
+
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Input pins:");
+		sb.append(Arrays.toString(pinsIn));
+		sb.append("\r\n");
+		sb.append("Output pins:");
+		sb.append(Arrays.toString(pinsOut));
+		sb.append("\r\n");
+		sb.append("Analog Input pins:");
+		sb.append(Arrays.toString(apins));
+		sb.append("\r\n");
+		return sb.toString();
+	}
 	 /**
      * calculate relative analog input voltage based on the 10-bit conversion value
      * read from the hardware

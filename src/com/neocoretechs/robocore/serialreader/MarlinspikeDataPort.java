@@ -14,10 +14,6 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.Variabl
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinAnalogInput;
-import com.pi4j.io.gpio.OdroidC1Pin;
-import com.pi4j.io.gpio.Pin;
-import com.pi4j.io.gpio.PinMode;
-import com.pi4j.io.gpio.GpioPin;
 import com.pi4j.io.gpio.PinState;
 
 /**
@@ -94,6 +90,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	
 	PWM pwm = null;
 	GpioPinDigitalOutput dpin;
+	GpioPinDigitalInput ipin;
 	int nread = 0;
 	long micros = 0;
 	int[] values;
@@ -109,7 +106,6 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	PWM[] panalogs = new PWM[10];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	// Dynamically defined digital pins
 	boolean[] digitalTarget = new boolean[12];
-	GpioPinDigitalOutput[] pdigitals= new GpioPinDigitalOutput[12];
 	// PWM control block
 	PWM[] ppwms = new PWM[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
 	static int pwm_freq = DEFAULT_PWM_FREQUENCY;
@@ -307,7 +303,6 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		}
 		return false;
 	}
-
 	
 	/**
 	 * Process command line
@@ -790,6 +785,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 									for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
 											int pMotor1 = ((HBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
 											int pMotor2 = ((HBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
+											System.out.println("Existing control using pins:"+pMotor1+","+pMotor2);
 											//if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
 											//	pdigitals[pMotor2] = null;
 											//}
@@ -809,6 +805,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 										for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
 												int pMotor1 = ((SplitBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
 												int pMotor2 = ((SplitBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
+												System.out.println("Existing control using pins:"+pMotor1+","+pMotor2);
 												//if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
 												//	pdigitals[pMotor2] = null;
 												//}
@@ -833,6 +830,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 									for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
 										int pMotor1 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorDigitalPin(i);
 										int pMotor2 = ((SwitchBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
+										System.out.println("Existing control using pins:"+pMotor1+","+pMotor2);
 										//if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
 										//	pdigitals[pMotor2] = null;
 										//}
@@ -855,6 +853,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 									// each controller can have up to 10 channels, each with its own PWM and direction pin
 									for(int i = 1; i <= pwmControl[motorController].getChannels(); i++) {
 										int pMotor1 = ((VariablePWMDriver)pwmControl[motorController]).getPWMEnablePin(i);
+										System.out.println("Existing control using pins:"+pMotor1);
 											//if(pMotor1 != 255 && pdigitals[pMotor1] != null) {
 											//	pdigitals[pMotor1] = null;
 											//}
@@ -1118,46 +1117,78 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				   }
 			  break;
 			  //
-			  // M41 - Create persistent digital pin, Write digital pin HIGH P<pin> (this gives you a 5v source on pin)
+			  // M41 P<pin> 
+			  // Create persistent digital output pin
 			  //
 			  case 41:
 			     pin_number = -1;
 			     if (code_seen('P')) {
 				     pin_number = (int)code_value();
-					 dpin = Pins.assignPin(pin_number);
-					 dpin.high();
-					 for(int i = 0; i < 32; i++) {
-						     if(pdigitals[i] != null) {
-							     pdigitals[i] = dpin;
-							     break;
-						     }
-					 }
+					 Pins.assignPin(pin_number);
 					 return(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
 			     }
-			break;
-			//
-			// M42 - Create persistent digital pin, Write digital pin LOW P<pin> (This gives you a grounded pin)
-			//
-		    case 42:
-			  pin_number = -1;
-			  if (code_seen('P')) {
-		        pin_number = (int)code_value();
-				dpin = Pins.assignPin(pin_number);
-				dpin.low();
-					return(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
-			  }
+			     break;
+			  //
+			  // M42 P<pin> S<state>
+			  // state 0 - LOW, 1 HIGH
+			  // Write digital pin LOW
+			  //
+			  case 42:
+				  pin_number = -1;
+				  if (code_seen('P')) {
+					  pin_number = (int)code_value();
+					  dpin = Pins.getOutputPin(pin_number);
+				      if (code_seen('S')) {
+				    	  switch( (int)code_value()) {
+				    	  case 0:
+							  dpin.low();
+							  break;
+				    	  case 1:
+				    		 dpin.high();
+				    		 break;
+				    	  default:
+							 dpin.low();
+							 break;
+				    	  }
+						  return(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
+				      }
+				  }
 		     break;
-			 
-			//
-		    // M44 P<pin> [U] - -Read digital pin with optional pullup
-		    //
-			case 44:
+			  //
+			  // M43 P<pin>
+		      // Create persistent digital input pin
+			  //
+			  case 43:
+			     pin_number = -1;
+			     if (code_seen('P')) {
+				     pin_number = (int)code_value();
+					 Pins.assignInputPin(pin_number);
+					 return(String.format("%sM43%s%n",MSG_BEGIN,MSG_TERMINATE));
+			     }
+			     break; 
+			  //
+		      // M44 P<pin> [U] - -Read digital pin with optional pullup
+		      //
+			  case 44:
 		        pin_number = -1;
 		        int res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
+		          ipin = Pins.getInputPin(pin_number);
+		          switch(ipin.getState()) {
+		          	case LOW:
+		          		res = 0;
+		          		break;
+		          	case HIGH:
+		          		res = 1;
+		          		break;
+		          	default:
+		          		res = 0;
+		          		break;
+		          }
+				  return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
 				}
-				return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
+		        break;
 			 //	
 			 // M45 - set up PWM P<pin> S<power val 0-255> [F<frequency>]
 			 // PWM value between 0 and 255, default timer mode is 2; clear on match, default resolution is 8 bits, default prescale is 1
@@ -1339,47 +1370,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 				return(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
-			//
-			// M305
-			// Read the pins defined in M306 and output them if they are of the defined target value
-			//
-			case 305: 
-				for(int i = 0 ; i < pdigitals.length; i++) {
-					if( pdigitals[i] != null && (pdigitals[i].isMode(PinMode.ANALOG_INPUT) || pdigitals[i].isMode(PinMode.DIGITAL_INPUT))) {
-						printDigital(pdigitals[i], digitalTarget[i]);
-					}
-				}
-		      break;
-			//
-		    // M306 P<pin> T<target> [U] 
-		    // toggle digital read, 0 or 1 for target value, default 0 optional INPUT_PULLUP
-		    //
-			case 306: 
-				// Looks for target value, if so publish with <digitalpin> header and 1 - pin 2 - value
-				uspin = code_seen('P') ? (int)code_value() : 0;
-				digitarg = code_seen('T') ? (int)code_value() : 0;
-				// this is a permanent pin assignment so dont add if its already assigned
-				//if( assignPin(uspin) ) {
-					for(int i = 0; i < pdigitals.length; i++) {
-						if(pdigitals[i] != null) {
-							pdigitals[i] = Pins.assignPin(uspin);
-							//if(code_seen('U')) {
-								pdigitals[i].setMode(PinMode.DIGITAL_INPUT);
-							//}
-							digitalTarget[i] = digitarg == 1;
-							break;
-						}
-					}
-				//} else {
-				//	for(int i = 0; i < 32; i++) {
-				//		if(pdigitals[i] && pdigitals[i].pin == uspin) {
-				//			digitalTarget[i] = digitarg;
-				//			return(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
-				//			break;
-				//		}
-				//	}
-				//}
-				return(String.format("%sM306%s%n",MSG_BEGIN,MSG_TERMINATE));
+
 			//
 			// M445 P<pin> 
 			// Turn off pulsed write pin - disable PWM
@@ -1470,12 +1461,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(digitalPinSettingHdr);
 				sb.append(MSG_DELIMIT);
 				sb.append("\r\n");
-				for(int i = 0; i < 32; i++) {
-					if( pdigitals[i] != null) {
-						sb.append(pdigitals[i]);
-						sb.append("\r\n");
-					}
-				}
+				sb.append(new Pins().toString());
 				sb.append(MSG_BEGIN);
 				sb.append(digitalPinSettingHdr);
 				sb.append(MSG_TERMINATE);

@@ -53,21 +53,20 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
 		if(DEBUG) 
 			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" slot:"+tsce.slot+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getId());
-		String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
-		AsynchDemuxer.addWrite(asynchDemuxer, affectorCommand);
+		//String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
+		AsynchDemuxer.addWrite(asynchDemuxer, tsce.genActivate(deviceLevel));
 	}
-
 
 	/**
 	 * Generate a series of requests to query the Marlinspike realtime subsystem and retrieve status
 	 * reports via various M codes issued to the realtime processing loop.<p>
-	 * We issue the commands directly through the serial USB or other port and wait for status messages to be
-	 * returned from the Marlinspike.<p/>
+	 * We issue the commands directly through the serial USB or other port or call the standalone method 
+	 * and wait for status messages to be returned from the Marlinspike.<p/>
 	 * These reports are delineated by XML type headers and have various levels of structure, so a handler
 	 * is used in a separate thread for each 'topic' that corresponds to a header from the status payload from the Marlinspike.<p/>
 	 * These processing threads get the asynchronously returned data by demultiplexing them from a circular blocking queue
 	 * populated by the main run method of (@code AsynchDemuxer} which reads from the Marlinspike using the third party
-	 * open source RxTx library and its own read and write threads.<p/>
+	 * open source RxTx library and its own read and write threads, or processes the return from the MarlinspikeDataPort.<p/>
 	 * Once each handler has demuxxed the data from the queue, it creates a series of {@code MachineReading} instances which
 	 * serve to order and give further structure to the retrieved data.<p/>
 	 * Each topic handler has it own queue of MachineReading instances and so in this way the realtime data which may come back
