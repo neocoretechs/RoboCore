@@ -3,6 +3,7 @@ package com.neocoretechs.robocore.marlinspike;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -77,11 +78,13 @@ public class NodeDeviceDemuxer implements Serializable {
 	/**
 	 * Add the parameter to the startup collection, if the entry already exists, reject it such that
 	 * all entries are unique. There is currently no known use case where a duplicate startup directive needs issued.
-	 * @param init
+	 * @param m10Gen
 	 */
-	public void addInit(String init) {
-		if(!startup.contains(init))
-			startup.add(init);
+	public void addInit(List<String> m10Gen) {
+		for(String mElem : m10Gen) {
+			if(!startup.contains(mElem))
+				startup.add(mElem);
+		}
 	}
 	
 	public void init() throws IOException {

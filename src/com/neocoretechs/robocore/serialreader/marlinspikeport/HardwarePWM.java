@@ -25,6 +25,19 @@ public abstract class HardwarePWM {
 	public enum mode { INPUT, OUTPUT };
 	int channel = 0;
 	InterruptService interruptService=null;
+	// explicitly disable PWM for safety
+	static {
+		try {
+			pwmEnable0 = new RandomAccessFile(enable0,"rw");
+			pwmEnable0.writeBytes(String.valueOf(0));
+			pwmEnable0.seek(0);
+		} catch (IOException e) {}
+		try {
+			pwmEnable1 = new RandomAccessFile(enable1,"rw");
+			pwmEnable1.writeBytes(String.valueOf(0));
+			pwmEnable1.seek(0);
+		} catch (IOException e) {}
+	}
 	public HardwarePWM(int pin) {
 		this.pin = pin;
 	}
@@ -36,7 +49,7 @@ public abstract class HardwarePWM {
 					if(pwmDuty1 == null) {
 						pwmDuty1 = new RandomAccessFile(duty1,"rw");
 						pwmFreq1 = new RandomAccessFile(freq1,"rw");
-						pwmEnable1 = new RandomAccessFile(enable1,"rw");
+						//pwmEnable1 = new RandomAccessFile(enable1,"rw");
 						pwmFreq1.writeBytes(String.valueOf(timer_freq));
 						pwmFreq1.seek(0);
 					}
@@ -45,7 +58,7 @@ public abstract class HardwarePWM {
 					if(pwmDuty0 == null) {
 						pwmDuty0 = new RandomAccessFile(duty0,"rw");
 						pwmFreq0 = new RandomAccessFile(freq0,"rw");
-						pwmEnable0 = new RandomAccessFile(enable0,"rw");
+						//pwmEnable0 = new RandomAccessFile(enable0,"rw");
 						pwmFreq0.writeBytes(String.valueOf(timer_freq));
 						pwmFreq0.seek(0);
 					}

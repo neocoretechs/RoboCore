@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -250,10 +251,10 @@ public class MarlinspikeManager {
 			}
 		}
 
-		String M10Gen = null;
+		List<String> M10Gen = null;
 		try {
 			M10Gen = tsce.genM10(ipin0, ipin1);
-			if(M10Gen.length() > 0)
+			if(M10Gen.size() > 0)
 				ndd.addInit(M10Gen);
 			if(DEBUG) {
 				System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);

@@ -1,7 +1,9 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Class to facilitate the creation of logical controllers in the Marlinspike microcontroller subsystem.<p/>
@@ -152,18 +154,21 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @param ipin0 PWM secondary drive pin1
 	 * @return The M10 directive string, possibly multiple c/r delimited directives
 	 */
-	public String genM10(int ipin0, int ipin1) {
+	public List<String> genM10(int ipin0, int ipin1) {
 		typeNames[] t = typeNames.values();
 		typeNames ctrl = Arrays.stream(t).filter(e -> e.name.equals(cntrltype)).findFirst().get();
 		M10CtrlType = ctrl.ordinal();
-		StringBuilder sb =  new StringBuilder();
+		StringBuilder sb = new StringBuilder();
+		ArrayList<String> ab =  new ArrayList<String>();
 		if(cntrltype.endsWith("Pin")) {
-			sb.append("M").append(configCodes[M10CtrlType]).append(" P").append(pin).append("\r\n");
+			ab.add(sb.append("M").append(configCodes[M10CtrlType]).append(" P").append(pin).append("\r\n").toString());
 		} else {
-			sb.append("M10 ").append("Z").append(slot).append(" T").append(M10CtrlType).append("\r\n");
+			ab.add(sb.append("M10 ").append("Z").append(slot).append(" T").append(M10CtrlType).append("\r\n").toString());
+			sb = new StringBuilder();
 			sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder()).append(genChannelEncoder());
+			ab.add(sb.toString());
 		}
-		return sb.toString();
+		return ab;
 	}
 	/**
 	 * Call at time of activation of command immediately before sending to Marlinspike to generate proper
