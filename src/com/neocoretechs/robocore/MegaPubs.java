@@ -414,6 +414,12 @@ public void onStart(final ConnectedNode connectedNode) {
 		}
 	});
 	*/
+	//
+	// Add a message listener for each subscriber device key. When a new message comes in
+	// extract the device name from the map based on the subscriber instance associated with the incoming message.
+	// Based on the device name, get the MarlinspikeControlInterface from the MarlinspikeManager.
+	// We can then set the power level etc on the device from the data in the message.
+	//
 	for(Subscriber<std_msgs.Int32MultiArray> subs : subscriberDevice.keySet()) {
 		subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 			@Override
@@ -423,12 +429,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				int[] valch = message.getData();
 				if(DEBUG)
 					System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%d Thread:%d%n", this.getClass().getName(), subs, deviceName, message.toString(), valch.length, Thread.currentThread().getId());
-				for(int iarg = 0; iarg < valch.length; iarg++) {
-					int affectorSpeed = valch[iarg];
-					if(DEBUG)
-						System.out.printf("%s Message:%s DeviceName=%s arg=%d speed:%d operating:%b%n", this.getClass().getName(), message.toString(), 
-								deviceName, iarg, affectorSpeed, isOperating.get(deviceName));
-					try {
+				try {
 						MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(deviceName);
 						if(DEBUG)
 							System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
@@ -439,24 +440,30 @@ public void onStart(final ConnectedNode connectedNode) {
 								new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
 										diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
 							}
-							continue;
+							return;
 						}
-						// keep Marlinspike from getting bombed with zeroes
-						if(isOperating.get(deviceName)) {
-							if(affectorSpeed == 0) {
-								control.setDeviceLevel(deviceName, 0);
-								isOperating.replace(deviceName, true, false);
+						for(int iarg = 0; iarg < valch.length; iarg++) {
+							int affectorSpeed = valch[iarg];
+							if(DEBUG)
+								System.out.printf("%s Message:%s DeviceName=%s arg=%d speed:%d operating:%b%n", this.getClass().getName(), message.toString(), 
+										deviceName, iarg, affectorSpeed, isOperating.get(deviceName));
+							// keep Marlinspike from getting bombed with zeroes
+							if(isOperating.get(deviceName)) {
+								if(affectorSpeed == 0) {
+									control.setDeviceLevel(deviceName, 0);
+									isOperating.replace(deviceName, true, false);
+								} else {
+									control.setDeviceLevel(deviceName, affectorSpeed);
+								}
 							} else {
-								control.setDeviceLevel(deviceName, affectorSpeed);
+								if(affectorSpeed != 0) {
+									isOperating.replace(deviceName, false, true);
+									control.setDeviceLevel(deviceName, affectorSpeed);
+								}
 							}
-						} else {
-							if(affectorSpeed != 0) {
-								isOperating.replace(deviceName, false, true);
-								control.setDeviceLevel(deviceName, affectorSpeed);
-							}
+							if(DEBUG)
+								System.out.printf("NewMessage, thread %d received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getId(),deviceName,affectorSpeed);
 						}
-						if(DEBUG)
-							System.out.printf("NewMessage, thread %d received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getId(),deviceName,affectorSpeed);
 					} catch (IOException e) {
 						System.out.println("There was a problem communicating with the controller:"+e);
 						e.printStackTrace();
@@ -468,7 +475,6 @@ public void onStart(final ConnectedNode connectedNode) {
 						}
 					}
 				}
-			}
 		});
 	}
 	// tell the waiting constructors that we have registered publishers
