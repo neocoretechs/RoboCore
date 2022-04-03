@@ -15,6 +15,7 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.PinState;
+import com.pi4j.io.gpio.exception.GpioPinExistsException;
 
 /**
  * RoboCore robotic controller platform to SBC (Odroid, RPi) GPIO headers interface to object model.
@@ -976,7 +977,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						analogRangeL = code_seen('L') ? code_value() : 0;
 						analogRangeH = code_seen('H') ? code_value() : 0;
 						counts = (int) (code_seen('N') ? code_value() : 1);
-						motorControl[motorController].createEncoder(channel, pin, analogRangeL, analogRangeH, counts);
+						try {
+							motorControl[motorController].createEncoder(channel, pin, analogRangeL, analogRangeH, counts);
+						} catch(GpioPinExistsException gpioe) {
+							return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						}
 						return(String.format("%sM14%s%n",MSG_BEGIN,MSG_TERMINATE));
 					}
 				}
@@ -1001,7 +1006,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							int pin = (int) code_value();
 							digitalState = (int) (code_seen('S') ? code_value() : 1);
 							counts = (int) (code_seen('N') ? code_value() : 1);
-							motorControl[motorController].createDigitalEncoder(channel, pin, (digitalState == 0 ? PinState.LOW : PinState.HIGH), counts);
+							try {
+								motorControl[motorController].createDigitalEncoder(channel, pin, (digitalState == 0 ? PinState.LOW : PinState.HIGH), counts);
+							} catch(GpioPinExistsException gpioe) {
+								return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							}
 							return(String.format("%sM15%s%n",MSG_BEGIN,MSG_TERMINATE));
 						}
 					}

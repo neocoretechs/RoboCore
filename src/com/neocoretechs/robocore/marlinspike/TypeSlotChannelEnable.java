@@ -165,8 +165,9 @@ public class TypeSlotChannelEnable implements Serializable {
 		} else {
 			ab.add(sb.append("M10 ").append("Z").append(slot).append(" T").append(M10CtrlType).append("\r\n").toString());
 			sb = new StringBuilder();
-			sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder()).append(genChannelEncoder());
+			sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder());
 			ab.add(sb.toString());
+			ab.add(genChannelEncoder());
 		}
 		return ab;
 	}
