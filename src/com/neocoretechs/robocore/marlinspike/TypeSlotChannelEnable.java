@@ -138,18 +138,17 @@ public class TypeSlotChannelEnable implements Serializable {
 	}
 	
 	/**
-	 * CALL THIS FIRST to establish type of controller for further operations.<p/>
+	 * CALL THIS FIRST to establish instance of controller for further operations and to refer to it numerically by type.<p/>
 	 * M10 initializes a type of controller in a specific 'slot' that becomes an ordinal number we use to refer to the controller
-	 * in subsequent M codes. Also creates an instance in the object model of the proper controller.<p/>
-	 * If we are just configuring pins for I/O, dont generate an M10, but perhaps a different M-c0de such as M41 for an output pin.<p/>
-	 * Define diff driver for traction in slot 0, Type 1 is HBridge driver in motor driver slots
-	 * M10 Z0 T1
-	 * Define H-bridge driver slot 1 for boom actuator, PWM pin 9 channel 1, Dir pin 26, no encoder
-	 * M10 Z1 T1
-	 * Define PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers
-	 * M10 Z0 T4
-	 * Now Define SplitBridge lift actuator slot 2 to Type 2 split bridge driver in motor driver slot
-	 * M10 Z2 T2
+	 * in subsequent M codes. Different controller types occupy different 'slots' depending on the object type hierarchy<p/>
+	 * Types 0-3 occupy the 'motor control' slots while type 4 occupies the 'PWM' slot. Each has its own sequence.<p/>
+	 * If we are just configuring pins for I/O, dont generate an M10, but perhaps a different M-code such as M41 for an output pin.<p/>
+	 * M10 Z(slot) T(type) <br/>
+	 * M10 Z0 T0 - Smart controller type 0 , slot 0<br/>
+	 * M10 Z1 T1 - H-Bridge controller type 1, slot 1 <br/>
+	 * M10 Z2 T2 - Split bridge, type 2 slot 2; each channel has 2 PWM pins and an enable pin, so up to 5 channels <br/>
+	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel has 2 GPIO pins for full forward and back, no PWM, and an enable pin <br/>
+	 * M10 Z0 T4 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br/>
 	 * @param ipin1 PWM primary drive pin0 from MarlinspikeManager.configureMarlinspike and properties file
 	 * @param ipin0 PWM secondary drive pin1
 	 * @return The M10 directive string, possibly multiple c/r delimited directives
@@ -228,22 +227,32 @@ public class TypeSlotChannelEnable implements Serializable {
 		return sb.toString();
 	}
 	/**
-	 * Generate remaining portion of config
+	 * Generate remaining portion of config for direction and encoder based on M10 type<p/>
+	 * M10 Z0 T0 - Smart controller type 0 , slot 0<br/>
+	 * M10 Z1 T1 - H-Bridge controller type 1, slot 1 <br/>
+	 * M10 Z2 T2 - Split bridge, type 2 slot 2; each channel has 2 PWM pins and an enable pin, so up to 5 channels <br/>
+	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel has 2 GPIO pins for full forward and back, no PWM, and an enable pin <br/>
+	 * M10 Z0 T4 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br/>
 	 * @param encoder The pin that receives hall effect or other encoder pulses per rotation of wheel. If 0, possibly add additional config
 	 * @return
 	 */
 	private String genChannelDirDefaultEncoder() {
 		StringBuilder sb = new StringBuilder(" C").append(channel);
-		if(M10CtrlType == 0) { // smart controller, may or may not have encoder defined with its firmware, not ours
-			if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
-				sb.append(" W").append(encoder);
-			return sb.append(" E").append(dirdefault).append("\r\n").toString();
+		switch(M10CtrlType) { 
+			case 0:// smart controller, may or may not have encoder defined with its firmware, not ours
+				if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
+					sb.append(" W").append(encoder);
+				return sb.append(" E").append(dirdefault).append("\r\n").toString();
+			case 4:// straight PWM driver, no motor, hence, no encoder
+				if(M10CtrlType == 4) { 
+					return sb.append(" D").append(dirdefault).append("\r\n").toString();
+				}
+			default:
+				break;
 		}
-		if(M10CtrlType == 4) { // straight PWM driver, no motor, hence, no encoder
-			return sb.append(" D").append(dirdefault).append("\r\n").toString();
-		}
+		// types 1, 2 and 3 have standard D-enable, E-default dir, W-optional encoder
 		sb.append(" D").append(enable).append(" E").append(dirdefault).toString();
-		if(encoder != 0)
+		if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
 			sb.append(" W").append(encoder);
 		return sb.append("\r\n").toString();
 	}

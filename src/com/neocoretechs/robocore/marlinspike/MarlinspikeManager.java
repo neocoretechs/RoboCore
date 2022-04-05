@@ -19,6 +19,7 @@ import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 
 /**
  * Each individual robot uses this class to manage its collection of attributes initially parsed from config file, including
@@ -216,7 +217,13 @@ public class MarlinspikeManager {
 		Optional<Object> enc = Optional.ofNullable(lun.get("EncoderPin"));
 		Optional<Object> encType = Optional.ofNullable(lun.get("EncoderType"));
 		Optional<Object> encCount = Optional.ofNullable(lun.get("EncoderCount"));
-
+		Optional<Object> aPollRate = Optional.ofNullable(lun.get("AnalogPollRate"));
+		Optional<Object> aChangeDelta = Optional.ofNullable(lun.get("AnalogChangeDelta"));
+		
+		if(aPollRate.isPresent())
+			Pins.setAnalogPollRate(Integer.parseInt((String)aPollRate.get()));
+		if(aChangeDelta.isPresent())
+			Pins.setAnalogChangeDelta(Integer.parseInt((String)aChangeDelta.get()));		
 		int ipin0=0,ipin1=0,ienc=0;
 		if(pin0.isPresent())
 			ipin0 = Integer.parseInt((String) pin0.get());

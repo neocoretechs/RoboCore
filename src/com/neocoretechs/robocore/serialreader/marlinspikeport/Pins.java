@@ -54,6 +54,8 @@ public class Pins {
 	static GpioPinDigitalInput[] pinsIn = new GpioPinDigitalInput[28];
 	static GpioPinDigitalOutput[] pinsOut = new GpioPinDigitalOutput[28];
 	static GpioPinAnalogInput[] apins = new GpioPinAnalogInput[2];
+	static int analogPollRate = 100; // ms between analog change for firing
+	static int analogChangeThreshold = 511; // amount analog input has to change before firing
 	public static double MAXVOLTS = 5.0; //normally analog in is limited to 1.8 volts, but if you are using a level shifter (as you should) it can be up to 5
 	/**
 	 * Get the logical pin from the physical header pin
@@ -71,13 +73,13 @@ public class Pins {
 			// <OPTIONAL>
 	        // We can optionally override the default polling rate for the analog input monitoring (DEFAULT=50ms)
 	        // ... this is the rate at which the internal analog input monitoring thread will poll for changes
-	        OdroidGpioProvider.setAnalogInputPollingRate(100); // milliseconds
+	        OdroidGpioProvider.setAnalogInputPollingRate(analogPollRate); // milliseconds
 	        // <OPTIONAL>
 	        // We can optionally override the default listener value change threshold (DEFAULT=0)
 	        // ... this is the threshold delta value that the internal analog input monitoring thread must cross before
 	        //     dispatching a new analog input value change event
 	        // analog value must change in excess of 511 from the last event dispatched before dispatching a new change event
-	        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(511);
+	        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(analogChangeThreshold);
 		}
 		//Pin[] allPins = OdroidC1Pin.allPins();
 		//for(Pin p: allPins)
@@ -245,13 +247,13 @@ public class Pins {
 				// <OPTIONAL>
 		        // We can optionally override the default polling rate for the analog input monitoring (DEFAULT=50ms)
 		        // ... this is the rate at which the internal analog input monitoring thread will poll for changes
-		        OdroidGpioProvider.setAnalogInputPollingRate(100); // milliseconds
+		        OdroidGpioProvider.setAnalogInputPollingRate(analogPollRate); // milliseconds
 		        // <OPTIONAL>
 		        // We can optionally override the default listener value change threshold (DEFAULT=0)
 		        // ... this is the threshold delta value that the internal analog input monitoring thread must cross before
 		        //     dispatching a new analog input value change event
 		        // analog value must change in excess of 511 from the last event dispatched before dispatching a new change event
-		        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(511);
+		        OdroidGpioProvider.setAnalogInputListenerChangeThreshold(analogChangeThreshold);
 			}
 			switch(pin) {
 				case 37:
@@ -292,6 +294,14 @@ public class Pins {
 		default:
 			throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0, but got pin:"+pin);
 		}
+	}
+	
+	public static void setAnalogPollRate(int rate) {
+		analogPollRate = rate;
+	}
+	
+	public static void setAnalogChangeDelta(int delta) {
+		analogChangeThreshold = delta;
 	}
 
 	public String toString() {

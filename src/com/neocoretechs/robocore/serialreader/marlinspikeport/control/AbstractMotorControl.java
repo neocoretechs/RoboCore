@@ -166,7 +166,7 @@ public abstract class AbstractMotorControl {
 	public void createEncoder(int channel, int encode_pin) {
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
 		wheelEncoder[channel-1] = new PCInterrupts();
-		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 1023, 1023); // trigger at max 10 bits analog
+		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 1020, 1023); // trigger at max 10 bits analog
 	}
 	/**
 	 * Create an analog Pin Change counter encoder hardwired to trigger at the max 10 bits resolution 1023<p/>

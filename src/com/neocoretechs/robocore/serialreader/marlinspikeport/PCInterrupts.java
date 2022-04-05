@@ -162,6 +162,9 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			default:
 				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to attach interrupt, but got pin:"+pin);
 		}
+		//if(DEBUG )
+		//	System.out.println("POTENTIAL Analog PIN STATE CHANGE: " + event.getPin() + " = "
+        //        + event.getValue() +" from pin "+ pin +" linked to interrupt service "+ints+ " with analog values "+PCintLoValue[ppin]+" to "+PCintHiValue[ppin]);
 		if(event.getValue() >= PCintLoValue[ppin] && event.getValue() <= PCintHiValue[ppin]) {
 			// display pin state on console
 			if(DEBUG )
