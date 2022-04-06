@@ -30,7 +30,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
  *
  */
 public class MarlinspikeManager {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	RobotInterface robot;
 	String hostName;
 	TypedWrapper[] lun;
@@ -104,7 +104,11 @@ public class MarlinspikeManager {
 		for(int i = 0; i < lun.length; i++) {
 			if(override || hostName.equals(lun[i].get("NodeName"))) {
 				String name = (String)lun[i].get("Name");
+				if(name == null)
+					throw new IOException("Must specify Name paramater in configuration file for host "+hostName);
 				String controller = (String)lun[i].get("Controller");
+				if(controller == null)
+					throw new IOException("Must specify Controller paramater in configuration file for host "+hostName+" Name:"+name);
 				DeviceEntry deviceEntry = new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controller);
 				devices.add(deviceEntry);
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
@@ -142,27 +146,36 @@ public class MarlinspikeManager {
 				Optional<Object> enable = Optional.ofNullable(lun[i].get("EnablePin"));
 				int ienable = enable.isPresent() ? Integer.parseInt((String)enable.get()) : 0;
 				// standalone controls?
-				Optional<Object> pinIn = Optional.ofNullable(lun[i].get("InputPin"));
-				Optional<Object> pinOut = Optional.ofNullable(lun[i].get("OutputPin"));
 				// if pin2 is present we assume pin1 is present and we are using a 2 PWM pin type
 				// if enable pin is not present we are probably using a smart controller, and we want our own
 				// constructor for TypeSlotChannelEnable
 				TypeSlotChannelEnable tsce = null;
-				if(!pinIn.isPresent() && !pinOut.isPresent()) {
+				String type = (String)lun[i].get("Type");
+				if(type == null)
+					throw new IOException("Must specify Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller);
+				if(!type.equals("InputPin") && !type.equals("OutputPin")) {
+					String slot = (String)lun[i].get("Slot");
+					if(slot == null)
+						throw new IOException("Must specify Slot paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
+					String channel = (String)lun[i].get("Channel");
+					if(channel == null)
+						throw new IOException("Must specify Channel paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
 					if(dir.isPresent()) {
-						tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"), 
-								Integer.parseInt((String)lun[i].get("Slot")), 
-								Integer.parseInt((String)lun[i].get("Channel")), 
+						tsce = new TypeSlotChannelEnable(type, 
+								Integer.parseInt(slot), 
+								Integer.parseInt(channel), 
 								ienable, Integer.parseInt((String) dir.get()));
 					} else {
-						tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"), 
-								Integer.parseInt((String)lun[i].get("Slot")), 
-								Integer.parseInt((String)lun[i].get("Channel")), 
+						tsce = new TypeSlotChannelEnable(type, 
+								Integer.parseInt(slot), 
+								Integer.parseInt(channel), 
 								ienable);
 					}
 				} else {
-						tsce = new TypeSlotChannelEnable((String)lun[i].get("Type"),
-											Integer.parseInt((String)lun[i].get("Pin")));
+					String pin = (String)lun[i].get("Pin");
+					if(pin == null)
+						throw new IOException("Must specify Pin paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
+					tsce = new TypeSlotChannelEnable(type, Integer.parseInt(pin));
 						
 				}
 				nameToTypeMap.put(name, tsce);
@@ -192,7 +205,7 @@ public class MarlinspikeManager {
 	 */
 	public synchronized void activateMarlinspike(NodeDeviceDemuxer ndd) throws IOException {
 		if(DEBUG)
-			System.out.printf("%s.activateMarlinspikes preparing to initialize %s%n",this.getClass().getName(), ndd);
+			System.out.printf("%s.activateMarlinspike preparing to initialize %s%n",this.getClass().getName(), ndd);
 		AsynchDemuxer asynchDemuxer = new AsynchDemuxer(this);
 		if(ndd.getDevice().equals("MarlinspikeDataPort"))
 			asynchDemuxer.connect(new MarlinspikeDataPort());

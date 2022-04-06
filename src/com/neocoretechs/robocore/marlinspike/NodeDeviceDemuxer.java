@@ -9,9 +9,12 @@ import java.util.Set;
 
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 /**
- * deviceName is a descriptor for the device, such as "LeftWheel" etc. The device itself is typically a tty
- * port that the Marlinspike board is attached to. These demuxers are unique to each device and as such the
- * hash and equals methods are keyed to device field.
+ * deviceName is a descriptor for the device, such as "LeftWheel" etc. Name from properties file.<p/>
+ * The device itself is a process or tty port that the Marlinspike board is attached to. Controller from properties file.<p/> 
+ * These demuxers are unique to each device and as such the hash and equals methods are keyed to device field.<p/>
+ * If the physical device is running this code as well, such as an SBC with its header generating PWM to the motor controllers,
+ * the device is a process called MarlinspikeDataPort, otherwise its a tty port talking to a remote microcontroller.<p/>
+ * Either way, directives are delivered as the platform agnostic M and G codes.<p/>
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
@@ -26,9 +29,9 @@ public class NodeDeviceDemuxer implements Serializable {
 	private transient MarlinspikeControlInterface controlHost;
 	
 	/**
-	 * @param nodeName The host name of the computer the device is connected to
-	 * @param deviceName descriptor for the device, such as "LeftWheel" etc.
-	 * @param device the physical device the Marlinspike board is connected to, typically a tty via USB, the Controller
+	 * @param nodeName The host name of the computer the device is connected to. NodeName from properties file.
+	 * @param deviceName descriptor for the device, such as "LeftWheel" etc. Name from properties file.
+	 * @param device the physical device or process handling realtime IO. Controller from properties file.
 	 */
 	public NodeDeviceDemuxer(String nodeName, String deviceName, String device)  {
 		this.nodeName = nodeName;
@@ -104,6 +107,6 @@ public class NodeDeviceDemuxer implements Serializable {
 	
 	@Override
 	public String toString() {
-		return String.format("%s %s %s %s (key)%n",this.getClass().getName(), nodeName, deviceName, device);
+		return String.format("%s Name:%s NodeName:%s Controller:%s%n",this.getClass().getName(), deviceName, nodeName, device);
 	}
 }
