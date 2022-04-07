@@ -609,11 +609,6 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						  } else {
 							  break;
 						  }
-						  if( code_seen('B')) {
-							  dir_pinb = (int) code_value();
-						  } else {
-							  break;
-						  }
 						  if( code_seen('E')) {
 							  dir_default = (int) code_value();
 						  } else {
@@ -623,7 +618,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							 encode_pin = (int) code_value();
 						  }
 						  try {
-							  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default);
+							  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_default);
 							  if(encode_pin != 0) {
 								  motorControl[motorController].createEncoder(channel, encode_pin);
 							  }

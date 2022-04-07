@@ -28,59 +28,41 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
 */
 public class SwitchBridgeDriver extends AbstractMotorControl {
 	final static String MSG_MOTORCONTROL_5= "Emergency stop";
-	GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels*4];
 	// 5 possible drive wheels, index is by channel-1.
 	// motorDrive[channel] [[Digitals array index][dir pin]
 	// PWM params array by channel:
 	// 0-pin index to Digital pins array(default 255)
 	// 1-direction pin
-	int[][] motorDrive= new int[][]{{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0}};
-	int[][] motorDriveB= new int[][]{{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0}};
+	int[][] motorDrive= new int[][]{{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0}};
 	int status_flag = 0;
 	
 	public int getMotorDigitalPin(int channel) { return motorDrive[channel-1][0]; }
 	
-	public int getMotorDigitalPinB(int channel) { return motorDriveB[channel-1][0]; }
+	public int getMotorDigitalPinB(int channel) { return motorDrive[channel-1][1]; }
 
-	public int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
+	public int getMotorEnablePin(int channel) {return motorDrive[channel-1][2]; }
 	
-	int getMotorEnablePinB(int channel) {return motorDriveB[channel-1][1]; }
+	public void setMotorDigitalPin(int channel, int pin) { motorDrive[channel-1][0] = pin; }
+	
+	public void setMotorDigitalPinB(int channel, int pin) { motorDrive[channel-1][1] = pin; }
+
+	public void setMotorEnablePin(int channel, int pin) { motorDrive[channel-1][2] = pin; }
+	
 	/**
 	 * Add a new Digital pin instance to this motor controller.
 	 * @param channel the controller channel from 1 to channels
-	 * @param pin_number the index in the GPIO pin array defined in 'setMotors' for M1, this is the next blank slot available
+	 * @param pin_number the index in the GPIO pin array defined in 'setMotors' for M1
 	 * @param pin_numberB the index in the GPIO array defined in 'setMotors' for M2
 	 * @param dir_pin the enable pin for this channel
 	 * @param dir_pinB enable for B
-	 * @param dir_default the default direction the motor starts in
 	 */
-	public void createDigital(int channel, int pin_number, int pin_numberB, int dir_pin, int dir_pinB, int dir_default) {
-		int i;
-		for(i = 0; i < channels*4; i++) {
-			if(pdigitals[i] == null)
-				break;
-		}
-		pdigitals[i] = Pins.assignPin(pin_number);
-		motorDrive[channel-1][0] = i;
-		for(i = 0; i < channels*4; i++) {
-			if(pdigitals[i] == null)
-				break;
-		}
-		pdigitals[i] = Pins.assignPin(pin_numberB);
-		motorDriveB[channel-1][0] = i;
-		for(i = 0; i < channels*4; i++) {
-			if(pdigitals[i] == null)
-				break;
-		}	
-		pdigitals[i] = Pins.assignPin(dir_pin);
-		motorDrive[channel-1][1] = i;
-		for(i = 0; i < channels*4; i++) {
-			if(pdigitals[i] == null)
-				break;
-		}
-		pdigitals[i] = Pins.assignPin(dir_pinB);
-		motorDriveB[channel-1][1] = i;
-				
+	public void createDigital(int channel, int pin_number, int pin_numberB, int dir_pin, int dir_default) {
+		Pins.assignPin(pin_number);
+		setMotorDigitalPin(channel, pin_number);
+		Pins.assignPin(pin_numberB);
+		setMotorDigitalPinB(channel, pin_numberB);
+		Pins.assignPin(dir_pin);
+		setMotorEnablePin(channel, dir_pin);			
 		currentDirection[channel-1] = dir_default;
 		defaultDirection[channel-1] = dir_default;
 	}
@@ -100,8 +82,10 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		if( MOTORSHUTDOWN )
 			return 0;
 		setMotorSpeed(channel, motorPower);
-		int gioIndex = motorDrive[channel][0]; // index to gpio array
-		int dirPinIndex = motorDrive[channel][1]; // index to dir pin array
+		int gioIndex = getMotorDigitalPin(channel); // index to gpio array
+		int gioIndexB = getMotorDigitalPinB(channel); // index to gpio array
+		int dirPinIndex = getMotorEnablePin(channel); // index to dir pin array
+		Pins.getOutputPin(dirPinIndex).high(); // enable motor inputs
 		//int freq = motorDrive[channel][2]; // value of freq, no index;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
@@ -109,10 +93,13 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 			if( motorPower < 0 ) { // and we want to go backward
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
-				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex].high();
-				else 
-					pdigitals[dirPinIndex].low();
+				if(getDefaultDirection(channel) > 0) {
+					Pins.getOutputPin(gioIndexB).low();
+					Pins.getOutputPin(gioIndex).high();
+				} else { 
+					Pins.getOutputPin(gioIndex).low();
+					Pins.getOutputPin(gioIndexB).high();
+				}
 				setCurrentDirection(channel, 0); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
@@ -120,10 +107,13 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 			if( motorPower > 0 ) { // we are going 'backward' as defined by our initial default direction and we want 'forward'
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
-				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex].low();
-				else
-					pdigitals[dirPinIndex].high();
+				if(getDefaultDirection(channel) > 0) { 
+					Pins.getOutputPin(gioIndex).low();
+					Pins.getOutputPin(gioIndexB).high();
+				} else {
+					Pins.getOutputPin(gioIndexB).low();
+					Pins.getOutputPin(gioIndex).high();
+				}
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
@@ -143,65 +133,16 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		pdigitals[gioIndex].high();
-		// now do B, if dir pin is same, values should match, otherwise pin may be written
-		gioIndex = motorDriveB[channel][0]; // index to gpio array
-		dirPinIndex = motorDriveB[channel][1]; // index to dir pin array
-		//int freq = motorDrive[channel][2]; // value of freq, no index;
-		// get mapping of channel to pin
-		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
-		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
-			if( motorPower < 0 ) { // and we want to go backward
-				// reverse dir, send dir change to pin
-				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
-				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex].high();
-				else 
-					pdigitals[dirPinIndex].low();
-				setCurrentDirection(channel, 0); // set new direction value
-				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
-			}
-		} else { // dir is 0
-			if( motorPower > 0 ) { // we are going 'backward' as defined by our initial default direction and we want 'forward'
-				// reverse, send dir change to pin
-				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
-				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex].low();
-				else
-					pdigitals[dirPinIndex].high();
-				setCurrentDirection(channel, 1);
-			} else { // backward with more backwardness
-				// If less than 0 take absolute value, if zero dont play with sign
-				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
-			}
-		}
-		//
-		// Reset encoders on new speed setting
-		resetEncoders();
-		// If we have a linked distance sensor. check range and possibly skip
-		// If we are setting power 0, we are stopping anyway
-		if( checkUltrasonicShutdown()) {
-			// find the PWM pin and get the object we set up in M3 to write to power level
-			// element 0 of motorDrive has index to PWM array
-			// writing power 0 sets mode 0 and timer turnoff
-			setMotorShutdown(); // sends commandEmergencyStop(1);
-			return fault_flag;
-		}
-		fault_flag = 0;
-		pdigitals[gioIndex].high();
 		return 0;
 	}
 
 	@Override
 	public int commandEmergencyStop(int status) throws IOException {
-		for(int j=0; j < channels; j++) {
-			int pindex = motorDrive[j][0];
-			if(pindex != 255) {
-				pdigitals[pindex].low();
-			}
-			pindex = motorDriveB[j][0];
-			if(pindex != 255) {
-					pdigitals[pindex].low();
+		for(int j=1; j <= channels; j++) {
+			if(getMotorDigitalPin(j) != 255) {
+				Pins.getOutputPin(getMotorEnablePin(j)).low();
+				Pins.getOutputPin(getMotorDigitalPin(j)).low();
+				Pins.getOutputPin(getMotorDigitalPinB(j)).low();
 			}
 		}
 		fault_flag = 16;
@@ -217,10 +158,10 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 
 	@Override
 	public String getDriverInfo(int ch) {
-		if( motorDrive[ch-1][0] == 255 ) {
+		if( getMotorDigitalPin(ch) == 255 ) {
 			return String.format("SwitchBridge UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("SwitchBridge Channel %d PinA:%d, PinB:%d Dir PinA:%d Dir PinB:%d%n",ch, motorDrive[ch-1][0], motorDriveB[ch-1][0], motorDrive[ch-1][1], motorDrive[ch-1][1]);	
+		return String.format("SwitchBridge Channel %d PinA:%d, PinB:%d Dir Pin:%d%n",ch, getMotorDigitalPin(ch), getMotorDigitalPinB(ch), getMotorEnablePin(ch));	
 	}
 	
 	@Override
