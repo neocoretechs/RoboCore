@@ -762,6 +762,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				if(DEBUG)
 					System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), ndd.getName());	
 				isOperating.put(ndd.getName(), false);
+				ndd.getNodeDeviceDemuxer().getMarlinspikeControl().reportAllControllerStatus();
 			}
 			responses = new PublishDiagnosticResponse[stopics.length];
 		} catch (IOException e) {

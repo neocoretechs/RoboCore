@@ -76,15 +76,15 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	 * applications.
 	 */
 	public synchronized String reportAllControllerStatus() throws IOException {
-		getSystemStatus();
-		getAssignedPins();
-		getDigitalPinSetting();
-		getAnalogPinSetting();
-		getUltrasonicPinSetting();
-		getPWMPinSetting();
-		getMotorControlSetting();
+		//getSystemStatus();
+		//getAssignedPins();
+		//getDigitalPinSetting();
+		//getAnalogPinSetting();
+		//getUltrasonicPinSetting();
+		//getPWMPinSetting();
+		//getMotorControlSetting();
 		getControllerStatus();
-		getPWMControlSetting();
+		//getPWMControlSetting();
 		if(DEBUG)
 			System.out.println(this.getClass().getName()+".reportAllControllerStatus");
 		return "Ok";

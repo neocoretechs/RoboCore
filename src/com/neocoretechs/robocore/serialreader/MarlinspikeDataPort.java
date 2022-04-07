@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.serialreader;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
@@ -64,24 +65,25 @@ import com.pi4j.io.gpio.exception.GpioPinExistsException;
  * @author Jonathan Neville Groff Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements DataPortCommandInterface {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
+	private static final int MAX_CMD_SIZE = 1024;
 	public static int DEFAULT_PWM_FREQUENCY = 10000;
 	public static int MAX_MOTOR_POWER = 1000;
 	static int gcode_N, gcode_LastN, Stopped_gcode_LastN = 0;
 
 	static boolean realtime_output = true; // Determines whether real time data from inactive period is streamed
 
-	static String cmdbuffer;
-	static String[] cmdtokens = new String[25];
-	static String outbuffer;
+	String cmdbuffer;
+	String[] cmdtokens = new String[25];
+	String outbuffer;
 	char serial_char;
 
-	static int serial_read;
-	static int serial_count = 0;
+	int serial_read;
+	int serial_count = 0;
 
 	//Inactivity shutdown variables
-	static long previous_millis_cmd = 0;
-	static long max_inactive_time = 0;
+	long previous_millis_cmd = 0;
+	long max_inactive_time = 0;
 
 	long starttime = 0;
 	long stoptime = 0;
@@ -89,9 +91,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	boolean Stopped=false;
 	boolean target_direction;
 	
-	PWM pwm = null;
-	GpioPinDigitalOutput dpin;
-	GpioPinDigitalInput ipin;
+	private GpioPinDigitalOutput dpin;
+	private GpioPinDigitalInput ipin;
 	int nread = 0;
 	long micros = 0;
 	int[] values;
@@ -99,23 +100,21 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	int status;
 	int fault = 0;
 	// Dynamically defined ultrasonic rangers
-	Ultrasonic[] psonics = new Ultrasonic[10];
+	static Ultrasonic[] psonics = new Ultrasonic[10];
 	// Last distance published per sensor
-	float[] sonicDist = new float[]{0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
+	static float[] sonicDist = new float[]{0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
 	// Dynamically defined analog pins
-	double[][] analogRanges = new double[2][16];
-	PWM[] panalogs = new PWM[10];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	static double[][] analogRanges = new double[2][16];
+	static PWM[] panalogs = new PWM[10];//{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	// Dynamically defined digital pins
-	boolean[] digitalTarget = new boolean[12];
+	static boolean[] digitalTarget = new boolean[12];
 	// PWM control block
-	PWM[] ppwms = new PWM[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
+	static PWM[] ppwms = new PWM[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
 	static int pwm_freq = DEFAULT_PWM_FREQUENCY;
-	
-	private int MAX_CMD_SIZE = 1024;
 
 	// &roboteqDevice, new HBridgeDriver, new SplitBridgeDriver...
-	AbstractMotorControl[] motorControl = new AbstractMotorControl[10];
-	AbstractPWMControl[] pwmControl= new AbstractPWMControl[10];
+	static AbstractMotorControl[] motorControl = new AbstractMotorControl[10];
+	static AbstractPWMControl[] pwmControl= new AbstractPWMControl[10];
 	int channel;
 	  
 	int digitarg;
@@ -237,7 +236,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 
 	@Override
 	public String getPortName() {
-		return "MarlinspikeDataPort";
+		return this.toString();
 	}
 
 	@Override
@@ -246,7 +245,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	}
 
 	@Override
-	public String sendCommand(String command) throws IOException {
+	public ArrayList<String> sendCommand(String command) throws IOException {
 		cmdbuffer = command;
 		get_command();
 		return process_commands();
@@ -308,7 +307,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	/**
 	 * Process command line
 	 */
-	String process_commands() throws IOException { 
+	ArrayList<String> process_commands() throws IOException {
+		ArrayList<String> ret = new ArrayList<String>();
 		if(code_seen('G')) {
 			  int cval = (int)code_value();
 			  return processGCode(cval);
@@ -319,14 +319,16 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			 }
 		}
 		// if neither G nor M code
-		return ("Neither G nor M code encountered in command:"+cmdbuffer);
+		ret.add("Neither G nor M code encountered in command:"+cmdbuffer);
+		return ret;
 	}
 
 	/**
 	 * Processing of G-code command sequence
 	 * @param cval
 	 */
-	String processGCode(int cval) throws IOException {
+	ArrayList<String> processGCode(int cval) throws IOException {
+		ArrayList<String> ret = new ArrayList<String>();
 		if(DEBUG)
 			System.out.printf("%s processGCode %s%n", this.getClass().getName(), String.valueOf(cval));
 		switch(cval) {    
@@ -345,7 +347,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					break;
 				}
 		      }
-			  return (String.format("%sG4%s%n",MSG_BEGIN,MSG_TERMINATE));
+			  ret.add(String.format("%sG4%s%n",MSG_BEGIN,MSG_TERMINATE));
+			  return ret;
 			//
 			// G5 [Z<controller>] C<Channel> [P<motor power -1000 to 1000>] [X<PWM power -1000 to 1000>(scaled 0-2000)]
 			// Primary code to command power level to a given controller on a given channel.
@@ -361,20 +364,22 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							motorPower = (int) code_value(); // motor power -1000,1000
 							fault = 0; // clear fault flag
 							if( (status=motorControl[motorController].commandMotorPower(motorChannel, motorPower)) != 0) {
-								return(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_MOTOR,status,motorChannel,motorPower,MSG_TERMINATE));
+								ret.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_MOTOR,status,motorChannel,motorPower,MSG_TERMINATE));
 							} else {
-								return(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
+							return ret;
 						} else {// code P or X
 							if(code_seen('X')) {
 								PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
 								fault = 0; // clear fault flag
 								// use motor related index and value, as we have them
 								if( (status=pwmControl[motorController].commandPWMLevel(motorChannel, PWMLevel)) != 0) {
-									return(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,motorChannel,PWMLevel,MSG_TERMINATE));
+									ret.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,motorChannel,PWMLevel,MSG_TERMINATE));
 								} else {
-									return(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
+									ret.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
 								}
+								return ret;
 							} // code X
 						}
 					 } // code C
@@ -387,7 +392,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				if( code_seen('T') ) {
 					//int time_val = (int) code_value();
 					//watchdog_timer = new WatchdogTimer();
-					return(String.format("%sG99%s%n",MSG_BEGIN,MSG_TERMINATE));
+					ret.add(String.format("%sG99%s%n",MSG_BEGIN,MSG_TERMINATE));
+					return ret;
 					//watchdog_timer.watchdog_init(time_val);
 				}
 				break;
@@ -398,18 +404,22 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				//if( watchdog_timer != null ) {
 				//	watchdog_timer.watchdog_reset();
 				//}
-				return(String.format("%sG100%s%n",MSG_BEGIN,MSG_TERMINATE));	
+				ret.add(String.format("%sG100%s%n",MSG_BEGIN,MSG_TERMINATE));
+				return ret;
 			default:
-				return(String.format("%s%s%s%s%n",MSG_BEGIN,MSG_UNKNOWN_GCODE,cmdbuffer,MSG_TERMINATE));	
+				ret.add(String.format("%s%s%s%s%n",MSG_BEGIN,MSG_UNKNOWN_GCODE,cmdbuffer,MSG_TERMINATE));
+				return ret;
 		} // switch
-		return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_GCODE,cmdbuffer,MSG_TERMINATE));	
+		ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_GCODE,cmdbuffer,MSG_TERMINATE));
+		return ret;
 	}
 	  
 	/**
 	 * Process M codes
 	 * @param cval
 	 */
-	String processMCode(int cval) {
+	ArrayList<String> processMCode(int cval) {
+		ArrayList<String> ret = new ArrayList<String>();
 		if(DEBUG)
 			System.out.printf("%s processMCode %s%n", this.getClass().getName(), String.valueOf(cval));
 		int motorController = 0; 
@@ -417,10 +427,12 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		switch( cval ) {
 			case 0: // M0 - Set real time output off
 				realtime_output = false;
-				return(String.format("%sM0%s%n",MSG_BEGIN,MSG_TERMINATE));		
+				ret.add(String.format("%sM0%s%n",MSG_BEGIN,MSG_TERMINATE));	
+				return ret;
 			case 1: // M1 - Set real time output on 
 				realtime_output = true;
-				return(String.format("%sM1%s%n",MSG_BEGIN,MSG_TERMINATE));
+				ret.add(String.format("%sM1%s%n",MSG_BEGIN,MSG_TERMINATE));
+				return ret;
 			//
 			// M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] 
 			// Set smart controller (default) with optional encoder pin per channel, can be issued multiple times
@@ -441,7 +453,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					if(code_seen('E')) {
 						motorControl[motorController].setDefaultDirection(channel, (int) code_value());
 					}
-					return(String.format("%sM2%s%n",MSG_BEGIN,MSG_TERMINATE));
+					ret.add(String.format("%sM2%s%n",MSG_BEGIN,MSG_TERMINATE));
+					return ret;
 	
 				}
 				break;
@@ -500,10 +513,12 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								motorControl[motorController].createEncoder(channel, encode_pin);
 							}
 						} catch (IOException | GpioPinExistsException gpioe) {
-							return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
 						}
 					}
-					return(String.format("%sM3%s%n",MSG_BEGIN,MSG_TERMINATE));
+					ret.add(String.format("%sM3%s%n",MSG_BEGIN,MSG_TERMINATE));
+					return ret;
 				} // if motorControl[motorController]
 			  break;
 			//
@@ -568,9 +583,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						motorControl[motorController].createEncoder(channel, encode_pin);
 					}
 				  } catch (IOException | GpioPinExistsException gpioe) {
-						return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						return ret;
 				  }
-				  return(String.format("%sM4%s%n",MSG_BEGIN,MSG_TERMINATE));
+				  ret.add(String.format("%sM4%s%n",MSG_BEGIN,MSG_TERMINATE));
+				  return ret;
 				} // code C
 			} //motorcontrol[motorcontroller]
 			break;
@@ -623,9 +640,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								  motorControl[motorController].createEncoder(channel, encode_pin);
 							  }
 						  } catch (GpioPinExistsException gpioe) {
-							return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
 						  }
-						  return(String.format("%sM5%s%n",MSG_BEGIN,MSG_TERMINATE));
+						  ret.add(String.format("%sM5%s%n",MSG_BEGIN,MSG_TERMINATE));
+						  return ret;
 					  } // code C
 				  } //motorcontrol[motorcontroller]
 				break;
@@ -640,13 +659,15 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				if( code_seen('S') ) {
 					if(motorControl[motorController] != null) {
 						motorControl[motorController].setMotorPowerScale((int) code_value());
-						return(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					}
 				} else {
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
 							pwmControl[motorController].setPWMPowerScale((int) code_value());
-							return(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
+							ret.add(String.format("%sM6%s%n",MSG_BEGIN,MSG_TERMINATE));
+							return ret;
 						}
 					}
 				}
@@ -665,7 +686,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						return(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					}
 				} else {
 					if(motorControl[motorController] != null) {
@@ -674,7 +696,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						return(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sM7%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					}
 				}
 				break;
@@ -692,7 +715,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						return(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					}
 				} else {
 					if(motorControl[motorController] != null ) {
@@ -701,7 +725,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						return(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sM8%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					}
 				}
 				break;
@@ -746,9 +771,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					try {
 						((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, dir_default, pwm_freq);
 					} catch (IOException | GpioPinExistsException gpioe) {
-						return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						return ret;
 					}
-					return(String.format("%sM9%s%n",MSG_BEGIN,MSG_TERMINATE));
+					ret.add(String.format("%sM9%s%n",MSG_BEGIN,MSG_TERMINATE));
+					return ret;
 				 }
 				}
 				break;
@@ -777,7 +804,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								} catch (IOException e) {
 									e.printStackTrace();
 								}
-								return(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
 							case 1: // type 1 Hbridge
 								// up to 10 channels, each channel has a direction pin (1), and a PWM pin (0)
 								if(motorControl[motorController] != null) {
@@ -798,7 +826,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 									motorControl[motorController] = null; // in case assignment below fails
 								}
 								motorControl[motorController] = new HBridgeDriver(MAX_MOTOR_POWER);
-								return(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
 							case 2: // type 2 Split bridge, each channel has 2 PWM pins and an enable pin, so up to 5 channels
 								if(motorControl[motorController] != null) {
 										// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
@@ -823,7 +852,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 										motorControl[motorController] = null; // in case assignment below fails
 								}
 								motorControl[motorController] = new SplitBridgeDriver(MAX_MOTOR_POWER);
-								return(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
 							case 3: // type 3 Switch bridge, each channel has 2 GPIO pins for full forward and back, no PWM, and an enable pin
 								if(motorControl[motorController] != null) {
 									// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
@@ -847,7 +877,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 									motorControl[motorController] = null; // in case assignment below fails
 								}
 								motorControl[motorController] = new SwitchBridgeDriver();
-								return(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
 							case 4: // Type 4 non-propulsion PWM driver 
 								if(pwmControl[motorController] != null) {
 									// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
@@ -867,18 +898,23 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 									pwmControl[motorController] = null; // in case assignment below fails
 								}
 								pwmControl[motorController] = new VariablePWMDriver();
-								return(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
 							default:
-								return(String.format("%sBAD CONTROLLER TYPE:%d%s%n",MSG_BEGIN,controllerType,MSG_TERMINATE));
+								ret.add(String.format("%sBAD CONTROLLER TYPE:%d%s%n",MSG_BEGIN,controllerType,MSG_TERMINATE));
+								return ret;
 						}
 						} catch (GpioPinExistsException gpioe) {
-							return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
 						}
 					} else {
-						return(String.format("%sBAD CONTROLLER TYPE:CONTROLLER TYPE DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sBAD CONTROLLER TYPE:CONTROLLER TYPE DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					}			
 				} else {
-					return(String.format("%sBAD CONTROLLER TYPE:CONTROLLER SLOT DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
+					ret.add(String.format("%sBAD CONTROLLER TYPE:CONTROLLER SLOT DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
+					return ret;
 				}
 			//
 			// M11 [Z<slot>] C<channel> [D<duration>] [X<duration>] 
@@ -896,13 +932,15 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
 							pwmControl[motorController].setDuration(channel, (int)code_value());
-							return(String.format("%sM11%s%n",MSG_BEGIN,MSG_TERMINATE));
+							ret.add(String.format("%sM11%s%n",MSG_BEGIN,MSG_TERMINATE));
+							return ret;
 						}
 					} else {
 						if(code_seen('D')) {
 							if(motorControl[motorController] != null) {
 								motorControl[motorController].setDuration(channel, (int)code_value());
-								return(String.format("%s M11%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%s M11%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
 							}
 						}
 					}
@@ -924,13 +962,15 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
 							pwmControl[motorController].setMinPWMLevel(channel, (int)code_value());
-							return(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
+							ret.add(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
+							return ret;
 						}
 					} else {
 						if( code_seen('P')) {
 							if(motorControl[motorController] != null) {
 								motorControl[motorController].setMinMotorPower(channel, (int)code_value());
-								return(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
+								ret.add(String.format("%sM12%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
 							}
 						}
 					}
@@ -947,12 +987,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				if( code_seen('P') ) {
 				  if(motorControl[motorController] != null) {
 					  motorControl[motorController].setMaxMotorPower((int)code_value());
-					  return(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  ret.add(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  return ret;
 				  } else {
 					  if(code_seen('X')) {
 						  if(pwmControl[motorController] != null) {
 							  pwmControl[motorController].setMaxPWMLevel((int)code_value());
-							  return(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+							  ret.add(String.format("%sM13%s%n",MSG_BEGIN,MSG_TERMINATE));
+							  return ret;
 						  }
 					  }
 				  }
@@ -983,9 +1025,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						try {
 							motorControl[motorController].createEncoder(channel, pin, analogRangeL, analogRangeH, counts);
 						} catch(GpioPinExistsException gpioe) {
-							return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
 						}
-						return(String.format("%sM14%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sM14%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					}
 				}
 				break;
@@ -1012,9 +1056,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							try {
 								motorControl[motorController].createDigitalEncoder(channel, pin, (digitalState == 0 ? PinState.LOW : PinState.HIGH), counts);
 							} catch(GpioPinExistsException gpioe) {
-								return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+								ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+								return ret;
 							}
-							return(String.format("%sM15%s%n",MSG_BEGIN,MSG_TERMINATE));
+							ret.add(String.format("%sM15%s%n",MSG_BEGIN,MSG_TERMINATE));
+							return ret;
 						}
 					}
 					break;
@@ -1043,9 +1089,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						try {
 							motorControl[motorController].linkDistanceSensor( pin_number, (Ultrasonic)psonics, dist, dir_face);
 						} catch(GpioPinExistsException gpioe) {
-							return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
 						}
-						return(String.format("%sM33%s%n",MSG_BEGIN,MSG_TERMINATE));
+						ret.add(String.format("%sM33%s%n",MSG_BEGIN,MSG_TERMINATE));
+						return ret;
 					} // code_seen = 'P'
 				}
 			  break;
@@ -1054,14 +1102,16 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			  // Clear all digital pins assigned outside motor controller directives
 			  //
 			  case 35:
-				return(String.format("%sM35%s%n",MSG_BEGIN,MSG_TERMINATE));
+				ret.add(String.format("%sM35%s%n",MSG_BEGIN,MSG_TERMINATE));
+				return ret;
 			  //
 			  // M36 
 			  // Clear all analog pins assigned outside motor controller directives
 			  //
 			  case 36: 
 					//Pins.unassignPins();
-				  	return(String.format("%sM36%s%n",MSG_BEGIN,MSG_TERMINATE));
+				  	ret.add(String.format("%sM36%s%n",MSG_BEGIN,MSG_TERMINATE));
+				  	return ret;
 			  //
 			  // M37 - Clear all PWM pins, ALL MOTOR AND PWM DISABLED, perhaps not cleanly
 			  //
@@ -1075,7 +1125,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				  }
 				}
 				*/
-				return(String.format("%sM37%s%n",MSG_BEGIN,MSG_TERMINATE));
+				ret.add(String.format("%sM37%s%n",MSG_BEGIN,MSG_TERMINATE));
+				return ret;
 			  //
 			  // M38  P<pin> - Remove PWM pin, MOTOR AND PWM DISABLED, perhaps not cleanly
 			  //
@@ -1090,7 +1141,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								  //ppwms[i] = null;
 						  	  //} // pwms == pin_number
 					  	  //} // i iterate pwm array
-					  	return(String.format("%sM38%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  	ret.add(String.format("%sM38%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  	return ret;
 				  	 // } // unassign pin
 			  	  } // code P
 			  break;
@@ -1109,7 +1161,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							   // break;
 						  	  //}
 					  	  //}
-					  	return(String.format("%sM39%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  	ret.add(String.format("%sM39%s%n",MSG_BEGIN,MSG_TERMINATE));
+					  	return ret;
 				  	  //}
 			  	  }
 			  break;
@@ -1128,7 +1181,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							      // break;
 						       //}
 					       //}
-					       return(String.format("%sM40%s%n",MSG_BEGIN,MSG_TERMINATE));
+					       ret.add(String.format("%sM40%s%n",MSG_BEGIN,MSG_TERMINATE));
+					       return ret;
 					   //}
 				   }
 			  break;
@@ -1141,10 +1195,12 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			     if (code_seen('P')) {
 				     pin_number = (int)code_value();
 				     try {
-				    	 Pins.assignPin(pin_number);
-					 	return(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
+				    	Pins.assignPin(pin_number);
+					 	ret.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
+					 	return ret;
 					} catch(GpioPinExistsException gpioe) {
-							return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
 					}
 			     }
 			     break;
@@ -1170,7 +1226,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							 dpin.low();
 							 break;
 				    	  }
-						  return(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
+						  ret.add(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
+						  return ret;
 				      }
 				  }
 		     break;
@@ -1184,9 +1241,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				     pin_number = (int)code_value();
 				     try {
 				    	 Pins.assignInputPin(pin_number);
-				    	 return(String.format("%sM43%s%n",MSG_BEGIN,MSG_TERMINATE));
+				    	 ret.add(String.format("%sM43%s%n",MSG_BEGIN,MSG_TERMINATE));
+				    	 return ret;
 					} catch(GpioPinExistsException gpioe) {
-						return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						return ret;
 					}
 			     }
 			     break; 
@@ -1210,7 +1269,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		          		res = 0;
 		          		break;
 		          }
-				  return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
+				  ret.add(String.format("%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT));
+				  ret.add(String.format("0 %d%n",pin_number));
+				  ret.add(String.format("1 %d%n",res));
+				  ret.add(String.format("%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_TERMINATE));
 				}
 		        break;
 			 //	
@@ -1248,7 +1310,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							ppwms[i] = ppin;
 						}
 		      }
-		      return(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
+		      ret.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));
+		      return ret;
 			  //
 		      // M46 -Read analog pin P<pin>
 		      //
@@ -1257,7 +1320,22 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		        res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
-		          return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT,pin_number,res,MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
+			      GpioPinAnalogInput apin = null;
+			      apin = Pins.getAnalogInputPin(pin_number);
+			      if(apin == null) {
+					try {
+						Pins.assignAnalogInputPin(codenum);
+					} catch(GpioPinExistsException gpioe) {
+						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						return ret;
+					}
+				 }
+			     res = (int) apin.getValue();
+		         ret.add(String.format("%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT));
+		         ret.add(String.format("0 %d%n",pin_number));
+		         ret.add(String.format("1 %d%n",res));
+		         ret.add(String.format(MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
+		         return ret;
 				}
 		     break;
 			 //
@@ -1268,18 +1346,30 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			   if (code_seen('P')) {
 				   pin_number = (int)code_value();
 				   digitarg = code_seen('T') ? (int)code_value() : 0;
-				   //GpioPinAnalogInput apin = new GpioPinAnalogInput(pin_number);
-				   //double res = apin.getValue();
-				   //if( res < digitarg ) { // result < threshold is 0 by default
-					//	   publishBatteryVolts(res);
-					//} else {
-						   return(String.format("%sM47%s%n",MSG_BEGIN,MSG_TERMINATE));
-					//}
+			          pin_number = (int)code_value();
+				      GpioPinAnalogInput apin = null;
+				      apin = Pins.getAnalogInputPin(pin_number);
+				      if(apin == null) {
+						try {
+							Pins.assignAnalogInputPin(codenum);
+						} catch(GpioPinExistsException gpioe) {
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
+						}
+					 }
+				     res = (int) apin.getValue();
+				     if( res < digitarg ) { // result < threshold is 0 by default
+						   return publishBatteryVolts(res);
+					 } else {
+						   ret.add(String.format("%sM47%s%n",MSG_BEGIN,MSG_TERMINATE));
+						   return ret;
+					 }
 			   }
 			 break;
 			 
 		     case 80: //
-		    	 return(String.format("%sM80%s%n",MSG_BEGIN,MSG_TERMINATE));
+		    	 ret.add(String.format("%sM80%s%n",MSG_BEGIN,MSG_TERMINATE));
+		    	 return ret;
 		     //
 		     // M81 [Z<slot>] X 
 		     // Turn off Power Z shut down motorcontroller in slot, X shut down PWM, slot -1 do all
@@ -1330,13 +1420,17 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 			  }
-			  return(String.format("%sM81%s%n",MSG_BEGIN,MSG_TERMINATE));
+			  ret.add(String.format("%sM81%s%n",MSG_BEGIN,MSG_TERMINATE));
+			  return ret;
 			//
 			// M115
 			// Generate configuration report
 			//
 		    case 115: 
-		    	return(String.format("%s%s%s%s%s%s%s%n",MSG_BEGIN,MSG_M115_REPORT,MSG_DELIMIT,MSG_115_REPORT2,MSG_BEGIN,MSG_M115_REPORT,MSG_TERMINATE));
+		    	ret.add(String.format("%s%s%s%n",MSG_BEGIN,MSG_M115_REPORT,MSG_DELIMIT));
+		    	ret.add(MSG_115_REPORT2);
+		    	ret.add(String.format("%s%s%s%n",MSG_BEGIN,MSG_M115_REPORT,MSG_TERMINATE));
+		    	return ret;
 			//
 		    // M300 P<pin number>
 		    // emit ultrasonic pulse on given pin and return duration 
@@ -1344,8 +1438,24 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		    case 300:
 		      uspin = code_seen('P') ? (int)code_value() : 0;
 		      if (uspin > 0) {
-				Ultrasonic upin = new Ultrasonic(uspin);
-				return(String.format("%s%s%s1 %d%n2 %d%n%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_DELIMIT,upin,MSG_BEGIN,sonicCntrlHdr,MSG_TERMINATE));
+		    	try {
+		    	int i = 0;
+		    	for(; i < psonics.length; i++) {
+		    		if(psonics[i] == null) {
+						psonics[i] = new Ultrasonic(uspin);
+		    			break;
+		    		}
+		    		if(psonics[i].txrxPin == uspin || psonics[i].txPin == uspin)
+		    			break;
+		    	}
+				ret.add(String.format("%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_DELIMIT));
+				ret.add(String.format("0 %d%n", uspin));
+				ret.add(String.format("1 %d%n", psonics[i].getRange()));
+				ret.add(String.format("%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_TERMINATE));
+				return ret;	
+		    	} catch(GpioPinExistsException | IOException gpee) {
+		    		
+		    	}
 		      }
 		    break;
 			//
@@ -1359,7 +1469,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				for(int i = 0; i < psonics.length; i++) {
 						if(psonics[i] != null) {
 							psonics[i] = new Ultrasonic(uspin);
-							return(String.format("%sM301%s%n",MSG_BEGIN,MSG_TERMINATE));
+							ret.add(String.format("%sM301%s%n",MSG_BEGIN,MSG_TERMINATE));
+							return ret;
 						}
 				}
 				break;
@@ -1370,12 +1481,13 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			case 302:
 				uspin = code_seen('P') ? (int)code_value() : 0;
 				for(int i = 0; i < psonics.length; i++) {
-						if(psonics[i] != null && psonics[i].txrxPin == uspin) {
+						if(psonics[i] != null && psonics[i].txrxPin == uspin || psonics[i].txPin == uspin ) {
 							psonics[i] = null;
 							break;
 						}
 				}
-				return(String.format("%sM302%s%n",MSG_BEGIN,MSG_TERMINATE));
+				ret.add(String.format("%sM302%s%n",MSG_BEGIN,MSG_TERMINATE));
+				return ret;
 			
 			//case 303: // M303 - Check the analog inputs for all pins defined by successive M304 directives. Generate a read and output data if in range.
 		      //break;
@@ -1385,15 +1497,33 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			//
 			case 304:
 				// if optional L and H values exclude readings in that range
-				uspin = code_seen('P') ? (int)code_value() : 0;
-				// this is a permanent pin assignment so dont add if its already assigned
-				for(int i = 0; i < panalogs.length; i++) {
-					if(panalogs[i] != null) {
-						analogRanges[0][i] = code_seen('L') ? code_value() : 0;
-						analogRanges[1][i] = code_seen('H') ? code_value() : 0;
+				pin_number = -1;
+				if (code_seen('P')) {
+					pin_number = (int)code_value();
+					int i = 0;
+					analogRanges[0][i] = code_seen('L') ? code_value() : 0;
+					analogRanges[1][i] = code_seen('H') ? code_value() : 0;
+					GpioPinAnalogInput apin = null;
+					apin = Pins.getAnalogInputPin(pin_number);
+					if(apin == null) {
+						try {
+							Pins.assignAnalogInputPin(codenum);
+						} catch(GpioPinExistsException gpioe) {
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
+						}
+					}
+					res = (int) apin.getValue();
+					if( res >= analogRanges[0][i] && res <= analogRanges[1][i]) {
+						ret.add(String.format("%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT));
+						ret.add(String.format("0 %d%n",pin_number));
+						ret.add(String.format("1 %d%n",res));
+						ret.add(String.format(MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
+						return ret;
 					}
 				}
-				return(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
+				ret.add(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
+				return ret;
 
 			//
 			// M445 P<pin> 
@@ -1415,7 +1545,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				}
 			  }
-			return(String.format("%sM445%s%n",MSG_BEGIN,MSG_TERMINATE));
+			ret.add(String.format("%sM445%s%n",MSG_BEGIN,MSG_TERMINATE));
+			return ret;
 			//
 			// M500 
 			// Make current settings persistent
@@ -1426,7 +1557,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(MSG_BEGIN);
 				sb.append("M500");
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				ret.add(sb.toString());
+				return ret;
 			//
 			// M501 
 			// Read settings from persistence
@@ -1437,7 +1569,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(MSG_BEGIN);
 				sb.append("M501");
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				ret.add(sb.toString());
+				return ret;
 			//
 			// M502 
 			// Revert to default settings
@@ -1448,7 +1581,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(MSG_BEGIN);
 				sb.append("M502");
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				ret.add(sb.toString());
+				return ret;
 			
 		    //case 503: // M503 print settings currently in memory
 		    //Config_PrintSettings();
@@ -1463,18 +1597,25 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			  sb.append(MSG_STATUS);
 			  sb.append(MSG_DELIMIT);
 			  sb.append("\r\n");
+			  ret.add(sb.toString());
 			  // Check startup - does nothing if bootloader sets MCUSR to 0
+		      sb = new StringBuilder();
 			  //sb.append(VERSION_STRING);
 			  sb.append(MSG_CONFIGURATION_VER);
 			  //sb.append(STRING_VERSION_CONFIG_H);
 			  sb.append(MSG_AUTHOR);
 			  //sb.append(STRING_CONFIG_H_AUTHOR);
 			  sb.append(MSG_FREE_MEMORY);
+			  sb.append("\r\n");
+			  ret.add(sb.toString());
+		      sb = new StringBuilder();
 			  //sb.appendln(freeMemory());
 			  sb.append(MSG_BEGIN);
 			  sb.append(MSG_STATUS);
 			  sb.append(MSG_TERMINATE);
-			  return(sb.toString());
+			  sb.append("\r\n");
+			  ret.add(sb.toString());
+			  return ret;
 			//
 			// M701
 			// Report digital pins in use
@@ -1485,11 +1626,16 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(digitalPinSettingHdr);
 				sb.append(MSG_DELIMIT);
 				sb.append("\r\n");
+				ret.add(sb.toString());
+		        sb = new StringBuilder();
 				sb.append(new Pins().toString());
+				sb.append("\r\n");
+				ret.add(sb.toString());
 				sb.append(MSG_BEGIN);
 				sb.append(digitalPinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				sb.append("\r\n");
+				ret.add(sb.toString());
 			//
 			// M702
 			// Report analog pins in use
@@ -1499,17 +1645,22 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinSettingHdr);
 				sb.append(MSG_DELIMIT);
-				 sb.append("\r\n");
+				sb.append("\r\n");
+				ret.add(sb.toString());
 				for(int i = 0; i < 16; i++) {
+			        sb = new StringBuilder();
 					if( panalogs[i]  != null ) {
 						sb.append(panalogs[i]);
 						sb.append("\r\n");
+						ret.add(sb.toString());
 					}
 				}
+		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				sb.append("\r\n");
+				ret.add(sb.toString());
 			//
 			// M703
 			// Report ultrasonic pins in use
@@ -1520,17 +1671,22 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(ultrasonicPinSettingHdr);
 				sb.append(MSG_DELIMIT);
 				sb.append("\r\n");
+				ret.add(sb.toString());
 				for(int i = 0; i < 10; i++) {
 					if( psonics[i] != null) {
+				        sb = new StringBuilder();
 						sb.append("Pin:");
 						sb.append(psonics[i]);
 						sb.append("\r\n");
+						ret.add(sb.toString());
 					}
 				}
 				sb.append(MSG_BEGIN);
 				sb.append(ultrasonicPinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				sb.append("\r\n");
+				ret.add(sb.toString());
+				return ret;
 			//
 			// M704
 			// Report PWM pins in use
@@ -1541,21 +1697,27 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(pwmPinSettingHdr);
 				sb.append(MSG_DELIMIT);
 				sb.append("\r\n");
+				ret.add(sb.toString());
 				for(int i = 0; i < 12; i++) {
 					if( ppwms[i] != null) {
+						sb = new StringBuilder();
 						sb.append("Pin:");
 						sb.append(ppwms[i].pin);
 						sb.append(" Timer channel:");
 						sb.append(ppwms[i]);
 						sb.append("\r\n");
+						ret.add(sb.toString());
 					}
 				}
+				sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(pwmPinSettingHdr);
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
-				System.out.println(sb.toString());
-				break;
+				ret.add(sb.toString());
+				if(DEBUG)
+					System.out.println(sb.toString());
+				return ret;
 			//
 			// M705
 			// Definitive comprehensive report on all motor control and pwm controls configured
@@ -1566,8 +1728,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(motorControlSettingHdr);
 				sb.append(MSG_DELIMIT);
 				sb.append("\r\n");
+				ret.add(sb.toString());
 				for(int j = 0; j < motorControl.length; j++) {
 						if( motorControl[j] != null) {
+					        sb = new StringBuilder();
 							for(int i = 0 ; i < motorControl[j].getChannels(); i++) { //per channel
 								sb.append("Motor channel:");
 								sb.append("\r\n");
@@ -1613,37 +1777,46 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								sb.append("None.");
 								sb.append("\r\n");
 							}
+							ret.add(sb.toString());
 						} // if motorControl[j]
-					} // j each motor controller
-					sb.append(MSG_BEGIN);
-					sb.append(motorControlSettingHdr);
-					sb.append(MSG_TERMINATE);
-					sb.append("\r\n");
-					//
-					// PWM control
-					//
-					sb.append(MSG_BEGIN);
-					sb.append(pwmControlSettingHdr);
-					sb.append(MSG_DELIMIT);
-					sb.append("\r\n");
-					for(int j = 0; j < pwmControl.length; j++) {
-						if(pwmControl[j] != null) {
-							for(int i = 0 ; i < pwmControl[j].getChannels(); i++) { //per channel
-								sb.append("PWM channel:");
-								sb.append(i+1);
-								sb.append(" Min Level:");
-								sb.append(pwmControl[j].getMinPWMLevel(i+1));
-								sb.append(" Duration:");
-								sb.append(pwmControl[j].getMaxPWMDuration(i+1));
-								sb.append("\r\n");
-							}
+				} // j each motor controller
+		        sb = new StringBuilder();
+				sb.append(MSG_BEGIN);
+				sb.append(motorControlSettingHdr);
+				sb.append(MSG_TERMINATE);
+				sb.append("\r\n");
+				ret.add(sb.toString());
+				//
+				// PWM control
+				//
+			    sb = new StringBuilder();
+			    sb.append(MSG_BEGIN);
+				sb.append(pwmControlSettingHdr);
+				sb.append(MSG_DELIMIT);
+				sb.append("\r\n");
+				ret.add(sb.toString());
+				for(int j = 0; j < pwmControl.length; j++) {
+					if(pwmControl[j] != null) {
+					    sb = new StringBuilder();
+						for(int i = 0 ; i < pwmControl[j].getChannels(); i++) { //per channel
+							sb.append("PWM channel:");
+							sb.append(i+1);
+							sb.append(" Min Level:");
+							sb.append(pwmControl[j].getMinPWMLevel(i+1));
+							sb.append(" Duration:");
+							sb.append(pwmControl[j].getMaxPWMDuration(i+1));
+							sb.append("\r\n");
 						}
-					} // j each PWM controller
-					sb.append(MSG_BEGIN);
-					sb.append(pwmControlSettingHdr);
-					sb.append(MSG_TERMINATE);
-					sb.append("\r\n");
-					return(sb.toString());
+						ret.add(sb.toString());
+					}
+				} // j each PWM controller
+			    sb = new StringBuilder();
+			    sb.append(MSG_BEGIN);
+				sb.append(pwmControlSettingHdr);
+				sb.append(MSG_TERMINATE);
+				sb.append("\r\n");
+				ret.add(sb.toString());
+				return ret;
 			//
 			// M706
 			// Report all pins in use
@@ -1654,10 +1827,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(pinSettingHdr);
 				sb.append(MSG_DELIMIT);
 				sb.append("\r\n");
+				ret.add(sb.toString());
+		        sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(pinSettingHdr);
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				sb.append("\r\n");
+				ret.add(sb.toString());
+				return ret;
 			//
 			// M798 Z<motor control> [X] 
 			// Report controller status for given controller. If X, slot is PWM
@@ -1667,36 +1844,43 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(MSG_BEGIN);
 				sb.append(controllerStatusHdr);
 				sb.append(MSG_DELIMIT);
+				sb.append("\r\n");
+				ret.add(sb.toString());
 				if (code_seen('Z')) {
 					motorController = (int)code_value();
-				}
-				
+				}		
 				if(code_seen('X')) {
 						if(pwmControl[motorController] != null) {
 							for(int i = 0; i < pwmControl[motorController].getChannels() ; i++ ) {
+								sb = new StringBuilder();
 								sb.append("PWM Channel:");
 								sb.append(i+1);
 								sb.append("\r\n");
 								sb.append(pwmControl[motorController].getDriverInfo(i+1));
 								sb.append("\r\n");
-								//sb.appendln(outbuffer);
+								ret.add(sb.toString());
 							}
 						}
 				} else {
 					if( motorControl[motorController] != null  ) {
 						for(int i = 0; i < motorControl[motorController].getChannels() ; i++ ) {
+							sb = new StringBuilder();
 							sb.append("Motor Channel:");
 							sb.append(i+1);
 							sb.append("\r\n");
 							sb.append(motorControl[motorController].getDriverInfo(i+1));
 							sb.append("\r\n");
+							ret.add(sb.toString());
 						}
 					}
 				} // code_seen('X')
+				sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(controllerStatusHdr);
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());	
+				sb.append("\r\n");
+				ret.add(sb.toString());	
+				return ret;
 			//
 			// M799 [Z<controller>][X] 
 			// Reset controller, if no argument, reset all. If X, slot is PWM
@@ -1715,6 +1899,9 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							sb.append(MSG_BEGIN);
 							sb.append("M799");
 							sb.append(MSG_TERMINATE);
+							sb.append("\r\n");
+							ret.add(sb.toString());
+							return ret;
 						}
 					} else {
 						if(motorControl[motorController] != null) {
@@ -1723,9 +1910,13 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							} catch (IOException e) {
 								e.printStackTrace();
 							}
+					        sb = new StringBuilder();
 							sb.append(MSG_BEGIN);
 							sb.append("M799");
 							sb.append(MSG_TERMINATE);
+							sb.append("\r\n");
+							ret.add(sb.toString());	
+							return ret;
 						}
 					}
 				} else { // no slot defined, do them all if present
@@ -1747,28 +1938,34 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								}
 							}
 						}
-						sb.append("\r\n");
 					}
 					sb.append(MSG_BEGIN);
 					sb.append("M799");
 					sb.append(MSG_TERMINATE);
+					sb.append("\r\n");
+					ret.add(sb.toString());	
+					return ret;
 				}
-				return(sb.toString());	
 			//
 			// M802 P<n> S<x> M<x>
 			// Acquire analog pin data 
 			// P=Pin number, S=number readings, M=microseconds per reading. 
 			//
 			case 802:
-				// Publish <dataset> 1 - pin, 2 - reading
+				// Publish <dataset> 0 - pin, 1-S - reading
 		        sb = new StringBuilder();
+		        GpioPinAnalogInput apin = null;
 				if( code_seen('P')) {
-					//apin = new Analog((uint8_t)code_value());
-					//if( code_seen('X') ) {
-					//	apin.pinMode(INPUT_PULLUP);
-					//} else {
-					//	apin.pinMode(INPUT);
-					//}
+					codenum = (int) code_value();
+					apin = Pins.getAnalogInputPin(codenum);
+					if(apin == null) {
+						try {
+							Pins.assignAnalogInputPin(codenum);
+						} catch(GpioPinExistsException gpioe) {
+							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							return ret;
+						}
+					}				
 				}
 				nread = 0;
 				if( code_seen('S') ) {
@@ -1780,7 +1977,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 				values = new int[nread];
 				for(int i = 0; i < nread; i++) {
-					//(values+i) = apin.analogRead();
+					values[i] = (int) apin.getValue();
 					for(int j = 0; j < micros; j++)
 						try {
 							Thread.sleep(0,1000);
@@ -1792,23 +1989,25 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(analogPinHdr);
 				sb.append(MSG_DELIMIT);
 				sb.append("\r\n");
-				for(int i = 0; i < nread; i++) {
-					sb.append(i+1); // sequence
+				ret.add(sb.toString());
+				for(int i = 0; i <= nread; i++) {
+					sb = new StringBuilder();
+					sb.append(i); // sequence
 					sb.append(' ');
-					// 0 element is pin number
-					//if( i == 0 ) {
-					//	sb.append(apin.pin);
-					//} else {
-					//	sb.append((values+i)); // value
-					//}
+					if(i == 0)
+						sb.append(codenum); // pin at reading 0
+					else
+						sb.append((values[i-1])); // value
 					sb.append("\r\n");
+					ret.add(sb.toString());
 				}
-				//delete values;
+				sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(analogPinHdr);
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
-				return(sb.toString());			
+				ret.add(sb.toString());	
+				return ret;
 			//
 			// M999
 			// Reset
@@ -1830,19 +2029,31 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				sb.append(MSG_TERMINATE);
 				sb.append("\r\n");
 				//watchdog_timer.watchdog_init(15); // 15 ms
-				return(sb.toString());
+				ret.add(sb.toString());
+				return ret;
 				
 			default:
 				sb = new StringBuilder();
 				sb.append(MSG_BEGIN);
 				sb.append(MSG_UNKNOWN_MCODE);
+				sb.append(":");
 				sb.append(cmdbuffer);
 				sb.append(MSG_TERMINATE);
-				return(sb.toString());
+				sb.append("\r\n");
+				ret.add(sb.toString());
+				return ret;
 			
 		  } // switch m code
 		
-		  return(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,cmdbuffer,MSG_TERMINATE));
+		  StringBuilder sb = new StringBuilder();
+		  sb.append(MSG_BEGIN);
+		  sb.append(MALFORMED_MCODE);
+		  sb.append(":");
+		  sb.append(cmdbuffer);
+		  sb.append(MSG_TERMINATE);
+		  sb.append("\r\n");
+		  ret.add(sb.toString());
+		  return ret;
 		  
 		} //processMCode
 
@@ -1899,40 +2110,36 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			return(sb.toString());
 		}
 		//
-		// Deliver the battery voltage from smart controller
-		//
-		String publishBatteryVolts(int volts) {
-			StringBuilder sb = new StringBuilder();
-			sb.append(MSG_BEGIN);
-			sb.append(batteryCntrlHdr);
-			sb.append(MSG_DELIMIT);
-			sb.append("\r\n");
-			sb.append("1 ");
-			sb.append(volts);
-			sb.append("\r\n");
-			sb.append(MSG_BEGIN);
-			sb.append(batteryCntrlHdr);
-			sb.append(MSG_TERMINATE);
-			sb.append("\r\n");
-			return(sb.toString());
+		ArrayList<String> publishBatteryVolts(int volts) {
+			ArrayList<String> sb = new ArrayList<String>();
+			sb.add(MSG_BEGIN+batteryCntrlHdr+MSG_DELIMIT+"\r\n");
+			sb.add("1 "+volts+"\r\n");
+			sb.add(MSG_BEGIN+batteryCntrlHdr+MSG_TERMINATE+"\r\n");
+			return sb;
 		}
 		// **********************************************************************
 		// only call this if we know code is stall                              
 		// **********************************************************************
-		String publishMotorStatCode(String stat) {
+		ArrayList<String> publishMotorStatCode(String stat) {
+			ArrayList<String> ret = new ArrayList<String>();
 			StringBuilder sb = new StringBuilder();
 			sb.append(MSG_BEGIN);
 			sb.append(motorFaultCntrlHdr);
 			sb.append(MSG_DELIMIT);
 			sb.append("\r\n");
+			ret.add(sb.toString());
+			sb = new StringBuilder();
 			sb.append("1 ");
 			sb.append(stat);
 			sb.append("\r\n");
+			ret.add(sb.toString());
+			sb = new StringBuilder();
 			sb.append(MSG_BEGIN);
 			sb.append(motorFaultCntrlHdr);
 			sb.append(MSG_TERMINATE);
 			sb.append("\r\n");
-			return(sb.toString());
+			ret.add(sb.toString());
+			return ret;
 		}
 
 		/**

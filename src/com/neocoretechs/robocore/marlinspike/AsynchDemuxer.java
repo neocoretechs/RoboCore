@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -804,15 +805,16 @@ public class AsynchDemuxer implements Runnable {
 	public void run() {
 		// Take Marlinspike lines from circular blocking deque and demux them.
 		// this will process the responses from the dataport that have placed on the deque.
-		String line = null,fop;
+		String fop;
+		ArrayList<String> payload;
 		while(shouldRun) {
 				try {
-					line = dataPort.sendCommand(toWrite.takeFirst());
-					if(line == null || line.length() == 0 ) {
+					payload = dataPort.sendCommand(toWrite.takeFirst());
+					if(payload == null || payload.size() == 0 ) {
 						throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
-								" RESPONSE FROM PORT "+dataPort.getPortName()+" NULL DIRECTIVE:"+line);
+								" RESPONSE FROM PORT "+dataPort.getPortName()+" NULL DIRECTIVE:"+Arrays.toString(payload.toArray()));
 					}
-					fop = parseDirective(line);
+					fop = parseDirective(payload.get(0));
 					if(fop != null) {
 						if(DEBUG)
 							System.out.println("AsynchDemux Parsed directive:"+fop);
@@ -820,19 +822,18 @@ public class AsynchDemuxer implements Runnable {
 						if( tl != null ) {
 							if(DEBUG)
 								System.out.println("AsynchDemux call out to topic:"+tl.getMachineBridge().getGroup());
-							ArrayList<String> payload = new ArrayList<String>();
+	
 							// consume the lines from the Marlinspike response until we see a terminal directive
 							// once this happens we pass it to the proper TopicList {@link AbstractBasicResponse}
 							// retrieveData method that consumes the payload line(s) and issues the await on mutexWrite cyclicbarrier
 							// so that read/write cycle to port can resume
-							payload.add(line);
 							if(DEBUG)
-								System.out.println(this.getClass().getName()+" "+tl+" payload:"+line);
+								System.out.println(this.getClass().getName()+" "+tl+" payload:"+Arrays.toString(payload.toArray()));
 							// triggers mutexWrite.await when entire message retrieved for given topic, should be 3rd cyclic barrier awaiter
 							tl.retrieveData(payload);
 						} else {
 							throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
-									" RESPONSE FROM PORT "+dataPort.getPortName()+" NO TOPIC FOR:"+fop+", CANNOT DEMUX DIRECTIVE:"+line);
+									" RESPONSE FROM PORT "+dataPort.getPortName()+" NO TOPIC FOR:"+fop+", CANNOT DEMUX DIRECTIVE:"+Arrays.toString(payload.toArray()));
 						}
 					}		
 				} catch(IndexOutOfBoundsException | IOException ioob) {

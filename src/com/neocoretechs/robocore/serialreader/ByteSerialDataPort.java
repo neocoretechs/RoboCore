@@ -10,6 +10,7 @@ import gnu.io.UnsupportedCommOperationException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Enumeration;
 
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
@@ -335,13 +336,18 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	    }
 	    
 		@Override
-		public String sendCommand(String command) throws IOException {
+		public ArrayList<String> sendCommand(String command) throws IOException {
 			writeLine(command);
-			while(bytesToRead() <= 0)
+			ArrayList<String> ret = new ArrayList<String>();
+			while(bytesToRead() <= 0) {
 				try {
 					Thread.sleep(0,50000);
 				} catch (InterruptedException e) {}
-			return readLine();
+			}
+			while(bytesToRead() > 0) {
+				ret.add(readLine());
+			}
+			return ret;
 		}
 	    public String getPortName() { return portName; }
 	    public int getBaudRate() { return baud; }

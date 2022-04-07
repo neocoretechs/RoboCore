@@ -9,14 +9,17 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 
 /**
- * M46 P<pin> - -Read analog pin 
+ * M46 P<pin> -Read analog pin
+ * M802 P<n> S<x> M<x> - Acquire analog pin data 
+ * P=Pin number, S=number readings, M=microseconds per reading. 
  *	SERIAL_PGM(MSG_BEGIN);
  *	SERIAL_PGM(analogPinHdr);
  *	SERIAL_PGMLN(MSG_DELIMIT);
- *	SERIAL_PGM("1 ");
+ *	SERIAL_PGM("0 ");
  *	SERIAL_PORT.println(pin_number);
- *	SERIAL_PGM("2 ");
+ *	SERIAL_PGM("1 ");
  *	SERIAL_PORT.println(res);
+ *  ...
  *	SERIAL_PGM(MSG_BEGIN);
  *	SERIAL_PGM(analogPinHdr);
  *	SERIAL_PGMLN(MSG_TERMINATE);
