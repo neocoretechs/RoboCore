@@ -77,6 +77,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	int digitalEncoderState = 0; // low
 	int maxValue = 1000;
 	int minValue = -1000;
+	boolean pinToggle = false;
 	/**
 	 * M10 controller types
 	 */
@@ -158,15 +159,24 @@ public class TypeSlotChannelEnable implements Serializable {
 	public void setEncoderPin(int ienc) {
 		this.encoder = ienc;	
 	}
-	
+	/**
+	 * Minimum drive value, or if digital out pin, min value of control resulting in LOW state
+	 * @param minValue
+	 */
 	public void setMinValue(int minValue) {
 		this.minValue = minValue;
 	}
 	
+	public int getMinValue() { return minValue; }
+	/**
+	 * Maximum drive value, or if digital out pin, max value of control that results in HIGH state
+	 * @param maxValue
+	 */
 	public void setMaxValue(int maxValue) {
 		this.maxValue = maxValue;
 	}
 	
+	public int getMaxValue() { return maxValue; }
 	/**
 	 * CALL THIS FIRST to establish instance of controller for further operations and to refer to it numerically by type.<p/>
 	 * M10 initializes a type of controller in a specific 'slot' that becomes an ordinal number we use to refer to the controller
@@ -205,23 +215,6 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @return
 	 */
 	public String genActivate(int deviceLevel) {
-		/*
-		switch(cntrltype) {
-		case"SmartController":
-		case "H-Bridge":
-		case "SplitBridge":
-		case "SwitchBridge":
-		case "PWM":
-			return String.format("G5 Z%d C%d P%d%n",getSlot(),channel,deviceLevel);
-		case "InputPin":
-			return String.format("M44 P%d%n", pin);
-		case "OutputPin":
-			if(deviceLevel != maxValue)
-				deviceLevel = 0;
-			return String.format("M42 P%d S%d%n", pin, deviceLevel);
-		}
-		throw new RuntimeException("Bad TypeSlotChannel config "+this);
-		*/
 		return activator.getActivation(deviceLevel);
 	}
 	/**
@@ -253,6 +246,9 @@ public class TypeSlotChannelEnable implements Serializable {
 	public int getPin() {
 		return pin;
 	}
+	// If digital out pin, toggle at high value?
+	public boolean isPinToggle() { return pinToggle; }
+	public void setPinToggle() { pinToggle = true; }
 	/**
 	 * Generate the drive pins for the controller, if its a smart controller (M10CtrlType == 0) return an empty string.
 	 * If the type is 2 or 3, generate a Q<pin> for secondary drive pin.
@@ -339,7 +335,7 @@ public class TypeSlotChannelEnable implements Serializable {
 					ret += String.format(" Analog encoder at pin:%d range lo:%d, hi:%d count%d%n",encoder, loAnalogEncoderRange, hiAnalogEncoderRange, encoderCount);
 				else
 					if(isDigitalEncoder)
-						ret += String.format(" Digital encoder at pin:%d stsate:%d count%d%n",encoder, digitalEncoderState, encoderCount);
+						ret += String.format(" Digital encoder at pin:%d state:%d count%d%n",encoder, digitalEncoderState, encoderCount);
 		}
 		return ret;			
 	}

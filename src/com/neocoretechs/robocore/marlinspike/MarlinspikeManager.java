@@ -192,8 +192,19 @@ public class MarlinspikeManager {
 					String pin = (String)lun[i].get("Pin");
 					if(pin == null)
 						throw new IOException("Must specify Pin paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
-					tsce = new TypeSlotChannelEnable(eType, Integer.parseInt(pin));				
+					tsce = new TypeSlotChannelEnable(eType, Integer.parseInt(pin));
+					//Toggle:True,true,TRUE False,false,FALSE or absent
+					Optional<Object> oToggle = Optional.ofNullable(lun[i].get("Toggle"));
+					if(oToggle.isPresent() && Boolean.parseBoolean((String)lun[i].get("Toggle")))
+							tsce.setPinToggle();
 				}
+				// general min and max values
+				Optional<Object> ominValue = Optional.ofNullable(lun[i].get("Min"));
+				Optional<Object> omaxValue = Optional.ofNullable(lun[i].get("Max"));
+				if(ominValue.isPresent())
+					tsce.setMinValue(Integer.parseInt((String)lun[i].get("Min")));
+				if(omaxValue.isPresent())
+					tsce.setMaxValue(Integer.parseInt((String)lun[i].get("Max")));
 				nameToTypeMap.put(name, tsce);
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				if(activate)

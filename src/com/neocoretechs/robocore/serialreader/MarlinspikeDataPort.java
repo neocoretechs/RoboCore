@@ -65,7 +65,7 @@ import com.pi4j.io.gpio.exception.GpioPinExistsException;
  * @author Jonathan Neville Groff Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements DataPortCommandInterface {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final int MAX_CMD_SIZE = 1024;
 	public static int DEFAULT_PWM_FREQUENCY = 10000;
 	public static int MAX_MOTOR_POWER = 1000;
@@ -278,7 +278,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	  serial_count = 0;
 	  cmdtokens = cmdbuffer.split(" ");
 	  if(DEBUG)
-			System.out.printf("%s get_command %d tokens%n", this.getClass().getName(), cmdtokens.length);
+			System.out.printf("%s get_command %s%n", this.getClass().getName(), cmdbuffer);
 	}
 
 	float code_value() {
@@ -1205,32 +1205,38 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			     }
 			     break;
 			  //
-			  // M42 P<pin> S<state>
-			  // state 0 - LOW, 1 HIGH
-			  // Write digital pin LOW
+			  // M42 P<pin> S<state> L[low value] H[high value] T
+			  // state value L - LOW state value, H HIGH state value T - toggle at high, ignore low
+			  // Write digital pin
 			  //
 			  case 42:
 				  pin_number = -1;
 				  if (code_seen('P')) {
 					  pin_number = (int)code_value();
 					  dpin = Pins.getOutputPin(pin_number);
-				      if (code_seen('S')) {
-				    	  switch( (int)code_value()) {
-				    	  case 0:
-							  dpin.low();
-							  break;
-				    	  case 1:
-				    		 dpin.high();
-				    		 break;
-				    	  default:
-							 dpin.low();
-							 break;
-				    	  }
-						  ret.add(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
-						  return ret;
+				      if(code_seen('S')) {
+				    	 codenum = (int)code_value(); // current state
+				    	 int low_val = 0;
+				    	 int high_val = 0;
+				    	 if( code_seen('L'))
+				    		 low_val = (int)code_value();
+				    	 if( code_seen('H'))
+				    		 high_val = (int)code_value();
+				    	 if(code_seen('T')) { // toggle if high, else ignore
+				    		 if(codenum == high_val)
+				    			 dpin.toggle();
+				    	 } else {
+				    		 if(codenum == low_val)
+				    			 dpin.low();
+				    		 else
+				    			 if(codenum == high_val)
+				    				 dpin.high();
+				    	 }
 				      }
+					ret.add(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
+					return ret;
 				  }
-		     break;
+				  break;
 			  //
 			  // M43 P<pin>
 		      // Create persistent digital input pin
