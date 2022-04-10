@@ -208,8 +208,8 @@ public class MotionController extends AbstractNodeMain {
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	MarlinspikeManager marlinspikeManager;
 	Collection<DeviceEntry> deviceEntries;
+	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
 	boolean[] isActive;
-
 	
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -235,7 +235,6 @@ public class MotionController extends AbstractNodeMain {
 		deviceEntries = marlinspikeManager.getDevices();
 		isActive = new boolean[deviceEntries.size()];
 	}
-		
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -320,6 +319,7 @@ public class MotionController extends AbstractNodeMain {
 						pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
 					}	
 				});
+				publishedLUNRestValue.put(ndd.getLUN(),false);
 			}
 		//}	
 		
@@ -1070,17 +1070,44 @@ public class MotionController extends AbstractNodeMain {
 							String sy = (String) robot.getAXIS()[luni].get("AxisY");
 							float x = -axes[Integer.parseInt(sx)] * 1000;
 							float y = -axes[Integer.parseInt(sy)] * 1000;
-							publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x);
+							if( y != 0 || x != 0) {
+								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x);
+								publishedLUNRestValue.replace(luni, false);
+							} else {
+								// rest value here
+								if(!publishedLUNRestValue.get(luni)) {
+									publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x); // not published, so hit once
+									publishedLUNRestValue.replace(luni, true); // and set it as published at rest
+								}
+							}
 						} else {
 							String sy = (String) robot.getAXIS()[luni].get("AxisY");
 							float y = -axes[Integer.parseInt(sy)] * 1000;
-							publishAxis(connectedNode, pubschannel, lun.getName(), (int)y);
+							if( y != 0) {
+								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y);
+								publishedLUNRestValue.replace(luni, false); // rest value not yet sent
+							} else {
+								// rest value here
+								if(!publishedLUNRestValue.get(luni)) {
+									publishAxis(connectedNode, pubschannel, lun.getName(), (int)y); // rest not yet published, so do it
+									publishedLUNRestValue.replace(luni, true); // rest value sent
+								}
+							}
 						}
 					break;
 					case "Trigger":
 						String ax = (String) robot.getAXIS()[luni].get("Axis");
-						float a = -axes[Integer.parseInt(ax)] * 1000;
-						publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
+						float a = axes[Integer.parseInt(ax)] * 1000;
+						if(a != -1000) {
+							publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
+							publishedLUNRestValue.replace(luni, false);
+						} else {
+							// rest value here
+							if(!publishedLUNRestValue.get(luni)) {
+								publishAxis(connectedNode, pubschannel, lun.getName(), (int)a); // not published, so hit it
+								publishedLUNRestValue.replace(luni, true); // and set it as published at rest
+							}
+						}
 					break;
 					case "POV":
 						ax = (String) robot.getAXIS()[luni].get("Axis");
