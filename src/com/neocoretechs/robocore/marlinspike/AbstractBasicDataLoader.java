@@ -15,6 +15,7 @@ import com.neocoretechs.robocore.machine.bridge.MachineReading;
 public abstract class AbstractBasicDataLoader extends AbstractBasicResponse {
 	private boolean DEBUG = false;
 	int queueSize;
+	public AbstractBasicDataLoader() {}
 	public AbstractBasicDataLoader(AsynchDemuxer asynchDemuxer, String topicName, int queueSize) {
 		super(asynchDemuxer, topicName, queueSize);
 		this.queueSize = queueSize;

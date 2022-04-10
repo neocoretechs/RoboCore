@@ -24,6 +24,7 @@ public abstract class AbstractBasicResponse implements ResponseInterface {
 	protected TopicListInterface topicList;
 	protected AsynchDemuxer asynchDemuxer;
 	protected String topicName;
+	public AbstractBasicResponse() {}
 	public AbstractBasicResponse(AsynchDemuxer asynchDemuxer, String topicName) {
 		this.asynchDemuxer = asynchDemuxer;
 		this.topicName = topicName;

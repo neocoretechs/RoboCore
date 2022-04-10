@@ -5,6 +5,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import com.neocoretechs.robocore.marlinspike.gcodes.G5;
+import com.neocoretechs.robocore.marlinspike.mcodes.M42;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
+
 /**
  * Class to facilitate the creation of logical controllers in the Marlinspike microcontroller subsystem.<p/>
  * M10 Controller types - Type 0=Smart controller, Type 1=HBridge, Type 2=Split Bridge, Type 3=Switch Bridge, Type 4=Straight up nonmotor PWM<p/>
@@ -57,9 +61,9 @@ import java.util.List;
  */
 public class TypeSlotChannelEnable implements Serializable {
 	private static final long serialVersionUID = 1L;
-	String cntrltype;
+	typeNames cntrltype;
 	int pin;
-	int slot;
+	private int slot;
 	int channel;
 	int enable;
 	int dirdefault = 0;
@@ -87,9 +91,31 @@ public class TypeSlotChannelEnable implements Serializable {
 		String name;
 		typeNames(String name) { this.name= name;} 
 		public String val() { return name; }
+		public ActivationInterface activatorFactory(TypeSlotChannelEnable tsce) {
+			switch(this) {
+				case SMARTCONTROLLER:
+				case HBRIDGE:
+				case SPLITBRIDGE:
+				case SWITCHBRIDGE:
+				case PWM:
+					//return String.format("G5 Z%d C%d P%d%n",slot,channel,deviceLevel);
+					return new G5(tsce);
+				case INPUTPIN:
+					//return String.format("M44 P%d%n", pin);
+					return new digitalpin(tsce);
+				case OUTPUTPIN:
+					//if(deviceLevel != maxValue)
+						//deviceLevel = 0;
+				//return String.format("M42 P%d S%d%n", pin, deviceLevel);
+					return new M42(tsce);
+			}
+			throw new RuntimeException("Bad TypeSlotChannel config "+this);
+		}
 	};
 
 	String[] configCodes = {"2","3","4","5","9","43","41"};
+	
+	private ActivationInterface activator = null;
 	
 	/**
 	 * Create a template to initialize a logical controller within the Marlinspike where we have an enable pin and no direction pin.
@@ -98,7 +124,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @param channel The channel within the controller at the numerical slot; 10 channels per sloted controller
 	 * @param enable The pin to enable the controller at the slot at the channel in the Marlinspike on the node.
 	 */
-	public TypeSlotChannelEnable(String cntrltype, int slot, int channel, int enable) {
+	public TypeSlotChannelEnable(typeNames cntrltype, int slot, int channel, int enable) {
 		this.cntrltype = cntrltype;
 		this.slot = slot;
 		this.channel = channel;
@@ -112,17 +138,19 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @param enable The pin to enable the controller at the slot at the channel in the Marlinspike on the node.
 	 * @param dirdefault The default direction for motor 0 is 'forward', 1 is 'reverse' in a case where a drive wheel is wired the same each side.
 	 */
-	public TypeSlotChannelEnable(String cntrltype, int slot, int channel, int enable, int dirdefault) {
+	public TypeSlotChannelEnable(typeNames cntrltype, int slot, int channel, int enable, int dirdefault) {
 		this.cntrltype = cntrltype;
 		this.slot = slot;
 		this.channel = channel;
 		this.enable = enable;
 		this.dirdefault = dirdefault;
+		this.activator = cntrltype.activatorFactory(this);
 	}
 	
-	public TypeSlotChannelEnable(String cntrltype, int pin) {
+	public TypeSlotChannelEnable(typeNames cntrltype, int pin) {
 		this.cntrltype = cntrltype;
 		this.pin = pin;
+		this.activator = cntrltype.activatorFactory(this);
 	}
 	
 	public void setEncoderPin(int ienc) {
@@ -159,10 +187,10 @@ public class TypeSlotChannelEnable implements Serializable {
 		M10CtrlType = ctrl.ordinal();
 		StringBuilder sb = new StringBuilder();
 		ArrayList<String> ab =  new ArrayList<String>();
-		if(cntrltype.endsWith("Pin")) {
+		if(cntrltype.val().endsWith("Pin")) {
 			ab.add(sb.append("M").append(configCodes[M10CtrlType]).append(" P").append(pin).append("\r\n").toString());
 		} else {
-			ab.add(sb.append("M10 ").append("Z").append(slot).append(" T").append(M10CtrlType).append("\r\n").toString());
+			ab.add(sb.append("M10 ").append("Z").append(getSlot()).append(" T").append(M10CtrlType).append("\r\n").toString());
 			sb = new StringBuilder();
 			sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder());
 			ab.add(sb.toString());
@@ -177,13 +205,14 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @return
 	 */
 	public String genActivate(int deviceLevel) {
+		/*
 		switch(cntrltype) {
 		case"SmartController":
 		case "H-Bridge":
 		case "SplitBridge":
 		case "SwitchBridge":
 		case "PWM":
-			return String.format("G5 Z%d C%d P%d%n",slot,channel,deviceLevel);
+			return String.format("G5 Z%d C%d P%d%n",getSlot(),channel,deviceLevel);
 		case "InputPin":
 			return String.format("M44 P%d%n", pin);
 		case "OutputPin":
@@ -192,6 +221,8 @@ public class TypeSlotChannelEnable implements Serializable {
 			return String.format("M42 P%d S%d%n", pin, deviceLevel);
 		}
 		throw new RuntimeException("Bad TypeSlotChannel config "+this);
+		*/
+		return activator.getActivation(deviceLevel);
 	}
 	/**
 	 * Generate preamble to control<p/>
@@ -204,10 +235,24 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @return The partially formed directive to send to Marlinspike for config
 	 */
 	private String genTypeAndSlot() {
-		return new StringBuilder("M").append(configCodes[M10CtrlType]).append(" Z").append(slot).toString();
+		return new StringBuilder("M").append(configCodes[M10CtrlType]).append(" Z").append(getSlot()).toString();
 	}
 	
-	public String getType() { return cntrltype; }
+	public typeNames getType() { return cntrltype; }
+	/**
+	 * @return the slot
+	 */
+	public int getSlot() {
+		return slot;
+	}
+	
+	public int getChannel() {
+		return channel;
+	}
+
+	public int getPin() {
+		return pin;
+	}
 	/**
 	 * Generate the drive pins for the controller, if its a smart controller (M10CtrlType == 0) return an empty string.
 	 * If the type is 2 or 3, generate a Q<pin> for secondary drive pin.
@@ -260,10 +305,10 @@ public class TypeSlotChannelEnable implements Serializable {
 	private String genChannelEncoder() {
 		StringBuilder sb = new StringBuilder();
 		if(isAnalogEncoder)
-			sb.append("M14 Z").append(slot).append(" C").append(channel).append(" P").append(encoder).append(" L").append(loAnalogEncoderRange).append(" H").append(hiAnalogEncoderRange).append(" N").append(encoderCount).append("\r\n");
+			sb.append("M14 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" L").append(loAnalogEncoderRange).append(" H").append(hiAnalogEncoderRange).append(" N").append(encoderCount).append("\r\n");
 		else 
 			if(isDigitalEncoder)
-				sb.append("M15 Z").append(slot).append(" C").append(channel).append(" P").append(encoder).append(" S").append(digitalEncoderState).append(" N").append(encoderCount).append("\r\n");
+				sb.append("M15 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" S").append(digitalEncoderState).append(" N").append(encoderCount).append("\r\n");
 		return sb.toString();
 	}
 	
@@ -282,11 +327,11 @@ public class TypeSlotChannelEnable implements Serializable {
 	@Override
 	public String toString() {
 		String ret;
-		if(cntrltype.endsWith("Pin")) {
+		if(cntrltype.val().endsWith("Pin")) {
 			ret = String.format("Control type: %s pin:%d%n",cntrltype, pin);
 		} else {
 			ret = String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d M10 type:%d%n",  
-				cntrltype, slot, channel, enable, dirdefault, M10CtrlType);
+				cntrltype, getSlot(), channel, enable, dirdefault, M10CtrlType);
 			if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
 				ret += String.format(" Default encoder at pin:%d%n",encoder);
 			else 
@@ -321,27 +366,32 @@ public class TypeSlotChannelEnable implements Serializable {
 	 */
 	public static void main(String[] args) {
 		System.out.println("-----");		
-		TypeSlotChannelEnable tsce = new TypeSlotChannelEnable("SmartController", 0, 1, 22);
+		TypeSlotChannelEnable tsce = new TypeSlotChannelEnable(typeNames.SMARTCONTROLLER, 0, 1, 22);
 		System.out.print(tsce.genM10(0,0));
 		StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(0, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");
-		tsce = new TypeSlotChannelEnable("H-Bridge", 0, 1, 24, 1);
+		tsce = new TypeSlotChannelEnable(typeNames.HBRIDGE, 0, 1, 24, 1);
 		System.out.print(tsce.genM10(0,0));
 		tsce.setEncoderPin(68);
 		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(8, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");		
-		tsce = new TypeSlotChannelEnable("PWM", 0, 1, 30);
+		tsce = new TypeSlotChannelEnable(typeNames.PWM, 0, 1, 30);
 		System.out.print(tsce.genM10(0,0));
 		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(13, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");		
-		tsce = new TypeSlotChannelEnable("SplitBridge", 2, 1, 32);
+		tsce = new TypeSlotChannelEnable(typeNames.SPLITBRIDGE, 2, 1, 32);
 		System.out.print(tsce.genM10(0,0));
 		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(6, 7)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
-		System.out.println("-----");		
+		System.out.println("-----");
+		tsce = new TypeSlotChannelEnable(typeNames.SWITCHBRIDGE, 2, 1, 32);
+		System.out.print(tsce.genM10(0,0));
+		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(6, 7)).append(tsce.genChannelDirDefaultEncoder());
+		System.out.print(sb);
+		System.out.println("-----");
 	}
 
 

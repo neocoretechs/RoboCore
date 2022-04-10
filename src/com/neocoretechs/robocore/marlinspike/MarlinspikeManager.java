@@ -17,6 +17,7 @@ import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
+import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
@@ -153,7 +154,27 @@ public class MarlinspikeManager {
 				String type = (String)lun[i].get("Type");
 				if(type == null)
 					throw new IOException("Must specify Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller);
+				typeNames eType = null;
 				if(!type.equals("InputPin") && !type.equals("OutputPin")) {
+					switch(type) {
+						case"SmartController":
+							eType = typeNames.SMARTCONTROLLER;
+							break;
+						case "H-Bridge":
+							eType = typeNames.HBRIDGE;
+							break;
+						case "SplitBridge":
+							eType = typeNames.SPLITBRIDGE;
+							break;
+						case "SwitchBridge":
+							eType = typeNames.SWITCHBRIDGE;
+							break;
+						case "PWM":
+							eType = typeNames.PWM;
+							break;
+						default:
+							throw new IOException("Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type+" must be one of SmartController, H-Bridge, SplitBridge, SwitchBridge or PWM");
+					}
 					String slot = (String)lun[i].get("Slot");
 					if(slot == null)
 						throw new IOException("Must specify Slot paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
@@ -161,12 +182,12 @@ public class MarlinspikeManager {
 					if(channel == null)
 						throw new IOException("Must specify Channel paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
 					if(dir.isPresent()) {
-						tsce = new TypeSlotChannelEnable(type, 
+						tsce = new TypeSlotChannelEnable(eType, 
 								Integer.parseInt(slot), 
 								Integer.parseInt(channel), 
 								ienable, Integer.parseInt((String) dir.get()));
 					} else {
-						tsce = new TypeSlotChannelEnable(type, 
+						tsce = new TypeSlotChannelEnable(eType, 
 								Integer.parseInt(slot), 
 								Integer.parseInt(channel), 
 								ienable);
@@ -175,7 +196,13 @@ public class MarlinspikeManager {
 					String pin = (String)lun[i].get("Pin");
 					if(pin == null)
 						throw new IOException("Must specify Pin paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
-					tsce = new TypeSlotChannelEnable(type, Integer.parseInt(pin));
+					if(type.equals("InputPin"))
+						tsce = new TypeSlotChannelEnable(typeNames.INPUTPIN, Integer.parseInt(pin));
+					else
+						if(type.equals("OutputPin"))
+							tsce = new TypeSlotChannelEnable(typeNames.OUTPUTPIN, Integer.parseInt(pin));
+						else
+							throw new IOException("Pin paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type+" must be one of InputPin or OutputPin");
 						
 				}
 				nameToTypeMap.put(name, tsce);
