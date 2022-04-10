@@ -89,7 +89,7 @@ public class TypeSlotChannelEnable implements Serializable {
 		INPUTPIN("InputPin"),
 		OUTPUTPIN("OutputPin");
 		String name;
-		typeNames(String name) { this.name= name;} 
+		typeNames(String name) { this.name = name;} 
 		public String val() { return name; }
 		public ActivationInterface activatorFactory(TypeSlotChannelEnable tsce) {
 			switch(this) {
@@ -115,6 +115,7 @@ public class TypeSlotChannelEnable implements Serializable {
 
 	String[] configCodes = {"2","3","4","5","9","43","41"};
 	
+	// This interface is responsible for generating the actual M or G code that is passed to the Marlinspike to activate the device
 	private ActivationInterface activator = null;
 	
 	/**
@@ -129,6 +130,7 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.slot = slot;
 		this.channel = channel;
 		this.enable = enable;
+		this.activator = cntrltype.activatorFactory(this);
 	}
 	/**
 	 * Create a template to initialize a logical controller within the Marlinspike where we have an enable pin and a direction pin.
@@ -182,9 +184,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @return The M10 directive string, possibly multiple c/r delimited directives
 	 */
 	public List<String> genM10(int ipin0, int ipin1) {
-		typeNames[] t = typeNames.values();
-		typeNames ctrl = Arrays.stream(t).filter(e -> e.name.equals(cntrltype)).findFirst().get();
-		M10CtrlType = ctrl.ordinal();
+		M10CtrlType = cntrltype.ordinal();
 		StringBuilder sb = new StringBuilder();
 		ArrayList<String> ab =  new ArrayList<String>();
 		if(cntrltype.val().endsWith("Pin")) {

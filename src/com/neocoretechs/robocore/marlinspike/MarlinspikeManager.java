@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Iterator;
@@ -155,26 +156,21 @@ public class MarlinspikeManager {
 				if(type == null)
 					throw new IOException("Must specify Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller);
 				typeNames eType = null;
-				if(!type.equals("InputPin") && !type.equals("OutputPin")) {
-					switch(type) {
-						case"SmartController":
-							eType = typeNames.SMARTCONTROLLER;
-							break;
-						case "H-Bridge":
-							eType = typeNames.HBRIDGE;
-							break;
-						case "SplitBridge":
-							eType = typeNames.SPLITBRIDGE;
-							break;
-						case "SwitchBridge":
-							eType = typeNames.SWITCHBRIDGE;
-							break;
-						case "PWM":
-							eType = typeNames.PWM;
-							break;
-						default:
-							throw new IOException("Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type+" must be one of SmartController, H-Bridge, SplitBridge, SwitchBridge or PWM");
-					}
+				//eType = typeNames.valueOf(type) will fail because we use mixed case names;
+				for(typeNames et : typeNames.values()) {
+					if(et.name.equals(type)) {
+						eType = et;
+						break;
+					}		
+				}
+				if(eType == null) {
+					//Arrays.toString(typeNames.values()) gives enum types, not values of names
+					StringBuilder sb = new StringBuilder();
+					for(typeNames et : typeNames.values())
+						sb.append(et.val()+" ");
+					throw new IOException("Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type+" must be one of "+sb.toString());
+				}
+				if(!type.endsWith("Pin")) { // such as InputPin, OutputPin. i.e. a more sophisticated control with multiple constructor args
 					String slot = (String)lun[i].get("Slot");
 					if(slot == null)
 						throw new IOException("Must specify Slot paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
@@ -192,18 +188,11 @@ public class MarlinspikeManager {
 								Integer.parseInt(channel), 
 								ienable);
 					}
-				} else {
+				} else { // type of Pin, so get actual pin number and construct TypeSlotChannelEnable accordingly
 					String pin = (String)lun[i].get("Pin");
 					if(pin == null)
 						throw new IOException("Must specify Pin paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
-					if(type.equals("InputPin"))
-						tsce = new TypeSlotChannelEnable(typeNames.INPUTPIN, Integer.parseInt(pin));
-					else
-						if(type.equals("OutputPin"))
-							tsce = new TypeSlotChannelEnable(typeNames.OUTPUTPIN, Integer.parseInt(pin));
-						else
-							throw new IOException("Pin paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type+" must be one of InputPin or OutputPin");
-						
+					tsce = new TypeSlotChannelEnable(eType, Integer.parseInt(pin));				
 				}
 				nameToTypeMap.put(name, tsce);
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
@@ -436,6 +425,7 @@ public class MarlinspikeManager {
 	}
 	
 	public static void main(String[] args) throws IOException {
+		System.out.println(Arrays.toString((typeNames.values())));
 		RobotInterface robot = new Robot();
 		MarlinspikeManager mm = new MarlinspikeManager(robot);
 		mm.createControllers(true, true);
