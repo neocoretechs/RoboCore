@@ -252,8 +252,8 @@ public class MarlinspikeManager {
 	 * @throws IOException If commands fail in send or confirmation
 	 */
 	private synchronized void configureMarlinspike(NodeDeviceDemuxer ndd, TypedWrapper lun, TypeSlotChannelEnable tsce) throws IOException {
-		Optional<Object> pin1 = Optional.ofNullable(lun.get("PWMPin1"));
-		Optional<Object> pin0 = Optional.ofNullable(lun.get("PWMPin0"));
+		Optional<Object> pin1 = Optional.ofNullable(lun.get("SignalPin1"));
+		Optional<Object> pin0 = Optional.ofNullable(lun.get("SignalPin0"));
 		Optional<Object> enc = Optional.ofNullable(lun.get("EncoderPin"));
 		Optional<Object> encType = Optional.ofNullable(lun.get("EncoderType"));
 		Optional<Object> encCount = Optional.ofNullable(lun.get("EncoderCount"));

@@ -3,7 +3,11 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
-
+/**
+ * Driver for Roboteq smart motor controllers. Interface serial protocol is via RS232 over UART and level converter or CAN etc.
+ * Relies on {@link ByteSerialDataPort}
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
+ */
 public class RoboteqDevice extends AbstractSmartMotorControl {
 
 	static final int ROBOTEQ_DEFAULT_TIMEOUT  =   1000;

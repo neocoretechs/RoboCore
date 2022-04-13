@@ -10,27 +10,21 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
 * A motor driver that uses straight GPIO switching rather than PWM, for an on/off drive motor setup.<p/>
 *
 * Structure:<p/>
-* 1) Top level, a master list of pins in the digitals array. Slots to which physical pins are assigned.
-* these are pdigitals here, which hold pointers to these top level array.<p/>
+* 1) Top level, a master list of pins in the digitals array. Slots to which physical pins are assigned.<p/>
 * 2) In each class and subclass, a sublist of pins. Multidimensional array which holds the index to the top level pins.
 * these are indexed by channel. motorDrive here.<p/>
-* Since the M1 and M2 inputs are split, we add an additional motorDriveB multidimensional array for the second input.
-* NOTE: The pin assignment for the IO pins is arranged in the index array one after the other, so the assignment for M1 is at pindex
-* and the assignment for M2 is at pindex+1. This does NOT mean the pins have to be next to each other, its just that the indexes in
-* the arrays are arranged one after the other for convenience.
-* 3) A GPIO pin list indexed by channel. The level value is either a + or - value for on or off.<p/>
+* Since the M1 and M2 inputs are split, we add an additional third element in the multidimensional array for the second input.
+* 3) A GPIO pin list indexed by channel. The level value is either a high or low value for on or off.<p/>
 * 4) Optionally, a duration. The duration represents a maximum interval before the GPIO pin
 * is automatically shut down. In this case, the hall effect interrupts that are serviced by an interrupt handler that detect wheel rotation.
 * the top level abstract class AbstractMotorControl contains these values.<p/>
-* Created: 10/20/2020 1:39:44 PM
-* @author groff
+* @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2022
 *
 */
 public class SwitchBridgeDriver extends AbstractMotorControl {
 	final static String MSG_MOTORCONTROL_5= "Emergency stop";
-	// 5 possible drive wheels, index is by channel-1.
+	// drive wheel index is by channel-1.
 	// motorDrive[channel] [[Digitals array index][dir pin]
-	// PWM params array by channel:
 	// 0-pin index to Digital pins array(default 255)
 	// 1-direction pin
 	int[][] motorDrive= new int[][]{{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0}};
@@ -81,7 +75,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return 0;
-		setMotorSpeed(channel, motorPower);
+		setMotorSpeed(channel, motorPower == 0 ? 0 : (motorPower < 0 ? -MAXMOTORPOWER : MAXMOTORPOWER));
 		int gioIndex = getMotorDigitalPin(channel); // index to gpio array
 		int gioIndexB = getMotorDigitalPinB(channel); // index to gpio array
 		int dirPinIndex = getMotorEnablePin(channel); // index to dir pin array
@@ -126,7 +120,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		// If we have a linked distance sensor. check range and possibly skip
 		// If we are setting power 0, we are stopping anyway
 		if(checkUltrasonicShutdown()) {
-			// find the PWM pin and get the object we set up in M3 to write to power level
+			// find the pin and get the object we set up in M3 to write to power level
 			// element 0 of motorDrive has index to PWM array
 			// writing power 0 sets mode 0 and timer turnoff
 			setMotorShutdown(); // sends commandEmergencyStop(1);

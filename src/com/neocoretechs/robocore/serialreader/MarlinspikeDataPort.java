@@ -9,6 +9,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.RoboteqDevice;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SplitBridgeDriver;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SwitchBridgeDriver;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SwitchHBridgeDriver;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.AbstractPWMControl;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.VariablePWMDriver;
@@ -592,16 +593,19 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			} //motorcontrol[motorcontroller]
 			break;
 			//
-			// M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>] 
+			// M5 Z<slot> P<pin> [Q<pin>] C<channel> D<enable pin> E<default dir> [W<encoder>] 
 			// Create switch bridge Z slot, P forward pin, Q reverse pin, D enable, E default state of enable for dir
 			// Switch bridge or 2 digital motor controller. Takes 2 inputs: one digital pin for forward,called P, 
 			// one for backward,called Q, then motor channel,
 			// and then D, an enable pin, and E default dir, with optional encoder.
+			// If Q pin argument is missing, create the switch H bridge type, which is descended from switch bridge.
+			// the switch H bridge takes a direction pin high/low and a signal pin high/low to determine direction and speed.
 			//
 			case 5: 
 				pin_number = -1;
 				pin_numberB = -1;
 				encode_pin = 0;
+				boolean onePin = false;
 				  if(code_seen('Z')) {
 					  motorController = (int)code_value();
 				  }
@@ -614,7 +618,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					  if(code_seen('Q')) {
 						  pin_numberB = (int) code_value();
 					  } else {
-						  break;
+						  onePin = true;
 					  }
 					  if(code_seen('C')) {
 						  channel = (int) code_value();
@@ -635,7 +639,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							 encode_pin = (int) code_value();
 						  }
 						  try {
-							  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_default);
+							  if(onePin)
+								  ((SwitchHBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, dir_pin, dir_default);
+							  else
+								  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_default);
 							  if(encode_pin != 0) {
 								  motorControl[motorController].createEncoder(channel, encode_pin);
 							  }
@@ -879,7 +886,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								motorControl[motorController] = new SwitchBridgeDriver();
 								ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 								return ret;
-							case 4: // Type 4 non-propulsion PWM driver 
+							case 4: // Type 4 switch H-bridge
+								if(motorControl[motorController] != null) {
+									motorControl[motorController] = null; // in case assignment below fails
+								}
+								motorControl[motorController] = new SwitchHBridgeDriver();
+								ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
+								return ret;
+							case 5: // Type 5 non-propulsion PWM driver 
 								if(pwmControl[motorController] != null) {
 									// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 									// each controller can have up to 10 channels, each with its own PWM and direction pin

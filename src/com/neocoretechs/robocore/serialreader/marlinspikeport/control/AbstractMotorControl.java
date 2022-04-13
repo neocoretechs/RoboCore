@@ -46,6 +46,10 @@ import com.pi4j.io.gpio.PinState;
 * typically uses 2 separate enable pins that enable the operation of a DC motor in the same fashion as a
 * SplitBridge but without variable speed control.
 *
+* SwitchHBridge - A low level motor driver that does not use PWM and that uses enable pin and signal pin, each with one state (logic high).
+* Instead of PWM, full drive current is delivered via a switched mechanical or electronic device such as
+* a mechanical or solid state relay using MOSFET transistor, BJT transistor, or IGBT transistor.
+* 
 * Variable PWM Driver - A low level PWM driver that uses a single enable pin with one state(logic high) to switch the driver on or off.
 * This type of driver would typically be used for LEDs with variable brightness, a single motor in the forward direction, etc.
 *
