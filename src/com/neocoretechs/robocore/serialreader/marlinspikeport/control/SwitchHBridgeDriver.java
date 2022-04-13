@@ -122,7 +122,7 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 		if( getMotorDigitalPin(ch) == 255 ) {
 			return String.format("HB-SWITCH UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("HB-SWITCH Channel %d Pin:%d, Dir Pin:%s%n",ch, Pins.getPin(getMotorDigitalPin(ch)), Pins.getPin(getMotorEnablePin(ch)));	
+		return String.format("HB-SWITCH Channel %d Pin:%s, Dir Pin:%s%n",ch, Pins.getPin(getMotorDigitalPin(ch)), Pins.getPin(getMotorEnablePin(ch)));	
 	}
 
 }

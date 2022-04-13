@@ -13,7 +13,7 @@ import java.util.Map;
  * LUN[0].Controller:/dev/ttyACM0 <br/>
  * LUN[0].Type:H-Bridge <br/>
  * LUN[0].Slot:0 <br/>
- * LUN[0].PWMPin0:8 <br/>
+ * LUN[0].SignalPin0:8 <br/>
  * LUN[0].Channel:1 <br/>
  * LUN[0].EnablePin:24 <br/>
  * LUN[0].Direction:0 <br/>

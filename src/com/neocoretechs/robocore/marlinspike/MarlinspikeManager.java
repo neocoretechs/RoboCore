@@ -472,7 +472,7 @@ public class MarlinspikeManager {
 		//System.out.println("----");
 		for(int i = 0; i < mm.lun.length; i++) {
 			System.out.println(i+".)"+mm.lun[i].get("Name")+","+mm.lun[i].get("NodeName")+","+mm.lun[i].get("Controller")+","+
-		mm.lun[i].get("Type")+","+mm.lun[i].get("Slot")+","+mm.lun[i].get("PWMPin0")+","+mm.lun[i].get("Channel")+","+
+		mm.lun[i].get("Type")+","+mm.lun[i].get("Slot")+","+mm.lun[i].get("SignalPin0")+","+mm.lun[i].get("Channel")+","+
 					mm.lun[i].get("EnablePin")+","+mm.lun[i].get("Direction")+","+mm.lun[i].get("EncoderPin"));
 		}
 	}
