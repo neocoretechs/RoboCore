@@ -1124,6 +1124,10 @@ public class MotionController extends AbstractNodeMain {
 							} else {
 								if(a == axDown) {
 									publishAxis(connectedNode, pubschannel, lun.getName(), -1000);
+								} else {
+									if(a == 0) {
+										publishAxis(connectedNode, pubschannel, lun.getName(), 0);
+									}
 								}
 							}
 						}

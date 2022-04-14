@@ -96,9 +96,9 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 		}
 		fault_flag = 0;
 		if(motorPower == 0)
-			Pins.getOutputPin(pIndex).high();
-		else
 			Pins.getOutputPin(pIndex).low();
+		else
+			Pins.getOutputPin(pIndex).high();
 		return 0;
 	}
 
