@@ -141,7 +141,7 @@ import std_msgs.Int32MultiArray;
  *
  */
 public class MotionController extends AbstractNodeMain {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private boolean IMUDEBUG = false;
 	private String host;
 	private InetSocketAddress master;

@@ -32,7 +32,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
  *
  */
 public class MarlinspikeManager {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	RobotInterface robot;
 	String hostName;
 	TypedWrapper[] lun;

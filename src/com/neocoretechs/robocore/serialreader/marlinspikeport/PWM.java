@@ -14,7 +14,7 @@ import java.io.IOException;
  *
  */
 public class PWM extends HardwarePWM {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private boolean enabled = false;
 	
 	public PWM(int pin) {

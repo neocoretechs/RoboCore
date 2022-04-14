@@ -45,7 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Jonathan Groff
  */
 public class Props {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static final String propsFile = "RoboCore.properties";
 	private static String propfile = null;
 	public static String dataDirectory;

@@ -49,7 +49,7 @@ import com.pi4j.util.CommandArgumentParser;
  *
  */
 public class Pins {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static GpioController gpioController = null;
 	static GpioPinDigitalInput[] pinsIn = new GpioPinDigitalInput[28];
 	static GpioPinDigitalOutput[] pinsOut = new GpioPinDigitalOutput[28];

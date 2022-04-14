@@ -57,7 +57,7 @@ import com.pi4j.io.gpio.PinState;
 * @author: Jonathan Groff Copyright (C) NeoCoreTechs 2022
 */
 public abstract class AbstractMotorControl {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	public static int channels = 10;
 	// Ultrasonic arrays by channel:
 	private Ultrasonic[] usensor = new Ultrasonic[channels];

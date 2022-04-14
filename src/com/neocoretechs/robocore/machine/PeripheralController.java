@@ -133,7 +133,7 @@ import std_msgs.Int32MultiArray;
  *
  */
 public class PeripheralController extends AbstractNodeMain {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);

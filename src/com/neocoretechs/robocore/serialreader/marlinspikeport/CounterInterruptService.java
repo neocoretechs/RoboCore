@@ -12,7 +12,7 @@ import com.pi4j.io.gpio.event.GpioPinListenerDigital;
  * @uthor Jonathan Groff Copyright (C) NeoCoreTechs 2022
  */ 
 public class CounterInterruptService implements InterruptService {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private volatile int counter;
 	private int pin;
 	private int maxcount;
