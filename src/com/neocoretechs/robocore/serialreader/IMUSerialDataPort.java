@@ -62,10 +62,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    private int portOwned = CommPortOwnershipListener.PORT_UNOWNED;
 	    private CommPortIdentifier portId = null;
 	    
-	    static {
-            SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
-	    }
-	    
 	    //BNO055
 	    //Page id register definition
 	    public static final byte BNO055_ID              = (byte)0xA0;
@@ -214,6 +210,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	    public boolean isEOT() { return EOT; }
 	    
 	    public void connect(boolean writeable) throws IOException {
+	        SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
 	    	if(portOwned == CommPortOwnershipListener.PORT_OWNED) {
 	    		throw new IOException(Thread.currentThread().getName()+" requesting ownership of port already owned by.."+portId.getCurrentOwner());
 	    	}
