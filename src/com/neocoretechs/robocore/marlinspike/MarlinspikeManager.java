@@ -257,6 +257,7 @@ public class MarlinspikeManager {
 		Optional<Object> enc = Optional.ofNullable(lun.get("EncoderPin"));
 		Optional<Object> encType = Optional.ofNullable(lun.get("EncoderType"));
 		Optional<Object> encCount = Optional.ofNullable(lun.get("EncoderCount"));
+		Optional<Object> encInterrupt = Optional.ofNullable(lun.get("EncoderInterrupt"));
 		Optional<Object> aPollRate = Optional.ofNullable(lun.get("AnalogPollRate"));
 		Optional<Object> aChangeDelta = Optional.ofNullable(lun.get("AnalogChangeDelta"));
 		
@@ -281,7 +282,10 @@ public class MarlinspikeManager {
 					iencLoRange = Integer.parseInt((String) lun.get("EncoderLoRange"));
 				if(Optional.ofNullable(lun.get("EncoderHiRange")).isPresent())
 					iencHiRange = Integer.parseInt((String) lun.get("EncoderHiRange"));
-				tsce.setAnalogEncoder(iencCount, iencLoRange, iencHiRange);
+				int iencInterrupt = 0;
+				if(encInterrupt.isPresent())
+					iencInterrupt = Integer.parseInt((String) encInterrupt.get());
+				tsce.setAnalogEncoder(iencCount, iencLoRange, iencHiRange, iencInterrupt);
 			} else {
 				if(encType.isPresent() && encType.get().equals("Digital")) {
 					int iencCount = 1;
@@ -293,7 +297,10 @@ public class MarlinspikeManager {
 						encState = (String) lun.get("EncoderState");
 						iencState = encState.equals("LOW") ? 0 : 1;
 					}
-					tsce.setDigitalEncoder(iencCount, iencState);
+					int iencInterrupt = 0;
+					if(encInterrupt.isPresent())
+						iencInterrupt = Integer.parseInt((String) encInterrupt.get());
+					tsce.setDigitalEncoder(iencCount, iencState, iencInterrupt);
 				}
 			}
 		}

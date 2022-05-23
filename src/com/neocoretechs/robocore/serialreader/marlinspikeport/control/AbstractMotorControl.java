@@ -87,6 +87,7 @@ public abstract class AbstractMotorControl {
 	public abstract int queryStatusFlag();
 	public abstract String getMotorFaultDescriptor(int fault);
 	public abstract String getMotorStatusDescriptor(int status);
+	public abstract void setInterruptServiceHandler(int intPin);
 
 	public void linkDistanceSensor(int channel, Ultrasonic us, int distance, int facing) {
 		int i;
@@ -166,9 +167,12 @@ public abstract class AbstractMotorControl {
 	 * The count will be based on the value in maxMotorDuration[channel-1]
 	 * @param channel
 	 * @param encode_pin
+	 * @param interrupt_pin Pin to service from interrupt, assume concrete controller is instantiated
 	 */
-	public void createEncoder(int channel, int encode_pin) {
+	public void createEncoder(int channel, int encode_pin, int interrupt_pin) {
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
+		setInterruptServiceHandler(interrupt_pin);
+		// eventually, wheelEncoderService[channel-1].setInterruptServiceHandler(concrete instance of pin);
 		wheelEncoder[channel-1] = new PCInterrupts();
 		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], 1020, 1023); // trigger at max 10 bits analog
 	}
@@ -178,9 +182,10 @@ public abstract class AbstractMotorControl {
 	 * @param channel
 	 * @param encode_pin
 	 */
-	public void createEncoder(int channel, int encode_pin, double lowVal, double highVal, int counts) {
+	public void createEncoder(int channel, int encode_pin, double lowVal, double highVal, int counts, int interrupt_pin) {
 		maxMotorDuration[channel-1] = counts;
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
+		setInterruptServiceHandler(interrupt_pin);
 		wheelEncoder[channel-1] = new PCInterrupts();
 		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], lowVal, highVal); // trigger at 10 bits analog
 	}
@@ -191,9 +196,10 @@ public abstract class AbstractMotorControl {
 	 * @param encode_pin
 	 * @param ps PinState.HIGH or PinState.LOW
 	 */
-	public void createDigitalEncoder(int channel, int encode_pin, PinState ps, int counts) {
+	public void createDigitalEncoder(int channel, int encode_pin, PinState ps, int counts, int interrupt_pin) {
 		maxMotorDuration[channel-1] = counts;
 		wheelEncoderService[channel-1] = new CounterInterruptService(encode_pin, maxMotorDuration[channel-1]);
+		setInterruptServiceHandler(interrupt_pin);
 		wheelEncoder[channel-1] = new PCInterrupts();
 		wheelEncoder[channel-1].attachInterrupt(encode_pin, wheelEncoderService[channel-1], ps); // trigger at digital pin state
 	}

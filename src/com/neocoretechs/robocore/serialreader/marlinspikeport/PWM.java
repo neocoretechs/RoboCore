@@ -13,8 +13,9 @@ import java.io.IOException;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  *
  */
-public class PWM extends HardwarePWM {
+public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface {
 	public static boolean DEBUG = false;
+	public static boolean DEBUGENABLE = false;
 	private boolean enabled = false;
 	
 	public PWM(int pin) {
@@ -53,6 +54,8 @@ public class PWM extends HardwarePWM {
 				System.out.println("Pin must specify 19 or 33 for hardware PWM enable!");
 				return;
 		}
+		if(DEBUG || DEBUGENABLE)
+			System.out.printf("%s enable pin %d value %b%n", this.getClass().getName(), pin, enabled);
 
 	}
 	
@@ -122,8 +125,9 @@ public class PWM extends HardwarePWM {
 
 
 	@Override
-	public synchronized void attachInterrupt(InterruptService cins, boolean overflow) {
+	public synchronized void attachInterrupt(InterruptServiceInterface cins, boolean overflow) {
 		this.interruptService = cins;	
+		cins.setInterruptServiceHandler(this);
 	}
 
 
@@ -131,5 +135,15 @@ public class PWM extends HardwarePWM {
 	public synchronized void detachInterrupt(boolean overflow) {
 		this.interruptService = null;
 		
+	}
+
+	@Override
+	/**
+	 * If we have attached a handler via setInterruptServiceHandler of {@link InterruptServiceInterface}
+	 * then this method is called. We should have done this here in attachInterrupt. this method is part of
+	 * {@link InterruptServiceHandlerInterface}
+	 */
+	public synchronized void handleInterrupt() throws IOException {
+		enable(false);	
 	}
 }

@@ -75,6 +75,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	int loAnalogEncoderRange = 0;
 	int hiAnalogEncoderRange = 0;
 	int encoderCount = 1;
+	int encInterrupt;
 	int digitalEncoderState = 0; // low
 	int maxValue = 1000;
 	int minValue = -1000;
@@ -196,7 +197,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * M10 Z0 T5 - Switch H bridge, type 5 slot 0, each channel has 1 GPIO pin, no PWN, and enable which functions as direction when<p/>
 	 * @param ipin1 PWM primary drive pin0 from MarlinspikeManager.configureMarlinspike and properties file
 	 * @param ipin0 PWM secondary drive pin1
-	 * @return The M10 directive string, possibly multiple c/r delimited directives
+	 * @return The M10 directive string, possibly multiple c/r delimited directives relating to configuring the type in the M10 preamble
 	 */
 	public List<String> genM10(int ipin0, int ipin1) {
 		M10CtrlType = cntrltype.ordinal();
@@ -205,6 +206,7 @@ public class TypeSlotChannelEnable implements Serializable {
 		if(cntrltype.val().endsWith("Pin")) {
 			ab.add(sb.append("M").append(configCodes[M10CtrlType]).append(" P").append(pin).append("\r\n").toString());
 		} else {
+			// Generate the M10 followed by the the M codes to create the type, the encoder, the interrupt linkage, etc.
 			ab.add(sb.append("M10 ").append("Z").append(getSlot()).append(" T").append(M10CtrlType).append("\r\n").toString());
 			sb = new StringBuilder();
 			sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder());
@@ -298,33 +300,47 @@ public class TypeSlotChannelEnable implements Serializable {
 		}
 		// types 1, 2 and 3 have standard D-enable, E-default dir, W-optional encoder
 		sb.append(" D").append(enable).append(" E").append(dirdefault).toString();
-		if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
+		if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder) {
 			sb.append(" W").append(encoder);
+			if(encInterrupt != 0)
+				sb.append(" I").append(encInterrupt);
+		}
 		return sb.append("\r\n").toString();
 	}
 	
 	private String genChannelEncoder() {
 		StringBuilder sb = new StringBuilder();
-		if(isAnalogEncoder)
-			sb.append("M14 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" L").append(loAnalogEncoderRange).append(" H").append(hiAnalogEncoderRange).append(" N").append(encoderCount).append("\r\n");
-		else 
-			if(isDigitalEncoder)
-				sb.append("M15 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" S").append(digitalEncoderState).append(" N").append(encoderCount).append("\r\n");
+		if(isAnalogEncoder) {
+			sb.append("M14 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" L").append(loAnalogEncoderRange).append(" H").append(hiAnalogEncoderRange).append(" N").append(encoderCount);
+			if(encInterrupt != 0)
+				sb.append(" I").append(encInterrupt);
+			sb.append("\r\n");
+		} else { 
+			if(isDigitalEncoder) {
+				sb.append("M15 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" S").append(digitalEncoderState).append(" N").append(encoderCount);
+				if(encInterrupt != 0)
+					sb.append(" I").append(encInterrupt);
+				sb.append("\r\n");
+			}
+		}
 		return sb.toString();
 	}
 	
-	public void setAnalogEncoder(int iencCount, int iencLoRange, int iencHiRange) {
+	public void setAnalogEncoder(int iencCount, int iencLoRange, int iencHiRange, int iencInterrupt) {
 		isAnalogEncoder = true;
 		encoderCount = iencCount;
 		loAnalogEncoderRange = iencLoRange;
 		hiAnalogEncoderRange = iencHiRange;
+		encInterrupt = iencInterrupt;
 	}
 	
-	public void setDigitalEncoder(int iencCount, int iencState) {
+	public void setDigitalEncoder(int iencCount, int iencState, int iencInterrupt) {
 		isDigitalEncoder = true;
 		encoderCount = iencCount;
 		digitalEncoderState = iencState;
+		encInterrupt = iencInterrupt;
 	}
+	
 	@Override
 	public String toString() {
 		String ret;
@@ -333,14 +349,26 @@ public class TypeSlotChannelEnable implements Serializable {
 		} else {
 			ret = String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d M10 type:%d%n",  
 				cntrltype, getSlot(), channel, enable, dirdefault, M10CtrlType);
-			if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
-				ret += String.format(" Default encoder at pin:%d%n",encoder);
-			else 
-				if(isAnalogEncoder)
-					ret += String.format(" Analog encoder at pin:%d range lo:%d, hi:%d count%d%n",encoder, loAnalogEncoderRange, hiAnalogEncoderRange, encoderCount);
-				else
-					if(isDigitalEncoder)
-						ret += String.format(" Digital encoder at pin:%d state:%d count%d%n",encoder, digitalEncoderState, encoderCount);
+			if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder) {
+				ret += String.format(" Default encoder at pin:%d",encoder);
+				if(encInterrupt != 0)
+					ret += String.format(" Encoder Interrupt %d",encInterrupt);
+				ret += "\r\n";
+			} else {
+				if(isAnalogEncoder) {
+					ret += String.format(" Analog encoder at pin:%d range lo:%d, hi:%d count%d",encoder, loAnalogEncoderRange, hiAnalogEncoderRange, encoderCount);
+					if(encInterrupt != 0)
+						ret += String.format(" Encoder Interrupt %d",encInterrupt);
+					ret += "\r\n";
+				} else {
+					if(isDigitalEncoder) {
+						ret += String.format(" Digital encoder at pin:%d state:%d count%d",encoder, digitalEncoderState, encoderCount);
+						if(encInterrupt != 0)
+							ret += String.format(" Encoder Interrupt %d",encInterrupt);
+						ret += "\r\n";
+					}
+				}
+			}
 		}
 		return ret;			
 	}

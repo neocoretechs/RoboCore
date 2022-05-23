@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,18 +42,18 @@ import com.pi4j.util.CommandArgumentParser;
  *
  */
 public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnalog {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	static PinState[] PCintMode = new PinState[28];
 	static double[] PCintLoValue = new double[2];
 	static double[] PCintHiValue = new double[2];
-	static ConcurrentHashMap<Pin, InterruptService> PCintFunc = new ConcurrentHashMap<Pin, InterruptService>();
+	static ConcurrentHashMap<Pin, InterruptServiceInterface> PCintFunc = new ConcurrentHashMap<Pin, InterruptServiceInterface>();
 	/**
 	 * Attach analog input pin to state change interrupt
 	 * @param pin
 	 * @param userFunc
 	 * @param value
 	 */
-	public void attachInterrupt(int pin, InterruptService userFunc, double loValue, double hiValue) {
+	public void attachInterrupt(int pin, InterruptServiceInterface userFunc, double loValue, double hiValue) {
 		GpioPinAnalogInput ppin = Pins.assignAnalogInputPin(pin);
 		ppin.addListener(this);
 		Pin pipin = Pins.getPin(pin);
@@ -79,7 +80,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	 * @param userFunc
 	 * @param mode
 	 */
-	public void attachInterrupt(int pin, InterruptService userFunc, PinState mode) {
+	public void attachInterrupt(int pin, InterruptServiceInterface userFunc, PinState mode) {
 		if(pin >= PCintMode.length)
 			throw new RuntimeException("Pin number "+pin+" out of range to provision as digital input to attach interrupt, are you trying to attach a digital pin state to an analog pin?");
 		PCintMode[pin] = mode;
@@ -87,7 +88,6 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 		PCintFunc.put(pipin,userFunc);
 		Pins.pinsIn[pin] = Pins.assignInputPin(pin);
 		Pins.pinsIn[pin].addListener(this);
-
 	}
 	
 	/**
@@ -130,7 +130,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	
 	@Override
 	public void handleGpioPinDigitalStateChangeEvent(GpioPinDigitalStateChangeEvent event) {
-		InterruptService ints =  PCintFunc.get(event.getPin().getPin());
+		InterruptServiceInterface ints =  PCintFunc.get(event.getPin().getPin());
 		if(ints == null)
 			throw new RuntimeException("Digital Pin "+event.getPin().getPin()+" returned null, error in provisioning");
 		int pin = ints.getPin();
@@ -141,13 +141,17 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			if(DEBUG )
 				System.out.println(" --> Digital GPIO PIN STATE CHANGE: " + event.getPin() + " = "
 	                + event.getState()+" from pin "+ pin +" linked to interrupt service "+ints+ " with digital state "+PCintMode[pin]);
-			PCintFunc.get(event.getPin().getPin()).service();
+			try {
+				PCintFunc.get(event.getPin().getPin()).service();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
 	@Override
 	public void handleGpioPinAnalogValueChangeEvent(GpioPinAnalogValueChangeEvent event) {
-		InterruptService ints =  PCintFunc.get(event.getPin().getPin());
+		InterruptServiceInterface ints =  PCintFunc.get(event.getPin().getPin());
 		if(ints == null)
 			throw new RuntimeException("Analog Pin "+event.getPin().getPin()+" returned null, error in provisioning");
 		int pin = ints.getPin();
@@ -162,15 +166,19 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			default:
 				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to attach interrupt, but got pin:"+pin);
 		}
-		//if(DEBUG )
-		//	System.out.println("POTENTIAL Analog PIN STATE CHANGE: " + event.getPin() + " = "
-        //        + event.getValue() +" from pin "+ pin +" linked to interrupt service "+ints+ " with analog values "+PCintLoValue[ppin]+" to "+PCintHiValue[ppin]);
+		if(DEBUG )
+			System.out.println("POTENTIAL Analog PIN STATE CHANGE: " + event.getPin() + " = "
+                + event.getValue() +" from pin "+ pin +" linked to interrupt service "+ints+ " with analog values "+PCintLoValue[ppin]+" to "+PCintHiValue[ppin]);
 		if(event.getValue() >= PCintLoValue[ppin] && event.getValue() <= PCintHiValue[ppin]) {
 			// display pin state on console
 			if(DEBUG )
 				System.out.println(" --> Analog PIN STATE CHANGE: " + event.getPin() + " = "
 	                + event.getValue() +" from pin "+ pin +" linked to interrupt service "+ints+ " with analog values "+PCintLoValue[ppin]+" to "+PCintHiValue[ppin]);
-			ints.service();
+			try {
+				ints.service();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 		
 	}

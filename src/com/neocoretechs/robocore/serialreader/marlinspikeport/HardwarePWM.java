@@ -24,7 +24,7 @@ public abstract class HardwarePWM {
 	public int pin;
 	public enum mode { INPUT, OUTPUT };
 	int channel = 0;
-	InterruptService interruptService=null;
+	InterruptServiceInterface interruptService=null;
 	// explicitly disable PWM for safety
 	static {
 		try {
@@ -82,6 +82,6 @@ public abstract class HardwarePWM {
 	public abstract int getCounter();
 	public abstract void digitalWrite(int val) throws IOException;
 	public abstract void pinModeOut();
-	public abstract void attachInterrupt(InterruptService cins, boolean overflow);
+	public abstract void attachInterrupt(InterruptServiceInterface cins, boolean overflow);
 	public abstract void detachInterrupt(boolean overflow);
 }

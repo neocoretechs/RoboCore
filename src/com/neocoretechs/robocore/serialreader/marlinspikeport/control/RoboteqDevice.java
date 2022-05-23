@@ -766,4 +766,11 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		// we only get stall for status
 		return MSG_MOTORCONTROL_9;
 	}
+	
+	@Override
+	/**
+	 * Presumably this is handled internally when encoder present
+	 */
+	public void setInterruptServiceHandler(int intPin) {	
+	}
 }

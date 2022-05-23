@@ -180,4 +180,13 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		return "";
 	}
 
+	@Override
+	/**
+	 * To service a digital pin with an interrupt we will have to wrap it to implement InterruptServiceHandlerInterface
+	 * as we do the PWM pin
+	 */
+	public void setInterruptServiceHandler(int intPin) {
+		
+	}
+
 }

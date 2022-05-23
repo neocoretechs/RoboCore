@@ -26,6 +26,7 @@ import com.pi4j.io.gpio.PinMode;
  *
  */
 public class HBridgeDriver extends AbstractPWMMotorControl {
+	public static boolean DEBUG = false;
 	final static String MSG_MOTORCONTROL_5= "Emergency stop";
 	int status_flag = 0;
 	
@@ -148,6 +149,21 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			return String.format("HB-PWM UNINITIALIZED Channel %d%n",ch);
 		}
 		return String.format("HB-PWM Channel %d Pin:%d, Dir Pin:%s%n",ch, ppwms[motorDrive[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]].getPin());	
+	}
+
+	@Override
+	public void setInterruptServiceHandler(int intPin) {
+		if(DEBUG)
+			System.out.printf("%s.setInterrupterviceHandler pin %d%n", this.getClass().getName(),intPin);
+		for(int j=0; j < channels; j++) {
+			int pindex = motorDrive[j][0];
+			if(pindex != 255 && intPin != 0 && intPin == ppwms[pindex].pin) {
+				wheelEncoderService[j].setInterruptServiceHandler(ppwms[pindex]);
+				if(DEBUG)
+					System.out.printf("%s.setInterrupterviceHandler pin %d pindex %d channel %d encoder service %s pwm %s%n", this.getClass().getName(),intPin,pindex,j,wheelEncoderService[j],ppwms[pindex]);
+				break;
+			}
+		}
 	}
 
 }

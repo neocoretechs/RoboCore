@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
+import java.io.IOException;
+
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
 import com.pi4j.io.gpio.event.GpioPinListenerDigital;
@@ -11,11 +13,12 @@ import com.pi4j.io.gpio.event.GpioPinListenerDigital;
  * Created: 9/9/2016 3:03:02 PM
  * @uthor Jonathan Groff Copyright (C) NeoCoreTechs 2022
  */ 
-public class CounterInterruptService implements InterruptService {
+public class CounterInterruptService implements InterruptServiceInterface {
 	private static boolean DEBUG = false;
 	private volatile int counter;
 	private int pin;
 	private int maxcount;
+	private InterruptServiceHandlerInterface ishi;
 	public CounterInterruptService(int pin, int tmax) {
 		this.pin = pin;
 		this.maxcount = tmax;
@@ -33,12 +36,23 @@ public class CounterInterruptService implements InterruptService {
 	public void set_counter(int cntx) {
 		counter = cntx;
 	}
-
+	
 	@Override
-	public void service() {
+	public void setInterruptServiceHandler(InterruptServiceHandlerInterface ishi) {
+		this.ishi = ishi;
+		if(DEBUG)
+			System.out.printf("%s pin %d handler %s%n", this.getClass().getName(), pin, ishi);
+	}
+	
+	@Override
+	public void service() throws IOException {
 		if( counter < maxcount ) {
 			++counter;
-		} 
+		} else {
+			if(ishi != null)
+				ishi.handleInterrupt();
+			counter = 0;
+		}
 	}
 	
 	@Override
