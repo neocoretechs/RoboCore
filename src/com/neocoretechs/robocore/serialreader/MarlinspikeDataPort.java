@@ -66,7 +66,7 @@ import com.pi4j.io.gpio.exception.GpioPinExistsException;
  * @author Jonathan Neville Groff Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements DataPortCommandInterface {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final int MAX_CMD_SIZE = 1024;
 	public static int DEFAULT_PWM_FREQUENCY = 10000;
 	public static int MAX_MOTOR_POWER = 1000;
@@ -2105,16 +2105,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		  // check motor controllers
 		  for(int j =0; j < 10; j++) {
 			  if(motorControl[j] != null) {
-				if( motorControl[j].isConnected() != 0) {
 					motorControl[j].checkEncoderShutdown();
 					motorControl[j].checkUltrasonicShutdown();
-					if( motorControl[j].queryFaultFlag() != fault ) {
+					if( motorControl[j].queryFaultFlag() == fault ) {
 						fault = motorControl[j].queryFaultFlag();
 						if(fault != 10) // dont publish normal encoder shutdown
 							publishMotorFaultCode(motorControl[j].getMotorFaultDescriptor(fault));
 					}
-				}
-			  }
+			}
 		  }
 		}
 

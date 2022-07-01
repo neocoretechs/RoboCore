@@ -9,7 +9,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  */
 public class RoboteqDevice extends AbstractSmartMotorControl {
-
+	private static boolean DEBUG = true;
 	static final int ROBOTEQ_DEFAULT_TIMEOUT  =   1000;
 	static final int ROBOTEQ_BUFFER_SIZE      =   64;
 	static final int ROBOTEQ_COMMAND_BUFFER_SIZE =20;
@@ -53,7 +53,8 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	final static String MSG_MOTORCONTROL_9= "Stall";
 	
 	private ByteSerialDataPort m_Serial;
-	private String port = "/dev/ttyS2";
+	//private String port = "/dev/ttyS2";
+	private String port = "/dev/ttyUSB0";
 	private int baud = 115200;
 	private int dataBits = 8;
 	private int stopBits = 1;
@@ -154,9 +155,16 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	}
 
 	private int sendCommand(String commandx) {
-		if (this.m_Serial == null)
+		if(DEBUG)
+			System.out.printf("%s sending command %s%n", this.getClass().getName(),commandx);
+		if (this.m_Serial == null) {
+			if(DEBUG)
+				System.out.printf("%s serial port instance null!%n", this.getClass().getName());
 			return ROBOTEQ_ERROR;
+		}
 		if(commandx.length() <= 0 || commandx.length() >= ROBOTEQ_COMMAND_BUFFER_SIZE){
+			if(DEBUG)
+				System.out.printf("%s bad command length %d%n", this.getClass().getName(),commandx.length());
 			return ROBOTEQ_BAD_COMMAND;
 		}	
 		for(int i = 0 ; i < commandx.length(); i++) {
@@ -173,15 +181,19 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
 		int res = this.readResponse(buffer);
 
-		if (res < 1)
+		if (res < 1) {
+			if(DEBUG)
+				System.out.printf("%s bad command %s, response = %d%n", this.getClass().getName(),commandx, res);
 			return ROBOTEQ_BAD_RESPONSE;
+		}
 
 		// Check Command Status
 		if (buffer[0] == '+') {
 			return ROBOTEQ_OK;
-		} else {
-			return ROBOTEQ_BAD_COMMAND;
 		}
+		if(DEBUG)
+			System.out.printf("%s bad command %s, response = %d%n", this.getClass().getName(),commandx,buffer[0]);
+		return ROBOTEQ_BAD_COMMAND;
 	}
 	/**
 	 * Read 10 attempts searching for 0x0D end of line, then return ROBOTEQ_TIMEOUT
@@ -189,39 +201,47 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	 * @return
 	 */
 	private int readResponse(char[] buf) {
-		int inByte;
+		//int inByte;
 		int index = 0;
-		try {
-		for(int i = 0; i < 10; i++) {
-			if (m_Serial.bytesToRead() > 0) {
-				while(m_Serial.bytesToRead() > 0) {
-					inByte = m_Serial.read();
-					buf[index++] = (char) inByte;
-					if (index > buf.length) {
-						// out of buffer space
-						return ROBOTEQ_BUFFER_OVER;
+		//try {
+		//for(int i = 0; i < 10; i++) {
+			//if (m_Serial.bytesToRead() > 0) {
+				//while(m_Serial.bytesToRead() > 0) {
+					String inByte = m_Serial.readLine();
+					if(DEBUG)
+						System.out.printf("%s got response:%s%n", this.getClass().getName(),inByte);
+					while(index < inByte.length()) {
+						if (inByte.charAt(index) == 0x0D) {
+							return index;
+						}
+						buf[index] = inByte.charAt(index++);
+						if (index > buf.length) {
+							// out of buffer space
+							return ROBOTEQ_BUFFER_OVER;
+						}
 					}
-					if (inByte == 0x0D) {
-						return index;
-					}
-				}
-			}
-			Thread.sleep(10);
-		}
-		} catch (IOException | InterruptedException e) {
-			e.printStackTrace();
-		}
-		// timeout
-		return ROBOTEQ_TIMEOUT;
+			//}
+			//Thread.sleep(10);
+		//}
+		//} catch (IOException | InterruptedException e) {
+		//	e.printStackTrace();
+		//}
+		return index;
 	}
 
 
 	private int sendQuery(String commandx, char[] response) {
+		if(DEBUG)
+			System.out.printf("%s sending query:%s%n", this.getClass().getName(),commandx);
 		try {
-			for(int i = 0; i < commandx.length(); i++) {
-				m_Serial.write(commandx.charAt(i));
-				m_Serial.read();
-			}
+			//for(int i = 0; i < commandx.length(); i++) {
+				//m_Serial.write(commandx.charAt(i));
+				//if(i < commandx.length()-1)
+					//m_Serial.read();
+			//}
+			m_Serial.writeLine(commandx);
+			// read echo
+			m_Serial.readLine();
 		} catch (IOException e) {
 			e.printStackTrace();
 			return -1;
@@ -281,27 +301,38 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
      * @throws IOException 
      */
 	public int isConnected() throws IOException {
+		if(DEBUG)
+			System.out.printf("%s Testing connection%n", this.getClass().getName());
 		if (this.m_Serial == null)
 			return 0;
 		m_Serial.write(ROBOTEQ_QUERY_CHAR);
 		//m_Serial.flush();
 		int inByte;
-		for(int i = 0; i < 10; i++) {
-			if (m_Serial.bytesToRead() > 0) {
-				while(m_Serial.bytesToRead() > 0) {
+		//for(int i = 0; i < 10; i++) {
+			//if (m_Serial.bytesToRead() > 0) {
+				//while(m_Serial.bytesToRead() > 0) {
 					inByte = m_Serial.read();
 					if (inByte == ROBOTEQ_ACK_CHAR) {
-							return 1;
+						if(DEBUG)
+							System.out.printf("%s connection got ACK%n", this.getClass().getName());
+						return 1;
+					} else {
+						if(DEBUG)
+							System.out.printf("%s connection got unknown response:%d%n", this.getClass().getName(),inByte);
 					}
-				}
-			}
-			try {
-				Thread.sleep(10);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}
+				//}
+			//}
+			//try {
+				//if(DEBUG)
+					//System.out.printf("%s Connection waiting for ACK...%n", this.getClass().getName());
+				//Thread.sleep(10);
+			//} catch (InterruptedException e) {
+				//e.printStackTrace();
+			//}
+		//}
 		// timeout
+		//if(DEBUG)
+			//System.out.printf("%s Connection TIMEOUT!%n", this.getClass().getName());
 		return 0;
 	}
 
@@ -315,7 +346,13 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 			e.printStackTrace();
 			return String.format("Roboteq smart Controller channel %d threw exception%s.%n", ch, e.getMessage());
 		}
-		return String.format("Roboteq smart Controller Voltage:%s Amps:%s Fault:%s Status:%s%n",queryBatteryVoltage() , queryBatteryAmps(), queryFaultFlag(), queryStatusFlag());
+		int voltage = queryBatteryVoltage();
+		int amperage = queryBatteryAmps();
+		int fault = queryFaultFlag();
+		int status = queryStatusFlag();
+		if(voltage == ROBOTEQ_BAD_RESPONSE || amperage == ROBOTEQ_BAD_RESPONSE || fault == ROBOTEQ_BAD_RESPONSE || status == ROBOTEQ_BAD_RESPONSE)
+			return String.format("Roboteq smart Controller BAD RESPONSE from one or more of Voltage:%s Amps:%s Fault:%s Status:%s%n", voltage , amperage, fault, status);
+		return String.format("Roboteq smart Controller Voltage:%s Amps:%s Fault:%s Status:%s%n", voltage , amperage, fault, status);
 	}
 
 	@Override
@@ -403,7 +440,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(2);
+		x = x.substring(2,5);
 		p = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "M=%i", &p) < 1) {
@@ -427,7 +464,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(3);
+		x = x.substring(3,5);
 		String[] amps = x.split(":");
 		// Parse Response
 		//if (sscanf((char*)buffer, "BA=%i:%i", &ch1, &ch2) < 2) {
@@ -454,7 +491,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(3);
+		x = x.substring(3,4);
 		amps = Integer.parseInt(x);
 		// Parse Response
 		if(amps < 0) {
@@ -477,7 +514,9 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(2);
+		x = x.substring(2,5);
+		if(DEBUG)
+			System.out.println("Voltage="+x+" len:"+x.length());
 		voltage = Integer.parseInt(x);
 		// Parse Response
 		if(voltage < 0) {
@@ -503,7 +542,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(2);
+		x = x.substring(2,5);
 		speed = Integer.parseInt(x);
 		//if (sscanf((char*)buffer, "S=%i", &speed) < 1) {
 		if(speed < 0) {
@@ -527,7 +566,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(3);
+		x = x.substring(3,5);
 		speed = Integer.parseInt(x);
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
@@ -556,7 +595,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(2);
+		x = x.substring(2,5);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "C=%i", &speed) < 1) {
@@ -582,7 +621,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(3);
+		x = x.substring(3,5);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "CR=%i", &speed) < 1) {
@@ -608,7 +647,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(3);
+		x = x.substring(3,5);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		if(speed < 1) {
@@ -634,7 +673,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(4);
+		x = x.substring(4,6);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		if(speed < 1) {
@@ -658,7 +697,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		String x = new String(buffer);
-		x = x.substring(3);
+		x = x.substring(3,5);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "TM=%i", &speed) < 1) {
@@ -772,5 +811,20 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	 * Presumably this is handled internally when encoder present
 	 */
 	public void setInterruptServiceHandler(int intPin) {	
+	}
+	
+	public static void main(String[] args) throws IOException {
+		RoboteqDevice rd = new RoboteqDevice(1000);
+		/*
+		while(rd.isConnected() == 0) {
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		*/
+		System.out.println(rd.getDriverInfo(1));
 	}
 }

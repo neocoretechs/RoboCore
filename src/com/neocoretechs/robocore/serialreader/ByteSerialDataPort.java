@@ -23,7 +23,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class ByteSerialDataPort implements DataPortCommandInterface {
-		private static boolean DEBUG = false;
+		private static boolean DEBUG = true;
 		private static boolean PORTDEBUG = false;
 	    private SerialPort serialPort;
         CommPortIdentifier portId = null;
@@ -32,8 +32,8 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		// serial settings
 		//Port=/dev/ttyACM0
 		//PortSettings=115200,n,8,1
-	    private String portName = "/dev/ttyACM0";
-	    //private static String portName = "/dev/ttyAMA0";
+	    //private String portName = "/dev/ttyACM0";
+	    private static String portName = "/dev/ttyUSB0";
 	    private int baud = 115200;
 	    private int datab = 8;
 	    private int stopb = 1;
