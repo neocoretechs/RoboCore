@@ -131,7 +131,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static boolean PORTDEBUG = true;
 	private volatile boolean shouldRun = true;
 	private DataPortCommandInterface dataPort;
@@ -215,6 +215,7 @@ public class AsynchDemuxer implements Runnable {
 	public static void addWrite(AsynchDemuxer ad, String req) {
 		synchronized(ad) {
 			ad.toWrite.addLast(req);
+			System.out.println("Adding request to demuxer:"+ad+" "+req+" len:"+ad.toWrite.length());
 		}
 	}
 
@@ -810,6 +811,8 @@ public class AsynchDemuxer implements Runnable {
 		while(shouldRun) {
 				try {
 					payload = dataPort.sendCommand(toWrite.takeFirst());
+					if(DEBUG)
+						System.out.println("AsynchDemux "+this+" response:"+payload+" from dataport:"+dataPort);
 					if(payload == null || payload.size() == 0 ) {
 						throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
 								" RESPONSE FROM PORT "+dataPort.getPortName()+" NULL DIRECTIVE:"+Arrays.toString(payload.toArray()));
@@ -817,11 +820,11 @@ public class AsynchDemuxer implements Runnable {
 					fop = parseDirective(payload.get(0));
 					if(fop != null) {
 						if(DEBUG)
-							System.out.println("AsynchDemux Parsed directive:"+fop);
+							System.out.println("AsynchDemux "+this+" Parsed directive:"+fop);
 						TopicListInterface tl = topics.get(fop);
 						if( tl != null ) {
 							if(DEBUG)
-								System.out.println("AsynchDemux call out to topic:"+tl.getMachineBridge().getGroup());
+								System.out.println("AsynchDemux "+this+" call out to topic:"+tl.getMachineBridge().getGroup());
 	
 							// consume the lines from the Marlinspike response until we see a terminal directive
 							// once this happens we pass it to the proper TopicList {@link AbstractBasicResponse}
@@ -843,6 +846,7 @@ public class AsynchDemuxer implements Runnable {
 					shouldRun = false;
 				}				
 		}
+		System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" exiting run...");
 	}
 	/**
 	 * Determine if this line contains a message acknowledgement such as <G5/>
