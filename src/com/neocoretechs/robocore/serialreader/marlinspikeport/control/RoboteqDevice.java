@@ -177,8 +177,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 				e.printStackTrace();
 			}
 		}
-		//this->m_Serial->flush();
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		int res = this.readResponse(buffer);
 
 		if (res < 1) {
@@ -188,11 +187,11 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		}
 
 		// Check Command Status
-		if (buffer[0] == '+') {
+		if (buffer.toString().charAt(0) == '+') {
 			return ROBOTEQ_OK;
 		}
 		if(DEBUG)
-			System.out.printf("%s bad command %s, response = %d%n", this.getClass().getName(),commandx,buffer[0]);
+			System.out.printf("%s bad command %s, response = %d%n", this.getClass().getName(),commandx,buffer.toString());
 		return ROBOTEQ_BAD_COMMAND;
 	}
 	/**
@@ -200,45 +199,22 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	 * @param buf
 	 * @return
 	 */
-	private int readResponse(char[] buf) {
-		//int inByte;
-		int index = 0;
-		//try {
-		//for(int i = 0; i < 10; i++) {
-			//if (m_Serial.bytesToRead() > 0) {
-				//while(m_Serial.bytesToRead() > 0) {
-					String inByte = m_Serial.readLine();
-					if(DEBUG)
-						System.out.printf("%s got response:%s%n", this.getClass().getName(),inByte);
-					while(index < inByte.length()) {
-						if (inByte.charAt(index) == 0x0D) {
-							return index;
-						}
-						buf[index] = inByte.charAt(index++);
-						if (index > buf.length) {
-							// out of buffer space
-							return ROBOTEQ_BUFFER_OVER;
-						}
-					}
-			//}
-			//Thread.sleep(10);
-		//}
-		//} catch (IOException | InterruptedException e) {
-		//	e.printStackTrace();
-		//}
-		return index;
+	private int readResponse(StringBuilder buf) {
+		buf.append(m_Serial.readLine());
+		if (buf.toString().length() > ROBOTEQ_BUFFER_SIZE) {
+			// out of buffer space
+			return ROBOTEQ_BUFFER_OVER;
+		}
+		if(DEBUG)
+			System.out.printf("%s got response:%s%n", this.getClass().getName(),buf.toString());	
+		return buf.toString().length();
 	}
 
 
-	private int sendQuery(String commandx, char[] response) {
+	private int sendQuery(String commandx, StringBuilder response) {
 		if(DEBUG)
 			System.out.printf("%s sending query:%s%n", this.getClass().getName(),commandx);
 		try {
-			//for(int i = 0; i < commandx.length(); i++) {
-				//m_Serial.write(commandx.charAt(i));
-				//if(i < commandx.length()-1)
-					//m_Serial.read();
-			//}
 			m_Serial.writeLine(commandx);
 			// read echo
 			m_Serial.readLine();
@@ -306,33 +282,16 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		if (this.m_Serial == null)
 			return 0;
 		m_Serial.write(ROBOTEQ_QUERY_CHAR);
-		//m_Serial.flush();
 		int inByte;
-		//for(int i = 0; i < 10; i++) {
-			//if (m_Serial.bytesToRead() > 0) {
-				//while(m_Serial.bytesToRead() > 0) {
-					inByte = m_Serial.read();
-					if (inByte == ROBOTEQ_ACK_CHAR) {
-						if(DEBUG)
-							System.out.printf("%s connection got ACK%n", this.getClass().getName());
-						return 1;
-					} else {
-						if(DEBUG)
-							System.out.printf("%s connection got unknown response:%d%n", this.getClass().getName(),inByte);
-					}
-				//}
-			//}
-			//try {
-				//if(DEBUG)
-					//System.out.printf("%s Connection waiting for ACK...%n", this.getClass().getName());
-				//Thread.sleep(10);
-			//} catch (InterruptedException e) {
-				//e.printStackTrace();
-			//}
-		//}
-		// timeout
-		//if(DEBUG)
-			//System.out.printf("%s Connection TIMEOUT!%n", this.getClass().getName());
+		inByte = m_Serial.read();
+		if (inByte == ROBOTEQ_ACK_CHAR) {
+			if(DEBUG)
+				System.out.printf("%s connection got ACK%n", this.getClass().getName());
+			return 1;
+		} else {
+			if(DEBUG)
+				System.out.printf("%s connection got unknown response:%d%n", this.getClass().getName(),inByte);
+		}
 		return 0;
 	}
 
@@ -371,15 +330,15 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		// Response: FF=<status>
 		int fault = -1;
 		//memset(buffer, NULL, ROBOTEQ_BUFFER_SIZE);
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		int res = 0;
 		if((res = this.sendQuery("?FF\r", buffer)) < 0)
 			return res;
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
 		// Parse Response
-		fault = buffer[4] - 48;
-		if (fault < 1)
+		fault = buffer.toString().charAt(3) - 48;
+		if (fault < 0)
 			return ROBOTEQ_BAD_RESPONSE;
 		return fault | fault_flag;
 	}
@@ -400,16 +359,16 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		// Response: FS=<status>
 		int status = -1;
 		//memset(buffer, NULL, ROBOTEQ_BUFFER_SIZE);
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		int res;
 		if ((res = this.sendQuery("?FS\r", buffer)) < 0)
 			return res;
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
 		// Parse Response
-		status = buffer[4] - 48;
+		status = buffer.toString().charAt(3)- 48;
 		//if (sscanf((char*)buffer, "FS=%i", &status) < 1)
-		if(status < 1)
+		if(status < 0)
 			return ROBOTEQ_BAD_RESPONSE;
 		return status;
 	}
@@ -417,8 +376,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryFirmware() {
 		// Query: ?FID
 		// Response: FID=<firmware>
-		//memset(buf, NULL, bufSize);
-		char[] buf = new char[100];
+		StringBuilder buf = new StringBuilder();
 		return this.sendQuery("?FID\r",buf);
 		// TODO: Parse response
 	}
@@ -433,14 +391,13 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		int res;
 		// Build Query Command
 		command = String.format("?M %d\r", ch);
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		// Send Query
 		if ((res = this.sendQuery("?BA\r", buffer)) < 0)
 			return res;
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(2,5);
+		String x = buffer.toString().substring(2);
 		p = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "M=%i", &p) < 1) {
@@ -458,13 +415,12 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		int ch1, ch2;
 		int res;
 		// Send Query
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		if ((res = this.sendQuery("?BA\r", buffer)) < 0)
 			return res;
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(3,5);
+		String x = buffer.toString().substring(3);
 		String[] amps = x.split(":");
 		// Parse Response
 		//if (sscanf((char*)buffer, "BA=%i:%i", &ch1, &ch2) < 2) {
@@ -484,14 +440,13 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		int amps;
 		int res;
 		// Build Query Command
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		command = String.format("?BA %d\r", ch);
 		if ((res = this.sendQuery(command, buffer)) < 0)
 			return res;
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(3,4);
+		String x = buffer.toString().substring(3);
 		amps = Integer.parseInt(x);
 		// Parse Response
 		if(amps < 0) {
@@ -507,14 +462,13 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryBatteryVoltage() {
 		int voltage = -1;
 		//memset(buffer, NULL, ROBOTEQ_BUFFER_SIZE);
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		int res;
 		if ((res = this.sendQuery("?V 2\r", buffer)) < 0)
 			return res;
 		if (res < 4)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(2,5);
+		String x = buffer.toString().substring(2);
 		if(DEBUG)
 			System.out.println("Voltage="+x+" len:"+x.length());
 		voltage = Integer.parseInt(x);
@@ -534,15 +488,14 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryEncoderSpeed(int ch){
 		int speed;
 		int res;
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		// Build Query Command
 		command = String.format("?S %d\r", ch);
 		if ((res = this.sendQuery(command, buffer)) < 0)
 			return res;
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(2,5);
+		String x = buffer.toString().substring(2);
 		speed = Integer.parseInt(x);
 		//if (sscanf((char*)buffer, "S=%i", &speed) < 1) {
 		if(speed < 0) {
@@ -558,21 +511,20 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryEncoderRelativeSpeed(int ch) {
 		int speed;
 		int res;
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		// Build Query Command
 		command = String.format("?SR %d\r", ch);
 		if ((res = this.sendQuery(command, buffer)) < 0)
 			return res;
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(3,5);
+		String x = buffer.toString().substring(3);
 		speed = Integer.parseInt(x);
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
 		// Parse Response
 		//if (sscanf((char*)buffer, "SR=%i", &speed) < 1) {
-		if(speed < 1) {
+		if(speed < 0) {
 			return ROBOTEQ_BAD_RESPONSE;
 		}
 		return speed;
@@ -587,19 +539,18 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryBrushlessCounter(int ch) {
 		int speed;
 		int res;
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		// Build Query Command
 		command = String.format("?C %d\r", ch);
 		if ((res = this.sendQuery(command, buffer)) < 0)
 			return res;
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(2,5);
+		String x = buffer.toString().substring(2);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "C=%i", &speed) < 1) {
-		if(speed < 1) {
+		if(speed < 0) {
 			return ROBOTEQ_BAD_RESPONSE;
 		}
 		return speed;
@@ -613,19 +564,18 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryBrushlessCounterRelative(int ch) {
 		int speed;
 		int res;
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		// Build Query Command
 		command = String.format("?CR %d\r", ch);
 		if ((res = this.sendQuery(command, buffer)) < 0)
 			return res;
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(3,5);
+		String x = buffer.toString().substring(3);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "CR=%i", &speed) < 1) {
-		if(speed < 1) {
+		if(speed < 0) {
 			return ROBOTEQ_BAD_RESPONSE;
 		}
 		return speed;
@@ -639,18 +589,17 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryBrushlessSpeed(int ch) {
 		int speed;
 		int res;
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		// Build Query Command
 		command = String.format("?BS %d\r", ch);
 		if ((res = this.sendQuery(command, buffer)) < 0)
 			return res;
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(3,5);
+		String x = buffer.toString().substring(3);
 		speed = Integer.parseInt(x);
 		// Parse Response
-		if(speed < 1) {
+		if(speed < 0) {
 			return ROBOTEQ_BAD_RESPONSE;
 		}
 		// Parse Response
@@ -665,18 +614,17 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryBrushlessSpeedRelative(int ch) {
 		int speed;
 		int res;
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		// Build Query Command
 		command = String.format("?BSR %d\r", ch);
 		if ((res = this.sendQuery(command, buffer)) < 0)
 			return res;
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(4,6);
+		String x = buffer.toString().substring(4);
 		speed = Integer.parseInt(x);
 		// Parse Response
-		if(speed < 1) {
+		if(speed < 0) {
 			return ROBOTEQ_BAD_RESPONSE;
 		}
 		// Parse Response
@@ -691,17 +639,16 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 	public int queryTime() {
 		int speed;
 		int res;
-		char[] buffer = new char[ROBOTEQ_BUFFER_SIZE];
+		StringBuilder buffer = new StringBuilder();
 		if ((res = this.sendQuery("?TM\r", buffer)) < 0)
 			return res;
 		if (res < 3)
 			return ROBOTEQ_BAD_RESPONSE;
-		String x = new String(buffer);
-		x = x.substring(3,5);
+		String x = buffer.toString().substring(3);
 		speed = Integer.parseInt(x);
 		// Parse Response
 		//if (sscanf((char*)buffer, "TM=%i", &speed) < 1) {
-		if(speed < 1) {
+		if(speed < 0) {
 			return ROBOTEQ_BAD_RESPONSE;
 		}
 		return speed;
