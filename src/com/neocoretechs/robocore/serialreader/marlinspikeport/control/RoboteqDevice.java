@@ -9,7 +9,7 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  */
 public class RoboteqDevice extends AbstractSmartMotorControl {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	static final int ROBOTEQ_DEFAULT_TIMEOUT  =   1000;
 	static final int ROBOTEQ_BUFFER_SIZE      =   64;
 	static final int ROBOTEQ_COMMAND_BUFFER_SIZE =20;

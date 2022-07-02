@@ -215,7 +215,8 @@ public class AsynchDemuxer implements Runnable {
 	public static void addWrite(AsynchDemuxer ad, String req) {
 		synchronized(ad) {
 			ad.toWrite.addLast(req);
-			System.out.println("Adding request to demuxer:"+ad+" "+req+" len:"+ad.toWrite.length());
+			if(DEBUG)
+				System.out.println("Adding request to demuxer:"+ad+" "+req+" len:"+ad.toWrite.length());
 		}
 	}
 
