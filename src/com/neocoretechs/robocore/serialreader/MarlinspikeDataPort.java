@@ -66,7 +66,7 @@ import com.pi4j.io.gpio.exception.GpioPinExistsException;
  * @author Jonathan Neville Groff Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements DataPortCommandInterface {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static final int MAX_CMD_SIZE = 1024;
 	public static int DEFAULT_PWM_FREQUENCY = 10000;
 	public static int MAX_MOTOR_POWER = 1000;

@@ -59,36 +59,28 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
 import diagnostic_msgs.DiagnosticStatus;
 
 /**
- * Process the serial interface data acquired from the Mega board. Real-time telemetry from the Marlinspike realtime subsystem
- * such Motor controller status, ultrasonic sensor, voltage reading, etc and all that is acquired from the attached UART/USB of an aux 
- * board such as Mega2560 via asynchronous bidirectional serial protocol such as RS-232. Since serial ports are monolithic and atomic
- * the actual communications are centralized in the {@code MegaControl} class and its contained {@code ByteSerialDataPort} low level
- * access module.<p/>
- * Certain command line remappings are used to affect behavior as follows:<br/>
- * determine debugging directives __debug:=publisher,demuxer,marlinspike any of these 3 arguments are optional to turn on debugging<br/>
- * __pwm:=controller<br/>
- * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
- * initialized with a previous M-code<p/>
- * __pwm:=direct<br/>
- * Indicates that PWM directives sent as a service are to be directly applied as a set of values working
- * on a PWM pin<p/>
- * GPIO service invocation always works directly on a pin.<p/>  
+ * Functions:<br/>
+ * Process data acquired from the Real-time telemetry from the Marlinspike realtime subsystem.
+ * Respond to messages from bus as subscriber to device name in configuration and process via realtime subsystem.
+ * <p/>
+ * Messages can relate to Motor control, controller status, ultrasonic sensor, voltage reading, etc, acquired from the attached UART/USB of an aux 
+ * board such as Mega2560 via RS-232 or from the SBC running the Ros node using the GPIO header and Pi4j, or from the USB
+ * port of the SBC talking to a smart controller.
+ * <p/> 
+ * Serial communications are centralized in the {@link ByteSerialDataPort} class.<p/>
  * 
- * As input from the attached board is received, the {@code AsynchDemuxer} decodes the header and prepares the data for publication
- * to the Ros bus. Publish various warnings over the 'robocore/status' topic.<p/>
+ * As input from realtime subsystem is received, the {@link AsynchDemuxer} decodes the header and prepares the data for publication
+ * to the Ros bus. It may also publish various warnings over the 'robocore/status' topic.<p/>
+ * The {@link NodeDeviceDemuxer} class encapsulates the device as enumerated in the configuration, the demuxer for the device and node information.<p/>
  * <h3>AsynchDemuxer:</h3>
- * The ByteSerialDataPort and its associates read the base level data coming over the USB port from the marlinspike organized 
- * as a header delimited by chevrons and containing the message topic identifier.<p/>
- * The identifier is used to demux the message and properly read the remainder and process it after each successive line.
+ * The demuxer processes formatted responses from the realtime subsystem in response to various directives.<p/>
+ * The messages are organized by topics identifgied by a header delimited by chevrons and containing the message topic identifier.<p/>
  * Each line after the header has a parameter number and value. For instance, for an analog pin input or an ultrasonic reading
  * we have '1 pin', '2 reading' with pin and reading being the numeric values for the distance or pin reading value.
  * The end of the message is delimited with '</topic>' with topic being the matching header element.<p/>
  * 
- * Essentially this is the main interface to the attached Mega2560 and on to all GPIO
- * and high level motor control functions which are activated via a serial board TTL to RS-232 attached to Mega2560.
- * Anything attached to the microcontroller: UART aux port or low level motor driver H bridge, issued a series of M codes 
- * to activate the functions of the PWM and GPIO pins on the Mega. 
- * Controller M and G code examples:
+ * The realtime subsystem is activated by being issued a series of M and G codes similar to 3D printer and CNC standard codes.<br/>
+ * Examples:<br/>
  * <code> G5 Z<slot> C<channel> P<power> </code>- Issue move command to controller in slot Z<slot> on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
@@ -98,6 +90,15 @@ import diagnostic_msgs.DiagnosticStatus;
  * M41 P<pin> - Set digital pin P high forward <br/>
  * M42 P<pin> - Set digital pin P low reverse <br/>
  * </code>
+ * Certain command line remappings are used to affect behavior as follows:<br/>
+ * determine debugging directives __debug:=publisher,demuxer,marlinspike any of these 3 arguments are optional to turn on debugging<br/>
+ * __pwm:=controller<br/>
+ * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
+ * initialized with a previous M-code<p/>
+ * __pwm:=direct<br/>
+ * Indicates that PWM directives sent as a service are to be directly applied as a set of values working
+ * on a PWM pin<p/>
+ * GPIO service invocation always works directly on a pin.<p/>  
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class MegaPubs extends AbstractNodeMain  {

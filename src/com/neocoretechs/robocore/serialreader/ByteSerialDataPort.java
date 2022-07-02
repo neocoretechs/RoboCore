@@ -23,7 +23,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class ByteSerialDataPort implements DataPortCommandInterface {
-		private static boolean DEBUG = true;
+		private static boolean DEBUG = false;
 		private static boolean PORTDEBUG = false;
 	    private SerialPort serialPort;
         CommPortIdentifier portId = null;
