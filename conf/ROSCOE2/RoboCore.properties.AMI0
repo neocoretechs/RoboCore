@@ -1,0 +1,99 @@
+# If 'Controller' is MarlinspikeDataPort instead of physical port like /dev/ttyACM0, then pins refer to WiringPi GPIO pins, otherwise they are
+# the physical pins on the Mega2560 or other microcontroller attached to the port, 
+# EXCEPT for the PWM0, PWM1, AIN0 and AIN1 which use
+# physical pins numbering as they are handled in special case outside WiringPi.
+# Phy | WPi 
+# 11  | 0
+# 12  | 1
+# 13  | 2
+# 15  | 3
+# 16  | 4
+# 18  | 5
+# 22  | 6
+# 7   | 7	(unusable Odroid)
+# 24  | 10
+# 26  | 11
+# 19  | 12	(PWM1)
+# 21  | 13	
+# 23  | 14
+# 29  | 21
+# 31  | 22
+# 33  | 23	(PWM0)
+# 35  | 24	
+# 36  | 27
+# When designating pins, use the WPi numbers, except for the analog input pins which are designed as:
+# 37  | AIN1
+# 40  | AIN0
+# Assume 3 controllers, so con-one gets slot 0 tty0 for left wheel , con-two gets slot 0 tty1 for right wheel
+# con-three gets slot 0 tty0 for boom, con-three gets PWM slot 0 tty0 for LED since PWM uses different slots, and
+# con-three gets slot 1 tty0 for lift.
+Name:ROSCOE2
+IsIndoor:false
+LUN[0].Name:BoomActuator
+LUN[0].NodeName:AMI0
+LUN[0].Controller:MarlinspikeDataPort
+LUN[0].Type:H-Bridge
+LUN[0].Slot:0
+LUN[0].SignalPin0:33
+LUN[0].Channel:1
+LUN[0].EnablePin:2
+LUN[0].Direction:0
+LUN[0].MinValue:-1000
+LUN[0].MaxValue:1000
+AXIS[0].AxisType:Stick
+AXIS[0].AxisX:1
+AXIS[0].AxisY:3
+# Define PWM LED driver simple Output pin linked to trigger, axis 4.
+# optionally a Type 4 PWM driver in separate slot from motor drivers
+# M10 Z0 T4
+# then config slot 0 to PWM pin 33 on channel 1 enable pin 3
+# M9 Z0 P33 C1 D3
+LUN[1].Name:LEDDriver
+LUN[1].NodeName:AMI0
+LUN[1].Controller:MarlinspikeDataPort
+LUN[1].Type:OutputPin
+LUN[1].Pin:0
+LUN[1].Toggle:true
+AXIS[1].AxisType:Trigger
+AXIS[1].Axis:4
+# If we wanted to use PWN, Define SplitBridge lift actuator slot 1 to Type 2 split bridge driver in motor driver slot
+# M10 Z1 T2
+# For PWM, Config SplitBridge lift actuator slot 1, pwm pins 6 and 7 for forward/reverse channel 1, enable pin 32, default dir 0
+# M4 Z1 P6 Q7 C1 D32 E0
+# But if we dont need PWM, we can config a SwitchBridge, which uses output pins at full DC drive level when no PWM and no speed
+# control is necessary:
+# M10 Z1 T3
+# M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>]
+# In this config, enable allows either forward or reverse pin to use applied pin output.
+# Create switch bridge Z slot, P forward pin, Q reverse pin, D enable, E default state of enable for dir
+# Switch bridge or 2 digital motor controller. Takes 2 inputs: one digital pin for forward,called P, 
+# one for backward,called Q, then motor channel,
+# and then D, an enable pin, and E default dir, with optional encoder.
+# A SwitchHBridge is derived from a SwitchBridge. It uses one signal pin and
+# one pin for direction.
+# M10 Z1 T4
+# M5 Z<slot> P<pin> C<channel> D<direction pin> E<default dir> [W<encoder>]
+# Notice the M5 directive is the same, but excludes the second pin, thus
+# Designating the SwitchHBridge.
+LUN[2].Name:LiftActuator
+LUN[2].NodeName:AMI0
+LUN[2].Controller:MarlinspikeDataPort
+LUN[2].Type:SwitchHBridge
+LUN[2].Slot:1
+LUN[2].SignalPin0:4
+LUN[2].Channel:1
+LUN[2].EnablePin:3
+LUN[2].MinValue:-1000
+LUN[2].MaxValue:1000
+AXIS[2].AxisType:POV
+AXIS[2].Axis:6
+AXIS[2].AxisUp:0.25
+AXIS[2].AxisDown:0.75
+CrosstrackKp:1.5
+CrosstrackKd:0.9
+CrosstrackKi:3.0
+CrosstrackKo:1.0
+CrosstrackPIDRate:30
+MaxIMUDeviationDegrees:180
+MinIMUDeviationDegrees:-180
+TemperatureThreshold:40
