@@ -84,13 +84,15 @@ public class Robot implements RobotInterface, Serializable {
 		extractPID();
 		extractAXIS();
 		extractBUTTON();
-		robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
-		//kp, ki, kd, ko, pidRate (hz)
-		motionPIDController = new MotionPIDController(Props.toFloat("CrosstrackKp"), 
+		if(WHEEL.length > 0) {
+			robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
+			//kp, ki, kd, ko, pidRate (hz)
+			motionPIDController = new MotionPIDController(Props.toFloat("CrosstrackKp"), 
 														Props.toFloat("CrosstrackKd"), 
 														Props.toFloat("CrosstrackKi"), 
 														Props.toFloat("CrosstrackKo"), 
 														Props.toInt("CrosstrackPIDRate"));
+		}
 		IMUSetpoint = new IMUSetpointInfo();
 		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
 		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
@@ -124,6 +126,10 @@ public class Robot implements RobotInterface, Serializable {
 	private void extractAXIS() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> axis = globalConfigs.get("AXIS");
+		 if(axis == null) {
+			 AXIS = new TypedWrapper[0];
+			 return;
+		 }
 		 if(DEBUG)
 			 System.out.println("AXIS size:"+axis.size());
 		 AXIS = new TypedWrapper[axis.size()];
@@ -145,6 +151,10 @@ public class Robot implements RobotInterface, Serializable {
 	private void extractPID() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> pids = globalConfigs.get("PID");
+		 if(pids == null) {
+			 PID = new TypedWrapper[0];
+			 return;
+		 }
 		 PID = new TypedWrapper[pids.size()];
 		 Set<Integer> pidsChannels = pids.keySet();
 		 Object[] pidsOChannels = pidsChannels.toArray();
@@ -158,6 +168,10 @@ public class Robot implements RobotInterface, Serializable {
 	private void extractWHEEL() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> wheels = globalConfigs.get("WHEEL");
+		 if(wheels == null) {
+			 WHEEL = new TypedWrapper[0];
+			 return;
+		 }
 		 if(DEBUG)
 			 System.out.println("Wheel size:"+wheels.size());
 		 WHEEL = new TypedWrapper[wheels.size()];
@@ -181,6 +195,8 @@ public class Robot implements RobotInterface, Serializable {
 	private void extractLUN() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> luns = globalConfigs.get("LUN");
+		 if(luns == null)
+			 throw new RuntimeException("No LUNs defined in configuration, hence, nothing to configure.");
 		 if(DEBUG)
 			 System.out.println("LUN size:"+luns.size());
 		 LUN = new TypedWrapper[luns.size()];
