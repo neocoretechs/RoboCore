@@ -161,9 +161,9 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		for(int i = 0; i < channels; i ++) {
-			if(motorDrive[i+1][0] != 255)
-				sb.append(getDriverInfo(i+1));
+		for(int i = 1; i <= channels; i++) {
+			if(motorDrive[i-1][0] != 255)
+				sb.append(getDriverInfo(i));
 		}
 		return sb.toString();
 	}

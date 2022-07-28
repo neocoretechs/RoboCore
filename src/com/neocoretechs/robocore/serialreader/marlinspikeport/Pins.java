@@ -199,7 +199,7 @@ public class Pins {
 		                OdroidC1Pin.AIN0);  // default pin if no pin argument found
 				break;
 			default:
-				throw new RuntimeException("Digital Pins limited to numbers 0,1,2,3,4,5,6,7 10,11,12,13,14 21,22,23,24 26,27 and analog in 37,40");
+				throw new RuntimeException("Digital Pins limited to numbers 0,1,2,3,4,5,6,7 10,11,12,13,14 21,22,23,24 26,27 and analog in 37,40 (Pins 19 and 33 are PWM and cannot be assigned to digital)");
 		}
 		return pipin;
 	}

@@ -84,6 +84,22 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
     return overwrite;
   }
 
+  public boolean addLast(List<T> lentry) {
+	boolean overwrite = false;
+    synchronized (mutex) {
+    	for(T entry: lentry) {	
+    		deque[(start + length) % limit] = entry;
+    		if (length == limit) {
+    			start = (start + 1) % limit;
+    			overwrite = true;
+    		} else {
+    			length++;
+    		}
+    	}
+    	mutex.notify();
+    }
+    return overwrite;
+  }
   /**
    * Adds the specified entry to the head of the queue, overwriting older
    * entries if necessary.
@@ -516,5 +532,6 @@ public int drainTo(Collection<? super T> c, int maxElements) {
 	}
 	return len;
 }
+
 
 }

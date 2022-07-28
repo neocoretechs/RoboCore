@@ -66,7 +66,7 @@ import com.pi4j.io.gpio.exception.GpioPinExistsException;
  * @author Jonathan Neville Groff Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements DataPortCommandInterface {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final int MAX_CMD_SIZE = 1024;
 	public static int DEFAULT_PWM_FREQUENCY = 10000;
 	public static int MAX_MOTOR_POWER = 1000;
@@ -195,6 +195,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	final static String MALFORMED_MCODE= "Malformed M code ";
 	final static String MSG_BAD_MOTOR ="Bad Motor command ";
 	final static String MSG_BAD_PWM= "Bad PWM Driver command ";
+	final static String MSG_NO_CONTROL = "Attempt to configure undefined device ";
 
 	@Override
 	/**
@@ -365,22 +366,30 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						if(code_seen('P')) {
 							motorPower = (int) code_value(); // motor power -1000,1000
 							fault = 0; // clear fault flag
+							if(DEBUG)
+								System.out.printf("%s Command Motor Power control %s for slot %d%n", this.getClass().getName(), motorControl[motorController], motorController);
 							if( (status=motorControl[motorController].commandMotorPower(motorChannel, motorPower)) != 0) {
 								ret.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_MOTOR,status,motorChannel,motorPower,MSG_TERMINATE));
 							} else {
 								ret.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
 							}
+							if(DEBUG && status != 0)
+								System.out.printf("%s Commanded Motor Power control %s for slot %d status was %d%n", this.getClass().getName(), motorControl[motorController], motorController, status);
 							return ret;
 						} else {// code P or X
 							if(code_seen('X')) {
 								PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
 								fault = 0; // clear fault flag
+								if(DEBUG)
+									System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
 								// use motor related index and value, as we have them
 								if( (status=pwmControl[motorController].commandPWMLevel(motorChannel, PWMLevel)) != 0) {
 									ret.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,motorChannel,PWMLevel,MSG_TERMINATE));
 								} else {
 									ret.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
 								}
+								if(DEBUG && status != 0)
+									System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
 								return ret;
 							} // code X
 						}
@@ -525,8 +534,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 					ret.add(String.format("%sM3%s%n",MSG_BEGIN,MSG_TERMINATE));
 					return ret;
-				} // if motorControl[motorController]
-			  break;
+				} else { //motorcontrol[motorcontroller]
+					  ret.add(String.format("%s%s%s%n",MSG_BEGIN,MSG_NO_CONTROL,MSG_TERMINATE));
+					  return ret;
+				}
 			//
 			// M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> B<enable pin b> E<default dir> [W<encoder pin>] [F<frequency 1-1000000>]
 			// Split bridge or 2 half bridge motor controller. Takes 2 inputs: one for forward,called P, one for backward,called Q, then motor channel, 
@@ -599,7 +610,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				  ret.add(String.format("%sM4%s%n",MSG_BEGIN,MSG_TERMINATE));
 				  return ret;
 				} // code C
-			} //motorcontrol[motorcontroller]
+			} else { //motorcontrol[motorcontroller]
+				  ret.add(String.format("%s%s%s%n",MSG_BEGIN,MSG_NO_CONTROL,MSG_TERMINATE));
+				  return ret;
+			}
 			break;
 			//
 			// M5 Z<slot> P<pin> [Q<pin>] C<channel> D<enable pin> E<default dir> [W<encoder>] 
@@ -656,6 +670,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								  ((SwitchHBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, dir_pin, dir_default);
 							  else
 								  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_default);
+							  if(DEBUG)
+								  System.out.printf("%s Created M5 control %s for slot %d%n", this.getClass().getName(), (SwitchBridgeDriver)motorControl[motorController], motorController);
 							  if(encode_pin != 0) {
 								  motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
 							  }
@@ -666,7 +682,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						  ret.add(String.format("%sM5%s%n",MSG_BEGIN,MSG_TERMINATE));
 						  return ret;
 					  } // code C
-				  } //motorcontrol[motorcontroller]
+				  } else { //motorcontrol[motorcontroller]
+					  ret.add(String.format("%s%s%s%n",MSG_BEGIN,MSG_NO_CONTROL,MSG_TERMINATE));
+					  return ret;
+				  }
 				break;
 			//
 			// M6 [Z<slot>] [S<scale>] [X<scale>] 

@@ -131,7 +131,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static boolean PORTDEBUG = false;
 	private volatile boolean shouldRun = true;
 	private DataPortCommandInterface dataPort;
@@ -219,7 +219,23 @@ public class AsynchDemuxer implements Runnable {
 				System.out.println("Adding request to demuxer:"+ad+" "+req+" len:"+ad.toWrite.length());
 		}
 	}
-
+	/**
+	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
+	 * If the elements reach a predetermined upper bound they are emplaced at the beginning. If this occurs,
+	 * a warning message is displayed but otherwise operation is unaffected. If these warnings are an issue,
+	 * the size of the deque must be increased.
+	 * @param ad The AsynchDemuxer to queue to.
+	 * @param req The request to be enqueued.
+	 */
+	public static void addWrite(AsynchDemuxer ad, List<String> req) {
+		synchronized(ad) {
+			ad.toWrite.addLast(req);
+			if(DEBUG) {
+				for(String reqs: req)
+					System.out.println("Adding request to demuxer:"+ad+" "+reqs+" len:"+ad.toWrite.length());
+			}
+		}
+	}
 	public MachineBridge getMachineBridge(String group) {
 		return topics.get(group).getMachineBridge();
 	}
@@ -782,10 +798,9 @@ public class AsynchDemuxer implements Runnable {
 	 * @throws IOException
 	 */
 	public synchronized void config(List<String> starts) throws IOException {
-		for(String s : starts) {
-			System.out.printf("%s Thread:%s Port:%s Startup GCode:%s%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName(),s);
-			addWrite(this,s);
-		}
+		if(DEBUG)
+			System.out.printf("%s Thread:%s Port:%s Startup GCode list:%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName());
+		addWrite(this,starts);
 		if(DEBUG)
 			addWrite(this,"M705\r"); // comprehensive motor driver and pin assignment M-code
 		//while(!toWrite.isEmpty() || mutexWrite.getNumberWaiting() > 0)

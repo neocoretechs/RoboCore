@@ -46,7 +46,8 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * and if the tracks are driven by 4 motors with 2 sets of cogs differing in size front to back the rotation rates wil
  * have to by synchronized despite the differing 'wheel' sizes. So to may the track vary slightly, and other instances I cant yet forsee.<p/>
  * With that in mind the parameters that would seem to warrant global status have been repeated so as to appear from the
- * perspective of each individual component, and if necessary, appear in aggregate as global. 
+ * perspective of each individual component, and if necessary, appear in aggregate as global.<p/>
+ * If we initialize a diff drive, we expect PID control settings, and IMU settings even if one never appears.
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
@@ -54,7 +55,7 @@ public class Robot implements RobotInterface, Serializable {
 	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
-	private int temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
+	private int temperatureThreshold;
 	private MotionPIDController motionPIDController;
 	private RobotDiffDriveInterface robotDrive;
 	private IMUSetpointInfo IMUSetpoint;
@@ -92,10 +93,11 @@ public class Robot implements RobotInterface, Serializable {
 														Props.toFloat("CrosstrackKi"), 
 														Props.toFloat("CrosstrackKo"), 
 														Props.toInt("CrosstrackPIDRate"));
+			IMUSetpoint = new IMUSetpointInfo();
+			IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
+			IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
+			temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
 		}
-		IMUSetpoint = new IMUSetpointInfo();
-		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
-		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
 	}
 	
 	private void extractBUTTON() {
