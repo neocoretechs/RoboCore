@@ -1,0 +1,105 @@
+# If 'Controller' is MarlinspikeDataPort instead of physical port like /dev/ttyACM0, then pins refer to WiringPi GPIO pins, otherwise they are
+# the physical pins on the Mega2560 or other microcontroller attached to the port, 
+# EXCEPT for the PWM0, PWM1, AIN0 and AIN1 which use
+# physical pins numbering as they are handled in special case outside WiringPi.
+# Phy | WPi 
+# 11  | 0
+# 12  | 1
+# 13  | 2
+# 15  | 3
+# 16  | 4
+# 18  | 5
+# 22  | 6
+# 7   | 7	(unusable Odroid)
+# 24  | 10
+# 26  | 11
+# 19  | 12	(PWM1)
+# 21  | 13	
+# 23  | 14
+# 29  | 21
+# 31  | 22
+# 33  | 23	(PWM0)
+# 35  | 24	
+# 36  | 27
+# When designating pins, use the WPi numbers, except for the analog input pins which are designed as:
+# 37  | AIN1
+# 40  | AIN0
+# Assume 3 controllers, so con-one gets slot 0 tty0 for left wheel , con-two gets slot 0 tty1 for right wheel
+# con-three gets slot 0 tty0 for boom, con-three gets PWM slot 0 tty0 for LED since PWM uses different slots, and
+# con-three gets slot 1 tty0 for lift.
+Name:ROSCOE2
+IsIndoor:false
+# M10 Z0 T1 where T1 = H-Bridge, Z0 = slot 0
+# M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
+# Config H-bridge diff driver slot 0, PWM pin 8 channel 1, Direction pin digital 24, encoder pin 68
+# M3 Z0 P8 C1 D24 E0 W68
+LUN[0].Name:RightWheel
+LUN[0].NodeName:CONTROL1
+LUN[0].Controller:MarlinspikeDataPort
+LUN[0].Type:H-Bridge
+LUN[0].Slot:0
+#LUN[0].signalPin0:8
+LUN[0].SignalPin0:33
+LUN[0].Channel:1
+#LUN[0].EnablePin:38
+LUN[0].EnablePin:2
+LUN[0].Direction:0
+#LUN[0].EncoderPin:68
+LUN[0].EncoderPin:40
+LUN[0].EncoderType:Analog
+LUN[0].EncoderCount:1
+LUN[0].EncoderLoRange:100
+LUN[0].EncoderHiRange:1023
+LUN[0].EncoderInterrupt:33
+LUN[0].MinValue:-1000
+LUN[0].MaxValue:1000
+WHEEL[0].WheelTrackMM:457.2
+WHEEL[0].WheelDiameterMM:203.2
+WHEEL[0].TicksPerRevolution:500
+PID[0].MotorPIDRate:1
+PID[0].MotorKp:1.0
+PID[0].MotorKd:1.0
+PID[0].MotorKi:1.0
+PID[0].MotorKo:1.0
+AXIS[0].AxisType:Stick
+AXIS[0].AxisX:0
+AXIS[0].AxisY:2
+# M3 Z0 P10 C1 D22 E1 W69 - we would define E1 since wheel is essentially reversed so default direction is opposite
+LUN[1].Name:LeftWheel
+LUN[1].NodeName:CONTROL1
+LUN[1].Controller:MarlinspikeDataPort
+LUN[1].Type:H-Bridge
+LUN[1].Slot:0
+LUN[1].SignalPin0:19
+LUN[1].Channel:2
+LUN[1].EnablePin:0
+LUN[1].Direction:0
+LUN[1].EncoderPin:37
+LUN[1].EncoderType:Analog
+LUN[1].AnalogPollRate:100
+LUN[1].AnalogChangeDelta:128
+LUN[1].EncoderCount:1
+LUN[1].EncoderLoRange:100
+LUN[1].EncoderHiRange:1023
+LUN[1].EncoderInterrupt:19
+LUN[1].MinValue:-1000
+LUN[1].MaxValue:1000
+WHEEL[1].WheelTrackMM:457.2
+WHEEL[1].WheelDiameterMM:203.2
+WHEEL[1].TicksPerRevolution:500
+PID[1].MotorPIDRate:1
+PID[1].MotorKp:1.0
+PID[1].MotorKd:1.0
+PID[1].MotorKi:1.0
+PID[1].MotorKo:1.0
+AXIS[1].AxisType:Stick
+AXIS[1].AxisX:0
+AXIS[1].AxisY:2
+CrosstrackKp:1.5
+CrosstrackKd:0.9
+CrosstrackKi:3.0
+CrosstrackKo:1.0
+CrosstrackPIDRate:30
+MaxIMUDeviationDegrees:180
+MinIMUDeviationDegrees:-180
+TemperatureThreshold:40
