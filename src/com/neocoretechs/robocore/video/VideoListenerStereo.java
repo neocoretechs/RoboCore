@@ -19,6 +19,7 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -52,7 +53,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
  */
 public class VideoListenerStereo extends AbstractNodeMain 
 {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
     private BufferedImage imagel = null;
@@ -101,7 +102,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 		if( mode.equals("display")) {
 			//if( DEBUG )
 				System.out.println("Invoking thread for pumping frames to AWT Panel");
-			
+			CountDownLatch latch = new CountDownLatch(1);
 			SwingUtilities.invokeLater(new Runnable() {
 			    public void run() {
 					JFrame frame = new JFrame("Player");
@@ -119,11 +120,17 @@ public class VideoListenerStereo extends AbstractNodeMain
 					frame.setVisible(true);
 			        displayPanel1.paintPanel();
 			        displayPanel2.paintPanel();
+			        latch.countDown();
 			    }
 			});
 			SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 				@Override
 				public void run() {
+					try {
+						latch.await();
+					} catch (InterruptedException e1) {
+						e1.printStackTrace();
+					}
 					if(DEBUG)
 						System.out.println("Entering display loop");
 			        while(true) {
