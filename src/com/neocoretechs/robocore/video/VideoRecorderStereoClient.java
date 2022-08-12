@@ -1,32 +1,30 @@
 package com.neocoretechs.robocore.video;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 import java.util.Map;
-import java.util.concurrent.BrokenBarrierException;
+import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
+
+import javax.imageio.ImageIO;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
-import org.ros.node.service.CountDownServiceServerListener;
-import org.ros.node.service.ServiceResponseBuilder;
-import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.bigsack.session.BigSackAdapter;
+import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.DuplicateKeyException;
-
 import com.neocoretechs.relatrix.client.RelatrixClient;
+import com.neocoretechs.relatrix.client.RemoteStream;
+import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-
-
-//import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
-
 
 /**
  * Create a database and receive published video images on the Ros bus from /stereo_msgs/StereoImage, then
@@ -42,6 +40,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 public class VideoRecorderStereoClient extends AbstractNodeMain 
 {
 	private static boolean DEBUG = true;
+	private static boolean DEBUGDIFF = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
     private Object mutex = new Object();
@@ -50,6 +49,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
     byte[] bufferl = new byte[0];
     ByteBuffer cbr;
     byte[] bufferr = new byte[0];
+    int[] prevBuffer = new int[0];
     
     double eulers[] = new double[]{0.0,0.0,0.0};
    
@@ -67,6 +67,8 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	public static int DATABASE_PORT = 9020;
 	CountDownLatch latch;
 	RelatrixClient session = null;
+	CannyEdgeDetector detector;
+	BufferedImage imagel, imager;
 	static {
 		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDERCLIENT"});
 	}
@@ -77,14 +79,13 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
+
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.containsKey("__database") )
 			DATABASE = remaps.get("__database");
 		if( remaps.containsKey("__databasePort") )
 			DATABASE_PORT = Integer.parseInt(remaps.get("__databasePort"));
 		try {
-			//Relatrix.setTablespaceDirectory(DATABASE);
-			BigSackAdapter.setTableSpaceDir(DATABASE);
 			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE+" PORT:"+DATABASE_PORT);
 			//session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
 			session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
@@ -149,7 +150,15 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 							shouldStore = false;
 						}
 						synchronized(mutex) {
-							StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
+							if(!imageDiff()) // creates imagel
+								continue;
+							imager = createImage(bufferr);
+							byte[] bl = convertImage(imagel);
+							byte[] br = convertImage(imager);
+							if(DEBUG)
+								System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
+							//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
+							StereoscopicImageBytes sib = new StereoscopicImageBytes(bl, br);
 							//try {
 								session.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
 								//session.put(sib);
@@ -249,11 +258,144 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 			}
 		});
 		
+	}
+	boolean imageDiff() {
+		detector = new CannyEdgeDetector();
+		detector.setLowThreshold(.75f);
+		detector.setHighThreshold(1f);
+		detector.setGaussianKernelWidth(32);
+		detector.setGaussianKernelRadius(3);
+		try {
+			imagel = createImage(bufferl);
+		} catch (IOException e1) {
+			System.out.println("Could not convert LEFT image payload due to:"+e1.getMessage());
+			return false;
+		}
+		//int[] currBuffer = readLuminance(imagel);
+		detector.setSourceImage(imagel);
+		int[] currBuffer = detector.semiProcess();
+		//float[] coeffs = new float[currBuffer.length];
+		//for(int i = 0; i < currBuffer.length; i++)
+		//	coeffs[i] = (float)currBuffer[i];
+		//FloatDCT_1D fdct1d = new FloatDCT_1D(coeffs.length);
+		//fdct1d.forward(coeffs, false);
+		if(prevBuffer.length == 0) {
+			prevBuffer = currBuffer;
+			return true; // store first
+		}
+		int numDiff = 0;
 
-		
+		for(int i = 0; i < currBuffer.length; i++) {
+			if((prevBuffer[i] > 0 && currBuffer[i] <= 0) || (prevBuffer[i] <= 0 && currBuffer[i] > 0))
+				++numDiff;
+		}
+		prevBuffer = currBuffer;
+		if(DEBUGDIFF)
+			System.out.println("Image diff="+numDiff+" of "+currBuffer.length+" threshold:"+(int)(Math.ceil((double)currBuffer.length * .04)));
+		// % diff
+		if(numDiff > (int)(Math.ceil((double)currBuffer.length * .04)))
+			return true;
+		return false;
 	}
 	
-
+	BufferedImage createImage(byte[] imgBuff) throws IOException {
+		BufferedImage bImg;
+		InputStream in = new ByteArrayInputStream(bufferl);
+		bImg = ImageIO.read(in);
+		in.close();
+		return bImg;
+	}
 	
+	byte[] convertImage(BufferedImage bImage) throws IOException {
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		ImageIO.write(bImage, "jpg", bos );
+		return bos.toByteArray();
+	}
+	
+	/**
+	 * Luma represents the achromatic image while chroma represents the color component. 
+	 * In video systems such as PAL, SECAM, and NTSC, a nonlinear luma component (Y') is calculated directly 
+	 * from gamma-compressed primary intensities as a weighted sum, which, although not a perfect 
+	 * representation of the colorimetric luminance, can be calculated more quickly without 
+	 * the gamma expansion and compression used in photometric/colorimetric calculations. 
+	 * In the Y'UV and Y'IQ models used by PAL and NTSC, the rec601 luma (Y') component is computed as
+	 * Math.round(0.299f * r + 0.587f * g + 0.114f * b);
+	 * rec601 Methods encode 525-line 60 Hz and 625-line 50 Hz signals, both with an active region covering 
+	 * 720 luminance samples and 360 chrominance samples per line. The color encoding system is known as YCbCr 4:2:2.
+	 * @param r
+	 * @param g
+	 * @param b
+	 * @return Y'
+	 */
+	public static int luminance(float r, float g, float b) {
+		return Math.round(0.299f * r + 0.587f * g + 0.114f * b);
+	}
+	
+	/**
+	 * Fill the data array with grayscale adjusted image data from sourceImage
+	 */
+	public static int[] readLuminance(BufferedImage sourceImage) {
+		int[] data = new int[sourceImage.getWidth()*sourceImage.getHeight()];
+		int type = sourceImage.getType();
+		if (type == BufferedImage.TYPE_CUSTOM || type == BufferedImage.TYPE_INT_RGB || type == BufferedImage.TYPE_INT_ARGB) {
+			int[] pixels = (int[]) sourceImage.getData().getDataElements(0, 0, sourceImage.getWidth(), sourceImage.getHeight(), null);
+			for (int i = 0; i < pixels.length; i++) {
+				int p = pixels[i];
+				int r = (p & 0xff0000) >> 16;
+				int g = (p & 0xff00) >> 8;
+				int b = p & 0xff;
+				data[i] = luminance(r, g, b);
+			}
+		} else if (type == BufferedImage.TYPE_BYTE_GRAY) {
+			byte[] pixels = (byte[]) sourceImage.getData().getDataElements(0, 0, sourceImage.getWidth(), sourceImage.getHeight(), null);
+			for (int i = 0; i < pixels.length; i++) {
+				data[i] = (pixels[i] & 0xff);
+			}
+		} else if (type == BufferedImage.TYPE_USHORT_GRAY) {
+			short[] pixels = (short[]) sourceImage.getData().getDataElements(0, 0, sourceImage.getWidth(), sourceImage.getHeight(), null);
+			for (int i = 0; i < pixels.length; i++) {
+				data[i] = (pixels[i] & 0xffff) / 256;
+			}
+		} else if (type == BufferedImage.TYPE_3BYTE_BGR) {
+            byte[] pixels = (byte[]) sourceImage.getData().getDataElements(0, 0, sourceImage.getWidth(), sourceImage.getHeight(), null);
+            int offset = 0;
+            int index = 0;
+            for (int i = 0; i < pixels.length; i+=3) {
+                int b = pixels[offset++] & 0xff;
+                int g = pixels[offset++] & 0xff;
+                int r = pixels[offset++] & 0xff;
+                data[index++] = luminance(r, g, b);
+            }
+        } else {
+			throw new IllegalArgumentException("Unsupported image type: " + type);
+		}
+		return data;
+	}	
+	/**
+	 * Delete records from db. cmdl: local node, remote node, remote port
+	 * @param argv
+	 * @throws Exception
+	 */
+	public static void main(String[] argv) throws Exception {
+		if(argv.length < 3) {
+			System.out.println("Usage: java com.neocoretechs.robocore.video.VideoRecorderStereoClient <local node> <remote node> <remote port>");
+			return;
+		}
+		System.out.println("Will delete all video database records. Proceed? hit return");
+		Scanner console = new Scanner(System.in);
+		console.nextLine();
+		console.close();
+		RelatrixClient session = new RelatrixClient(argv[0], argv[1], Integer.parseInt(argv[2]));
+	    RemoteStream stream = (RemoteStream) session.findSetStream("?", "?", "?");
+		stream.of().forEach(e -> {
+			try {
+				session.remove(((Comparable[]) e)[0], ((Comparable[]) e)[1], (StereoscopicImageBytes) ((Comparable[]) e)[2]);
+			} catch (ClassNotFoundException | IllegalAccessException | IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+		});
+		session.close();
+	}
 }
 

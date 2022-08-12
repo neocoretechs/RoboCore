@@ -34,6 +34,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 public class VideoRecorderStereo extends AbstractNodeMain 
 {
 	private static boolean DEBUG = true;
+	private static boolean DEBUGDIFF = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
     private Object mutex = new Object();
@@ -42,6 +43,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
     byte[] bufferl = new byte[0];
     ByteBuffer cbr;
     byte[] bufferr = new byte[0];
+    byte[] prevBuffer = new byte[0];
     
     double eulers[] = new double[]{0.0,0.0,0.0};
    
@@ -137,6 +139,8 @@ public class VideoRecorderStereo extends AbstractNodeMain
 							shouldStore = false;
 						}
 						synchronized(mutex) {
+							if(!imageDiff())
+								continue;
 							StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 							//try {
 								//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
@@ -226,13 +230,28 @@ public class VideoRecorderStereo extends AbstractNodeMain
 						//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 				}
 			}
-		});
-		
-
+		});	
 		
 	}
 	
-
+	boolean imageDiff() {
+		if(prevBuffer.length == 0) {
+			prevBuffer = bufferr;
+			return true; // store first
+		}
+		int numDiff = 0;
+		for(int i = 0; i < bufferr.length; i++) {
+			if((prevBuffer[i] ^ bufferr[i]) != 0)
+				++numDiff;
+		}
+		prevBuffer = bufferr;
+		if(DEBUGDIFF)
+			System.out.println("Image diff="+numDiff);
+		// 1% diff
+		if(numDiff > (int)(Math.ceil((double)bufferr.length * .01)))
+			return true;
+		return false;
+	}
 	
 }
 

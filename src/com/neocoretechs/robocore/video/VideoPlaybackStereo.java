@@ -24,6 +24,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
+import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
 
@@ -64,6 +65,11 @@ public class VideoPlaybackStereo  {
     private static byte[][] bqueue;
 	private static int sequenceNumber,lastSequenceNumber;
 	static long time1;
+	static long timdiff = 0;
+	static long timlast = 0;
+	static long realtimdiff = 0;
+	static long realtimlast = 0;
+	static long samplesPer = 0;
 	
 	public static void main(String[] args) {
 		try {
@@ -109,10 +115,7 @@ public class VideoPlaybackStereo  {
 		//}
 		
 		try {
-			long timdiff = 0;
-			long timlast = 0;
-			long samplesPer = 0;
-			
+		
 		    RemoteStream stream = (RemoteStream) rkvc.findSetStream("?", "?", "?");
 		    
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
@@ -121,46 +124,37 @@ public class VideoPlaybackStereo  {
 		    //		Collectors.groupingBy(e -> e[2].toString(), Collectors.counting()))));
 	        //nameCount.forEach((name, count) -> {
 	        //    System.out.println(name + ":" + count);
-	        //});
-		    
-		    
+	        //});	        
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
 		    //stream.flatMap(e -> Stream.of(e))
 		    //	.forEach((l,m,n) -> System.out.println("Element B:"+l));
 		    	//.forEach(g -> System.out.println("Element B:"+g));
-		    /*
-		    spliterator = Spliterators.spliteratorUnknownSize(Relatrix.findSet("?", "?", "?"), characteristics);
-		    parallel = false;
-		    stream = (Stream<Comparable[]>) StreamSupport.stream(spliterator, parallel);
-		    long nano = System.nanoTime();
-		    System.out.println(stream.count());
-		    System.out.println(System.nanoTime()-nano);
-		    
-		    spliterator = Spliterators.spliteratorUnknownSize(Relatrix.findSet("?", "?", "?"), characteristics);
-		    parallel = true;
-		    nano = System.nanoTime();
-		    stream = (Stream<Comparable[]>) StreamSupport.stream(spliterator, parallel);
-		    System.out.println(stream.count());
-		    System.out.println(System.nanoTime()-nano);
-		    */
 			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
 			//RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
 			stream.of().forEach(e -> {
-				//while(rkvc.hasNext(it)) {
-					/*
-					Comparable[] c = (Comparable[]) it.next();
-					Long tim = (Long) c[0];
-					Double yaw = (Double) c[1];
+				// try to push frames in realtime, capped at 1 second max wait since we detect motion
+					Long tim = (long)((Comparable[]) e)[0];
 					if(timdiff == 0) {
 						timdiff = tim;
-						timlast = tim;
+						realtimdiff = System.currentTimeMillis();
 					} else {
 						timdiff = tim-timlast;
-						samplesPer = (timdiff+samplesPer)/2;
-						timlast = tim;
+						realtimdiff = System.currentTimeMillis() - realtimlast;
+						if(timdiff > realtimdiff) {
+							try {
+								// cap it at 1 sec
+								if((timdiff - realtimdiff) > 1000)
+									Thread.sleep(1000);
+								else
+									Thread.sleep(timdiff - realtimdiff);
+							} catch (InterruptedException e1) {
+							}
+						}
 					}
-					StereoscopicImageBytes<?> sib = (StereoscopicImageBytes<?>) c[2];
-					*/
+					//if(DEBUG)
+						System.out.println("timdiff="+timdiff+" relatimdiff="+realtimdiff);
+					timlast = tim;
+					realtimlast = System.currentTimeMillis();
 					//Entry e = (Entry) rkvc.next(it);
 					StereoscopicImageBytes sib = (StereoscopicImageBytes) ((Comparable[]) e)[2];
 					synchronized(mutex) {
@@ -171,6 +165,14 @@ public class VideoPlaybackStereo  {
 								InputStream in = new ByteArrayInputStream(bufferl);
 								imagel = ImageIO.read(in);
 								in.close();
+								CannyEdgeDetector detect = new CannyEdgeDetector();
+								detect.setLowThreshold(.75f);
+								detect.setHighThreshold(1f);
+								detect.setGaussianKernelWidth(32);
+								detect.setGaussianKernelRadius(3);
+								detect.setSourceImage(imagel);
+								detect.process();
+								imagel = detect.getEdgesImage();
 							} catch (IOException e1) {
 								System.out.println("Could not convert LEFT image payload due to:"+e1.getMessage());
 								return;
@@ -188,6 +190,7 @@ public class VideoPlaybackStereo  {
 								bqueue = new byte[][]{bufferl, bufferr};
 							} 
 						}
+
 	        			displayPanel1.setLastFrame((java.awt.Image)imagel);
 	        			displayPanel2.setLastFrame((java.awt.Image)imager);
 	    				displayPanel2.setComputedValues((double)((Comparable[]) e)[1], (long)((Comparable[]) e)[0],(double) 0);
@@ -202,7 +205,7 @@ public class VideoPlaybackStereo  {
 					++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 				//}
 		});
-		System.out.println("End of retrieval");
+		System.out.println("End of retrieval. sequence="+sequenceNumber);
 		} catch(IllegalAccessException | IllegalArgumentException | ClassNotFoundException | IOException iae) {
 			iae.printStackTrace();
 			return;
