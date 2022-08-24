@@ -73,8 +73,8 @@ public class VideoPlaybackStereo  {
 	
 	public static void main(String[] args) {
 		try {
-			if(args.length != 3 ) {
-				System.out.println("usage: java com.neocoretechs.robocore.video.VideoPlaybackStereo [local node] [remote node] [server port]");
+			if(args.length != 3 && args.length != 4) {
+				System.out.println("usage: java com.neocoretechs.robocore.video.VideoPlaybackStereo [local node] [remote node] [server port] <previous hours to display>");
 				System.exit(1);
 			}
 			rkvc = new RelatrixClient(args[0], args[1], Integer.parseInt(args[2]));
@@ -116,7 +116,15 @@ public class VideoPlaybackStereo  {
 		
 		try {
 		
-		    RemoteStream stream = (RemoteStream) rkvc.findSetStream("?", "?", "?");
+		    RemoteStream stream;
+		    if(args.length == 4) {
+		    	long ptimh = Long.parseLong(args[3]);
+		    	long ptim = System.currentTimeMillis() - (ptimh*3600000L);
+		    	Long lastTim = (Long)rkvc.lastKey(Long.class);
+		    	stream = (RemoteStream) rkvc.findSubSetStream(ptim, "?", "?",lastTim);
+		    } else {
+		    	stream = (RemoteStream) rkvc.findSetStream("?", "?", "?");
+		    }
 		    
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
 			//Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),

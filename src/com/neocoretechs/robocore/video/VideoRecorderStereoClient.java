@@ -40,7 +40,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 public class VideoRecorderStereoClient extends AbstractNodeMain 
 {
 	private static boolean DEBUG = true;
-	private static boolean DEBUGDIFF = true;
+	private static boolean DEBUGDIFF = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
     private Object mutex = new Object();
@@ -61,7 +61,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	long time1;
 	protected static boolean shouldStore = true;
 	private static String STORE_SERVICE = "cmd_store";
-	private static int MAXIMUM = 50000;
+	private static int MAXIMUM = 0;
 	int commitRate = 500;
 	public static String DATABASE = "COREPLEX";
 	public static int DATABASE_PORT = 9020;
@@ -155,8 +155,8 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 							imager = createImage(bufferr);
 							byte[] bl = convertImage(imagel);
 							byte[] br = convertImage(imager);
-							if(DEBUG)
-								System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
+							//if(DEBUG)
+							//	System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
 							//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 							StereoscopicImageBytes sib = new StereoscopicImageBytes(bl, br);
 							//try {
@@ -166,7 +166,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 								// if within 1 ms, rare but occurs
 							//}
 							if(sequenceNumber%commitRate == 0) {
-								System.out.println("Committing at sequence "+sequenceNumber);
+								//System.out.println("Committing at sequence "+sequenceNumber);
 								session.transactionCommit();
 								session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
 								//session.Commit();
