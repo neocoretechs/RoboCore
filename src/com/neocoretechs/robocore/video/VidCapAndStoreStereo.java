@@ -134,7 +134,7 @@ public class VidCapAndStoreStereo  {
         			time1 = System.currentTimeMillis();
         			System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber)+" queue L:"+dequeL.size()+" R:"+dequeR.size());
         			if(commitCount > FRAME_COMMIT_THRESHOLD) {
-        				rkvc.transactionCommit(java.lang.Long.class);
+        				// commit here
         				commitCount = 0;
         			}
         			lastSequenceNumber = sequenceNumber;
@@ -142,7 +142,7 @@ public class VidCapAndStoreStereo  {
         		if( DEBUG )
         				System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
         				StereoscopicImageBytes b = new StereoscopicImageBytes(bbL,bbR);
-        				rkvc.transactionalStore(new Long(System.currentTimeMillis()),b);
+        				rkvc.store(new Long(System.currentTimeMillis()),b);
         				++commitCount;
         				if( DEBUG )
         					System.out.println("Pub. Image:"+sequenceNumber);	

@@ -16,6 +16,7 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
+import java.util.Date;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -121,7 +122,15 @@ public class VideoPlaybackStereo  {
 		    	long ptimh = Long.parseLong(args[3]);
 		    	long ptim = System.currentTimeMillis() - (ptimh*3600000L);
 		    	Long lastTim = (Long)rkvc.lastKey(Long.class);
+		    	//long ptim = (ptimh*3600000L);
+		    	//Long firstTim = (Long)rkvc.firstKey(Long.class);
+		    	System.out.println("From:"+new Date(ptim)+" To:"+new Date(lastTim));
 		    	stream = (RemoteStream) rkvc.findSubSetStream(ptim, "?", "?",lastTim);
+		    	//stream = (RemoteStream) rkvc.findTailSetStream(ptim+firstTim, "?", "?");
+		    	//stream.of().forEach(e -> {
+		    	//	System.out.println(((Comparable[]) e)[0]+" "+((Comparable[]) e)[1]);
+		    	//});
+		    	//return;
 		    } else {
 		    	stream = (RemoteStream) rkvc.findSetStream("?", "?", "?");
 		    }
@@ -141,6 +150,9 @@ public class VideoPlaybackStereo  {
 			//RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
 			stream.of().forEach(e -> {
 				// try to push frames in realtime, capped at 1 second max wait since we detect motion
+				// if the recorded time between the frames is longer than the realtime display, slow
+				// the display down to match the difference in recorded frame time to the difference in real time (capped at 1 sec).
+				// We want to avoid playing faster than realtime.
 					Long tim = (long)((Comparable[]) e)[0];
 					if(timdiff == 0) {
 						timdiff = tim;
@@ -367,7 +379,7 @@ public class VideoPlaybackStereo  {
 		   /*
 		    * Set up the "Pitch" label
 		    */
-		        JLabel aJLabel = new JLabel("");
+		        JLabel aJLabel = new JLabel("Pitch:");
 		        gbc.fill=gbc.HORIZONTAL;
 		        gbc.gridx=3;
 		        gbc.gridy=1;
@@ -427,7 +439,8 @@ public class VideoPlaybackStereo  {
 		    * Create formatters for the coordinates and time (2 decimal places)
 		    * and the angles (1 decimal place, and the degrees symbol).
 		    */
-		        df = DateFormat.getTimeInstance();
+		        dt = DateFormat.getTimeInstance();
+		        df = DateFormat.getDateInstance();
 		        dfs = new DecimalFormat("+####0.00;-####0.00");
 		        da = new DecimalFormat("####0.0\u00b0");
 		        das = new DecimalFormat("+####0.0\u00b0;-####0.0\u00b0");
@@ -461,13 +474,13 @@ public class VideoPlaybackStereo  {
 		    void setComputedValues(double yaw, long time, double pitch)
 		    {
 		        xField.setText(da.format(yaw));
-		        yField.setText(df.format(time));
+		        yField.setText(dt.format(time)+" "+df.format(time));
 		        aField.setText(da.format(pitch));
 
 		    }
 
 		    /** Formatter for the time. */
-		    DateFormat df;
+		    DateFormat dt,df;
 
 		    /** Formatter for the errors (2 decimal places, allows shows + or -). */
 		    DecimalFormat dfs;

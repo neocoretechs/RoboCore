@@ -160,19 +160,17 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 							//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 							StereoscopicImageBytes sib = new StereoscopicImageBytes(bl, br);
 							//try {
-								session.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
+								session.store(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
 								//session.put(sib);
 							//} catch (DuplicateKeyException e) {
 								// if within 1 ms, rare but occurs
 							//}
 							if(sequenceNumber%commitRate == 0) {
 								//System.out.println("Committing at sequence "+sequenceNumber);
-								session.transactionCommit();
 								session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
 								//session.Commit();
 								//session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
 								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM) {
-									session.transactionCommit();
 									session.close();
 									shouldStore = false;
 								}
