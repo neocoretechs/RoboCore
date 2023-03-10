@@ -12,9 +12,11 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.bigsack.session.BigSackAdapter;
-import com.neocoretechs.bigsack.session.TransactionalHashSet;
+
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.rocksack.session.RockSackAdapter;
+import com.neocoretechs.rocksack.session.RockSackTransactionSession;
+import com.neocoretechs.rocksack.session.TransactionalMap;
 
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -59,7 +61,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	int commitRate = 500;
 	public static String DATABASE = "D:/etc/ROSCOE2/Images";
 	CountDownLatch latch;
-	TransactionalHashSet session = null;
+	TransactionalMap session = null;
 	static {
 		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDER"});
 	}
@@ -75,9 +77,10 @@ public class VideoRecorderStereo extends AbstractNodeMain
 			DATABASE = remaps.get("__database");
 		try {
 			//Relatrix.setTablespaceDirectory(DATABASE);
-			BigSackAdapter.setTableSpaceDir(DATABASE);
+			RockSackAdapter.setTableSpaceDir(DATABASE);
 			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE);
-			session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
+			String xid = RockSackAdapter.getRockSackTransactionId();
+			session = RockSackAdapter.getRockSackTransactionalMap(StereoscopicImageBytes.class,xid);
 		} catch (IOException | IllegalAccessException e2) {
 			//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
 			throw new RuntimeException(e2);
@@ -144,7 +147,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 							StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 							//try {
 								//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
-								session.put(sib);
+								session.put(sib, System.currentTimeMillis());
 							//} catch (DuplicateKeyException e) {
 								// if within 1 ms, rare but occurs
 							//}
@@ -152,13 +155,12 @@ public class VideoRecorderStereo extends AbstractNodeMain
 								System.out.println("Committing at sequence "+sequenceNumber);
 								//Relatrix.transactionCommit();
 								session.Commit();
-								session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
 								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
 									System.exit(0);
 							}
 						}
 					}
-		        } catch (IllegalAccessException | IOException e) {
+		        } catch (IOException e) {
 		        	System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
 		        	e.printStackTrace();
 		        }

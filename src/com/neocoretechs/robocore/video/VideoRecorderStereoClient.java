@@ -87,7 +87,6 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 			DATABASE_PORT = Integer.parseInt(remaps.get("__databasePort"));
 		try {
 			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE+" PORT:"+DATABASE_PORT);
-			//session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
 			session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
 		} catch (IOException e2) {
 			//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
