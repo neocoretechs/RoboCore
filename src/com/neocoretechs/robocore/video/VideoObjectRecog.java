@@ -49,7 +49,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private static boolean DEBUGDIFF = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
-	public static long sequenceNumber = 0;
     private static Object mutex = new Object();
 
     ByteBuffer cbl;
@@ -66,8 +65,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 	int frames = 0;
     //CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
     CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
+	public long sequenceNumber = 0;
+	public long sequenceNumber2 = 0;
 	private long lastSequenceNumber;
-	long time1;
+	private long lastSequenceNumber2;
+	long time1 = System.currentTimeMillis();
+	long time2 = System.currentTimeMillis();
 	protected static boolean shouldStore = true;
 	private static String STORE_SERVICE = "cmd_store";
 	private static int MAXIMUM = 0;
@@ -145,11 +148,11 @@ public class VideoObjectRecog extends AbstractNodeMain
 		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
 		@Override
 		public void onNewMessage(stereo_msgs.StereoImage img) {
-			long slew = System.currentTimeMillis() - time1;
+			long slew = System.currentTimeMillis() - time2;
 			if( SAMPLERATE && slew >= 1000) {
-				time1 = System.currentTimeMillis();
-				System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
-				lastSequenceNumber = sequenceNumber;
+				time2 = System.currentTimeMillis();
+				System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
+				lastSequenceNumber2 = sequenceNumber2;
 			}	
 			//try {
 				synchronized(mutex) {
@@ -167,7 +170,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				shouldStore = false;
 			}
 			*/
-			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+			++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
 		}
 		});
 
@@ -223,7 +226,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				imageReadyL = true;
 				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
 					time1 = System.currentTimeMillis();
-					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber)+limage+" "+rimage);
+					System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/*+limage+" "+rimage*/);
 					lastSequenceNumber = sequenceNumber;
 				}
 				if( DEBUG )
