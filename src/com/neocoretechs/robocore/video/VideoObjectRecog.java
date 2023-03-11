@@ -1,30 +1,20 @@
 package com.neocoretechs.robocore.video;
 
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.Graphics;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.DateFormat;
-import java.text.DecimalFormat;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
-
+import org.ros.concurrent.CancellableLoop;
 import org.ros.message.MessageListener;
+import org.ros.message.Time;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
+import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.relatrix.client.RelatrixClient;
@@ -40,6 +30,7 @@ import com.neocoretechs.rknn4j.image.detect_result;
 import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
  * Create a database and receive published video images on the Ros bus from /stereo_msgs/StereoImage,
@@ -54,13 +45,11 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
  */
 public class VideoObjectRecog extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
-    private static PlayerFrame displayPanel1;
-    private static PlayerFrame displayPanel2;
-    private static JFrame frame = null;
+	public static long sequenceNumber = 0;
     private static Object mutex = new Object();
 
     ByteBuffer cbl;
@@ -68,14 +57,16 @@ public class VideoObjectRecog extends AbstractNodeMain
     ByteBuffer cbr;
     byte[] bufferr = new byte[0];
     int[] prevBuffer = new int[0];
+    static boolean imageReadyL = false;
+    static boolean imageReadyR = false;
     
     static double eulers[] = new double[]{0.0,0.0,0.0};
    
 	String outDir = "/";
 	int frames = 0;
     //CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
-    //CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
-	private int sequenceNumber,lastSequenceNumber;
+    CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
+	private long lastSequenceNumber;
 	long time1;
 	protected static boolean shouldStore = true;
 	private static String STORE_SERVICE = "cmd_store";
@@ -83,14 +74,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	int commitRate = 500;
 	public static String DATABASE = "COREPLEX";
 	public static int DATABASE_PORT = 9020;
-	static CountDownLatch latch;
-	static CountDownLatch displayLatch;
 	RelatrixClient session = null;
 	//
-	static Instance imagel;
-	static Instance imager;
-	static detect_result_group drgr;
-	static detect_result_group drgl;
 	
 	// NPU constants
 	long ctx; // context for NPU
@@ -101,8 +86,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	boolean wantFloat = false;
 	String[] labels = null;
 	String MODEL_DIR = "/etc/model/";
-	String LABELS_FILE = MODEL_DIR+"coco_80_labels_list.txt"; //YOLOv5
-	String MODEL_FILE = MODEL_DIR+"/RK3588/yolov5s-640-640.rknn";
+	String LABELS_FILE = "coco_80_labels_list.txt"; //YOLOv5
+	String MODEL_FILE = "RK3588/yolov5s-640-640.rknn";
 	//
 	Model model = new Model();
 	rknn_input_output_num ioNum;
@@ -111,8 +96,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 	// InceptSSD specific constants
 	float[][] boxPriors;
 	
+	static String threadGroup = "VIDEOCLIENT";
 	static {
-		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDERCLIENT"});
+		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {threadGroup});
 	}
 	
 	@Override
@@ -146,73 +132,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 			//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
 			throw new RuntimeException(e2);
 		}
-		final Subscriber<stereo_msgs.StereoImage> imgsub =
-				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = 
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
+		final Subscriber<stereo_msgs.StereoImage> imgsub =
+				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
+		final Publisher<stereo_msgs.StereoImage> imgpub =
+		connectedNode.newPublisher("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
 
-		latch = new CountDownLatch(1);
-		displayLatch = new CountDownLatch(1);
-		
-		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
-			@Override
-			public void run() {
-				if(DEBUG)
-					System.out.println("Entering processing loop");
-				while(shouldStore) {
-					try {
-						try {
-							latch.await();
-						} catch (InterruptedException e) {
-							shouldStore = false;
-						}
-						synchronized(mutex) {
-							//if(!imageDiff()) // creates imagel
-							//	continue;
-							imager = createImage(bufferr);
-							imagel = createImage(bufferl);
-							drgr = imageDiff(imager);
-							drgl = imageDiff(imagel);
-							//byte[] bl = convertImage(imagel, drgl);
-							//byte[] br = convertImage(imager, drgr);
-							//if(DEBUG)
-							//	System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
-							//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
-							//StereoscopicImageBytes sib = new StereoscopicImageBytes(bl, br);
-							//try {
-								//session.store(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
-								//session.put(sib);
-							//} catch (DuplicateKeyException e) {
-								// if within 1 ms, rare but occurs
-							//}
-							if(sequenceNumber%commitRate == 0) {
-								//System.out.println("Committing at sequence "+sequenceNumber);
-								//session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
-								//session.Commit();
-								//session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
-								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM) {
-									//session.close();
-									shouldStore = false;
-								}
-							}
-						}
-						displayLatch.countDown();
-						displayLatch = new CountDownLatch(1);
-					} catch (/*IllegalAccessException |*/ IOException e) {
-						System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
-						e.printStackTrace();
-						shouldStore = false;
-					} /*catch (DuplicateKeyException e) {
-					System.out.println("Duplicate key at "+System.currentTimeMillis());
-				}*/
-				}
-				
-				System.exit(1);
-			}
-		}, "VIDEORECORDERCLIENT");
-		
-		main(null); // fire up rest of display pipeline
-		
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
@@ -224,50 +150,27 @@ public class VideoObjectRecog extends AbstractNodeMain
 				time1 = System.currentTimeMillis();
 				System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
 				lastSequenceNumber = sequenceNumber;
-			}		
-			synchronized(mutex) {
-					cbl = img.getData();
-					bufferl = cbl.array(); // 3 byte BGR
-					cbr = img.getData2();
-					bufferr = cbr.array(); // 3 byte BGR
+			}	
+			//try {
+				synchronized(mutex) {
+					ByteBuffer cbl = img.getData();
+					byte[] bufferl = cbl.array(); // 3 byte BGR
+					ByteBuffer cbr = img.getData2();
+					byte[] bufferr = cbr.array(); // 3 byte BGR
+					bqueue.add(bufferl);
+					bqueue.add(bufferr);
+				}
+	
+			/*} catch (IllegalAccessException | IOException e) {
+				System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
+				e.printStackTrace();
+				shouldStore = false;
 			}
-			latch.countDown();
-			latch = new CountDownLatch(1);
-			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
-			//if( DEBUG ) {
-			//	System.out.println("New image set #"+sequenceNumber+" - "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
-			//}
-			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
-			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
-			/*
-			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
-			WritableRaster raster = (WritableRaster) image.getRaster();
-			int ibsize = img.getHeight() * img.getWidth();
-			if( ibuf == null )
-				ibuf = new int[ibsize * 4];
-			int iup = 0;
-			int ip = 0;
-			for(int i = 0; i < ibsize; i++) {
-				int ialph = 255; //(ib.get(i) >> 24) & 0x0ff;
-				//int ired = (ib.get(i) >> 16) & 0x0ff; 
-				//i                                             nt igreen = (ib.get(i) >> 8 ) & 0x0ff;
-				//int iblue = (ib.get(i) & 0x0ff);
-				int iblue = buffer[ip++];
-				int igreen = buffer[ip++];
-				int ired = buffer[ip++];
-				ibuf[iup++] = ired;
-				ibuf[iup++] = igreen;
-				ibuf[iup++] = iblue;
-				ibuf[iup++] = ialph;
-			}
-			//System.out.println(ibuf.length+" "+raster.getWidth()+" "+raster.getHeight()+" "+raster.getMinX()+" "+raster.getMinY());
-		    raster.setPixels(0, 0, img.getWidth(), img.getHeight(), ibuf);
 			*/
-			
 			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
 		});
-		
+
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
@@ -278,25 +181,117 @@ public class VideoObjectRecog extends AbstractNodeMain
 						//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 				}
 			}
-		});
-		
+		});	
+	/**
+	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
+	 * mutex appropriate to establish critical sections. A sleep follows each publication to keep the bus arbitrated
+	 * This CancellableLoop will be canceled automatically when the node shuts down
+	 */
+	connectedNode.executeCancellableLoop(new CancellableLoop() {
+		private int sequenceNumber;
+		@Override
+		protected void setup() {
+			sequenceNumber = 0;
+		}
+
+		@Override
+		protected void loop() throws InterruptedException {
+			std_msgs.Header imghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
+			imghead.setSeq(sequenceNumber);
+			Time tst = connectedNode.getCurrentTime();
+			imghead.setStamp(tst);
+			imghead.setFrameId(tst.toString());
+			//sensor_msgs.Image imagemess = imgpub.newMessage();
+			//stereo_msgs.StereoImage imagemess = imgpub.newMessage();
+			stereo_msgs.StereoImage imagemess = connectedNode.getTopicMessageFactory().newFromType(stereo_msgs.StereoImage._TYPE);
+			/*
+			std_msgs.Header rimghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
+			rimghead.setSeq(sequenceNumber);
+			tst = connectedNode.getCurrentTime();
+			rimghead.setStamp(tst);
+			rimghead.setFrameId(tst.toString());
+			sensor_msgs.Image rimagemess = rimgpub.newMessage();
+ 			*/
+			try {
+				byte[] rbuff = bqueue.take();
+				byte[] lbuff = bqueue.take();
+				Instance rimage = createImage(rbuff);
+				detect_result_group rdrg = imageDiff(rimage);
+				imageReadyR = true;
+				Instance limage = createImage(lbuff);
+				detect_result_group ldrg = imageDiff(limage);
+				imageReadyL = true;
+				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
+					time1 = System.currentTimeMillis();
+					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber)+limage+" "+rimage);
+					lastSequenceNumber = sequenceNumber;
+				}
+				if( DEBUG )
+					System.out.println(sequenceNumber+":Added frame ");
+				
+				synchronized(mutex) {
+					byte[] leftPayload = limage.detectionsToJPEGBytes(ldrg);
+					byte[] rightPayload = rimage.detectionsToJPEGBytes(rdrg);
+					if(leftPayload != null && rightPayload != null) {
+						imagemess.setData(ByteBuffer.wrap(leftPayload));
+						imagemess.setData2(ByteBuffer.wrap(rightPayload));
+						imagemess.setEncoding("JPG");
+						imagemess.setWidth(dimsImage[0]);
+						imagemess.setHeight(dimsImage[1]);
+						imagemess.setStep(dimsImage[0]);
+						imagemess.setIsBigendian((byte)0);
+						imagemess.setHeader(imghead);
+						imgpub.publish(imagemess);
+					}
+					
+					//
+					imageReadyL = false;
+					imageReadyR = false;
+					if( DEBUG )
+						System.out.println("Pub. Image:"+sequenceNumber);	
+				}
+				
+				//
+				//caminfomsg.setHeader(imghead);
+				//caminfomsg.setWidth(imwidth);
+				//caminfomsg.setHeight(imheight);
+				//caminfomsg.setDistortionModel("plumb_bob");
+				//caminfomsg.setK(K);
+				//caminfomsg.setP(P);
+				//caminfopub.publish(caminfomsg);
+				//System.out.println("Pub cam:"+imagemess);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				if(DEBUG)
+					System.out.println("Image(s) not ready "+sequenceNumber);
+				Thread.sleep(1);
+				++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
+			}
+			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+		}
+	});
 	}
 	
 	void initNPU(String modelFile) throws IOException {
 		byte[] bmodel = model.load(modelFile);
 		long tim = System.currentTimeMillis();
 		ctx = model.init(bmodel);
-		System.out.println("Init time:"+(System.currentTimeMillis()-tim)+" ms.");
+		if(DEBUG)
+			System.out.println("Init time:"+(System.currentTimeMillis()-tim)+" ms.");
 		rknn_sdk_version sdk = model.querySDK(ctx);
 		ioNum = model.queryIONumber(ctx);
-		System.out.printf("%s %s%n", sdk, ioNum);
+		if(DEBUG)
+			System.out.printf("%s %s%n", sdk, ioNum);
 		//BufferedImage bimage = Instance.readBufferedImage(args[1]);
 		//Instance image = null;
 		inputAttrs = new rknn_tensor_attr[ioNum.getN_input()];
 		for(int i = 0; i < ioNum.getN_input(); i++) {
 			inputAttrs[i] = model.queryInputAttrs(ctx, i);
-		//	System.out.println("Tensor input layer "+i+" attributes:");
-		//	System.out.println(RKNN.dump_tensor_attr(inputAttrs[i]));
+			if(DEBUG) {
+				System.out.println("Tensor input layer "+i+" attributes:");
+				System.out.println(RKNN.dump_tensor_attr(inputAttrs[i]));
+			}
 		}
 		widthHeightChannel = Model.getWidthHeightChannel(inputAttrs[0]);
 		//int[] dimsImage = Instance.computeDimensions(bimage);
@@ -314,8 +309,10 @@ public class VideoObjectRecog extends AbstractNodeMain
 		//}
 		for(int i = 0; i < ioNum.getN_output(); i++) {
 			rknn_tensor_attr outputAttr = model.queryOutputAttrs(ctx, i);
-			//System.out.println("Tensor output layer "+i+" attributes:");
-			//System.out.println(RKNN.dump_tensor_attr(outputAttr));
+			if(DEBUG) {
+				System.out.println("Tensor output layer "+i+" attributes:");
+				System.out.println(RKNN.dump_tensor_attr(outputAttr));
+			}
 			tensorAttrs.add(outputAttr);
 		}
 		//
@@ -327,22 +324,34 @@ public class VideoObjectRecog extends AbstractNodeMain
 			wantFloat = true;
 		}
 		labels = Model.loadLines(MODEL_DIR+LABELS_FILE);
-		//System.out.println("Total category labels="+labels.length);
+		if(DEBUG)
+			System.out.println("Total category labels="+labels.length);
 		//System.out.println("Setup time:"+(System.currentTimeMillis()-tim)+" ms.");
 	}
 	
 	detect_result_group imageDiff(Instance image) throws IOException {
-		// Set input data, example of setInputs
+		// Set input data
+		if(DEBUG)
+		System.out.println(ctx+" "+widthHeightChannel[0]+" "+widthHeightChannel[1]+" "+widthHeightChannel[2]+" "+inputAttrs[0].getType()+" "+
+				inputAttrs[0].getFmt()+" "+image.getRGB888().length);
 		model.setInputs(ctx,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],inputAttrs[0].getType(),inputAttrs[0].getFmt(),image.getRGB888());
+		if(DEBUG)
+			System.out.println("Inputs set");
 		rknn_output[] outputs = model.setOutputs(ioNum.getN_output(), false, wantFloat); // last param is wantFloat, to force output to floating
+		if(DEBUG)
+			System.out.println("Outputs set");
 		long tim = System.currentTimeMillis();
 		model.run(ctx);
-		System.out.println("Run time:"+(System.currentTimeMillis()-tim)+" ms.");
-		System.out.println("Getting outputs...");
+		if(DEBUG) {
+			System.out.println("Run time:"+(System.currentTimeMillis()-tim)+" ms.");
+			System.out.println("Getting outputs...");
+		}
 		tim = System.currentTimeMillis();
 		model.getOutputs(ctx, ioNum.getN_output(), outputs);
-		System.out.println("Get outputs time:"+(System.currentTimeMillis()-tim)+" ms.");
-		System.out.println("Outputs:"+Arrays.toString(outputs));
+		if(DEBUG) {
+			System.out.println("Get outputs time:"+(System.currentTimeMillis()-tim)+" ms.");
+			System.out.println("Outputs:"+Arrays.toString(outputs));
+		}
 		detect_result_group drg = new detect_result_group();
 		if(ioNum.getN_output() == 2) { // InceptionSSD 2 layers output
 			boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
@@ -373,7 +382,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 			detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), outputs[2].getBuf(),
 				widthHeightChannel[1], widthHeightChannel[0], detect_result.BOX_THRESH, detect_result.NMS_THRESH, 
 				scale_w, scale_h, zps, scales, drg, labels);
-			System.out.println("Detected Result Group:"+drg);
+			if(DEBUG)
+				System.out.println("Detected Result Group:"+drg);
 			//image.drawDetections(drg);
 		}
 		return drg;
@@ -400,286 +410,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	}
 	
 	
-	static class PlayerFrame extends JPanel {
-		JFrame frame;
-		public PlayerFrame() {
-			//frame = new JFrame("Player");
-			//---
-			//displayPanel = new PlayerFrame();
-			//frame.getContentPane().add(displayPanel, BorderLayout.CENTER);
-			//displayPanel.setVisible(true);
-			//---
-			//frame.add(this, BorderLayout.CENTER);
-			// Remove window title and borders
-	        //frame.setUndecorated(true);
-	        // Make frame topmost
-	        //frame.setAlwaysOnTop(true);
-	        // Disable Alt+F4 on Windows
-	        //frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-	        // Make frame full-screen
-	        //frame.setExtendedState(Frame.MAXIMIZED_BOTH);
-	        // Display frame
-			//this.setVisible(true);
-			//frame.pack();
-			//frame.setSize(new Dimension(640, 480));
-			//frame.setVisible(true);
-		}
-		private java.awt.Image lastFrame;
-		public void setLastFrame(java.awt.Image lf) {
-			if( lf == null ) return;
-			if( lastFrame == null ) {
-				lastFrame = lf;
-				return;
-			}
-			synchronized(lastFrame) {
-				lastFrame = lf; 
-			} 
-		}
 
-		public void paintComponent(Graphics g) {
-			super.paintComponent(g);
-			if( lastFrame == null )
-				return;
-			synchronized(lastFrame) {
-				g.drawImage(lastFrame, 0, 0, lastFrame.getWidth(this), lastFrame.getHeight(this), this);
-				lastFrame.flush();
-			}
-		}
-		
-		public void paintPanel(){
-		   /*
-		    * Use a "Grid Bag Layout" for this panel.  It will be laid
-		    * out like this:
-		    * Yaw:<actual Yaw> Roll:<actual roll> Pitch:<actual pitch>
-		    */
-		        GridBagLayout      gbl      = new GridBagLayout();
-		        GridBagConstraints gbc = new GridBagConstraints();
-		        setLayout(gbl);
-		        gbc.anchor=gbc.LAST_LINE_START;
-
-
-		   /*
-		    * Set up the "Yaw" label
-		    */
-		        gbc.fill=gbc.HORIZONTAL;
-		        JLabel xJLabel = new JLabel("Yaw:");
-		        gbc.gridx=1;
-		        gbc.gridy=1;
-		        gbc.weightx=0;
-		        gbc.weighty=1;
-		        gbl.setConstraints(xJLabel, gbc);
-		        add(xJLabel);
-
-		   /*
-		    * Set up the "Time" label
-		    */
-		        JLabel yJLabel = new JLabel("Time:");
-		        gbc.fill=gbc.HORIZONTAL;
-		        gbc.gridx=2;
-		        gbc.gridy=1;
-		        gbc.weightx=0;
-		        gbc.weighty=1;
-		        gbl.setConstraints(yJLabel, gbc);
-		        add(yJLabel);
-
-		   /*
-		    * Set up the "Pitch" label
-		    */
-		        JLabel aJLabel = new JLabel("Pitch:");
-		        gbc.fill=gbc.HORIZONTAL;
-		        gbc.gridx=3;
-		        gbc.gridy=1;
-		        gbc.weightx=0;
-		        gbc.weighty=1;
-		        gbl.setConstraints(aJLabel, gbc);
-		        add(aJLabel);
-
-		   
-		   /*
-		    * Set up the text field for the actual X coordinate
-		    */
-		        xField = new JTextField(8);
-		        xField.setEditable(false);
-		        xField.setHorizontalAlignment(JTextField.RIGHT);
-		        xField.setBorder(null);
-		        gbc.fill=gbc.NONE;
-		        gbc.gridx=1;
-		        gbc.gridy=1;
-		        gbc.weightx=1;
-		        gbc.weighty=1;
-		        gbl.setConstraints(xField, gbc);
-		        add(xField);
-
-		   /*
-		    * Set up the text field for the actual Y coordinate
-		    */
-		        yField = new JTextField(18);
-		        yField.setEditable(false);
-		        yField.setHorizontalAlignment(JTextField.RIGHT);
-		        yField.setBorder(null);
-		        gbc.fill=gbc.NONE;
-		        gbc.gridx=2;
-		        gbc.gridy=1;
-		        gbc.weightx=1;
-		        gbc.weighty=1;
-		        gbl.setConstraints(yField, gbc);
-		        add(yField);
-
-		   /*
-		    * Set up the text field for the actual angle (theta)
-		    */
-		        aField = new JTextField(8);
-		        aField.setEditable(false);
-		        aField.setHorizontalAlignment(JTextField.RIGHT);
-		        aField.setBorder(null);
-		        gbc.fill=gbc.NONE;
-		        gbc.gridx=3;
-		        gbc.gridy=1;
-		        gbc.weightx=1;
-		        gbc.weighty=1;
-		        gbl.setConstraints(aField, gbc);
-		        add(aField);
-
-
-		   /*
-		    * Create formatters for the coordinates and time (2 decimal places)
-		    * and the angles (1 decimal place, and the degrees symbol).
-		    */
-		        dt = DateFormat.getTimeInstance();
-		        df = DateFormat.getDateInstance();
-		        dfs = new DecimalFormat("+####0.00;-####0.00");
-		        da = new DecimalFormat("####0.0\u00b0");
-		        das = new DecimalFormat("+####0.0\u00b0;-####0.0\u00b0");
-
-		   /*
-		    * Initialize all displayed values to 0, except the angles,
-		    * which are set to 90 degrees.
-		    */
-		        setComputedValues(0.0, 0, 0.0);
-		    }
-
-
-		    /* Convert from radians to degrees, and coerce to range (-180, 180] */
-		    private double degree(double a){
-		        double d = a*180.0/Math.PI;
-		        if(d<0)
-		           d = -d;
-		        d = d - 360.0*Math.floor(d/360.0);
-		        if(a<0)
-		           d=360.0-d;
-		        if(d>180.0)
-		           d-=360;
-		        return d;
-		    }
-
-
-		    /**
-		     * Display both the true and dead-reckoned positions
-		     * (location and direction).
-		     */
-		    void setComputedValues(double yaw, long time, double pitch)
-		    {
-		        xField.setText(da.format(yaw));
-		        yField.setText(dt.format(time)+" "+df.format(time));
-		        aField.setText(da.format(pitch));
-
-		    }
-
-		    /** Formatter for the time. */
-		    DateFormat dt,df;
-
-		    /** Formatter for the errors (2 decimal places, allows shows + or -). */
-		    DecimalFormat dfs;
-
-		    /** Formatter for the angles (1 decimal place, and the "&deg;" symbol). */
-		    DecimalFormat da;
-
-		    /** Formatter for the angle errors (1 decimal place, allows include + or - 
-				 * and the "&deg;" symbol). */
-		    DecimalFormat das;
-
-		   /** Field for displaying the "true" X coordinate. */
-		    JTextField xField;
-
-		    /** Field for displaying the "true" Y coordinate. */
-		    JTextField yField;
-		    /** Field for displaying the "true" direction. */
-		    JTextField aField;
-
-		}
-
-	public static void main(String[] args) {
-			
-		SwingUtilities.invokeLater(new Runnable() {
-			public void run() {
-					JFrame frame = new JFrame("Player");
-			        displayPanel1 = new PlayerFrame();
-			        frame.setLayout(new BorderLayout());
-					frame.add(displayPanel1, BorderLayout.EAST);
-					displayPanel1.setPreferredSize(new Dimension(640,480));
-					displayPanel1.setVisible(true);
-			        displayPanel2 = new PlayerFrame();
-					frame.add(displayPanel2, BorderLayout.WEST);
-					displayPanel2.setPreferredSize(new Dimension(640,480));
-					displayPanel2.setVisible(true);
-					frame.pack();
-					frame.setSize(new Dimension(1320, 520));
-					frame.setVisible(true);
-			        displayPanel1.paintPanel();
-			        displayPanel2.paintPanel();
-			    }
-		});
-			
-			while(displayPanel1 == null || displayPanel2 == null)
-				try {
-					Thread.sleep(1);
-				} catch (InterruptedException e) {}
-		
-			try {
-				SynchronizedFixedThreadPoolManager.spin(new Runnable() {
-					@Override
-					public void run() {
-						if(DEBUG)
-							System.out.println("Entering display loop");
-				        while(true) {
-				        	//java.awt.Image dimage=null;
-							//try {
-								//dimage = queue.takeFirst();
-							//} catch (InterruptedException e) {
-								//e.printStackTrace();
-							//}
-							try {
-								displayLatch.await();
-							} catch (InterruptedException e1) {
-								e1.printStackTrace();
-							}
-				        	if( imagel == null || imager == null) {
-								try {
-									Thread.sleep(1);
-								} catch (InterruptedException e) {}
-				        	} else {
-				        		synchronized(mutex) {
-				        			displayPanel1.setLastFrame((java.awt.Image)imagel.drawDetections(drgl));
-				        			displayPanel2.setLastFrame((java.awt.Image)imager.drawDetections(drgr));
-				        			displayPanel2.setComputedValues(eulers[0],(long) eulers[1],eulers[2]);
-				        			displayPanel1.setComputedValues(eulers[0],(long) eulers[1],eulers[2]); // values from db for time, yaw
-				        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
-				        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
-				        			displayPanel1.invalidate();
-				        			displayPanel2.invalidate();
-				        			displayPanel1.updateUI();
-				        			displayPanel2.updateUI();
-				        		}
-				        	}
-				        }
-					}
-				});
-			} catch( IllegalArgumentException iae) {
-				iae.printStackTrace();
-				return;
-			}
-		
-		} // run
 
 }
 
