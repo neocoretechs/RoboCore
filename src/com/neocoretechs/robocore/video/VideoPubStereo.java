@@ -9,6 +9,9 @@ import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
+
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+
 import org.ros.message.Time;
 
 import au.edu.jcu.v4l4j.CaptureCallback;
@@ -33,7 +36,8 @@ import au.edu.jcu.v4l4j.exceptions.V4L4JException;
 public class VideoPubStereo extends AbstractNodeMain {
 	private static final boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-
+	CircularBlockingDeque<byte[]> bqueueL = new CircularBlockingDeque<byte[]>(5);
+	CircularBlockingDeque<byte[]> bqueueR = new CircularBlockingDeque<byte[]>(5);
 
 	boolean imageReadyL = false;
 	boolean imageReadyR = false;
@@ -142,7 +146,7 @@ public class VideoPubStereo extends AbstractNodeMain {
 			sensor_msgs.Image rimagemess = rimgpub.newMessage();
  			*/
 						
-			if( imageReadyL && imageReadyR ) {
+			//if( imageReadyL && imageReadyR ) {
 				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
 					time1 = System.currentTimeMillis();
 					System.out.println("Samples per second:"+(sequenceNumber-lastSequenceNumber));
@@ -151,9 +155,11 @@ public class VideoPubStereo extends AbstractNodeMain {
 				if( DEBUG )
 					System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
 				
-				synchronized(vidMutexL) {
-					imagemess.setData(bbL);
-					imagemess.setData2(bbR);
+				//synchronized(vidMutexL) {
+					//imagemess.setData(bbL);
+					//imagemess.setData2(bbR);
+					imagemess.setData(ByteBuffer.wrap(bqueueL.take()));
+					imagemess.setData2(ByteBuffer.wrap(bqueueR.take()));
 					imagemess.setEncoding("JPG");
 					imagemess.setWidth(imwidth);
 					imagemess.setHeight(imheight);
@@ -178,7 +184,7 @@ public class VideoPubStereo extends AbstractNodeMain {
 					imageReadyR = false;
 					if( DEBUG )
 						System.out.println("Pub. Image:"+sequenceNumber);	
-				}
+				//}
 				//
 				//caminfomsg.setHeader(imghead);
 				//caminfomsg.setWidth(imwidth);
@@ -188,12 +194,12 @@ public class VideoPubStereo extends AbstractNodeMain {
 				//caminfomsg.setP(P);
 				//caminfopub.publish(caminfomsg);
 				//System.out.println("Pub cam:"+imagemess);
-			} else {
-				if(DEBUG)
-					System.out.println("Image(s) not ready "+sequenceNumber);
-				Thread.sleep(1);
-				++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
-			}
+			//} else {
+			//	if(DEBUG)
+			//		System.out.println("Image(s) not ready "+sequenceNumber);
+			//	Thread.sleep(1);
+			//	++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
+			//}
 			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
 	});
@@ -294,10 +300,11 @@ public class VideoPubStereo extends AbstractNodeMain {
 	 */
 	@Override
 	public void nextFrame(VideoFrame frame) {
-		synchronized(vidMutexL) {
+		//synchronized(vidMutexL) {
 			//bi = frame.getBufferedImage();
-			bbL = ByteBuffer.wrap(frame.getBytes());
-		}
+			//bbL = ByteBuffer.wrap(frame.getBytes());
+		//}
+		bqueueL.add(frame.getBytes());
 		imageReadyL = true;
 		// recycle the frame
 		frame.recycle();
@@ -367,10 +374,10 @@ public class VideoPubStereo extends AbstractNodeMain {
 	public void nextFrame(VideoFrame frame) {
 		// This method is called when a new frame is ready.
 		// Don't forget to recycle it when done dealing with the frame.
-		// draw the new frame onto the JLabel
-		synchronized(vidMutexR) {
-			bbR = ByteBuffer.wrap(frame.getBytes());
-		}
+		//synchronized(vidMutexR) {
+		//	bbR = ByteBuffer.wrap(frame.getBytes());
+		//}
+		bqueueR.add(frame.getBytes());
 		imageReadyR = true;
 		// recycle the frame
 		frame.recycle();

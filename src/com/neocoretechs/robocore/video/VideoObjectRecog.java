@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.message.MessageListener;
@@ -45,7 +44,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  */
 public class VideoObjectRecog extends AbstractNodeMain 
 {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static boolean DEBUGDIFF = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
@@ -63,8 +62,7 @@ public class VideoObjectRecog extends AbstractNodeMain
    
 	String outDir = "/";
 	int frames = 0;
-    //CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
-    CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
+    CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(10);
 	public long sequenceNumber = 0;
 	public long sequenceNumber2 = 0;
 	private long lastSequenceNumber;
@@ -82,11 +80,11 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	// NPU constants
 	long ctx; // context for NPU
+	boolean wantFloat = false;
 	int[] widthHeightChannel; // parameters from loaded model
 	int[] dimsImage = new int[] {640,480};
  	float scale_w;//(float)widthHeightChannel[0] / (float)dimsImage[0];
   	float scale_h;//(float)widthHeightChannel[1] / (float)dimsImage[1];
-	boolean wantFloat = false;
 	String[] labels = null;
 	String MODEL_DIR = "/etc/model/";
 	String LABELS_FILE = "coco_80_labels_list.txt"; //YOLOv5
@@ -337,18 +335,21 @@ public class VideoObjectRecog extends AbstractNodeMain
 		if(DEBUG)
 		System.out.println(ctx+" "+widthHeightChannel[0]+" "+widthHeightChannel[1]+" "+widthHeightChannel[2]+" "+inputAttrs[0].getType()+" "+
 				inputAttrs[0].getFmt()+" "+image.getRGB888().length);
-		model.setInputs(ctx,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],inputAttrs[0].getType(),inputAttrs[0].getFmt(),image.getRGB888());
+		
+		model.setInputs(ctx,inputAttrs[0].getSize(),inputAttrs[0].getType(),inputAttrs[0].getFmt(),image.getRGB888());
 		if(DEBUG)
 			System.out.println("Inputs set");
 		rknn_output[] outputs = model.setOutputs(ioNum.getN_output(), false, wantFloat); // last param is wantFloat, to force output to floating
 		if(DEBUG)
 			System.out.println("Outputs set");
+		
 		long tim = System.currentTimeMillis();
 		model.run(ctx);
 		if(DEBUG) {
 			System.out.println("Run time:"+(System.currentTimeMillis()-tim)+" ms.");
 			System.out.println("Getting outputs...");
 		}
+		
 		tim = System.currentTimeMillis();
 		model.getOutputs(ctx, ioNum.getN_output(), outputs);
 		if(DEBUG) {
@@ -356,6 +357,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			System.out.println("Outputs:"+Arrays.toString(outputs));
 		}
 		detect_result_group drg = new detect_result_group();
+		
 		if(ioNum.getN_output() == 2) { // InceptionSSD 2 layers output
 			boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
 			// If wantFloat is false, we would need the zero point and scaling
