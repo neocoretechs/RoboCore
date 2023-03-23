@@ -57,6 +57,7 @@ public class VideoObjectRecog extends AbstractNodeMain
     int[] prevBuffer = new int[0];
     static boolean imageReadyL = false;
     static boolean imageReadyR = false;
+	static boolean RESIZE_TO_ORIG = true; // resize model image back to original cam capture size
     
     static double eulers[] = new double[]{0.0,0.0,0.0};
    
@@ -80,6 +81,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	// NPU constants
 	long ctx; // context for NPU
+	boolean INCEPTIONSSD = true;
 	boolean wantFloat = false;
 	int[] widthHeightChannel; // parameters from loaded model
 	int[] dimsImage = new int[] {640,480};
@@ -88,7 +90,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 	String[] labels = null;
 	String MODEL_DIR = "/etc/model/";
 	String LABELS_FILE = "coco_80_labels_list.txt"; //YOLOv5
-	String MODEL_FILE = "RK3588/yolov5s-640-640.rknn";
+	String INCEPT_LABELS_FILE = "coco_labels_list.txt";
+	//String MODEL_FILE = "RK3588/yolov5s-640-640.rknn";
+	String MODEL_FILE = "RK3588/ssd_inception_v2.rknn";
 	//
 	Model model = new Model();
 	rknn_input_output_num ioNum;
@@ -231,9 +235,21 @@ public class VideoObjectRecog extends AbstractNodeMain
 					System.out.println(sequenceNumber+":Added frame ");
 				
 				synchronized(mutex) {
-					byte[] leftPayload = limage.detectionsToJPEGBytes(ldrg);
-					byte[] rightPayload = rimage.detectionsToJPEGBytes(rdrg);
+					byte[] leftPayload = null;
+					byte[] rightPayload = null;
+					leftPayload = limage.detectionsToJPEGBytes(ldrg);
+					rightPayload = rimage.detectionsToJPEGBytes(rdrg);
+
 					if(leftPayload != null && rightPayload != null) {
+						// for image resize back to 640x480
+						if(RESIZE_TO_ORIG) {
+							try {
+								leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+								rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+							} catch(Exception e) {
+								e.printStackTrace();
+							}
+						}
 						imagemess.setData(ByteBuffer.wrap(leftPayload));
 						imagemess.setData2(ByteBuffer.wrap(rightPayload));
 						imagemess.setEncoding("JPG");
@@ -321,10 +337,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 		// no preallocation of output image buffers for YOLO, no force floating output
 		// InceptionSSD required want_float = true, it has 2 layers of output vs 3 for YOLO
 		tim = System.currentTimeMillis();
-		if(ioNum.getN_output() == 2) { // InceptionSSD
-			wantFloat = true;
-		}
-		labels = Model.loadLines(MODEL_DIR+LABELS_FILE);
+		if(INCEPTIONSSD) { // InceptionSSD
+			//wantFloat = true;
+			labels = Model.loadLines(MODEL_DIR+INCEPT_LABELS_FILE);
+			boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
+		} else
+			labels = Model.loadLines(MODEL_DIR+LABELS_FILE);
 		if(DEBUG)
 			System.out.println("Total category labels="+labels.length);
 		//System.out.println("Setup time:"+(System.currentTimeMillis()-tim)+" ms.");
@@ -357,40 +375,37 @@ public class VideoObjectRecog extends AbstractNodeMain
 			System.out.println("Outputs:"+Arrays.toString(outputs));
 		}
 		detect_result_group drg = new detect_result_group();
-		
-		if(ioNum.getN_output() == 2) { // InceptionSSD 2 layers output
-			boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
-			// If wantFloat is false, we would need the zero point and scaling
-			//ArrayList<Float> scales = new ArrayList<Float>();
-			//ArrayList<Integer> zps = new ArrayList<Integer>();
-			//for(int i = 0; i < ioNum.getN_output(); i++) {
-			//	rknn_tensor_attr outputAttr = tensorAttrs.get(i);
-			//	zps.add(outputAttr.getZp());
-			//	scales.add(outputAttr.getScale());
-			//}
-			//detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
-			//		dimsImage[0], dimsImage[1], detect_result.NMS_THRESH_SSD, 
-			//		scale_w, scale_h, zps, scales, drg, labels);
-			detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
-					dimsImage[0], dimsImage[1], detect_result.NMS_THRESH_SSD, 
-					scale_w, scale_h, drg, labels);
-			//System.out.println("Detected Result Group:"+drg);
-			//image.detectionsToJPEGBytes(drg);
-		} else { //YOLOv5 3 layers output
-			ArrayList<Float> scales = new ArrayList<Float>();
-			ArrayList<Integer> zps = new ArrayList<Integer>();
+		ArrayList<Float> scales = null;
+		ArrayList<Integer> zps = null;
+		// If wantFloat is false, we would need the zero point and scaling
+		if(!wantFloat) {
+			scales = new ArrayList<Float>();
+			zps = new ArrayList<Integer>();
 			for(int i = 0; i < ioNum.getN_output(); i++) {
 				rknn_tensor_attr outputAttr = tensorAttrs.get(i);
 				zps.add(outputAttr.getZp());
 				scales.add(outputAttr.getScale());
 			}
-			detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), outputs[2].getBuf(),
+		}
+		if(INCEPTIONSSD) { // InceptionSSD 
+			if(wantFloat) {
+				detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
+						widthHeightChannel[1], widthHeightChannel[0], detect_result.NMS_THRESH_SSD, 
+					scale_w, scale_h, drg, labels);
+			} else {
+				detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
+						widthHeightChannel[1], widthHeightChannel[0], detect_result.NMS_THRESH_SSD, 
+						scale_w, scale_h, zps, scales, drg, labels);	
+			}
+			//image.detectionsToJPEGBytes(drg);
+		} else { //YOLOv5 
+			detect_result.post_process(outputs,
 				widthHeightChannel[1], widthHeightChannel[0], detect_result.BOX_THRESH, detect_result.NMS_THRESH, 
 				scale_w, scale_h, zps, scales, drg, labels);
-			if(DEBUG)
-				System.out.println("Detected Result Group:"+drg);
 			//image.drawDetections(drg);
 		}
+		if(DEBUG)
+			System.out.println("Detected Result Group:"+drg);
 		return drg;
 		//m.destroy(ctx);
 	}
@@ -401,7 +416,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	 * @throws IOException
 	 */
 	Instance createImage(byte[] imgBuff) throws IOException {
-	  	return new Instance("img",dimsImage[0],dimsImage[1],widthHeightChannel[2],imgBuff,widthHeightChannel[0],widthHeightChannel[1],"img",true);
+	  	return new Instance("img",dimsImage[0],dimsImage[1],widthHeightChannel[2],imgBuff,widthHeightChannel[0],widthHeightChannel[1],"img",!INCEPTIONSSD);
 	}
 	/**
 	 * Translate the image Instance and detect_result_group into raw JPEG byte array
@@ -414,8 +429,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 		return bImage.detectionsToJPEGBytes(group);
 	}
 	
-	
-
 
 }
 
