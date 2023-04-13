@@ -9,7 +9,6 @@ import java.nio.ByteBuffer;
 
 import java.util.Map;
 import java.util.Scanner;
-import java.util.concurrent.CountDownLatch;
 
 import javax.imageio.ImageIO;
 
@@ -25,6 +24,7 @@ import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
 import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
  * Create a database and receive published video images on the Ros bus from /stereo_msgs/StereoImage, then
@@ -56,7 +56,8 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	String outDir = "/";
 	int frames = 0;
     //CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
-    //CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
+    CircularBlockingDeque<byte[]> lqueue = new CircularBlockingDeque<byte[]>(30);
+    CircularBlockingDeque<byte[]> rqueue = new CircularBlockingDeque<byte[]>(30);
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
 	protected static boolean shouldStore = true;
@@ -65,7 +66,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	int commitRate = 500;
 	public static String DATABASE = "COREPLEX";
 	public static int DATABASE_PORT = 9020;
-	CountDownLatch latch;
+	//CountDownLatch latch;
 	RelatrixClient session = null;
 	CannyEdgeDetector detector;
 	BufferedImage imagel, imager;
@@ -93,9 +94,9 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 			throw new RuntimeException(e2);
 		}
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
-				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
-		final Subscriber<sensor_msgs.Imu> subsimu = 
-				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
+				connectedNode.newSubscriber("/stereo_msgs/StereoImageStore", stereo_msgs.StereoImage._TYPE);
+		//final Subscriber<sensor_msgs.Imu> subsimu = 
+				//connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 
 		if( remaps.containsKey("__commitRate") )
 			commitRate = Integer.parseInt(remaps.get("__commitRate"));
@@ -134,47 +135,50 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 			System.out.println("CONTROL VIA SERVICE NOT AVAILABLE");
 		}
 	*/
-		latch = new CountDownLatch(1);
+		//latch = new CountDownLatch(1);
 		
 		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			@Override
 			public void run() {
 				if(DEBUG)
 					System.out.println("Entering storage loop");
+				byte[] lbyte = null;
+				byte[] rbyte = null;
 				while(shouldStore) {
 				try {
 						try {
-							latch.await();
+							lbyte = lqueue.take();
+							rbyte = rqueue.take();
 						} catch (InterruptedException e) {
 							shouldStore = false;
 						}
-						synchronized(mutex) {
-							if(!imageDiff()) // creates imagel
-								continue;
-							imager = createImage(bufferr);
-							byte[] bl = convertImage(imagel);
-							byte[] br = convertImage(imager);
+						//synchronized(mutex) {
+							//if(!imageDiff()) // creates imagel
+							//	continue;
+							//imager = createImage(bufferr);
+							//byte[] bl = convertImage(imagel);
+							//byte[] br = convertImage(imager);
 							//if(DEBUG)
 							//	System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
 							//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
-							StereoscopicImageBytes sib = new StereoscopicImageBytes(bl, br);
+							StereoscopicImageBytes sib = new StereoscopicImageBytes(lbyte, rbyte);
 							//try {
-								session.store(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
+								session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
 								//session.put(sib);
 							//} catch (DuplicateKeyException e) {
 								// if within 1 ms, rare but occurs
 							//}
-							if(sequenceNumber%commitRate == 0) {
+							//if(sequenceNumber%commitRate == 0) {
 								//System.out.println("Committing at sequence "+sequenceNumber);
-								session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
+								//session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
 								//session.Commit();
 								//session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
-								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM) {
-									session.close();
-									shouldStore = false;
-								}
-							}
-						}
+								//if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM) {
+									//session.close();
+									//shouldStore = false;
+								//}
+							//}
+						//}
 		        } catch (IllegalAccessException | IOException e) {
 		        	System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
 		        	e.printStackTrace();
@@ -200,17 +204,19 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 				System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
 				lastSequenceNumber = sequenceNumber;
 			}		
-			synchronized(mutex) {
+			//synchronized(mutex) {
 					cbl = img.getData();
 					bufferl = cbl.array(); // 3 byte BGR
 					cbr = img.getData2();
 					bufferr = cbr.array(); // 3 byte BGR
-			}
-			latch.countDown();
-			latch = new CountDownLatch(1);
+					lqueue.add(bufferl);
+					rqueue.add(bufferr);
+			//}
+			//latch.countDown();
+			//latch = new CountDownLatch(1);
 			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
 			//if( DEBUG ) {
-			//	System.out.println("New image set #"+sequenceNumber+" - "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
+				System.out.println("New image set #"+sequenceNumber+" - "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
 			//}
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
 			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
@@ -243,17 +249,17 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 		}
 		});
 		
-		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
-			@Override
-			public void onNewMessage(sensor_msgs.Imu message) {
-				synchronized(mutex) {
-					eulers = message.getOrientationCovariance();
+		//subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
+			//@Override
+			//public void onNewMessage(sensor_msgs.Imu message) {
+				//synchronized(mutex) {
+					//eulers = message.getOrientationCovariance();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 					//if(DEBUG)
 						//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
-				}
-			}
-		});
+				//}
+			//}
+		//});
 		
 	}
 	boolean imageDiff() {

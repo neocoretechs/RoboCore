@@ -185,6 +185,7 @@ public class VideoPlaybackStereo  {
 								InputStream in = new ByteArrayInputStream(bufferl);
 								imagel = ImageIO.read(in);
 								in.close();
+								/*
 								CannyEdgeDetector detect = new CannyEdgeDetector();
 								detect.setLowThreshold(.75f);
 								detect.setHighThreshold(1f);
@@ -193,6 +194,7 @@ public class VideoPlaybackStereo  {
 								detect.setSourceImage(imagel);
 								detect.process();
 								imagel = detect.getEdgesImage();
+								*/
 							} catch (IOException e1) {
 								System.out.println("Could not convert LEFT image payload due to:"+e1.getMessage());
 								return;
@@ -213,8 +215,8 @@ public class VideoPlaybackStereo  {
 
 	        			displayPanel1.setLastFrame((java.awt.Image)imagel);
 	        			displayPanel2.setLastFrame((java.awt.Image)imager);
-	    				displayPanel2.setComputedValues((double)((Comparable[]) e)[1], (long)((Comparable[]) e)[0],(double) 0);
-	        			displayPanel1.setComputedValues((double)((Comparable[]) e)[1], (long)((Comparable[]) e)[0], (double)0); // values from db for time, yaw
+	    				displayPanel2.setComputedValues(String.valueOf(((Comparable[]) e)[1]), (long)((Comparable[]) e)[0],(double) 0);
+	        			displayPanel1.setComputedValues(String.valueOf(((Comparable[]) e)[1]), (long)((Comparable[]) e)[0], (double)0); // values from db for time, yaw
 	        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 	        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 	        			displayPanel1.invalidate();
@@ -449,7 +451,7 @@ public class VideoPlaybackStereo  {
 		    * Initialize all displayed values to 0, except the angles,
 		    * which are set to 90 degrees.
 		    */
-		        setComputedValues(0.0, 0, 0.0);
+		        setComputedValues(String.valueOf(0.0), 0, 0.0);
 		    }
 
 
@@ -471,9 +473,9 @@ public class VideoPlaybackStereo  {
 		     * Display both the true and dead-reckoned positions
 		     * (location and direction).
 		     */
-		    void setComputedValues(double yaw, long time, double pitch)
+		    void setComputedValues(String string, long time, double pitch)
 		    {
-		        xField.setText(da.format(yaw));
+		        xField.setText(/*da.format(*/string/*)*/);
 		        yField.setText(dt.format(time)+" "+df.format(time));
 		        aField.setText(da.format(pitch));
 

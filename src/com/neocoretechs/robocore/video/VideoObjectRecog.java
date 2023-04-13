@@ -26,6 +26,7 @@ import com.neocoretechs.rknn4j.rknn_sdk_version;
 import com.neocoretechs.rknn4j.rknn_tensor_attr;
 import com.neocoretechs.rknn4j.image.Instance;
 import com.neocoretechs.rknn4j.image.detect_result;
+import com.neocoretechs.rknn4j.image.detect_result.Rectangle;
 import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
@@ -57,13 +58,13 @@ public class VideoObjectRecog extends AbstractNodeMain
     int[] prevBuffer = new int[0];
     static boolean imageReadyL = false;
     static boolean imageReadyR = false;
-	static boolean RESIZE_TO_ORIG = true; // resize model image back to original cam capture size
     
     static double eulers[] = new double[]{0.0,0.0,0.0};
    
 	String outDir = "/";
 	int frames = 0;
-    CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(10);
+    CircularBlockingDeque<byte[]> lbqueue = new CircularBlockingDeque<byte[]>(10);
+    CircularBlockingDeque<byte[]> rbqueue = new CircularBlockingDeque<byte[]>(10);
 	public long sequenceNumber = 0;
 	public long sequenceNumber2 = 0;
 	private long lastSequenceNumber;
@@ -81,8 +82,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	// NPU constants
 	long ctx; // context for NPU
-	boolean INCEPTIONSSD = true;
+	String MODEL_FILE = "RK3588/yolov5s-640-640.rknn";
+	//String MODEL_FILE = "RK3588/ssd_inception_v2.rknn";
+	boolean INCEPTIONSSD = false;
 	boolean wantFloat = false;
+	static boolean RESIZE_TO_ORIG = false; // resize model image back to original cam capture size, false for YOLO, true for Inception
+	
 	int[] widthHeightChannel; // parameters from loaded model
 	int[] dimsImage = new int[] {640,480};
  	float scale_w;//(float)widthHeightChannel[0] / (float)dimsImage[0];
@@ -91,8 +96,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 	String MODEL_DIR = "/etc/model/";
 	String LABELS_FILE = "coco_80_labels_list.txt"; //YOLOv5
 	String INCEPT_LABELS_FILE = "coco_labels_list.txt";
-	//String MODEL_FILE = "RK3588/yolov5s-640-640.rknn";
-	String MODEL_FILE = "RK3588/ssd_inception_v2.rknn";
 	//
 	Model model = new Model();
 	rknn_input_output_num ioNum;
@@ -100,6 +103,14 @@ public class VideoObjectRecog extends AbstractNodeMain
 	ArrayList<rknn_tensor_attr> tensorAttrs = new ArrayList<rknn_tensor_attr>();
 	// InceptSSD specific constants
 	float[][] boxPriors;
+	//
+	// z = f*(B/xl-xr)
+	final static float f = 4.4f; // focal length mm
+	final static float B = 205.0f; // baseline mm
+	final static float IOU_THRESHOLD = .40f;
+	
+	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
+	String detectAndStore = null; // look for particular object and send to storage channel
 	
 	static String threadGroup = "VIDEOCLIENT";
 	static {
@@ -128,6 +139,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 			MODEL_FILE = remaps.get("__modelFile");
 		if(!MODEL_DIR.endsWith(("/")))
 				MODEL_DIR += "/";
+		if( remaps.containsKey("__storeDetect") )
+			detectAndStore = remaps.get("__storeDetect");
 		try {
 			//initialize the NPU with the proper model file
 			initNPU(MODEL_DIR+MODEL_FILE);
@@ -141,9 +154,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
+		
 		final Publisher<stereo_msgs.StereoImage> imgpub =
-		connectedNode.newPublisher("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
+				connectedNode.newPublisher("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
 
+		if(detectAndStore != null)
+				imgpubstore = connectedNode.newPublisher("/stereo_msgs/StereoImageStore", stereo_msgs.StereoImage._TYPE);
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
@@ -157,14 +173,14 @@ public class VideoObjectRecog extends AbstractNodeMain
 				lastSequenceNumber2 = sequenceNumber2;
 			}	
 			//try {
-				synchronized(mutex) {
+				//synchronized(mutex) {
 					ByteBuffer cbl = img.getData();
 					byte[] bufferl = cbl.array(); // 3 byte BGR
 					ByteBuffer cbr = img.getData2();
 					byte[] bufferr = cbr.array(); // 3 byte BGR
-					bqueue.add(bufferl);
-					bqueue.add(bufferr);
-				}
+					lbqueue.add(bufferl);
+					rbqueue.add(bufferr);
+				//}
 	
 			/*} catch (IllegalAccessException | IOException e) {
 				System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
@@ -218,8 +234,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 			sensor_msgs.Image rimagemess = rimgpub.newMessage();
  			*/
 			try {
-				byte[] rbuff = bqueue.take();
-				byte[] lbuff = bqueue.take();
+				byte[] rbuff = rbqueue.take();
+				byte[] lbuff = lbqueue.take();
 				Instance rimage = createImage(rbuff);
 				detect_result_group rdrg = imageDiff(rimage);
 				imageReadyR = true;
@@ -234,7 +250,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				if( DEBUG )
 					System.out.println(sequenceNumber+":Added frame ");
 				
-				synchronized(mutex) {
+				//synchronized(mutex) {
 					byte[] leftPayload = null;
 					byte[] rightPayload = null;
 					leftPayload = limage.detectionsToJPEGBytes(ldrg);
@@ -259,13 +275,81 @@ public class VideoObjectRecog extends AbstractNodeMain
 						imagemess.setIsBigendian((byte)0);
 						imagemess.setHeader(imghead);
 						imgpub.publish(imagemess);
-					}
-					
+						//
+						// see if we send this detection to storage channel as well
+						//
+						//boolean sendl = false;
+						//boolean sendr = false;
+						//float areal = 0.0f;
+						//float arear = 0.0f;
+						//float xlmin = 0.0f;
+						//float xlmax = 0.0f;
+						//float xrmin = 0.0f;
+						//float xrmax = 0.0f;
+						if(imgpubstore != null) {
+							ArrayList<Rectangle> leftBox = new ArrayList<Rectangle>();
+							ArrayList<Rectangle> rightBox = new ArrayList<Rectangle>();
+							for(detect_result dr: ldrg.getResults()) {
+								if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
+									float prob = dr.getProbability();
+									//xlmin = dr.getBox().xmin;
+									//xlmax = dr.getBox().xmax;
+									//areal = (dr.getBox().ymax-dr.getBox().ymin) * (xlmax-xlmin);
+									//if(prob > .4) {
+										//sendl = true;
+										System.out.println("L Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
+										//break;
+									//}
+									leftBox.add(dr.getBox());
+								}
+							}
+							if(leftBox.size() > 0) { // artifact?
+								for(detect_result dr: rdrg.getResults()) {
+									if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
+										float prob = dr.getProbability();
+										//xrmin = dr.getBox().xmin;
+										//xrmax = dr.getBox().xmax;
+										//arear = (dr.getBox().ymax-dr.getBox().ymin) * (xrmax-xrmin);
+										//if(prob > .4) {
+											//sendr = true;
+											System.out.println("R Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
+											//break;
+										//}
+									}
+									rightBox.add(dr.getBox());
+								}
+							}
+							
+							//if(sendl && sendr)
+							//	System.out.println("person "+areal+" "+arear+" "+Math.abs(areal-arear));
+							//if(sendl && sendr && Math.abs(areal-arear) < (.1f * areal)) {
+							if(leftBox.size() > 0 && rightBox.size() > 0) { // possible correlation
+								Object[] outBoxes = correlateRegions(leftBox, rightBox);
+								for(int i = 0; i < outBoxes.length; i+=8) {
+									//float lmin = xlmin-xrmin;
+									//float lmax = xlmax-xrmax;
+									float lmin = ((Integer)outBoxes[i]).floatValue()-((Integer)outBoxes[i+4]).floatValue();
+									float lmax = ((Integer)outBoxes[i+2]).floatValue()-((Integer)outBoxes[i+6]).floatValue();
+									if(lmin <= 0)
+										lmin = .00001f;
+									if(lmax <= 0)
+										lmax = .00001f;
+									float z1 = (f*B)/(f*(B/lmin));
+									//float z2 = f*(B/lmax); disparity
+									float z2 = (f*B)/(f*(B/lmax));
+									// z= (f*B)/d
+									System.out.println("Person "+i+" distance:"+z1+","+z2);
+									imgpubstore.publish(imagemess);
+									if( DEBUG )
+										System.out.println("Pub. Image:"+sequenceNumber);	
+								}
+							}
+						}
+								
+					//}	
 					//
 					imageReadyL = false;
 					imageReadyR = false;
-					if( DEBUG )
-						System.out.println("Pub. Image:"+sequenceNumber);	
 				}
 				
 				//
@@ -288,6 +372,58 @@ public class VideoObjectRecog extends AbstractNodeMain
 			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
 	});
+	}
+	
+	/**
+	 * Correlate all left boxes to right boxes, if there is overlap of better then threshold, return coords in out array
+	 * @param lbox
+	 * @param rbox
+	 * @return Array of Integer objects
+	 */
+	Object[] correlateRegions(ArrayList<Rectangle> lbox, ArrayList<Rectangle> rbox) {
+		float[][] ious = new float[lbox.size()][rbox.size()];
+		for(int i = 0; i < lbox.size(); i++) {
+			for(int j = 0; j < rbox.size(); j++) {
+				ious[i][j] = calculateOverlap(lbox.get(i).xmin,lbox.get(i).ymin,lbox.get(i).xmax,lbox.get(i).ymax,
+					rbox.get(j).xmin,rbox.get(j).ymin,rbox.get(j).xmax,rbox.get(j).ymax);
+			}
+		}
+		for(int k = 0; k < ious.length; k++)
+				System.out.println("IOU["+k+"]="+Arrays.toString(ious[k]));
+		ArrayList<Integer> outBoxes = new ArrayList<Integer>();
+		// iterate 2d array of left box to all right overlaps
+		for(int k = 0; k < lbox.size(); k++) {
+			float bestIou = 0.0f;
+			int bestNum = 0;
+			for(int m = 0; m < rbox.size(); m++) {
+				if(ious[k][m] > IOU_THRESHOLD && ious[k][m] > bestIou) {
+					bestIou = ious[k][m];
+					bestNum = m;
+				}
+			}
+			System.out.println("left box "+k+" BestIou="+bestIou+" bestNum="+bestNum);
+			// did we get one above threshold?
+			if(bestIou > 0.0f) {
+				// put left box in output array
+				outBoxes.add(lbox.get(k).xmin);
+				outBoxes.add(lbox.get(k).ymin);
+				outBoxes.add(lbox.get(k).xmax);
+				outBoxes.add(lbox.get(k).ymax);
+				outBoxes.add(rbox.get(bestNum).xmin);
+				outBoxes.add(rbox.get(bestNum).ymin);
+				outBoxes.add(rbox.get(bestNum).xmax);
+				outBoxes.add(rbox.get(bestNum).ymax);
+			}
+		}
+		return outBoxes.toArray();
+	}
+	
+	static float calculateOverlap(float xmin0, float ymin0, float xmax0, float ymax0, float xmin1, float ymin1, float xmax1, float ymax1) {
+		float w = Math.max(0.0f, Math.min(xmax0, xmax1) - Math.max(xmin0, xmin1));
+		float h = Math.max(0.0f, Math.min(ymax0, ymax1) - Math.max(ymin0, ymin1));
+		float i = w * h;
+		float u = (xmax0 - xmin0) * (ymax0 - ymin0) + (xmax1 - xmin1) * (ymax1 - ymin1) - i;
+		return (u <= 0.f ? 0.f : (i / u));
 	}
 	
 	void initNPU(String modelFile) throws IOException {
