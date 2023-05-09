@@ -45,7 +45,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  */
 public class VideoObjectRecog extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
@@ -297,6 +297,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 									//areal = (dr.getBox().ymax-dr.getBox().ymin) * (xlmax-xlmin);
 									//if(prob > .4) {
 										//sendl = true;
+									if(DEBUG)
 										System.out.println("L Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
 										//break;
 									//}
@@ -312,6 +313,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 										//arear = (dr.getBox().ymax-dr.getBox().ymin) * (xrmax-xrmin);
 										//if(prob > .4) {
 											//sendr = true;
+										if(DEBUG)
 											System.out.println("R Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
 											//break;
 										//}
@@ -338,7 +340,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 									//float z2 = f*(B/lmax); disparity
 									float z2 = (f*B)/(f*(B/lmax));
 									// z= (f*B)/d
-									System.out.println("Person "+i+" distance:"+z1+","+z2);
+									if(DEBUG)
+										System.out.println("Person "+i+" distance:"+z1+","+z2);
 									imgpubstore.publish(imagemess);
 									if( DEBUG )
 										System.out.println("Pub. Image:"+sequenceNumber);	
@@ -388,7 +391,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 					rbox.get(j).xmin,rbox.get(j).ymin,rbox.get(j).xmax,rbox.get(j).ymax);
 			}
 		}
-		for(int k = 0; k < ious.length; k++)
+		if(DEBUG)
+			for(int k = 0; k < ious.length; k++)
 				System.out.println("IOU["+k+"]="+Arrays.toString(ious[k]));
 		ArrayList<Integer> outBoxes = new ArrayList<Integer>();
 		// iterate 2d array of left box to all right overlaps
@@ -401,7 +405,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 					bestNum = m;
 				}
 			}
-			System.out.println("left box "+k+" BestIou="+bestIou+" bestNum="+bestNum);
+			if(DEBUG)
+				System.out.println("left box "+k+" BestIou="+bestIou+" bestNum="+bestNum);
 			// did we get one above threshold?
 			if(bestIou > 0.0f) {
 				// put left box in output array
