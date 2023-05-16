@@ -16,6 +16,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
+import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
 import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
@@ -75,8 +76,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private static String STORE_SERVICE = "cmd_store";
 	private static int MAXIMUM = 0;
 	int commitRate = 500;
-	public static String DATABASE = "COREPLEX";
-	public static int DATABASE_PORT = 9020;
+	public static String DATABASE = null;
+	public static int DATABASE_PORT = 0;
 	RelatrixClient session = null;
 	//
 	
@@ -160,6 +161,16 @@ public class VideoObjectRecog extends AbstractNodeMain
 
 		if(detectAndStore != null)
 				imgpubstore = connectedNode.newPublisher("/stereo_msgs/StereoImageStore", stereo_msgs.StereoImage._TYPE);
+		
+		if(DATABASE_PORT > 0) {
+			try {
+				System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE+" PORT:"+DATABASE_PORT);
+				session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
+			} catch (IOException e2) {
+				//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
+				throw new RuntimeException(e2);
+			}
+		}
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
@@ -344,7 +355,15 @@ public class VideoObjectRecog extends AbstractNodeMain
 										System.out.println("Person "+i+" distance:"+z1+","+z2);
 									imgpubstore.publish(imagemess);
 									if( DEBUG )
-										System.out.println("Pub. Image:"+sequenceNumber);	
+										System.out.println("Pub. Image:"+sequenceNumber);
+									if(DATABASE_PORT > 0) {
+										StereoscopicImageBytes sib = new StereoscopicImageBytes(leftPayload, rightPayload);
+										try {
+											session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
+										} catch (IllegalAccessException | DuplicateKeyException e) {
+											e.printStackTrace();
+										}
+									}
 								}
 							}
 						}

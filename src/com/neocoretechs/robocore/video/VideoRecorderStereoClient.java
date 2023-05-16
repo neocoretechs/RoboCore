@@ -71,7 +71,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	CannyEdgeDetector detector;
 	BufferedImage imagel, imager;
 	static {
-		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDERCLIENT"});
+		SynchronizedFixedThreadPoolManager.init(5, Integer.MAX_VALUE, new String[] {"VIDEORECORDERCLIENT"});
 	}
 	
 	@Override
