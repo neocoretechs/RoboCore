@@ -80,8 +80,7 @@ public class VideoPlaybackStereo  {
 			}
 			rkvc = new RelatrixClient(args[0], args[1], Integer.parseInt(args[2]));
 		} catch (IOException e2) {
-			System.out.println("Relatrix database volume "+VideoRecorderStereo.DATABASE+" does not exist!");
-			throw new RuntimeException();
+			throw new RuntimeException(e2);
 		}
 		if( mode.equals("display")) {
 			//if( DEBUG )

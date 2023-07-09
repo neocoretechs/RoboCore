@@ -142,7 +142,8 @@ import std_msgs.Int32MultiArray;
  */
 public class MotionController extends AbstractNodeMain {
 	private static boolean DEBUG = false;
-	private boolean IMUDEBUG = false;
+	private static boolean IMUDEBUG = false;
+	private static boolean DEBUGBEARING = true;
 	private String host;
 	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
@@ -197,6 +198,10 @@ public class MotionController extends AbstractNodeMain {
 	static boolean inAuto = false;
 	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
 	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
+	// slope speed change over time analysis
+	private CircularBlockingDeque<Float> speedQueueL = new CircularBlockingDeque<Float>(5);
+	private CircularBlockingDeque<Float> speedQueueR = new CircularBlockingDeque<Float>(5);
+	private float maxSpeedSlope = 100;
 	
 	Object rngMutex1 = new Object();
 	Object rngMutex2 = new Object();
@@ -920,9 +925,17 @@ public class MotionController extends AbstractNodeMain {
 		// get radian measure of left stick x,y
 		float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[robot.getDiffDrive().getControllerAxisX()]);
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
-		// horizontal axis is 0 to -180 degrees, we want 0 at the top
-		stickDegrees += 90;
-		stickDegrees = (stickDegrees > 180.0 ? stickDegrees -= 90.0 : -stickDegrees);
+
+		// horizontal axis is 0 to -180/180 degrees, we want 0 at the top
+		//         -90
+		//          |
+		//-180/180 --- 0
+		//          |
+		//         90
+		stickDegrees += 90; // fixes 2 right quadrants and top left quadrant, orients 0 at top, 180 at bottom, 0 to -90 top left.
+		if(stickDegrees > 180.0 ) // fixes bottom left quadrant, sets -90 to -180
+			stickDegrees -= 360.0;
+
 		// we have absolute stickdegrees, offset the current IMU by that quantity to get new desired course
 		float offsetDegrees = (float) (eulers[0] - stickDegrees);
 	    // reduce the angle  
@@ -950,7 +963,9 @@ public class MotionController extends AbstractNodeMain {
 			if( !holdBearing ) {
 				holdBearing = true;
 				outputNeg = false;
-				robot.getIMUSetpointInfo().setDesiredTarget((float) eulers[0]); // Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
+				// Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
+				robot.getIMUSetpointInfo().setDesiredTarget((float) eulers[0]);
+				robot.getIMUSetpointInfo().setTarget((float)0);
 				robot.getMotionPIDController().clearPID();
 				wasPid = true; // start with PID control until we get out of tolerance
 				if(DEBUG);
@@ -958,12 +973,30 @@ public class MotionController extends AbstractNodeMain {
 			}
 	    } else {
 	    	holdBearing = false;
-	    	robot.getIMUSetpointInfo().setDesiredTarget(offsetDegrees); // joystick setting becomes desired target yaw angle heading and IMU is disregarded
+	    	// joystick setting becomes desired target yaw angle heading and IMU is disregarded
+	    	robot.getIMUSetpointInfo().setDesiredTarget(stickDegrees);
+			robot.getIMUSetpointInfo().setTarget((float)0); 
 	    }
-
-		robot.getIMUSetpointInfo().setTarget((float) eulers[0]); //eulers[0] is Input: target yaw angle from IMU
+	    
+	    // eulers[0] is Input: target yaw angle from IMU. If IMU is delivering a 0, then our delta below will just be desiredTarget.
+		robot.getIMUSetpointInfo().setTarget((float) eulers[0]); 
 		//
 		// perform the PID processing
+		// IMUSetpointInfo looks like this:
+		// public void setTarget(float t) { yawAngle = t;	}
+		// public float getTarget() { return yawAngle; }
+		// public void setDesiredTarget(float t) { desiredYawAngle = t; }
+		// public float getDesiredTarget() { return desiredYawAngle; }
+		// public float delta() { return desiredYawAngle - yawAngle; }
+		//
+		// MotionPidController.Compute(SetPointInfo) does this with SetPointInfo before it sets PID terms:
+	    // SetPointInfo.setPrevErr(error);
+	    // error = SetPointInfo.delta();
+	    // error =  error % 360; // angle or 360 - angle
+	    // if (error <= -180.0)
+	    //     error += 360.0;
+	    // if (error >= 180)  
+	    //     error -= 360;  
 		//
 		((MotionPIDController) robot.getMotionPIDController()).Compute(robot.getIMUSetpointInfo());
 		
@@ -996,9 +1029,14 @@ public class MotionController extends AbstractNodeMain {
 		float arcin = 0, arcout = 0;
 		//
 		if( holdBearing ) {
+			if(DEBUG || DEBUGBEARING) {
+				System.out.printf("HOLDING BEARING %s\n",robot.getMotionPIDController().toString());
+				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR);
+			}
 			followIMUSetpoint(radius, arcin, arcout);
 		} else {
 			// manual steering mode, use tight radii and a human integrator
+			// Compute arc length on inner and outer wheel
 			arcin = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * radius);
 			arcout = (float) (Math.abs(robot.getMotionPIDController().getError()/360.0) * (2.0 * Math.PI) * (radius + WHEELBASE));
 			// error is difference in degrees between setpoint and input
@@ -1010,17 +1048,87 @@ public class MotionController extends AbstractNodeMain {
 					if( robot.getMotionPIDController().getError() > 0.0f )
 						speedR *= (arcin/arcout);
 			}
-			if(DEBUG)
-				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+			speedL = slope(speedL, speedQueueL);
+			speedR = slope(speedR, speedQueueR);
+			if(DEBUG || DEBUGBEARING) {
+				System.out.printf("MANUAL BEARING %s\n",robot.getMotionPIDController().toString());
+				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR);
+			}
 		}
-		if(DEBUG)
-			System.out.printf("%s | Hold=%b\n",robot.getMotionPIDController().toString(), holdBearing);
+
 		publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
 		
 		publishPeripheral(connectedNode, pubschannel, axes);
 		
 	}
-	
+	/**
+	 * If slope is negative and coordinate is neg acceleration in reverse
+	 * If slope is pos and coord is negative reverse deceleration
+	 * 
+	 * @param speed
+	 * @param speedQueue
+	 * @return
+	 */
+	private float slope(float speed, CircularBlockingDeque<Float> speedQueue) {
+		speedQueue.addLast(speed);
+	    int n = speedQueue.length();
+	    double m, c, sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
+	    for (int i = 0; i < n; i++) {
+	        sum_x += i;//x[i];
+	        sum_y += speedQueue.get(i);//[i];
+	        sum_xy += i * speedQueue.get(i);//[i] * y[i];
+	        sum_x2 += Math.pow(i, 2);//pow(x[i], 2);
+	    }
+	    m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - Math.pow(sum_x, 2));
+	    //c = (sum_y - m * sum_x) / n;
+	    //System.out.println("m = " + m);
+	    //System.out.println("c = " + c);
+	    if(m == 0)
+	    	return speedQueue.get(n-1);
+	    if(m < 0) {
+	    	if(m < -maxSpeedSlope) {
+    			if(n == 1) {
+    				speedQueue.set(0,speedQueue.get(1)/2); // divide it in half, we only have 1 point
+    			} else {
+    				// slope neg and coord neg, reverse accel
+    				if(speedQueue.get(n-1) < 0) {
+    					// diff of last point and next to last
+    					float diff = speedQueue.get(n-1)-speedQueue.get(n-2);
+    					// split the diff
+    					speedQueue.set(n-1, speedQueue.get(n-2)+(diff/2.0f));
+    				} else {
+    					// slope neg and coord pos, forward decel
+    					// diff of next to last and last
+    					float diff = speedQueue.get(n-2)-speedQueue.get(n-1);
+    					// split the diff
+    					speedQueue.set(n-1, speedQueue.get(n-2)-(diff/2.0f));
+    				}
+    			}
+	    	}
+	    } else {
+	    	// slope pos
+	    	if(m > maxSpeedSlope) {
+    			if(n == 1) {
+    				speedQueue.set(0,speedQueue.get(1)/2); // divide it in half, we only have 1 point
+    			} else {
+    				// slope pos and coord neg, reverse decel
+    				if(speedQueue.get(n-1) < 0) {
+    					// diff of next to last and last
+    					float diff = speedQueue.get(n-2)-speedQueue.get(n-1);
+    					// split the diff
+    					speedQueue.set(n-1, speedQueue.get(n-2)-(diff/2.0f));
+    				} else {
+    					// slope pos and coord pos, forward accel
+    					// diff of last and next to last
+    					float diff = speedQueue.get(n-1)-speedQueue.get(n-2);
+    					// split the diff
+    					speedQueue.set(n-1, speedQueue.get(n-2)+(diff/2.0f));
+    				}
+    			}
+	    	}
+	    }
+	    return speedQueue.get(n-1);
+	}
 	/**
 	* 
  	* Process other axis.<p/>
@@ -1192,7 +1300,7 @@ public class MotionController extends AbstractNodeMain {
 	 * @param arcout
 	 */
 	private void followIMUSetpoint(float radius, float arcin, float arcout) {
-		if(DEBUG)
+		if(DEBUG || DEBUGBEARING)
 			System.out.printf("Inertial Setpoint=%f | Hold=%b ", robot.getIMUSetpointInfo().getDesiredTarget(), holdBearing);
 		// In auto
 		// Point at which geometric solution begins/disengages is IMU maximumCourseDeviation from configuration
@@ -1218,7 +1326,7 @@ public class MotionController extends AbstractNodeMain {
 					robot.getMotionPIDController().setITerm(0);
 				}
 			}
-			if(DEBUG)
+			if(DEBUG || DEBUGBEARING)
 				System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
 		} else {
 			// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
@@ -1232,7 +1340,7 @@ public class MotionController extends AbstractNodeMain {
 			else
 				if( robot.getMotionPIDController().getError() > 0.0f )
 					speedR *= (arcin/arcout);
-			if(DEBUG)
+			if(DEBUG || DEBUGBEARING)
 				System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
 		}
 	}
