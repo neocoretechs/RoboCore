@@ -360,7 +360,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 										StereoscopicImageBytes sib = new StereoscopicImageBytes(leftPayload, rightPayload);
 										try {
 											session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
-										} catch (IllegalAccessException | DuplicateKeyException e) {
+										} catch (IllegalAccessException | DuplicateKeyException | ClassNotFoundException e) {
 											e.printStackTrace();
 										}
 									}

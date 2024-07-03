@@ -78,6 +78,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("subs_storevideoclient");
 	}
+	
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 
@@ -145,7 +146,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 				byte[] lbyte = null;
 				byte[] rbyte = null;
 				while(shouldStore) {
-				try {
+					try {
 						try {
 							lbyte = lqueue.take();
 							rbyte = rqueue.take();
@@ -153,45 +154,45 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 							shouldStore = false;
 						}
 						//synchronized(mutex) {
-							//if(!imageDiff()) // creates imagel
-							//	continue;
-							//imager = createImage(bufferr);
-							//byte[] bl = convertImage(imagel);
-							//byte[] br = convertImage(imager);
-							//if(DEBUG)
-							//	System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
-							//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
-							StereoscopicImageBytes sib = new StereoscopicImageBytes(lbyte, rbyte);
-							//try {
-								session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
-								//session.put(sib);
-							//} catch (DuplicateKeyException e) {
-								// if within 1 ms, rare but occurs
-							//}
-							//if(sequenceNumber%commitRate == 0) {
-								//System.out.println("Committing at sequence "+sequenceNumber);
-								//session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
-								//session.Commit();
-								//session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
-								//if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM) {
-									//session.close();
-									//shouldStore = false;
-								//}
-							//}
+						//if(!imageDiff()) // creates imagel
+						//	continue;
+						//imager = createImage(bufferr);
+						//byte[] bl = convertImage(imagel);
+						//byte[] br = convertImage(imager);
+						//if(DEBUG)
+						//	System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
+						//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
+						StereoscopicImageBytes sib = new StereoscopicImageBytes(lbyte, rbyte);
+						//try {
+						session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
+						//session.put(sib);
+						//} catch (DuplicateKeyException e) {
+						// if within 1 ms, rare but occurs
 						//}
-		        } catch (IllegalAccessException | IOException e) {
-		        	System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
-		        	e.printStackTrace();
-		        	shouldStore = false;
-		        } catch (DuplicateKeyException e) {
-					System.out.println("Duplicate key at "+System.currentTimeMillis());
+						//if(sequenceNumber%commitRate == 0) {
+						//System.out.println("Committing at sequence "+sequenceNumber);
+						//session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
+						//session.Commit();
+						//session = BigSackAdapter.getBigSackTransactionalHashSet(StereoscopicImageBytes.class);
+						//if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM) {
+						//session.close();
+						//shouldStore = false;
+						//}
+						//}
+						//}
+					} catch (IllegalAccessException | IOException | ClassNotFoundException e) {
+						System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
+						e.printStackTrace();
+						shouldStore = false;
+					} catch (DuplicateKeyException e) {
+						System.out.println("Duplicate key at "+System.currentTimeMillis());
+					}
+
+					System.exit(1);
 				}
-				}
-				
-				System.exit(1);
 			}
 		}, "VIDEORECORDERCLIENT");
-		
+
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
@@ -389,11 +390,11 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 		console.nextLine();
 		console.close();
 		RelatrixClient session = new RelatrixClient(argv[0], argv[1], Integer.parseInt(argv[2]));
-	    RemoteStream stream = (RemoteStream) session.findSetStream("?", "?", "?");
-		stream.of().forEach(e -> {
+	    RemoteStream stream = (RemoteStream) session.findStream("?", "?", "?");
+		stream.forEach(e -> {
 			try {
 				session.remove(((Comparable[]) e)[0], ((Comparable[]) e)[1], (StereoscopicImageBytes) ((Comparable[]) e)[2]);
-			} catch (ClassNotFoundException | IllegalAccessException | IOException e1) {
+			} catch (ClassNotFoundException | IllegalAccessException | IOException | DuplicateKeyException e1) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}

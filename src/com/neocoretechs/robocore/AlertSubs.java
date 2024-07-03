@@ -15,7 +15,8 @@ import org.ros.node.topic.Subscriber;
  * Listen for range finder messages and generate alarm upon receipt.
  * __MINRANGE:=30 __MAXRANGE:=300 for URM37
  * __ALERT:=true to enable audio out
- * __TIME:=minimum milliseconds between 2 detections to activate
+ * __TIME:=minimum milliseconds between detections to activate
+ * __NUMBER:=number of readings within __TIME to activate
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2021
  *
  */
@@ -25,7 +26,8 @@ public class AlertSubs extends AbstractNodeMain {
 	//private static double MAXRANGE = -1;
 	//private static double MINRANGE = -1;
 	private static int TIME = -1;
-	//private static int numberDetected = 0;
+	private static int NUMBER = 2;
+	private static int numberDetected = 0;
 	private static long time = -1;
 
 	@Override
@@ -45,6 +47,9 @@ public class AlertSubs extends AbstractNodeMain {
 		if( remaps.containsKey("__TIME") ) {
 			TIME = Integer.parseInt(remaps.get("__TIME"));
 		}
+		if( remaps.containsKey("__NUMBER") ) {
+			NUMBER = Integer.parseInt(remaps.get("__NUMBER"));
+		}
 		if( remaps.containsKey("__ALERT") ) {
 			ALERT = true;
 		}
@@ -52,41 +57,43 @@ public class AlertSubs extends AbstractNodeMain {
 		subsbat.addMessageListener(new MessageListener<std_msgs.String>() {
 			@Override
 			public void onNewMessage(std_msgs.String message) {
-			try
-			{
-				System.out.println("Status: "+message.getData()+" elapsed:"+(System.currentTimeMillis() - time)+" minimum:"+TIME+" Date:"+LocalDateTime.now());
-				//( (MINRANGE != -1 && MAXRANGE != -1) && 
-				//	(Double.parseDouble(message.getData()) < MAXRANGE) && (Double.parseDouble(message.getData()) > MINRANGE) ) {
+				try {
+					System.out.println("Status: "+message.getData()+" elapsed:"+(System.currentTimeMillis() - time)+" Count:"+numberDetected+" minimum:"+TIME+" Date:"+LocalDateTime.now());
+					//( (MINRANGE != -1 && MAXRANGE != -1) && 
+					//	(Double.parseDouble(message.getData()) < MAXRANGE) && (Double.parseDouble(message.getData()) > MINRANGE) ) {
 					if(TIME == -1 || (System.currentTimeMillis() - time) <= TIME) {
-						//numberDetected = 0;
-						System.out.println("ALERT! @ "+LocalDateTime.now());
-						// audio loop
-						for(int i = 0; i < 15; i++) {
-							try {
-								if(ALERT)
-									GenerateTone.generateTone(1500, 50, 100, true);
-							} catch (LineUnavailableException e1) {
-								e1.printStackTrace();
+						if(numberDetected >= NUMBER) {
+							System.out.println("ALERT! @ "+LocalDateTime.now());
+							// audio loop
+							for(int i = 0; i < 15; i++) {
+								try {
+									if(ALERT)
+										GenerateTone.generateTone(1500, 50, 100, true);
+								} catch (LineUnavailableException e1) {
+									e1.printStackTrace();
+								}
+								try {
+									Thread.sleep(10);
+								} catch (InterruptedException e) {
+									e.printStackTrace();
+								}
 							}
-							try {
-								Thread.sleep(10);
-							} catch (InterruptedException e) {
-								e.printStackTrace();
-							}
+							// alerted, restart number detections
+							numberDetected = 0;
+							time = System.currentTimeMillis();
+						} else {
+							++numberDetected; // in time range, increment detections
 						}
-					} // {
-						//++numberDetected;
-					//}
-					time = System.currentTimeMillis();
-				//} else {
-					//numberDetected = 0; // sequence is broken
-				//}
-			} catch (Throwable e) {
-				e.printStackTrace();
-			}
+					} else {
+						numberDetected = 0; // out of time range, start count of detections over
+						time = System.currentTimeMillis();
+					}
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}
 			}
 		});
-		
+
 	}
 
 }

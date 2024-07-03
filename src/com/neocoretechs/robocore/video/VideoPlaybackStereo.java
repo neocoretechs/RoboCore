@@ -25,7 +25,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
-import com.neocoretechs.machinevision.CannyEdgeDetector;
+//import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
 
@@ -124,14 +124,14 @@ public class VideoPlaybackStereo  {
 		    	//long ptim = (ptimh*3600000L);
 		    	//Long firstTim = (Long)rkvc.firstKey(Long.class);
 		    	System.out.println("From:"+new Date(ptim)+" To:"+new Date(lastTim));
-		    	stream = (RemoteStream) rkvc.findSubSetStream(ptim, "?", "?",lastTim);
+		    	stream = (RemoteStream) rkvc.findSubStream(ptim, "?", "?",lastTim);
 		    	//stream = (RemoteStream) rkvc.findTailSetStream(ptim+firstTim, "?", "?");
 		    	//stream.of().forEach(e -> {
 		    	//	System.out.println(((Comparable[]) e)[0]+" "+((Comparable[]) e)[1]);
 		    	//});
 		    	//return;
 		    } else {
-		    	stream = (RemoteStream) rkvc.findSetStream("?", "?", "?");
+		    	stream = (RemoteStream) rkvc.findStream("?", "?", "?");
 		    }
 		    
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
@@ -147,7 +147,7 @@ public class VideoPlaybackStereo  {
 		    	//.forEach(g -> System.out.println("Element B:"+g));
 			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
 			//RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
-			stream.of().forEach(e -> {
+			stream.forEach(e -> {
 				// try to push frames in realtime, capped at 1 second max wait since we detect motion
 				// if the recorded time between the frames is longer than the realtime display, slow
 				// the display down to match the difference in recorded frame time to the difference in real time (capped at 1 sec).

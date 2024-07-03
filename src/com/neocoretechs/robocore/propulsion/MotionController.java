@@ -270,10 +270,14 @@ public class MotionController extends AbstractNodeMain {
 			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
+		// Check startup for indoor speed scale setting ((stick -1 to 1) * SPEEDSCALE), then check cmdl for override of speed scale from startup and defaults
+		// MAX is always 1000
 		if(robot.isIndoor())
 			SPEEDSCALE = 100.0f;
 		else
 			SPEEDSCALE = 1000.0f;
+		if( remaps.containsKey("__speedscale") )
+			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);

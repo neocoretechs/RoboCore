@@ -14,8 +14,7 @@ import org.ros.node.topic.Subscriber;
 
 
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
-import com.neocoretechs.rocksack.session.RockSackAdapter;
-import com.neocoretechs.rocksack.session.RockSackTransactionSession;
+import com.neocoretechs.rocksack.session.DatabaseManager;
 import com.neocoretechs.rocksack.session.TransactionalMap;
 
 
@@ -60,6 +59,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	private static int MAXIMUM = 50000;
 	int commitRate = 500;
 	public static String DATABASE = "D:/etc/ROSCOE2/Images";
+	String xid;
 	CountDownLatch latch;
 	TransactionalMap session = null;
 	static {
@@ -77,12 +77,12 @@ public class VideoRecorderStereo extends AbstractNodeMain
 			DATABASE = remaps.get("__database");
 		try {
 			//Relatrix.setTablespaceDirectory(DATABASE);
-			RockSackAdapter.setTableSpaceDir(DATABASE);
+			DatabaseManager.setTableSpaceDir(DATABASE);
 			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE);
-			String xid = RockSackAdapter.getRockSackTransactionId();
-			session = RockSackAdapter.getRockSackTransactionalMap(StereoscopicImageBytes.class,xid);
+			xid = DatabaseManager.getTransactionId();
+			session = DatabaseManager.getTransactionalMap(StereoscopicImageBytes.class,xid);
 		} catch (IOException | IllegalAccessException e2) {
-			//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
+			//System.out.println("Database volume "+DATABASE+" does not exist!");
 			throw new RuntimeException(e2);
 		}
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
@@ -154,7 +154,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 							if(sequenceNumber%commitRate == 0) {
 								System.out.println("Committing at sequence "+sequenceNumber);
 								//Relatrix.transactionCommit();
-								session.Commit();
+								DatabaseManager.commitTransaction(xid);
 								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
 									System.exit(0);
 							}
