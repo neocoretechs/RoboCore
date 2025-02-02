@@ -20,9 +20,9 @@ import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.DuplicateKeyException;
+import com.neocoretechs.relatrix.Result;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
-import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -180,12 +180,10 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 						//}
 						//}
 						//}
-					} catch (IllegalAccessException | IOException | ClassNotFoundException e) {
+					} catch (IOException e) {
 						System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
 						e.printStackTrace();
 						shouldStore = false;
-					} catch (DuplicateKeyException e) {
-						System.out.println("Duplicate key at "+System.currentTimeMillis());
 					}
 
 					System.exit(1);
@@ -390,12 +388,11 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 		console.nextLine();
 		console.close();
 		RelatrixClient session = new RelatrixClient(argv[0], argv[1], Integer.parseInt(argv[2]));
-	    RemoteStream stream = (RemoteStream) session.findStream("?", "?", "?");
+	    RemoteStream stream = (RemoteStream) session.findStream('*', '*', '*');
 		stream.forEach(e -> {
 			try {
-				session.remove(((Comparable[]) e)[0], ((Comparable[]) e)[1], (StereoscopicImageBytes) ((Comparable[]) e)[2]);
-			} catch (ClassNotFoundException | IllegalAccessException | IOException | DuplicateKeyException e1) {
-				// TODO Auto-generated catch block
+				session.remove(((Result)e).get(0));
+			} catch (IOException e1) {
 				e1.printStackTrace();
 			}
 		});

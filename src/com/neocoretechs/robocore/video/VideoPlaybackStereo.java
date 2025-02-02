@@ -17,6 +17,7 @@ import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.util.Date;
+import java.util.stream.Stream;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -114,9 +115,8 @@ public class VideoPlaybackStereo  {
 				} catch (InterruptedException e) {}
 		//}
 		
-		try {
-		
-		    RemoteStream stream;
+		try {	
+		    Stream stream;
 		    if(args.length == 4) {
 		    	long ptimh = Long.parseLong(args[3]);
 		    	long ptim = System.currentTimeMillis() - (ptimh*3600000L);
@@ -124,14 +124,9 @@ public class VideoPlaybackStereo  {
 		    	//long ptim = (ptimh*3600000L);
 		    	//Long firstTim = (Long)rkvc.firstKey(Long.class);
 		    	System.out.println("From:"+new Date(ptim)+" To:"+new Date(lastTim));
-		    	stream = (RemoteStream) rkvc.findSubStream(ptim, "?", "?",lastTim);
-		    	//stream = (RemoteStream) rkvc.findTailSetStream(ptim+firstTim, "?", "?");
-		    	//stream.of().forEach(e -> {
-		    	//	System.out.println(((Comparable[]) e)[0]+" "+((Comparable[]) e)[1]);
-		    	//});
-		    	//return;
+		    	stream = rkvc.findSubStream(ptim, '?', '?',lastTim);
 		    } else {
-		    	stream = (RemoteStream) rkvc.findStream("?", "?", "?");
+		    	stream =  rkvc.findStream('?', '?', '?');
 		    }
 		    
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
@@ -227,7 +222,7 @@ public class VideoPlaybackStereo  {
 				//}
 		});
 		System.out.println("End of retrieval. sequence="+sequenceNumber);
-		} catch(IllegalAccessException | IllegalArgumentException | ClassNotFoundException | IOException iae) {
+		} catch(IllegalArgumentException | IOException iae) {
 			iae.printStackTrace();
 			return;
 		}

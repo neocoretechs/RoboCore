@@ -1,7 +1,12 @@
 package com.neocoretechs.robocore.video;
 
 import java.io.Serializable;
-
+/**
+ * Offers a Comparable left and right set of bytes representing a stereo image.
+ * Performs a byte by byte comparison of the left and right byte buffers.
+ * @author groff
+ *
+ */
 public class StereoscopicImageBytes implements Comparable, Serializable {
 	private static final long serialVersionUID = 1L;
 	private byte[] left;
@@ -44,12 +49,7 @@ public class StereoscopicImageBytes implements Comparable, Serializable {
 			return 1;
 		if(right.length < ((StereoscopicImageBytes)o).getRight().length)
 			return -1;
-		for(int i = 0; i < left.length; i++) {
-			if(left[i] > ((StereoscopicImageBytes)o).getLeft()[i])
-				return 1;
-			if(left[i] < ((StereoscopicImageBytes)o).getLeft()[i])
-				return -1;
-		}
+
 		for(int i = 0; i < left.length; i++) {
 			if(left[i] > ((StereoscopicImageBytes)o).getLeft()[i])
 				return 1;

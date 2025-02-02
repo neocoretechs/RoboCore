@@ -148,7 +148,7 @@ public class VidCapAndStoreStereo  {
         					System.out.println("Pub. Image:"+sequenceNumber);	
         			//System.out.println("Pub cam:"+imagemess);
         		++sequenceNumber; // we want to inc seq regardless to see how many we drop	
-        	} catch (InterruptedException | IllegalAccessException | IOException | DuplicateKeyException e) {
+        	} catch (InterruptedException | IOException e) {
                     e.printStackTrace();
         	}
         }

@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
+import org.rocksdb.RocksDBException;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -14,6 +15,7 @@ import org.ros.node.topic.Subscriber;
 
 
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.rocksack.TransactionId;
 import com.neocoretechs.rocksack.session.DatabaseManager;
 import com.neocoretechs.rocksack.session.TransactionalMap;
 
@@ -59,7 +61,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	private static int MAXIMUM = 50000;
 	int commitRate = 500;
 	public static String DATABASE = "D:/etc/ROSCOE2/Images";
-	String xid;
+	TransactionId xid;
 	CountDownLatch latch;
 	TransactionalMap session = null;
 	static {
@@ -81,7 +83,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE);
 			xid = DatabaseManager.getTransactionId();
 			session = DatabaseManager.getTransactionalMap(StereoscopicImageBytes.class,xid);
-		} catch (IOException | IllegalAccessException e2) {
+		} catch (IOException | IllegalAccessException | RocksDBException e2) {
 			//System.out.println("Database volume "+DATABASE+" does not exist!");
 			throw new RuntimeException(e2);
 		}
@@ -147,7 +149,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 							StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 							//try {
 								//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
-								session.put(sib, System.currentTimeMillis());
+								session.put(xid, sib, System.currentTimeMillis());
 							//} catch (DuplicateKeyException e) {
 								// if within 1 ms, rare but occurs
 							//}

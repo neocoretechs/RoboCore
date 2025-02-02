@@ -16,10 +16,9 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.relatrix.DuplicateKeyException;
+
 import com.neocoretechs.relatrix.client.RelatrixClient;
-import com.neocoretechs.relatrix.client.RemoteStream;
-import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
+
 import com.neocoretechs.rknn4j.RKNN;
 import com.neocoretechs.rknn4j.rknn_input_output_num;
 import com.neocoretechs.rknn4j.rknn_output;
@@ -34,8 +33,10 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
- * Create a database and receive published video images on the Ros bus from /stereo_msgs/StereoImage,
+ * Connect to a remote Relatrix database server and store receive published video images  sent on the Ros bus from /stereo_msgs/StereoImage,
  * use the NPU to do object recognition, then handle the data.
+ * The schema for the stored images is :session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
+ * Where sib is the {@link StereoscopicImageBytes} instance.
  * The function can use remapped command line param "__commitRate" int value, to change
  * the default of 100 images initiating a checkpoint transaction.<p/>
  * Image storage must be stopped and started via the service at uri cmd_store. The payload of the
@@ -358,11 +359,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 										System.out.println("Pub. Image:"+sequenceNumber);
 									if(DATABASE_PORT > 0) {
 										StereoscopicImageBytes sib = new StereoscopicImageBytes(leftPayload, rightPayload);
-										try {
-											session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
-										} catch (IllegalAccessException | DuplicateKeyException | ClassNotFoundException e) {
-											e.printStackTrace();
-										}
+										session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
 									}
 								}
 							}
