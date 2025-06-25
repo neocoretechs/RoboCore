@@ -28,7 +28,9 @@ import javax.swing.SwingUtilities;
 
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.client.RelatrixClient;
+import com.neocoretechs.relatrix.client.RelatrixClientTransaction;
 import com.neocoretechs.relatrix.client.RemoteStream;
+import com.neocoretechs.rocksack.TransactionId;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -43,7 +45,8 @@ import com.neocoretechs.relatrix.client.RemoteStream;
 public class VideoPlaybackStereo  {
 	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-	public static RelatrixClient rkvc;
+	public static RelatrixClientTransaction rkvc;
+	public static TransactionId xid;
     private static BufferedImage imagel = null;
     private static BufferedImage imager = null;
     private static PlayerFrame displayPanel1;
@@ -79,7 +82,8 @@ public class VideoPlaybackStereo  {
 				System.out.println("usage: java com.neocoretechs.robocore.video.VideoPlaybackStereo [local node] [remote node] [server port] <previous hours to display>");
 				System.exit(1);
 			}
-			rkvc = new RelatrixClient(args[0], args[1], Integer.parseInt(args[2]));
+			rkvc = new RelatrixClientTransaction(args[0], args[1], Integer.parseInt(args[2]));
+			xid = rkvc.getTransactionId();
 		} catch (IOException e2) {
 			throw new RuntimeException(e2);
 		}
@@ -120,13 +124,13 @@ public class VideoPlaybackStereo  {
 		    if(args.length == 4) {
 		    	long ptimh = Long.parseLong(args[3]);
 		    	long ptim = System.currentTimeMillis() - (ptimh*3600000L);
-		    	Long lastTim = (Long)rkvc.lastKey(Long.class);
+		    	Long lastTim = (Long)rkvc.lastKey(xid,Long.class);
 		    	//long ptim = (ptimh*3600000L);
 		    	//Long firstTim = (Long)rkvc.firstKey(Long.class);
 		    	System.out.println("From:"+new Date(ptim)+" To:"+new Date(lastTim));
-		    	stream = rkvc.findSubStream(ptim, '?', '?',lastTim);
+		    	stream = rkvc.findSubStream(xid, '*', Integer.class, '?',ptim,lastTim);
 		    } else {
-		    	stream =  rkvc.findStream('?', '?', '?');
+		    	stream =  rkvc.findStream(xid,'?', '?', '?');
 		    }
 		    
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);

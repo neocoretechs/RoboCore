@@ -6,18 +6,15 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
-import org.rocksdb.RocksDBException;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-
+import com.neocoretechs.relatrix.client.RelatrixClientTransaction;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.rocksack.TransactionId;
-import com.neocoretechs.rocksack.session.DatabaseManager;
-import com.neocoretechs.rocksack.session.TransactionalMap;
 
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
@@ -60,10 +57,10 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	private static String STORE_SERVICE = "cmd_store";
 	private static int MAXIMUM = 50000;
 	int commitRate = 500;
-	public static String DATABASE = "D:/etc/ROSCOE2/Images";
 	TransactionId xid;
 	CountDownLatch latch;
-	TransactionalMap session = null;
+	RelatrixClientTransaction session = null;
+
 	static {
 		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDER"});
 	}
@@ -75,18 +72,13 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-		if( remaps.containsKey("__database") )
-			DATABASE = remaps.get("__database");
 		try {
-			//Relatrix.setTablespaceDirectory(DATABASE);
-			DatabaseManager.setTableSpaceDir(DATABASE);
-			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE);
-			xid = DatabaseManager.getTransactionId();
-			session = DatabaseManager.getTransactionalMap(StereoscopicImageBytes.class,xid);
-		} catch (IOException | IllegalAccessException | RocksDBException e2) {
-			//System.out.println("Database volume "+DATABASE+" does not exist!");
-			throw new RuntimeException(e2);
+			session = connectedNode.getRelatrixClient();
+			xid = session.getTransactionId();
+		} catch (IOException e1) {
+			e1.printStackTrace();
 		}
+
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = 
@@ -128,9 +120,9 @@ public class VideoRecorderStereo extends AbstractNodeMain
 		} catch(Exception e2) {
 			System.out.println("CONTROL VIA SERVICE NOT AVAILABLE");
 		}
-	*/
+		 */
 		latch = new CountDownLatch(1);
-		
+
 		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
 			@Override
 			public void run() {
@@ -148,54 +140,54 @@ public class VideoRecorderStereo extends AbstractNodeMain
 								continue;
 							StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 							//try {
-								//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
-								session.put(xid, sib, System.currentTimeMillis());
+							//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
+							session.store(xid,System.currentTimeMillis(),sequenceNumber,sib);
 							//} catch (DuplicateKeyException e) {
-								// if within 1 ms, rare but occurs
+							// if within 1 ms, rare but occurs
 							//}
 							if(sequenceNumber%commitRate == 0) {
 								System.out.println("Committing at sequence "+sequenceNumber);
 								//Relatrix.transactionCommit();
-								DatabaseManager.commitTransaction(xid);
+								session.commit(xid);
 								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
 									System.exit(0);
 							}
 						}
 					}
-		        } catch (IOException e) {
-		        	System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
-		        	e.printStackTrace();
-		        }
+				} catch (IOException e) {
+					System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
+					e.printStackTrace();
+				}
 			}
 		}, "VIDEORECORDER");
-		
+
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
 		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
-		@Override
-		public void onNewMessage(stereo_msgs.StereoImage img) {
-			long slew = System.currentTimeMillis() - time1;
-			if( SAMPLERATE && slew >= 1000) {
-				time1 = System.currentTimeMillis();
-				System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
-				lastSequenceNumber = sequenceNumber;
-			}		
-			synchronized(mutex) {
+			@Override
+			public void onNewMessage(stereo_msgs.StereoImage img) {
+				long slew = System.currentTimeMillis() - time1;
+				if( SAMPLERATE && slew >= 1000) {
+					time1 = System.currentTimeMillis();
+					System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
+					lastSequenceNumber = sequenceNumber;
+				}		
+				synchronized(mutex) {
 					cbl = img.getData();
 					bufferl = cbl.array(); // 3 byte BGR
 					cbr = img.getData2();
 					bufferr = cbr.array(); // 3 byte BGR
-			}
-			latch.countDown();
-			latch = new CountDownLatch(1);
-			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
-			//if( DEBUG ) {
-			//	System.out.println("New image set #"+sequenceNumber+" - "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
-			//}
-			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
-			//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
-			/*
+				}
+				latch.countDown();
+				latch = new CountDownLatch(1);
+				//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
+				//if( DEBUG ) {
+				//	System.out.println("New image set #"+sequenceNumber+" - "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
+				//}
+				//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
+				//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
+				/*
 			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
 			WritableRaster raster = (WritableRaster) image.getRaster();
 			int ibsize = img.getHeight() * img.getWidth();
@@ -218,12 +210,12 @@ public class VideoRecorderStereo extends AbstractNodeMain
 			}
 			//System.out.println(ibuf.length+" "+raster.getWidth()+" "+raster.getHeight()+" "+raster.getMinX()+" "+raster.getMinY());
 		    raster.setPixels(0, 0, img.getWidth(), img.getHeight(), ibuf);
-			*/
-			
-			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
-		}
+				 */
+
+				++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+			}
 		});
-		
+
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
@@ -231,11 +223,11 @@ public class VideoRecorderStereo extends AbstractNodeMain
 					eulers = message.getOrientationCovariance();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 					//if(DEBUG)
-						//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+					//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
 				}
 			}
 		});	
-		
+
 	}
 	
 	boolean imageDiff() {

@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.test;
 
+import java.io.IOException;
+
 import org.apache.commons.logging.Log;
 import org.ros.Topics;
 import org.ros.concurrent.CancellableLoop;
@@ -7,6 +9,8 @@ import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
+
+import com.neocoretechs.relatrix.client.RelatrixClient;
 
 import std_msgs.Time;
 
@@ -18,7 +22,7 @@ import std_msgs.Time;
  */
 public class LogPubTester extends AbstractNodeMain  {
 	private boolean DEBUG = true;
-
+	RelatrixClient client;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -46,6 +50,12 @@ public class LogPubTester extends AbstractNodeMain  {
 		@Override
 		protected void setup() {
 			sequenceNumber = 0;
+			try {
+				connectedNode.getRelatrixClient();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 
 		@Override
