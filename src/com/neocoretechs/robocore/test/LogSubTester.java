@@ -1,6 +1,8 @@
 package com.neocoretechs.robocore.test;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import org.ros.Topics;
 import org.ros.concurrent.CancellableLoop;
@@ -10,7 +12,8 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.relatrix.client.RelatrixClientTransaction;
+import com.neocoretechs.relatrix.Relation;
+import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.rocksack.TransactionId;
 
 
@@ -21,7 +24,7 @@ import com.neocoretechs.rocksack.TransactionId;
  */
 public class LogSubTester extends AbstractNodeMain  {
 	private boolean DEBUG = true;
-	private RelatrixClientTransaction rct;
+	private AsynchRelatrixClientTransaction rct;
 	private TransactionId xid;
 	
 	@Override
@@ -45,9 +48,10 @@ public class LogSubTester extends AbstractNodeMain  {
 			@Override
 			public void onNewMessage(rosgraph_msgs.Log message) {
 				System.out.println(message);
+				CompletableFuture<Relation> r = rct.store(xid,System.currentTimeMillis(), message.getLine(),message.getMsg());
 				try {
-					rct.store(xid,System.currentTimeMillis(), message.getLine(),message.getMsg());
-				} catch (IOException e) {
+					r.get();
+				} catch (InterruptedException | ExecutionException e) {
 					e.printStackTrace();
 				}
 			}

@@ -10,8 +10,6 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 
-import com.neocoretechs.relatrix.client.RelatrixClient;
-
 import std_msgs.Time;
 
 
@@ -22,7 +20,6 @@ import std_msgs.Time;
  */
 public class LogPubTester extends AbstractNodeMain  {
 	private boolean DEBUG = true;
-	RelatrixClient client;
 	
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -50,18 +47,11 @@ public class LogPubTester extends AbstractNodeMain  {
 		@Override
 		protected void setup() {
 			sequenceNumber = 0;
-			try {
-				connectedNode.getRelatrixClient();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
 		}
 
 		@Override
 		protected void loop() throws InterruptedException {
-			//log.info(connectedNode.getName()+" "+sequenceNumber);
-			
+			//log.info(connectedNode.getName()+" "+sequenceNumber);		
 			std_msgs.Header imghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 			imghead.setSeq(sequenceNumber);
 			org.ros.message.Time tst = connectedNode.getCurrentTime();

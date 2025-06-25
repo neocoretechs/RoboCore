@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -12,7 +14,8 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.relatrix.client.RelatrixClientTransaction;
+import com.neocoretechs.relatrix.Relation;
+import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.rocksack.TransactionId;
 
@@ -59,7 +62,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	int commitRate = 500;
 	TransactionId xid;
 	CountDownLatch latch;
-	RelatrixClientTransaction session = null;
+	AsynchRelatrixClientTransaction session = null;
 
 	static {
 		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDER"});
@@ -128,35 +131,35 @@ public class VideoRecorderStereo extends AbstractNodeMain
 			public void run() {
 				if(DEBUG)
 					System.out.println("Entering storage loop");
-				try {
-					while(shouldStore) {
+				while(shouldStore) {
+					try {
+						latch.await();
+					} catch (InterruptedException e) {
+						shouldStore = false;
+					}
+					synchronized(mutex) {
+						if(!imageDiff())
+							continue;
+						StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
+						//try {
+						//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
+						CompletableFuture<Relation> r = session.store(xid,System.currentTimeMillis(),sequenceNumber,sib);
 						try {
-							latch.await();
-						} catch (InterruptedException e) {
-							shouldStore = false;
+							r.get();
+						} catch (InterruptedException | ExecutionException e) {
+							e.printStackTrace();
 						}
-						synchronized(mutex) {
-							if(!imageDiff())
-								continue;
-							StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
-							//try {
-							//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
-							session.store(xid,System.currentTimeMillis(),sequenceNumber,sib);
-							//} catch (DuplicateKeyException e) {
-							// if within 1 ms, rare but occurs
-							//}
-							if(sequenceNumber%commitRate == 0) {
-								System.out.println("Committing at sequence "+sequenceNumber);
-								//Relatrix.transactionCommit();
-								session.commit(xid);
-								if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
-									System.exit(0);
-							}
+						//} catch (DuplicateKeyException e) {
+						// if within 1 ms, rare but occurs
+						//}
+						if(sequenceNumber%commitRate == 0) {
+							System.out.println("Committing at sequence "+sequenceNumber);
+							//Relatrix.transactionCommit();
+							session.commit(xid);
+							if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
+								System.exit(0);
 						}
 					}
-				} catch (IOException e) {
-					System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
-					e.printStackTrace();
 				}
 			}
 		}, "VIDEORECORDER");

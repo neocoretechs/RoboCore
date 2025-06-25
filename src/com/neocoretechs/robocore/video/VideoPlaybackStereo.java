@@ -17,6 +17,8 @@ import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.util.Date;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
 import javax.imageio.ImageIO;
@@ -27,8 +29,7 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
-import com.neocoretechs.relatrix.client.RelatrixClient;
-import com.neocoretechs.relatrix.client.RelatrixClientTransaction;
+import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.relatrix.client.RemoteStream;
 import com.neocoretechs.rocksack.TransactionId;
 
@@ -45,7 +46,7 @@ import com.neocoretechs.rocksack.TransactionId;
 public class VideoPlaybackStereo  {
 	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-	public static RelatrixClientTransaction rkvc;
+	public static AsynchRelatrixClientTransaction rkvc;
 	public static TransactionId xid;
     private static BufferedImage imagel = null;
     private static BufferedImage imager = null;
@@ -82,7 +83,7 @@ public class VideoPlaybackStereo  {
 				System.out.println("usage: java com.neocoretechs.robocore.video.VideoPlaybackStereo [local node] [remote node] [server port] <previous hours to display>");
 				System.exit(1);
 			}
-			rkvc = new RelatrixClientTransaction(args[0], args[1], Integer.parseInt(args[2]));
+			rkvc = new AsynchRelatrixClientTransaction(args[0], args[1], Integer.parseInt(args[2]));
 			xid = rkvc.getTransactionId();
 		} catch (IOException e2) {
 			throw new RuntimeException(e2);
@@ -119,20 +120,26 @@ public class VideoPlaybackStereo  {
 				} catch (InterruptedException e) {}
 		//}
 		
-		try {	
-		    Stream stream;
+		try {
+			CompletableFuture<Stream> sstream;
+		    Stream stream = null;
 		    if(args.length == 4) {
 		    	long ptimh = Long.parseLong(args[3]);
 		    	long ptim = System.currentTimeMillis() - (ptimh*3600000L);
-		    	Long lastTim = (Long)rkvc.lastKey(xid,Long.class);
+		    	CompletableFuture<Object> r = rkvc.lastKey(xid,Long.class);
+		    	Long lastTim = (Long) r.get();
 		    	//long ptim = (ptimh*3600000L);
 		    	//Long firstTim = (Long)rkvc.firstKey(Long.class);
 		    	System.out.println("From:"+new Date(ptim)+" To:"+new Date(lastTim));
-		    	stream = rkvc.findSubStream(xid, '*', Integer.class, '?',ptim,lastTim);
+		    	sstream = rkvc.findSubStream(xid, '*', Integer.class, '?',ptim,lastTim);
 		    } else {
-		    	stream =  rkvc.findStream(xid,'?', '?', '?');
+		    	sstream =  rkvc.findStream(xid,'?', '?', '?');
 		    }
-		    
+		    try {
+				stream = sstream.get();
+			} catch (InterruptedException | ExecutionException e2) {
+				e2.printStackTrace();
+			}
 		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
 			//Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),
 		    //		Collectors.groupingBy(d -> d[1].toString(), 
@@ -226,7 +233,7 @@ public class VideoPlaybackStereo  {
 				//}
 		});
 		System.out.println("End of retrieval. sequence="+sequenceNumber);
-		} catch(IllegalArgumentException | IOException iae) {
+		} catch(IllegalArgumentException | InterruptedException | ExecutionException iae) {
 			iae.printStackTrace();
 			return;
 		}
