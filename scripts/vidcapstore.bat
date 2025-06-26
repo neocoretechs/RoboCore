@@ -1,0 +1,1 @@
+java -cp \Progra~1\apache\apache-tomcat\lib\RoboCore.jar;\Progra~1\apache\apache-tomcat\lib\BigSack.jar;\Progra~1\apache\apache-tomcat\lib\Relatrix.jar;\Progra~1\apache\apache-tomcat\lib\v4l4j.jar com.neocoretechs.robocore.video.VidCapAndStoreStereo %1 %2 %3

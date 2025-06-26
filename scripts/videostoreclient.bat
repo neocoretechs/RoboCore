@@ -1,0 +1,1 @@
+rosrun com.neocoretechs.robocore.video.VideoRecorderStereoClient 192.168.8.144 IMU
