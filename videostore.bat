@@ -1,1 +1,0 @@
-rosrun com.neocoretechs.robocore.video.VideoRecorderStereo 192.168.8.144 192.168.8.101

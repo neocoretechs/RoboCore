@@ -58,6 +58,7 @@ public class LogPubTester extends AbstractNodeMain  {
 			imghead.setStamp(tst);
 			imghead.setFrameId(tst.toString());
 			rosgraph_msgs.Log logmess = logpub.newMessage();
+			logmess.setMsg("Sequence number:"+sequenceNumber);
 			logmess.setHeader(imghead);
 			logpub.publish(logmess);
 			sequenceNumber++;  	
