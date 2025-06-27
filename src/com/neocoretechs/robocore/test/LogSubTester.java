@@ -47,13 +47,13 @@ public class LogSubTester extends AbstractNodeMain  {
 		subslog.addMessageListener(new MessageListener<rosgraph_msgs.Log>() {
 			@Override
 			public void onNewMessage(rosgraph_msgs.Log message) {
-				System.out.println("Store:"+xid+" "+message.getLine()+" "+message.getMsg());
-				CompletableFuture<Relation> r = rct.store(xid,System.currentTimeMillis(), message.getLine(),message.getMsg());
-				//try {
-				//	r.get();
-				//} catch (InterruptedException | ExecutionException e) {
-				//	e.printStackTrace();
-				//}
+				System.out.println("Store:"+xid+" "+message.getHeader().getStamp()+" "+message.getHeader().getSeq()+" "+message.getMsg());
+				CompletableFuture<Relation> r = rct.store(xid,message.getHeader().getStamp(), message.getHeader().getSeq(),message.getMsg());
+				try {
+					r.get();
+				} catch (InterruptedException | ExecutionException e) {
+					e.printStackTrace();
+				}
 			}
 
 		});

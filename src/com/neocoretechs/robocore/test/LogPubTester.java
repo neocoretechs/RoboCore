@@ -62,7 +62,7 @@ public class LogPubTester extends AbstractNodeMain  {
 			logmess.setHeader(imghead);
 			logpub.publish(logmess);
 			sequenceNumber++;  	
-			Thread.sleep(100);		
+			//Thread.sleep(100);		
 		}
 	});
 	}
