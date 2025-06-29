@@ -177,7 +177,7 @@ public class ControlPad extends JPanel {
             	  break;
               case 1:
           		try {
-          		 FileWriter fos = new FileWriter("/home/jg/coords");
+          		 FileWriter fos = new FileWriter("/home/coords");
           		 fos.write(String.valueOf(leftWheelSpeed)+","+String.valueOf(rightWheelSpeed));
           		 fos.flush();fos.close();
           		} catch (IOException e1) {
@@ -187,7 +187,7 @@ public class ControlPad extends JPanel {
           		break;
               case 2:
            		try {
-             		 FileWriter fos = new FileWriter("/home/jg/coords");
+             		 FileWriter fos = new FileWriter("/home/coords");
              		 fos.write(String.valueOf(leftWheelSpeed)+","+String.valueOf(rightWheelSpeed));
              		 fos.flush();fos.close();
              	} catch (IOException e1) {
