@@ -721,7 +721,7 @@ public class AsynchDemuxer implements Runnable {
     		if( sindex != -1 && sindex+1 < readLine.length() ) {
     			String rnum = readLine.substring(sindex+1);
     			try {
-    				return new Double(rnum).doubleValue();
+    				return Double.valueOf(rnum);
     			} catch(Exception e) {
     				System.out.println("AsynchDemux Cannot convert double value from:"+rnum);
     			}
@@ -736,7 +736,7 @@ public class AsynchDemuxer implements Runnable {
       		if( sindex != -1 && sindex+1 < readLine.length() ) {
       			String rnum = readLine.substring(sindex+1);
       			try {
-      				return new Integer(rnum).intValue();
+      				return Integer.valueOf(rnum);
       			} catch(Exception e) {
       				System.out.println("AsynchDemux Cannot convert integer value from:"+rnum);
       			}
@@ -768,7 +768,7 @@ public class AsynchDemuxer implements Runnable {
       			if( sindex != -1 && sindex+1 < readLine.length() ) {
       				String rnum = readLine.substring(0,sindex);
       				try {
-      					return new Integer(rnum).intValue();
+      					return Integer.valueOf(rnum);
       				} catch(Exception e) {
       					System.out.println("AsynchDemux Cannot convert Integer from:"+rnum);
       				}

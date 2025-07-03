@@ -45,9 +45,7 @@ import java.util.Iterator;
         public CircularBlockingDeque<MachineReading> get() { return machineReadings; }
 	
 		public void add(MachineReading entry) {
-			if(machineReadings.addLast(entry))
-				if(DEBUG)
-					System.out.println("WARNING: MachineBridge for "+group+" has overwritten its queue of size:"+machineReadings.length());
+			machineReadings.addLast(entry);
 		}
 		/**
 		 * Initialize the blocking queue to receive data for the associated topic.

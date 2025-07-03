@@ -129,17 +129,17 @@ public class JFBSlider extends JPanel implements ChangeListener {
         // Label the minimum (left limit)
         JLabel label = new JLabel(formatter.format(min));
         label.setFont(sliderFont);
-        labelStrings.put(new Integer(0), label);
+        labelStrings.put(Integer.valueOf(0), label);
 
         // Label the midpoint
         label = new JLabel(formatter.format((min + max)/2));
         label.setFont(sliderFont);
-        labelStrings.put(new Integer(steps/2), label);
+        labelStrings.put(Integer.valueOf(steps/2), label);
 
         // Label the maximum (right limit)
         label = new JLabel(formatter.format(max));
         label.setFont(sliderFont);
-        labelStrings.put(new Integer(steps), label);
+        labelStrings.put(Integer.valueOf(steps), label);
 
         /*
          * Install the labels on the slider, and turn them on.

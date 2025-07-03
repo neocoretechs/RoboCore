@@ -164,7 +164,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 						//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 						StereoscopicImageBytes sib = new StereoscopicImageBytes(lbyte, rbyte);
 						//try {
-						session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
+						session.store(Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), sib);
 						//session.put(sib);
 						//} catch (DuplicateKeyException e) {
 						// if within 1 ms, rare but occurs

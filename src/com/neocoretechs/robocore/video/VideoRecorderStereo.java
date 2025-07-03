@@ -142,7 +142,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 							continue;
 						StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
 						//try {
-						//Relatrix.transactionalStore(new Long(System.currentTimeMillis()), new Double(eulers[0]), sib);
+						//Relatrix.transactionalStore(Long.valueOf(System.currentTimeMillis()), new Double(eulers[0]), sib);
 						CompletableFuture<Relation> r = session.store(xid,System.currentTimeMillis(),sequenceNumber,sib);
 						try {
 							r.get();

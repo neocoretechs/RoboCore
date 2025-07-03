@@ -142,7 +142,7 @@ public class VidCapAndStoreStereo  {
         		if( DEBUG )
         				System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
         				StereoscopicImageBytes b = new StereoscopicImageBytes(bbL,bbR);
-        				rkvc.store(new Long(System.currentTimeMillis()),b);
+        				rkvc.store(Long.valueOf(System.currentTimeMillis()),b);
         				++commitCount;
         				if( DEBUG )
         					System.out.println("Pub. Image:"+sequenceNumber);	

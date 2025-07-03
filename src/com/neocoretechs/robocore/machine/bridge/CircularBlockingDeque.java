@@ -69,19 +69,19 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
    *          the entry to add
    * @return {@code true} if entry overwrote
    */
-  public boolean addLast(T entry) {
-	boolean overwrite = false;
+  public void addLast(T entry) {
+	//boolean overwrite = false;
     synchronized (mutex) {
       deque[(start + length) % limit] = entry;
       if (length == limit) {
         start = (start + 1) % limit;
-        overwrite = true;
+        //overwrite = true;
       } else {
         length++;
       }
       mutex.notify();
     }
-    return overwrite;
+    //return overwrite;
   }
 
   public boolean addLast(List<T> lentry) {
@@ -108,12 +108,12 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
    *          the entry to add
    * @return {@code true} if entry overwrote
    */
-  public boolean addFirst(T entry) {
-	boolean overwrite = false;
+  public void addFirst(T entry) {
+	//boolean overwrite = false;
     synchronized (mutex) {
       if (start - 1 < 0) {
         start = limit - 1;
-        overwrite = true;
+        //overwrite = true;
       } else {
         start--;
       }
@@ -123,7 +123,7 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
       }
       mutex.notify();
     }
-    return overwrite;
+    //return overwrite;
   }
 
   /**
@@ -277,7 +277,9 @@ public Object[] toArray(Object[] a) {
 
 @Override
 public boolean add(Object e) {
-	return addLast((T) e);
+	 if (length == limit) throw new IllegalStateException();
+	 addLast((T) e);
+	 return true;
 }
 
 @Override
@@ -457,7 +459,8 @@ public T peek() {
 public boolean offer(T e) {
 	if(length == limit)
 		return false;
-	return addLast(e);
+	addLast(e);
+	return true;
 }
 
 @Override

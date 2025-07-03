@@ -35,7 +35,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 /**
  * Connect to a remote Relatrix database server and store receive published video images  sent on the Ros bus from /stereo_msgs/StereoImage,
  * use the NPU to do object recognition, then handle the data.
- * The schema for the stored images is :session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
+ * The schema for the stored images is :session.store(Long.valueOf(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
  * Where sib is the {@link StereoscopicImageBytes} instance.
  * The function can use remapped command line param "__commitRate" int value, to change
  * the default of 100 images initiating a checkpoint transaction.<p/>
@@ -359,7 +359,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 										System.out.println("Pub. Image:"+sequenceNumber);
 									if(DATABASE_PORT > 0) {
 										StereoscopicImageBytes sib = new StereoscopicImageBytes(leftPayload, rightPayload);
-										session.store(new Long(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
+										session.store(Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), sib);
 									}
 								}
 							}
