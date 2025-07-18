@@ -17,6 +17,7 @@ import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
@@ -30,6 +31,7 @@ import javax.swing.SwingUtilities;
 
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
+import com.neocoretechs.relatrix.Result;
 import com.neocoretechs.relatrix.client.RemoteStream;
 import com.neocoretechs.rocksack.TransactionId;
 
@@ -153,12 +155,13 @@ public class VideoPlaybackStereo  {
 		    	//.forEach(g -> System.out.println("Element B:"+g));
 			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
 			//RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
-			stream.forEach(e -> {
+			stream.forEach(e2 -> {
 				// try to push frames in realtime, capped at 1 second max wait since we detect motion
 				// if the recorded time between the frames is longer than the realtime display, slow
 				// the display down to match the difference in recorded frame time to the difference in real time (capped at 1 sec).
 				// We want to avoid playing faster than realtime.
-					Long tim = (long)((Comparable[]) e)[0];
+				Result e = (Result)e2;
+					Long tim = (long)e.get(0);
 					if(timdiff == 0) {
 						timdiff = tim;
 						realtimdiff = System.currentTimeMillis();
@@ -181,10 +184,10 @@ public class VideoPlaybackStereo  {
 					timlast = tim;
 					realtimlast = System.currentTimeMillis();
 					//Entry e = (Entry) rkvc.next(it);
-					StereoscopicImageBytes sib = (StereoscopicImageBytes) ((Comparable[]) e)[2];
+					List<byte[]> sib = (List<byte[]>) e.get(2);
 					synchronized(mutex) {
-						bufferl = sib.getLeft(); // 3 byte BGR
-						bufferr = sib.getRight(); // 3 byte BGR	
+						bufferl = sib.get(0); // 3 byte BGR
+						bufferr = sib.get(1); // 3 byte BGR	
 						if( mode.equals("display")) {
 							try {
 								InputStream in = new ByteArrayInputStream(bufferl);
@@ -220,8 +223,8 @@ public class VideoPlaybackStereo  {
 
 	        			displayPanel1.setLastFrame((java.awt.Image)imagel);
 	        			displayPanel2.setLastFrame((java.awt.Image)imager);
-	    				displayPanel2.setComputedValues(String.valueOf(((Comparable[]) e)[1]), (long)((Comparable[]) e)[0],(double) 0);
-	        			displayPanel1.setComputedValues(String.valueOf(((Comparable[]) e)[1]), (long)((Comparable[]) e)[0], (double)0); // values from db for time, yaw
+	    				displayPanel2.setComputedValues(String.valueOf(e.get(1)), (long)e.get(0),(double) 0);
+	        			displayPanel1.setComputedValues(String.valueOf(e.get(1)), (long)e.get(0), (double)0); // values from db for time, yaw
 	        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 	        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 	        			displayPanel1.invalidate();
@@ -237,10 +240,8 @@ public class VideoPlaybackStereo  {
 			iae.printStackTrace();
 			return;
 		}
-		
-		} // run
 	
-		
+		} // run	
 	} // main
 
 	/**

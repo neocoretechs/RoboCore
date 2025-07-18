@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import org.ros.concurrent.CancellableLoop;
@@ -18,7 +19,7 @@ import org.ros.node.topic.Subscriber;
 
 
 import com.neocoretechs.relatrix.client.RelatrixClient;
-
+import com.neocoretechs.relatrix.key.NoIndex;
 import com.neocoretechs.rknn4j.RKNN;
 import com.neocoretechs.rknn4j.rknn_input_output_num;
 import com.neocoretechs.rknn4j.rknn_output;
@@ -36,7 +37,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  * Connect to a remote Relatrix database server and store receive published video images  sent on the Ros bus from /stereo_msgs/StereoImage,
  * use the NPU to do object recognition, then handle the data.
  * The schema for the stored images is :session.store(Long.valueOf(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
- * Where sib is the {@link StereoscopicImageBytes} instance.
+ * Where sib is the NoIndex instance.
  * The function can use remapped command line param "__commitRate" int value, to change
  * the default of 100 images initiating a checkpoint transaction.<p/>
  * Image storage must be stopped and started via the service at uri cmd_store. The payload of the
@@ -358,8 +359,10 @@ public class VideoObjectRecog extends AbstractNodeMain
 									if( DEBUG )
 										System.out.println("Pub. Image:"+sequenceNumber);
 									if(DATABASE_PORT > 0) {
-										StereoscopicImageBytes sib = new StereoscopicImageBytes(leftPayload, rightPayload);
-										session.store(Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), sib);
+										List<byte[]> sib = new ArrayList<byte[]>();
+										sib.add(leftPayload);
+										sib.add(rightPayload);
+										session.store(Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), NoIndex.create(sib));
 									}
 								}
 							}

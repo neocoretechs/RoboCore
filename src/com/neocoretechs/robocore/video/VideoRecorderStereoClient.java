@@ -6,7 +6,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
@@ -23,6 +24,7 @@ import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.Result;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
+import com.neocoretechs.relatrix.key.NoIndex;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -162,9 +164,11 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 						//if(DEBUG)
 						//	System.out.println("JPG buffers to DB size ="+bl.length+" "+br.length);
 						//StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
-						StereoscopicImageBytes sib = new StereoscopicImageBytes(lbyte, rbyte);
+						List<byte[]> sib = new ArrayList<byte[]>();
+						sib.add(lbyte);
+						sib.add(rbyte);
 						//try {
-						session.store(Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), sib);
+						session.store(Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), NoIndex.create(sib));
 						//session.put(sib);
 						//} catch (DuplicateKeyException e) {
 						// if within 1 ms, rare but occurs

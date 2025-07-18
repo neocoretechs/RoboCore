@@ -2,7 +2,8 @@ package com.neocoretechs.robocore.video;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -16,6 +17,7 @@ import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.relatrix.Relation;
 import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
+import com.neocoretechs.relatrix.key.NoIndex;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.rocksack.TransactionId;
 
@@ -140,10 +142,12 @@ public class VideoRecorderStereo extends AbstractNodeMain
 					synchronized(mutex) {
 						if(!imageDiff())
 							continue;
-						StereoscopicImageBytes sib = new StereoscopicImageBytes(bufferl, bufferr);
+						List<byte[]> sib = new ArrayList<byte[]>();
+						sib.add(bufferl);
+						sib.add(bufferr);
 						//try {
 						//Relatrix.transactionalStore(Long.valueOf(System.currentTimeMillis()), new Double(eulers[0]), sib);
-						CompletableFuture<Relation> r = session.store(xid,System.currentTimeMillis(),sequenceNumber,sib);
+						CompletableFuture<Relation> r = session.store(xid,System.currentTimeMillis(),sequenceNumber,NoIndex.create(sib));
 						try {
 							r.get();
 						} catch (InterruptedException | ExecutionException e) {

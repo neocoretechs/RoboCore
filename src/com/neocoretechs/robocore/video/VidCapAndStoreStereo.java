@@ -1,7 +1,7 @@
 package com.neocoretechs.robocore.video;
 
 import java.io.IOException;
-
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
 
@@ -141,7 +141,9 @@ public class VidCapAndStoreStereo  {
         		}
         		if( DEBUG )
         				System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
-        				StereoscopicImageBytes b = new StereoscopicImageBytes(bbL,bbR);
+        				List<byte[]> b = new ArrayList<byte[]>();
+        				b.add(bbL);
+        				b.add(bbR);
         				rkvc.store(Long.valueOf(System.currentTimeMillis()),b);
         				++commitCount;
         				if( DEBUG )
