@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.ros.concurrent.CancellableLoop;
+import org.ros.internal.message.Message;
 import org.ros.message.MessageListener;
 import org.ros.message.Time;
 import org.ros.namespace.GraphName;
@@ -17,8 +18,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
-
-import com.neocoretechs.relatrix.client.RelatrixClient;
+import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.relatrix.key.NoIndex;
 import com.neocoretechs.rknn4j.RKNN;
 import com.neocoretechs.rknn4j.rknn_input_output_num;
@@ -32,6 +32,10 @@ import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+import com.neocoretechs.rocksack.Alias;
+import com.neocoretechs.rocksack.TransactionId;
+
+import stereo_msgs.StereoImage;
 
 /**
  * Connect to a remote Relatrix database server and store receive published video images  sent on the Ros bus from /stereo_msgs/StereoImage,
@@ -51,7 +55,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
-
+	AsynchRelatrixClientTransaction session = null;
+	TransactionId xid = null;
+	Alias tensorAlias = null;
     private static Object mutex = new Object();
 
     ByteBuffer cbl;
@@ -75,13 +81,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	long time1 = System.currentTimeMillis();
 	long time2 = System.currentTimeMillis();
 	protected static boolean shouldStore = true;
-	private static String STORE_SERVICE = "cmd_store";
 	private static int MAXIMUM = 0;
 	int commitRate = 500;
-	public static String DATABASE = null;
-	public static int DATABASE_PORT = 0;
-	RelatrixClient session = null;
-	//
 	
 	// NPU constants
 	long ctx; // context for NPU
@@ -128,10 +129,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 	public void onStart(final ConnectedNode connectedNode) {
 
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-		if( remaps.containsKey("__database") )
-			DATABASE = remaps.get("__database");
-		if( remaps.containsKey("__databasePort") )
-			DATABASE_PORT = Integer.parseInt(remaps.get("__databasePort"));
 		if( remaps.containsKey("__commitRate") )
 			commitRate = Integer.parseInt(remaps.get("__commitRate"));
 		if( remaps.containsKey("__modelDir") )
@@ -147,11 +144,24 @@ public class VideoObjectRecog extends AbstractNodeMain
 		try {
 			//initialize the NPU with the proper model file
 			initNPU(MODEL_DIR+MODEL_FILE);
-			//System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE+" PORT:"+DATABASE_PORT);
-			//session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
 		} catch (IOException e2) {
-			//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
 			throw new RuntimeException(e2);
+		}
+		try {
+			session = connectedNode.getRelatrixClient();
+			//dbClient.setTablespace("D:/etc/Relatrix/db/test/ai");
+			//try {
+				xid = session.getTransactionId();
+			//} catch (IllegalAccessException | ClassNotFoundException e) {}
+			//tensorAlias = new Alias("Tensors");
+			//try {
+			//	if(dbClient.getAlias(tensorAlias).get() == null)
+			//		dbClient.setRelativeAlias(tensorAlias);
+			//} catch(ExecutionException | InterruptedException ie) {}
+			if(DEBUG)
+				System.out.println("Relatrix transaction Id:"+xid);
+		} catch(IOException ioe) {
+			ioe.printStackTrace();
 		}
 		final Subscriber<sensor_msgs.Imu> subsimu = 
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
@@ -161,48 +171,36 @@ public class VideoObjectRecog extends AbstractNodeMain
 		final Publisher<stereo_msgs.StereoImage> imgpub =
 				connectedNode.newPublisher("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
 
-		if(detectAndStore != null)
-				imgpubstore = connectedNode.newPublisher("/stereo_msgs/StereoImageStore", stereo_msgs.StereoImage._TYPE);
-		
-		if(DATABASE_PORT > 0) {
-			try {
-				System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE+" PORT:"+DATABASE_PORT);
-				session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
-			} catch (IOException e2) {
-				//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
-				throw new RuntimeException(e2);
-			}
-		}
 		/**
 		 * Image extraction from bus, then image processing, then on to display section.
 		 */
 		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
-		@Override
-		public void onNewMessage(stereo_msgs.StereoImage img) {
-			long slew = System.currentTimeMillis() - time2;
-			if( SAMPLERATE && slew >= 1000) {
-				time2 = System.currentTimeMillis();
-				System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
-				lastSequenceNumber2 = sequenceNumber2;
-			}	
-			//try {
+			@Override
+			public void onNewMessage(stereo_msgs.StereoImage img) {
+				long slew = System.currentTimeMillis() - time2;
+				if( SAMPLERATE && slew >= 1000) {
+					time2 = System.currentTimeMillis();
+					System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
+					lastSequenceNumber2 = sequenceNumber2;
+				}	
+				//try {
 				//synchronized(mutex) {
-					ByteBuffer cbl = img.getData();
-					byte[] bufferl = cbl.array(); // 3 byte BGR
-					ByteBuffer cbr = img.getData2();
-					byte[] bufferr = cbr.array(); // 3 byte BGR
-					lbqueue.add(bufferl);
-					rbqueue.add(bufferr);
+				ByteBuffer cbl = img.getData();
+				byte[] bufferl = cbl.array(); // 3 byte BGR
+				ByteBuffer cbr = img.getData2();
+				byte[] bufferr = cbr.array(); // 3 byte BGR
+				lbqueue.add(bufferl);
+				rbqueue.add(bufferr);
 				//}
-	
-			/*} catch (IllegalAccessException | IOException e) {
+
+				/*} catch (IllegalAccessException | IOException e) {
 				System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
 				e.printStackTrace();
 				shouldStore = false;
 			}
-			*/
-			++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
-		}
+				 */
+				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
+			}
 		});
 
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
@@ -264,115 +262,37 @@ public class VideoObjectRecog extends AbstractNodeMain
 					System.out.println(sequenceNumber+":Added frame ");
 				
 				//synchronized(mutex) {
-					byte[] leftPayload = null;
-					byte[] rightPayload = null;
-					leftPayload = limage.detectionsToJPEGBytes(ldrg);
-					rightPayload = rimage.detectionsToJPEGBytes(rdrg);
-
-					if(leftPayload != null && rightPayload != null) {
+					byte[] leftPayload = ldrg.toJson().getBytes();
+					byte[] rightPayload = rdrg.toJson().getBytes();
+					//leftPayload = limage.detectionsToJPEGBytes(ldrg);
+					//rightPayload = rimage.detectionsToJPEGBytes(rdrg);
+					//storeImage(ldrg, rdrg, leftPayload, rightPayload, imagemess, sequenceNumber);
+					//if(leftPayload != null && rightPayload != null) {
 						// for image resize back to 640x480
-						if(RESIZE_TO_ORIG) {
-							try {
-								leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-								rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-							} catch(Exception e) {
-								e.printStackTrace();
-							}
-						}
+						//if(RESIZE_TO_ORIG) {
+							//try {
+							//	leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+							//	rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+							//} catch(Exception e) {
+							//	e.printStackTrace();
+							//}
+						//}
 						imagemess.setData(ByteBuffer.wrap(leftPayload));
 						imagemess.setData2(ByteBuffer.wrap(rightPayload));
-						imagemess.setEncoding("JPG");
+						//imagemess.setEncoding("JPG");
+						imagemess.setEncoding("TXT");
 						imagemess.setWidth(dimsImage[0]);
 						imagemess.setHeight(dimsImage[1]);
 						imagemess.setStep(dimsImage[0]);
 						imagemess.setIsBigendian((byte)0);
 						imagemess.setHeader(imghead);
 						imgpub.publish(imagemess);
-						//
-						// see if we send this detection to storage channel as well
-						//
-						//boolean sendl = false;
-						//boolean sendr = false;
-						//float areal = 0.0f;
-						//float arear = 0.0f;
-						//float xlmin = 0.0f;
-						//float xlmax = 0.0f;
-						//float xrmin = 0.0f;
-						//float xrmax = 0.0f;
-						if(imgpubstore != null) {
-							ArrayList<Rectangle> leftBox = new ArrayList<Rectangle>();
-							ArrayList<Rectangle> rightBox = new ArrayList<Rectangle>();
-							for(detect_result dr: ldrg.getResults()) {
-								if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
-									float prob = dr.getProbability();
-									//xlmin = dr.getBox().xmin;
-									//xlmax = dr.getBox().xmax;
-									//areal = (dr.getBox().ymax-dr.getBox().ymin) * (xlmax-xlmin);
-									//if(prob > .4) {
-										//sendl = true;
-									if(DEBUG)
-										System.out.println("L Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
-										//break;
-									//}
-									leftBox.add(dr.getBox());
-								}
-							}
-							if(leftBox.size() > 0) { // artifact?
-								for(detect_result dr: rdrg.getResults()) {
-									if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
-										float prob = dr.getProbability();
-										//xrmin = dr.getBox().xmin;
-										//xrmax = dr.getBox().xmax;
-										//arear = (dr.getBox().ymax-dr.getBox().ymin) * (xrmax-xrmin);
-										//if(prob > .4) {
-											//sendr = true;
-										if(DEBUG)
-											System.out.println("R Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
-											//break;
-										//}
-									}
-									rightBox.add(dr.getBox());
-								}
-							}
-							
-							//if(sendl && sendr)
-							//	System.out.println("person "+areal+" "+arear+" "+Math.abs(areal-arear));
-							//if(sendl && sendr && Math.abs(areal-arear) < (.1f * areal)) {
-							if(leftBox.size() > 0 && rightBox.size() > 0) { // possible correlation
-								Object[] outBoxes = correlateRegions(leftBox, rightBox);
-								for(int i = 0; i < outBoxes.length; i+=8) {
-									//float lmin = xlmin-xrmin;
-									//float lmax = xlmax-xrmax;
-									float lmin = ((Integer)outBoxes[i]).floatValue()-((Integer)outBoxes[i+4]).floatValue();
-									float lmax = ((Integer)outBoxes[i+2]).floatValue()-((Integer)outBoxes[i+6]).floatValue();
-									if(lmin <= 0)
-										lmin = .00001f;
-									if(lmax <= 0)
-										lmax = .00001f;
-									float z1 = (f*B)/(f*(B/lmin));
-									//float z2 = f*(B/lmax); disparity
-									float z2 = (f*B)/(f*(B/lmax));
-									// z= (f*B)/d
-									if(DEBUG)
-										System.out.println("Person "+i+" distance:"+z1+","+z2);
-									imgpubstore.publish(imagemess);
-									if( DEBUG )
-										System.out.println("Pub. Image:"+sequenceNumber);
-									if(DATABASE_PORT > 0) {
-										List<byte[]> sib = new ArrayList<byte[]>();
-										sib.add(leftPayload);
-										sib.add(rightPayload);
-										session.store(Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), NoIndex.create(sib));
-									}
-								}
-							}
-						}
-								
+	
 					//}	
 					//
 					imageReadyL = false;
 					imageReadyR = false;
-				}
+				//}
 				
 				//
 				//caminfomsg.setHeader(imghead);
@@ -397,7 +317,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	}
 	
 	/**
-	 * Correlate all left boxes to right boxes, if there is overlap of better then threshold, return coords in out array
+	 * Correlate all left boxes to right boxes, if there is overlap of better than threshold, return coords in out array
+	 * called by storeImage
 	 * @param lbox
 	 * @param rbox
 	 * @return Array of Integer objects
@@ -568,6 +489,87 @@ public class VideoObjectRecog extends AbstractNodeMain
 			System.out.println("Detected Result Group:"+drg);
 		return drg;
 		//m.destroy(ctx);
+	}
+	
+	public void storeImage(detect_result_group ldrg, detect_result_group rdrg, byte[] leftPayload, byte[] rightPayload, StereoImage imagemess, Integer sequenceNumber) {
+		//
+		// see if we send this detection to storage channel as well
+		//
+		//boolean sendl = false;
+		//boolean sendr = false;
+		//float areal = 0.0f;
+		//float arear = 0.0f;
+		//float xlmin = 0.0f;
+		//float xlmax = 0.0f;
+		//float xrmin = 0.0f;
+		//float xrmax = 0.0f;
+		if(imgpubstore != null) {
+			ArrayList<Rectangle> leftBox = new ArrayList<Rectangle>();
+			ArrayList<Rectangle> rightBox = new ArrayList<Rectangle>();
+			for(detect_result dr: ldrg.getResults()) {
+				if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
+					float prob = dr.getProbability();
+					//xlmin = dr.getBox().xmin;
+					//xlmax = dr.getBox().xmax;
+					//areal = (dr.getBox().ymax-dr.getBox().ymin) * (xlmax-xlmin);
+					//if(prob > .4) {
+						//sendl = true;
+					if(DEBUG)
+						System.out.println("L Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
+						//break;
+					//}
+					leftBox.add(dr.getBox());
+				}
+			}
+			if(leftBox.size() > 0) { // artifact?
+				for(detect_result dr: rdrg.getResults()) {
+					if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
+						float prob = dr.getProbability();
+						//xrmin = dr.getBox().xmin;
+						//xrmax = dr.getBox().xmax;
+						//arear = (dr.getBox().ymax-dr.getBox().ymin) * (xrmax-xrmin);
+						//if(prob > .4) {
+							//sendr = true;
+						if(DEBUG)
+							System.out.println("R Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
+							//break;
+						//}
+					}
+					rightBox.add(dr.getBox());
+				}
+			}
+			//if(sendl && sendr)
+			//	System.out.println("person "+areal+" "+arear+" "+Math.abs(areal-arear));
+			//if(sendl && sendr && Math.abs(areal-arear) < (.1f * areal)) {
+			if(leftBox.size() > 0 && rightBox.size() > 0) { // possible correlation
+				Object[] outBoxes = correlateRegions(leftBox, rightBox);
+				for(int i = 0; i < outBoxes.length; i+=8) {
+					//float lmin = xlmin-xrmin;
+					//float lmax = xlmax-xrmax;
+					float lmin = ((Integer)outBoxes[i]).floatValue()-((Integer)outBoxes[i+4]).floatValue();
+					float lmax = ((Integer)outBoxes[i+2]).floatValue()-((Integer)outBoxes[i+6]).floatValue();
+					if(lmin <= 0)
+						lmin = .00001f;
+					if(lmax <= 0)
+						lmax = .00001f;
+					float z1 = (f*B)/(f*(B/lmin));
+					//float z2 = f*(B/lmax); disparity
+					float z2 = (f*B)/(f*(B/lmax));
+					// z= (f*B)/d
+					if(DEBUG)
+						System.out.println("Person "+i+" distance:"+z1+","+z2);
+					imgpubstore.publish(imagemess);
+					if( DEBUG )
+						System.out.println("Pub. Image:"+sequenceNumber);
+					if(detectAndStore != null) {
+						List<byte[]> sib = new ArrayList<byte[]>();
+						sib.add(leftPayload);
+						sib.add(rightPayload);
+						session.store(xid, Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), NoIndex.create(sib));
+					}
+				}
+			}
+		}
 	}
 	/**
 	 * Generate Instance from raw JPEG image buffer with RGA
