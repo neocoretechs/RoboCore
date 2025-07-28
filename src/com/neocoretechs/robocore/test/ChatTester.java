@@ -1,6 +1,25 @@
 package com.neocoretechs.robocore.test;
 
+import java.awt.BorderLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
+
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+import javax.swing.text.DefaultEditorKit;
+import javax.swing.text.DefaultEditorKit.PasteAction;
+import javax.swing.Action;
 
 import org.apache.commons.logging.Log;
 import org.ros.Topics;
@@ -25,7 +44,11 @@ public class ChatTester extends AbstractNodeMain  {
 	public static final String USER_PROMPT = "/user_prompt";
 	public static final String ASSIST_PROMPT = "/assist_prompt";
 	public static final String LLM = "/model";
-	
+    JTextArea inputArea = null;
+    JTextArea outputArea = null;
+    Object mutex = new Object();
+    boolean pasting = false;
+    
 	@Override
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("chattest");
@@ -41,10 +64,68 @@ public class ChatTester extends AbstractNodeMain  {
 		final Publisher<std_msgs.String> chatpub =
 				connectedNode.newPublisher(USER_PROMPT, std_msgs.String._TYPE);
 		Subscriber<std_msgs.String> subschat = connectedNode.newSubscriber(LLM, std_msgs.String._TYPE);
+		CountDownLatch latch = new CountDownLatch(1);
+		SwingUtilities.invokeLater(new Runnable() {
+		    public void run() {  
+		        JFrame frame = new JFrame("Relatrix Chat Interface");
+		        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		        frame.setSize(800, 600);
+		        inputArea = new JTextArea();
+		        outputArea = new JTextArea();
+		        inputArea.setLineWrap(true);
+		        outputArea.setLineWrap(true);
+		        outputArea.setEditable(false);
+		        inputArea.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK), "copy");
+		        inputArea.getActionMap().put("copy", new DefaultEditorKit.CopyAction());
+		        inputArea.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_V, InputEvent.CTRL_DOWN_MASK), "paste");
+		        inputArea.getActionMap().put("paste", new DefaultEditorKit.PasteAction());
+		        inputArea.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_X, InputEvent.CTRL_DOWN_MASK), "cut");
+		        inputArea.getActionMap().put("cut", new DefaultEditorKit.CutAction());
+		        JScrollPane inputScroll = new JScrollPane(inputArea);
+		        JScrollPane outputScroll = new JScrollPane(outputArea);
+		        inputScroll.setBorder(BorderFactory.createTitledBorder("You"));
+		        outputScroll.setBorder(BorderFactory.createTitledBorder("Model"));
+		        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputScroll, outputScroll);
+		        splitPane.setResizeWeight(0.5);
+		        JButton submitButton = new JButton("Submit (Ctrl+Enter)");
+		        JButton exitButton = new JButton("Exit");
+
+		        submitButton.addActionListener(e -> {
+		            String userInput = inputArea.getText().trim();
+		            if (!userInput.isEmpty()) {
+		                //outputArea.setText("🧠 Responding to:\n" + userInput + "\n\n🔧");
+		            	inputArea.append("\n\n🧠");
+		            	outputArea.append("\n\n🔧");
+		                //inputArea.setText(""); // clear input
+		                synchronized(mutex) {
+		                	mutex.notify();
+		                }
+		            }
+		        });
+
+		        exitButton.addActionListener(e -> System.exit(0));
+
+		        // Add Ctrl+Enter key binding for Submit
+		        inputArea.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK), "submitText");
+		        inputArea.getActionMap().put("submitText", new AbstractAction() {
+		            public void actionPerformed(ActionEvent e) {
+		                submitButton.doClick();
+		            }
+		        });
+		        JPanel buttonPanel = new JPanel();
+		        buttonPanel.add(submitButton);
+		        buttonPanel.add(exitButton);
+		        frame.getContentPane().add(splitPane, BorderLayout.CENTER);
+		        frame.getContentPane().add(buttonPanel, BorderLayout.SOUTH);
+		        frame.setVisible(true);
+		        latch.countDown();
+		    }
+		});
+		
 		subschat.addMessageListener(new MessageListener<std_msgs.String>() {
 			@Override
 			public void onNewMessage(std_msgs.String message) {
-				System.out.println("<"+message.getData()+">");
+				outputArea.append(message.getData());
 			}
 		});
 		
@@ -66,11 +147,12 @@ public class ChatTester extends AbstractNodeMain  {
 		@Override
 		protected void loop() throws InterruptedException {
 			++sequenceNumber;
-			System.out.print("> ");
-			String s = in.nextLine();
-			std_msgs.String sm = chatpub.newMessage();
-			sm.setData(s);
-			chatpub.publish(sm);
+			synchronized(mutex) {
+				mutex.wait();
+				std_msgs.String sm = chatpub.newMessage();
+				sm.setData(inputArea.getText().trim());
+				chatpub.publish(sm);
+			}
 		}
 	});
 	}

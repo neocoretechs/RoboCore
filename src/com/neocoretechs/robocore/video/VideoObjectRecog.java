@@ -280,7 +280,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 						imagemess.setData(ByteBuffer.wrap(leftPayload));
 						imagemess.setData2(ByteBuffer.wrap(rightPayload));
 						//imagemess.setEncoding("JPG");
-						imagemess.setEncoding("TXT");
+						imagemess.setEncoding("UTF8_JSON");
 						imagemess.setWidth(dimsImage[0]);
 						imagemess.setHeight(dimsImage[1]);
 						imagemess.setStep(dimsImage[0]);
