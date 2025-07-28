@@ -98,9 +98,6 @@ public class IMUPubs extends AbstractNodeMain  {
 		return GraphName.of("pubs_imu");
 	}
 
-
-
-
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 

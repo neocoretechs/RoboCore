@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.internal.message.Message;
@@ -38,16 +39,11 @@ import com.neocoretechs.rocksack.TransactionId;
 import stereo_msgs.StereoImage;
 
 /**
- * Connect to a remote Relatrix database server and store receive published video images  sent on the Ros bus from /stereo_msgs/StereoImage,
- * use the NPU to do object recognition, then handle the data.
- * The schema for the stored images is :session.store(Long.valueOf(System.currentTimeMillis()), new Integer(sequenceNumber), sib);
- * Where sib is the NoIndex instance.
- * The function can use remapped command line param "__commitRate" int value, to change
- * the default of 100 images initiating a checkpoint transaction.<p/>
- * Image storage must be stopped and started via the service at uri cmd_store. The payload of the
- * request is either "begin" or "end".<p/> 
- * Demonstrates how we can manipulate the image buffer to store images in the categorical database.<p/>
- * @author Jonathan Groff (C) NeoCoreTechs 2021
+ * Perform a series of data acquisition and sensor fusion operations by acting as subscriber to the topics of
+ * /stereo_msgs/ObjectDetect, /stereo_msgs/Imu and /sereo_msgs/StereoImage <p>
+ * Once fused, data is passed to the model runner for evaluation via the publishing loop.
+ * The internal TimedImage class performs a toJson on its images, timestamp and eulers angles.
+ * @author Jonathan Groff (C) NeoCoreTechs 2021,2025
  *
  */
 public class VideoObjectRecog extends AbstractNodeMain 
@@ -67,13 +63,11 @@ public class VideoObjectRecog extends AbstractNodeMain
     int[] prevBuffer = new int[0];
     static boolean imageReadyL = false;
     static boolean imageReadyR = false;
-    
-    static double eulers[] = new double[]{0.0,0.0,0.0};
    
 	String outDir = "/";
 	int frames = 0;
-    CircularBlockingDeque<byte[]> lbqueue = new CircularBlockingDeque<byte[]>(10);
-    CircularBlockingDeque<byte[]> rbqueue = new CircularBlockingDeque<byte[]>(10);
+    CircularBlockingDeque<TimedImage> queue = new CircularBlockingDeque<TimedImage>(30);
+  
 	public long sequenceNumber = 0;
 	public long sequenceNumber2 = 0;
 	private long lastSequenceNumber;
@@ -119,6 +113,93 @@ public class VideoObjectRecog extends AbstractNodeMain
 	static String threadGroup = "VIDEOCLIENT";
 	static {
 		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {threadGroup});
+	}
+	
+	final class TimedImage implements Comparable {
+		long sequence;
+		long time;
+		byte[] leftImage;
+		byte[] rightImage;
+		double eulers[] = new double[]{0.0,0.0,0.0};
+		public TimedImage(byte[] leftImage, byte[] rightImage, long sequence) {
+			this.leftImage = leftImage;
+			this.rightImage = rightImage;
+			this.sequence = sequence;
+			this.time = System.currentTimeMillis();
+		}
+		/**
+		 * Set time IMU data if it is a close enough match, if not, dont set erroneous data.
+		 * Lets consider 1 ms a good enough match. When we get new IMU data go through
+		 * the queue and set all eligible instances
+		 * @param time
+		 * @param eulers
+		 */
+		public void setIMU(long time, double[] eulers) {
+			if(this.time == time)
+				this.eulers = eulers;
+		}
+		public String toJson() throws IOException{
+			Instance rimage = createImage(rightImage);
+			detect_result_group rdrg = imageDiff(rimage);
+			imageReadyR = true;
+			Instance limage = createImage(leftImage);
+			detect_result_group ldrg = imageDiff(limage);
+			imageReadyL = true;
+			String slbuf = ldrg.toJson();
+			String srbuf = rdrg.toJson();
+			StringBuilder sb = new StringBuilder("{\r\n");
+			sb.append("\"timestamp\":");
+			sb.append(time);
+			sb.append(",\r\n");
+			if(eulers[0] != 0) {
+				sb.append("\"imu\":{\"heading\":");
+				sb.append(eulers[0]);
+				sb.append(",\"roll\":");
+				sb.append(eulers[1]);
+				sb.append(",\"pitch\":");
+				sb.append(eulers[2]);
+				sb.append("},\r\n");
+			}
+			sb.append("\"LeftImage\":[");
+			sb.append(slbuf);
+			sb.append("\r\n],\r\n\"RightImage\":[");
+			sb.append(srbuf);
+			sb.append("\r\n]");
+			return sb.toString();
+		}
+		@Override
+		public int compareTo(Object o) {
+			if(time > ((TimedImage)o).time)
+				return 1;
+			if(time < ((TimedImage)o).time)
+				return -1;
+			return 0;
+		}
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + getEnclosingInstance().hashCode();
+			result = prime * result + Objects.hash(time);
+			return result;
+		}
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (!(obj instanceof TimedImage)) {
+				return false;
+			}
+			TimedImage other = (TimedImage) obj;
+			if (!getEnclosingInstance().equals(other.getEnclosingInstance())) {
+				return false;
+			}
+			return time == other.time;
+		}
+		private VideoObjectRecog getEnclosingInstance() {
+			return VideoObjectRecog.this;
+		}
 	}
 	
 	@Override
@@ -172,7 +253,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				connectedNode.newPublisher("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
 
 		/**
-		 * Image extraction from bus, then image processing, then on to display section.
+		 * Image extraction from bus from StereoImage topic, then image processing, then pass to pipeline.
 		 */
 		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
 			@Override
@@ -183,37 +264,34 @@ public class VideoObjectRecog extends AbstractNodeMain
 					System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
 					lastSequenceNumber2 = sequenceNumber2;
 				}	
-				//try {
-				//synchronized(mutex) {
 				ByteBuffer cbl = img.getData();
 				byte[] bufferl = cbl.array(); // 3 byte BGR
 				ByteBuffer cbr = img.getData2();
 				byte[] bufferr = cbr.array(); // 3 byte BGR
-				lbqueue.add(bufferl);
-				rbqueue.add(bufferr);
-				//}
-
-				/*} catch (IllegalAccessException | IOException e) {
-				System.out.println("Storage failed for sequence number:"+sequenceNumber+" due to:"+e);
-				e.printStackTrace();
-				shouldStore = false;
-			}
-				 */
+				// sequenceNumber is the publishing number, it may repeat here if more images come in than are published
+				synchronized(mutex) {
+					queue.add(new TimedImage(bufferl, bufferr, sequenceNumber));
+				}
 				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
 			}
 		});
-
+		//
+		// update all TimedImage in the queue that match the current timestamp to 1 ms with the current
+		// IMU reading
+		//
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
 				synchronized(mutex) {
-					eulers = message.getOrientationCovariance();
-					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
-					//if(DEBUG)
-						//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+					double[] eulers = message.getOrientationCovariance();
+					long currentTime = System.currentTimeMillis();
+					queue.forEach(e->{
+						e.setIMU(currentTime, eulers);
+					});
 				}
 			}
-		});	
+		});
+
 	/**
 	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
 	 * mutex appropriate to establish critical sections. A sleep follows each publication to keep the bus arbitrated
@@ -236,86 +314,77 @@ public class VideoObjectRecog extends AbstractNodeMain
 			//sensor_msgs.Image imagemess = imgpub.newMessage();
 			//stereo_msgs.StereoImage imagemess = imgpub.newMessage();
 			stereo_msgs.StereoImage imagemess = connectedNode.getTopicMessageFactory().newFromType(stereo_msgs.StereoImage._TYPE);
-			/*
-			std_msgs.Header rimghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
-			rimghead.setSeq(sequenceNumber);
-			tst = connectedNode.getCurrentTime();
-			rimghead.setStamp(tst);
-			rimghead.setFrameId(tst.toString());
-			sensor_msgs.Image rimagemess = rimgpub.newMessage();
- 			*/
-			try {
-				byte[] rbuff = rbqueue.take();
-				byte[] lbuff = lbqueue.take();
-				Instance rimage = createImage(rbuff);
-				detect_result_group rdrg = imageDiff(rimage);
-				imageReadyR = true;
-				Instance limage = createImage(lbuff);
-				detect_result_group ldrg = imageDiff(limage);
-				imageReadyL = true;
-				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
-					time1 = System.currentTimeMillis();
-					System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/*+limage+" "+rimage*/);
-					lastSequenceNumber = sequenceNumber;
-				}
-				if( DEBUG )
-					System.out.println(sequenceNumber+":Added frame ");
-				
-				//synchronized(mutex) {
-					byte[] leftPayload = ldrg.toJson().getBytes();
-					byte[] rightPayload = rdrg.toJson().getBytes();
+
+			// publish all images in the queue sorted by time
+			// we have a circular deque, so we may have overwritten images at the head
+			// and/or out of order images inline.
+			ArrayList<TimedImage> imageArray = new ArrayList<>();
+			synchronized(mutex) {
+				queue.drainTo(imageArray);
+			}
+			// sort ascending timestamp for publication
+			imageArray.sort(null);
+			imageArray.forEach(e->{	
+				try {
+					if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
+						time1 = System.currentTimeMillis();
+						System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/*+limage+" "+rimage*/);
+						lastSequenceNumber = sequenceNumber;
+					}
+					if( DEBUG )
+						System.out.println(sequenceNumber+":Added frame ");
+					//synchronized(mutex) {
 					//leftPayload = limage.detectionsToJPEGBytes(ldrg);
 					//rightPayload = rimage.detectionsToJPEGBytes(rdrg);
 					//storeImage(ldrg, rdrg, leftPayload, rightPayload, imagemess, sequenceNumber);
 					//if(leftPayload != null && rightPayload != null) {
-						// for image resize back to 640x480
-						//if(RESIZE_TO_ORIG) {
-							//try {
-							//	leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-							//	rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-							//} catch(Exception e) {
-							//	e.printStackTrace();
-							//}
-						//}
-						imagemess.setData(ByteBuffer.wrap(leftPayload));
-						imagemess.setData2(ByteBuffer.wrap(rightPayload));
-						//imagemess.setEncoding("JPG");
-						imagemess.setEncoding("UTF8_JSON");
-						imagemess.setWidth(dimsImage[0]);
-						imagemess.setHeight(dimsImage[1]);
-						imagemess.setStep(dimsImage[0]);
-						imagemess.setIsBigendian((byte)0);
-						imagemess.setHeader(imghead);
-						imgpub.publish(imagemess);
-	
+					// for image resize back to 640x480
+					//if(RESIZE_TO_ORIG) {
+					//try {
+					//	leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+					//	rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+					//} catch(Exception e) {
+					//	e.printStackTrace();
+					//}
+					//}
+					imagemess.setData(ByteBuffer.wrap(e.toJson().getBytes()));
+					//imagemess.setEncoding("JPG");
+					imagemess.setEncoding("UTF8_JSON");
+					imagemess.setWidth(dimsImage[0]);
+					imagemess.setHeight(dimsImage[1]);
+					imagemess.setStep(dimsImage[0]);
+					imagemess.setIsBigendian((byte)0);
+					imagemess.setHeader(imghead);
+					imgpub.publish(imagemess);
 					//}	
 					//
 					imageReadyL = false;
 					imageReadyR = false;
-				//}
-				
-				//
-				//caminfomsg.setHeader(imghead);
-				//caminfomsg.setWidth(imwidth);
-				//caminfomsg.setHeight(imheight);
-				//caminfomsg.setDistortionModel("plumb_bob");
-				//caminfomsg.setK(K);
-				//caminfomsg.setP(P);
-				//caminfopub.publish(caminfomsg);
-				//System.out.println("Pub cam:"+imagemess);
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-				if(DEBUG)
-					System.out.println("Image(s) not ready "+sequenceNumber);
-				Thread.sleep(1);
-				++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
-			}
-			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+					//}
+					//
+					//caminfomsg.setHeader(imghead);
+					//caminfomsg.setWidth(imwidth);
+					//caminfomsg.setHeight(imheight);
+					//caminfomsg.setDistortionModel("plumb_bob");
+					//caminfomsg.setK(K);
+					//caminfomsg.setP(P);
+					//caminfopub.publish(caminfomsg);
+					//System.out.println("Pub cam:"+imagemess);
+				} catch (IOException ex) {
+					ex.printStackTrace();
+					if(DEBUG)
+						System.out.println("Image(s) not ready "+sequenceNumber);
+					try {
+						Thread.sleep(1);
+					} catch (InterruptedException e1) {}
+					++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
+				}
+				++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+			});
 		}
 	});
 	}
-	
+
 	/**
 	 * Correlate all left boxes to right boxes, if there is overlap of better than threshold, return coords in out array
 	 * called by storeImage
