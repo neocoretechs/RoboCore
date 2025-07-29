@@ -21,7 +21,6 @@ import com.pi4j.io.gpio.PinPullResistance;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.RaspiPin;
 
-import gnu.io.NoSuchPortException;
 
 /**
  * Use the Pi4J GPIO libraries to drive an ultrasonic range finder attached to GPIO pins 2 and 3 on the RasPi.
@@ -300,10 +299,10 @@ class UltraRead implements Runnable {
 		else
 			try {
 				usdp = UltrasonicSerialDataPort.getInstance(portName);
-			} catch (NoSuchPortException | IOException e1) {
-				e1.printStackTrace();
-				System.exit(1);
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
+	
 		while(shouldRun) {
 		try {
 			// Get the range
