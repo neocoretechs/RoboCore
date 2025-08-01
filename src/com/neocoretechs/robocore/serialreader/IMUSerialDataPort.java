@@ -1,6 +1,9 @@
 package com.neocoretechs.robocore.serialreader;
 
 import com.fazecast.jSerialComm.SerialPort;
+import com.fazecast.jSerialComm.SerialPortDataListener;
+import com.fazecast.jSerialComm.SerialPortEvent;
+import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -12,7 +15,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
@@ -25,14 +27,15 @@ public class IMUSerialDataPort implements DataPortInterface {
 	private static boolean PORTDEBUG = true;
 	private static boolean INFO = true;
 	private SerialPort serialPort;
-	private OutputStream outStream;
-	private InputStream inStream;
+	
+    private OutputStream outStream;
+    private InputStream inStream;
 	// serial settings
 	// PortSettings=115200,n,8,1
 	// On RasPi its /dev/ttyS0, on OdroidC2, ttyS0 is hardwired console so we use ttyS1 on header
 	// On C1 we have ttyS2 so basically, if we have ttyS2 use that, if we have a ttyS1, use it, otherwise, use ttyS0
 	// 
-	private static String portName = "/dev/ttyS0";
+	private static String portName = "/dev/ttyS1";
 	private static int baud = 115200;
 	private static int datab = 8;
 	private static int stopb = 1;
@@ -48,6 +51,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	private static int readBufferTail = 0;
 	private static int writeBufferHead = 0;
 	private static int writeBufferTail = 0;
+
 
 	private static volatile IMUSerialDataPort instance = null;
 	private static Object mutex = new Object();
@@ -192,10 +196,27 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public boolean isEOT() { return EOT; }
 
 	public void connect(boolean writeable) throws IOException {
-		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
+        SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
+		//getSerialPort();
+		SerialPort.allowPortOpenForEnumeration();
+		SerialPort.autoCleanupAtShutdown();
+		SerialPort.addShutdownHook(new Thread() { public void run() { System.out.println("\nRunning shutdown hook"); } });
 		serialPort = SerialPort.getCommPort(portName);
+		serialPort.allowElevatedPermissionsRequest();
+		boolean openedSuccessfully = serialPort.openPort(0);
+		System.out.println("\nOpening " + serialPort.getSystemPortName() + ": " + serialPort.getDescriptivePortName() + " - " + serialPort.getPortDescription() + ": " + (openedSuccessfully ? "Opened successfully!" : "FAILED!"));
+		if (!openedSuccessfully)
+		{
+			System.out.println("Error code was " + serialPort.getLastErrorCode() + " at Line " + serialPort.getLastErrorLocation());
+			return;
+		}
 		serialPort.setBaudRate(baud);
 		serialPort.setNumDataBits(datab);
+		serialPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
+		serialPort.clearDTR();
+		serialPort.clearRTS();
+		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 0, 0);
+		SerialPort.autoCleanupAtShutdown();
 		switch(stopb) {
 			case 1 -> serialPort.setNumStopBits(SerialPort.ONE_STOP_BIT);
 			case 2 -> serialPort.setNumStopBits(SerialPort.TWO_STOP_BITS);
@@ -205,37 +226,41 @@ public class IMUSerialDataPort implements DataPortInterface {
 			case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
 			case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
 		}
-
+		//serialPort.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 1000, 0);
 		// Open the input and output streams for the connection. If they won't
 		// open, close the port before throwing an exception.
-		inStream = serialPort.getInputStream();
-		if( inStream == null ) {
-			throw new IOException("Cant get InputStream for port "+portName);
-		}
-
-		//(new Thread(new SerialReader(inStream))).start();
-		SerialReader readThread = new SerialReader(inStream);
-		SynchronizedFixedThreadPoolManager.spin(readThread, "IMU"+portName);
-		while(!readThread.isRunning)
+		// give port time to config
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}
+        // Open the input and output streams for the connection. If they won't
+        // open, close the port before throwing an exception.
+        inStream = serialPort.getInputStream();
+        if( inStream == null ) {
+        	throw new IOException("Cant get InputStream for port "+portName);
+        }
+        
+        SerialReader readThread = new SerialReader(inStream);
+        SynchronizedFixedThreadPoolManager.spin(readThread, "IMU"+portName);
+        while(!readThread.isRunning)
 			try {
 				Thread.sleep(1);
 			} catch (InterruptedException e) {}
-
-
-		if( writeable) {
-			outStream = serialPort.getOutputStream();
-			if( outStream == null ) {
-				throw new IOException("Cant get OutputStream for port "+portName);
-			}
-			//(new Thread(new SerialWriter(outStream))).start();
-			SerialWriter writeThread = new SerialWriter(outStream);
-			SynchronizedFixedThreadPoolManager.spin(writeThread, "IMU"+portName);
-			while(!writeThread.isRunning)
+           
+        if( writeable) {
+            outStream = serialPort.getOutputStream();
+            if( outStream == null ) {
+            	throw new IOException("Cant get OutputStream for port "+portName);
+            }
+            //(new Thread(new SerialWriter(outStream))).start();
+            SerialWriter writeThread = new SerialWriter(outStream);
+            SynchronizedFixedThreadPoolManager.spin(writeThread, "IMU"+portName);
+            while(!writeThread.isRunning)
 				try {
 					Thread.sleep(1);
 				} catch (InterruptedException e) {}
-		}         
-
+        }
+	
 		//
 		// set up BNO055
 		// set config mode
@@ -244,7 +269,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		while(write(BNO055_PAGE_ID_ADDR, new byte[]{(byte)0x00}, true)) {
 			try {
 				Thread.sleep(100);
-			} catch (InterruptedException e) {}
+			} catch (InterruptedException er) {}
 		}
 		readChipId();
 		reset();
@@ -257,8 +282,22 @@ public class IMUSerialDataPort implements DataPortInterface {
 		} catch(FileNotFoundException fnfe) {}
 		setNormalPowerNDOFMode();
 		//reportCalibrationStatus();
-		if( PORTDEBUG ) 
-			System.out.println("Connected to "+portName+" and BNO055 IMU is ready!");
+		if( PORTDEBUG ) {
+			System.out.println("Connected to "+portName+" and BNO055 IMU is ready !"+stringSettings());
+		}
+	}
+	private SerialPort getSerialPort() {
+	    SerialPort[] serialPortList = SerialPort.getCommPorts();
+	    SerialPort preferredPort = null;
+	    for (SerialPort port : serialPortList) {
+	        String systemPortName = port.getSystemPortName();
+	        System.out.println("Existing Port:"+port+" System name: "+ systemPortName);
+	        if (systemPortName.equals("ttyS0") || systemPortName.equals("COM1")) {
+	            preferredPort = port;
+	            //break;
+	        }
+	    }
+	    return preferredPort;
 	}
 
 
@@ -284,16 +323,18 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public boolean write(byte address, byte[] data, boolean ack) throws IOException {
 		//if( Props.DEBUG ) System.out.println("write "+c);
 		// Build and send serial register write command.
-		write((byte) 0xAA); // Start byte
-		write((byte) 0x00);  // Write
-		write((byte) (address & 0xFF));
-		write((byte) (data.length & 0xFF));
-		for(int i = 0; i < data.length; i++) {
-			write((byte) (data[i] & 0xFF));
-		}
+			write((byte) 0xAA); // Start byte
+			write((byte) 0x00);  // Write
+			write((byte) (address & 0xFF));
+			write((byte) (data.length & 0xFF));
+			for(int i = 0; i < data.length; i++) {
+				write((byte) (data[i] & 0xFF));
+			}
 		if( ack ) {
 			byte resp;
 			while((resp = (byte)(read() & 0xFF)) == (byte)0xEE) {
+				if(DEBUG)
+					System.out.println("ack read 0xEE");
 				try {
 					Thread.sleep(1);
 				} catch (InterruptedException e) {}
@@ -325,51 +366,69 @@ public class IMUSerialDataPort implements DataPortInterface {
 				case((byte)0x0A):
 					throw new IOException(String.format("Error from write ACK:%02x RECEIVE_CHARACTER_TIMEOUT - decrease waiting time between sending of 2 bytes of 1 frame\r\n",resp));
 				default:
-					throw new IOException(String.format("UnknownError from write ACK:%02x\r\n",resp));
+					throw new IOException(String.format("Unknown Error from write ACK:%02x\r\n",resp));
 				}
 			}
-		}
-		if( DEBUG ) {
-			System.out.println("ACK successful");
+			if( DEBUG ) {
+				System.out.println("ACK successful");
+			}
+		} else {
+			if(DEBUG)
+				System.out.println("ACK skipped");
 		}
 		return false;
 	}
 
 	@Override
 	public void write(int c) throws IOException {
-		synchronized(writeMx) {
-			checkWriteBuffer();
-			writeBuffer[writeBufferTail++] = (byte)( c & 0xFF);
-			writeMx.notify();
-		}
+    	synchronized(writeMx) {
+    		checkWriteBuffer();
+    		writeBuffer[writeBufferTail++] = (byte)( c & 0xFF);
+       		writeMx.notify();
+    	}
 	}
-
-	private void checkWriteBuffer() {
-		synchronized(writeMx) {
-			if( writeBufferTail >= writeBuffer.length) {	
+	
+    private void checkWriteBuffer() {
+    	synchronized(writeMx) {
+    		if( writeBufferTail >= writeBuffer.length) {	
 				writeBufferTail = 0;
-			}
-		}
-	}
-
-	private void checkReadBuffer() {
-		synchronized(readMx) {
-			try {
-				if( readBufferHead == readBufferTail )
-					readMx.wait();
-				if( readBufferHead == readBuffer.length)
-					readBufferHead = 0;
-			} catch (InterruptedException e) {}
-		}
-	}
-
+    		}
+    	}
+    }
+    
+    private void checkReadBuffer() {
+    	synchronized(readMx) {
+    		try {
+    			if( readBufferHead == readBufferTail )
+    				readMx.wait();
+    			if( readBufferHead == readBuffer.length)
+    				readBufferHead = 0;
+    		} catch (InterruptedException e) {}
+    	}
+    }
+    
 	@Override
 	public int read() throws IOException {
-		synchronized(readMx) {
-			checkReadBuffer();
-			return readBuffer[readBufferHead++];
-		}
+    	synchronized(readMx) {
+    		checkReadBuffer();
+    		return readBuffer[readBufferHead++];
+    	}
 	}
+    
+	
+	byte[] ReadErrors = {
+		 0x02, 
+		 0x04,
+		 0x05, 
+		 0x06, 
+		 0x07, 
+		 0X08, 
+		 0x09, 
+		 0x0A};
+	
+	String[] ReadErrorMsg = { "READ_FAIL","REGMAP_INVALID_ADDRESS","REGMAP_WRITE_DISABLED","WRONG_START_BYTE","BUS_OVER_RUN_ERROR",
+			 "MAX_LENGTH_ERROR","MIN_LENGTH_ERROR", "RECEIVE_CHARACTER_TIMEOUT"};
+
 	/**
 	 * 0xEE - error, 0xBB - success
 	 * byte 2: returned from method, 0 if success
@@ -383,36 +442,38 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * 0x0A: RECEIVE_CHARACTER_TIMEOUT
 	 */
 	private byte signalRead(byte address, byte length) throws IOException {
-		//if( Props.DEBUG ) System.out.println("write "+c);
+		//if(DEBUG) 
+		//	System.out.println("signalRead:"+String.valueOf(address)+" len:"+length);
 		// Build and send serial register write command.
 		//if( DEBUG )
 		//	System.out.println("Setting up read registers from signalRead..");
-		write((byte) 0xAA); // Start byte
-		write((byte) 0x01);  // Read
-		write((byte) (address & 0xFF));
-		write((byte) (length & 0xFF));		
+			write((byte) 0xAA); // Start byte
+			write((byte) 0x01);  // Read
+			write((byte) (address & 0xFF));
+			write((byte) (length & 0xFF));
 		//if( DEBUG )
-		//		System.out.println("Reading response header in signalRead");
+		//	System.out.println("Reading response header in signalRead");
 		byte resp;
 		resp = (byte)( read() & 0xFF);
-		if( resp == (byte)0xBB )
+		if( resp == (byte)0xBB ) {
 			return 0;
+		}
 		// read fail is EE, otherwise confustion
-		//if( DEBUG )
-		//	System.out.println("Did NOT receive expected 0xBB response in signalRead");
 		if( resp != (byte)0xEE ) {
 			if(DEBUG)
-				System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte 'ee'\r\n", resp);
+				System.out.printf("Received unexpected response in signalRead: %02x while looking for error byte '0xEE'\r\n", resp);
 			return (byte)0x07; // lets call this bus overrun from chip
 		} else {
 			resp = (byte)( read() & 0xFF);
-			//if( DEBUG ) {
-			//	System.out.println("Recovered error code from signalRead");
-			//}
 		}
 		// should have the error code
-		if(DEBUG)
-			System.out.printf("Bad response from IMU: %02x\r\n",resp);
+		String err = "UNKNOWN";
+		for(int i = 0; i < ReadErrors.length; i++)
+			if(ReadErrors[i] == resp) {
+				err = ReadErrorMsg[i];
+				break;
+			}
+		System.out.printf("Error detected in IMU read, code: %02x %s\r\n",resp, err);
 		return resp;
 	}
 
@@ -443,6 +504,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 				Thread.sleep(100);
 			} catch (InterruptedException e) {}
 		}
+		// done retrying
 		if( resp != 0 ) {
 			switch(resp) {
 			case ((byte)0x03): 
@@ -480,13 +542,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 		return bout;
 	}
 
-	/**
-	 * pacman the jizzle in the inputstream
-	 */
-	public void clear() {
-		synchronized(readMx) {
-			readBufferHead = readBufferTail = 0;
-			try {
+    /**
+     * pacman the jizzle in the inputstream
+     */
+    public void clear() {
+    	synchronized(readMx) {
+    		readBufferHead = readBufferTail = 0;
+    		try {
 				int navail = inStream.available();
 				//if( Props.DEBUG )
 				//	System.out.println("Clearing "+navail+" from input");
@@ -494,9 +556,9 @@ public class IMUSerialDataPort implements DataPortInterface {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			EOT = false;
-		}
-	}
+    		EOT = false;
+    	}
+    }
 
 	/**
 	 * Set the operation mode for sensor
@@ -510,7 +572,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		//table 3-3 and 3-5 of the datasheet:
 		// http://www.adafruit.com/datasheets/BST_BNO055_DS000_12.pdf
 		// 
-		while(write(BNO055_OPR_MODE_ADDR, new byte[]{(byte)(mode & (byte)0xFF)}, true)) {
+		while(write(BNO055_OPR_MODE_ADDR, new byte[]{mode}, true)) {
 			try {
 				Thread.sleep(100);
 			} catch (InterruptedException e) {}
@@ -520,8 +582,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 		try {
 			Thread.sleep(30);
 		} catch (InterruptedException e) {}
-		//if( DEBUG )
-		//	System.out.println("Exiting set_mode");
+		if(DEBUG)
+			System.out.println("Exiting set_mode");
 	}
 
 	private void reset() throws IOException {
@@ -558,12 +620,12 @@ public class IMUSerialDataPort implements DataPortInterface {
 	}
 
 	private void readChipId() throws IOException {
-		//if( DEBUG )
-		//	System.out.println("Read chip id..");
+		if( DEBUG )
+			System.out.println("Read chip id..");
 		// Check the chip ID
 		byte[] bno_id = read(BNO055_CHIP_ID_ADDR,(byte)0x01);
 		if( DEBUG) {
-			System.out.printf("Read chip ID: %02x\r\n",bno_id[0]);
+			System.out.printf("Chip ID: %02x\r\n",bno_id[0]);
 		}
 		if(bno_id[0] != BNO055_ID) {
 			if(DEBUG)
@@ -1291,49 +1353,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 		setNormalPowerNDOFMode();
 	}
 
-
-	/**
-	 * Sets the serial port parameters
-	 * @param parityb 
-	 * @param stopb 
-	 * @param datab 
-	 * @param baud 
-	 * @throws UnsupportedCommOperationException 
-	 */
-	private void setSerialPortParameters(int baud, int datab, int stopb, int parityb) throws IOException {
-		//if( Props.DEBUG ) System.out.println("Setting serial port "+baud+" "+datab+" "+stopb+" "+parityb);
-		// Set serial port
-		// serialPort.setSerialPortParams(57600,SerialPort.DATABITS_8,SerialPort.STOPBITS_1,SerialPort.PARITY_NONE);
-		serialPort.setBaudRate(baud);
-		serialPort.setNumDataBits(datab);
-		switch(stopb) {
-			case 1 -> serialPort.setNumStopBits(SerialPort.ONE_STOP_BIT);
-			case 2 -> serialPort.setNumStopBits(SerialPort.TWO_STOP_BITS);
-		}
-		switch(parityb) {
-			case 0 -> serialPort.setParity(SerialPort.NO_PARITY);
-			case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
-			case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
-		}
-		serialPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
-
-		//serialPort.setFlowControlMode( 
-		//    		  SerialPort.FLOWCONTROL_RTSCTS_IN | 
-		//    		  SerialPort.FLOWCONTROL_RTSCTS_OUT);
-
-		//serialPort.setFlowControlMode(SerialPort.FLOWCONTROL_XONXOFF_IN |  SerialPort.FLOWCONTROL_XONXOFF_OUT);
-		//serialPort.setDTR(false);
-		//serialPort.setRTS(false);
-		//serialPort.enableReceiveThreshold(1);
-		//serialPort.disableReceiveTimeout();
-		//SerialPort.RtsEnable = true;
-		//SerialPort.ReadBufferSize = 4096;
-		//SerialPort.WriteBufferSize = 512;
-		//SerialPort.ReceivedBytesThreshold = 1;
-		//SerialPort.ReadTimeout = 5500;
-		//SerialPort.WriteTimeout = 5500;
-	}
-
 	/**
 	 * Data about machine and port settings
 	 */
@@ -1354,8 +1373,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 		sb.append("Port StopBits = ");
 		sb.append(getStopBits());
 		sb.append("\n");
-		sb.append("Port ReadTimeout = 5500\n");
-		sb.append("Port WriteTimeout = 5500\n");
 		sb.append("Port Handshake = ");
 		sb.append(getHandshake());
 		return sb.toString();
@@ -1367,22 +1384,23 @@ public class IMUSerialDataPort implements DataPortInterface {
 		bd = bd.setScale(places, RoundingMode.HALF_UP);
 		return bd.doubleValue();
 	}
-	/** */
-	public static class SerialReader implements Runnable 
-	{
-		InputStream in;
-		public static volatile boolean shouldRun = true;
-		public volatile boolean isRunning = false;
-		public SerialReader(InputStream in)
-		{
-			this.in = in;
-		}
 
-		public void run ()
-		{
-			int inChar = -1;
-			isRunning = true;
-			while (SerialReader.shouldRun)
+    /** */
+    public static class SerialReader implements Runnable 
+    {
+        InputStream in;
+        public static volatile boolean shouldRun = true;
+        public volatile boolean isRunning = false;
+        public SerialReader(InputStream in)
+        {
+            this.in = in;
+        }
+        
+        public void run ()
+        {
+            int inChar = -1;
+            isRunning = true;
+            while (SerialReader.shouldRun)
 			{
 				try {
 					inChar = this.in.read();
@@ -1399,11 +1417,12 @@ public class IMUSerialDataPort implements DataPortInterface {
 					System.out.println(ioe);
 					continue;
 				}
+
 				//System.out.print(inChar+"="+Character.toString((char)inChar)+" ");
-				//if( Props.DEBUG ) System.out.println("\n-----");
+			    //if( Props.DEBUG ) System.out.println("\n-----");
 				synchronized(readMx) {
 					if( readBufferTail == readBuffer.length)
-						readBufferTail = 0;
+				    		readBufferTail = 0;
 					readBuffer[readBufferTail++] = inChar;
 					if( readBufferTail == readBufferHead )
 						System.out.println("Possible buffer overrun "+readBufferHead+" "+readBufferTail);
@@ -1411,53 +1430,57 @@ public class IMUSerialDataPort implements DataPortInterface {
 				}
 				try {
 					Thread.sleep(2);
-				} catch (InterruptedException e) {}
-			}
-			isRunning = false;
-		}
-	}
-
-	/** */
-	public static class SerialWriter implements Runnable 
-	{
-		OutputStream out;
-		public static boolean shouldRun = true;
-		public boolean isRunning = false;
-		public SerialWriter( OutputStream out )
-		{
-			this.out = out;
-		}
-
-		public void run ()
-		{
-			isRunning = true;
-			while(SerialWriter.shouldRun)
-			{
-				try
-				{                
-					synchronized(writeMx) {
-						if( writeBufferHead == writeBufferTail ) {
-							//System.out.println("Enter wait writer:"+writeBufferHead+" "+writeBufferTail);
-							writeMx.wait();
-							//System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
-						}
-						if( writeBufferHead == writeBuffer.length)
-							writeBufferHead = 0;
-						//System.out.print("["+(char)(writeBuffer[writeBufferHead])+"@"+writeBufferHead+"]");
-						this.out.write(writeBuffer[writeBufferHead++]);
-						writeMx.notify();
-					}
-					Thread.sleep(2);
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
 				}
-				catch ( IOException ioe ) {
-					System.out.println("Write exception on serial write:"+ioe);
-				} 
-				catch (InterruptedException e) {}
 			}
-			isRunning = false;
-		}
-	}
+            isRunning = false;
+        }
+    }
 
+    /** */
+    public static class SerialWriter implements Runnable 
+    {
+        OutputStream out;
+        public static boolean shouldRun = true;
+        public boolean isRunning = false;
+        public SerialWriter( OutputStream out )
+        {
+            this.out = out;
+        }
+        
+        public void run ()
+        {
+        	isRunning = true;
+            while(SerialWriter.shouldRun)
+			{
+            	try
+            	{                
+            		synchronized(writeMx) {
+            			if( writeBufferHead == writeBufferTail ) {
+            				//System.out.println("Enter wait writer:"+writeBufferHead+" "+writeBufferTail);
+                			writeMx.wait();
+                			//System.out.println("Leave wait writer:"+writeBufferHead+" "+writeBufferTail);
+            			}
+            			if( writeBufferHead == writeBuffer.length)
+            				writeBufferHead = 0;
+            			//System.out.print("["+(char)(writeBuffer[writeBufferHead])+"@"+writeBufferHead+"]");
+            			this.out.write(writeBuffer[writeBufferHead++]);
+            			writeMx.notify();
+            		}
+            		Thread.sleep(2);
+            	}
+            	catch ( IOException ioe ) {
+					System.out.println("Write exception on serial write:"+ioe);
+            	} 
+            	catch (InterruptedException e) {
+            	}
+
+			}
+            isRunning = false;
+        }
+    }
 	@Override
 	public String readLine() {
 		throw new RuntimeException("refactor! not applicable method");

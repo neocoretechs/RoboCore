@@ -316,8 +316,8 @@ public void onStart(final ConnectedNode connectedNode) {
 				} // hasDataChanged
 				
 			} catch (IOException e) {
-				System.out.println("IMU publishing loop malfuntion "+e.getMessage());
-				statPub.add("IMU publishing loop malfuntion:");
+				System.out.println("IMU publishing loop malfunction "+e.getMessage());
+				statPub.add("IMU publishing loop malfunction:");
 				statPub.add(e.getMessage());
 				e.printStackTrace();
 			}
