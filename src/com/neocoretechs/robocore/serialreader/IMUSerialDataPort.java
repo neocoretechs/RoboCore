@@ -23,7 +23,7 @@ import java.math.RoundingMode;
  *
  */
 public class IMUSerialDataPort implements DataPortInterface {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean PORTDEBUG = true;
 	private static boolean INFO = true;
 	private SerialPort serialPort;
@@ -126,7 +126,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public static final byte BNO055_SYS_ERR_ADDR                  = (byte)0x3A;
 
 
-	private String CALIBRATION_FILE = "/var/local/calibration.json";
+	private String CALIBRATION_FILE = "/home/"+System.getProperty("user.name");
 
 	// Calibration tolerances for various sensors
 	private int SYSTEM_CAL = 3;
@@ -999,7 +999,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public String calibrate(byte[] stat) throws IOException {
 		StringBuilder sb = new StringBuilder();
 		//byte[] stat = reportCalibrationStatus();
-		sb.append("When status reaches target, the message:<< CALIBRATION ACHIEVED! >> and file "+CALIBRATION_FILE+" will appear and process is complete");
+		sb.append("When status reaches target, a completion message is issued and file "+CALIBRATION_FILE+" will appear and process is complete");
 		sb.append("\r\n");
 		sb.append("1.) For gyro leave flat for a few seconds, this reading usually self corrects immediately.");
 		sb.append("\r\n");
@@ -1490,6 +1490,24 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public void writeLine(String output) throws IOException {
 		throw new RuntimeException("refactor! not applicable method");
 
+	}
+	
+	public static void main(String[] args) throws IOException {
+		IMUSerialDataPort imuPort = IMUSerialDataPort.getInstance();
+		String calibString = "";
+		byte[] status = imuPort.getCalibrationStatus();
+		imuPort.reportCalibrationStatus(status);
+		imuPort.formatCalibrationStatus(status);
+		while(true) {
+			calibString = imuPort.calibrate(imuPort.getCalibrationStatus());
+			System.out.println(calibString);
+			if(calibString.contains("CALIBRATION ACHIEVED"))
+				break;
+			try {
+				Thread.sleep(5000);
+			} catch (InterruptedException e) {}
+		}
+		System.exit(0);
 	}
 
 }
