@@ -1,9 +1,7 @@
 package com.neocoretechs.robocore.navigation;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.URISyntaxException;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
@@ -11,11 +9,9 @@ import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
 import org.ros.namespace.GraphName;
-import org.ros.namespace.NameResolver;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
-import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
@@ -43,8 +39,6 @@ public class IMUPubs extends AbstractNodeMain  {
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String mode="";
-	private String host;
-	private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	sensor_msgs.Imu imumsg = null;
 	sensor_msgs.Temperature tempmsg = null;
