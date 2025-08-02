@@ -26,7 +26,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 	// On RasPi its /dev/ttyAMA0 or /dev/ttyS0, on OdroidC2, ttyS0 is hardwired console so we use ttyS1 on header
 	// On C1 we have ttyS2 so basically, if we have ttyS2 use that, if we have a ttyS1, use it, otherwise, use ttyS0
 	// 
-	private static String portName = "/dev/ttyS0";
+	private static String portName = "/dev/ttyS1";
 	private static int baud = 9600;
 	private static int datab = 8;
 	private static int stopb = 1;

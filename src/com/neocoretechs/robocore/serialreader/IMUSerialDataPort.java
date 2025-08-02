@@ -126,13 +126,13 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public static final byte BNO055_SYS_ERR_ADDR                  = (byte)0x3A;
 
 
-	private String CALIBRATION_FILE = "/home/"+System.getProperty("user.name");
+	private String CALIBRATION_FILE = "/home/"+System.getProperty("user.name")+"/imu.config";
 
 	// Calibration tolerances for various sensors
 	private int SYSTEM_CAL = 3;
-	private int ACC_CAL = 3;
-	private int GYRO_CAL = 3;
-	private int MAG_CAL = 3;
+	private int ACC_CAL = 2;
+	private int GYRO_CAL = 2;
+	private int MAG_CAL = 2;
 	// precision for position readout, number of decimal places
 	private int IMU_TOL = 3;
 
@@ -1009,7 +1009,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		sb.append("\r\n");
 		sb.append("Once all elements reach tolerance, a write is performed storing a file for next reset and the method exits!");
 		sb.append("\r\n");
-		if( stat[0] != SYSTEM_CAL || stat[1] != GYRO_CAL || stat[2] != ACC_CAL || stat[3] != MAG_CAL ){
+		if( stat[0] != SYSTEM_CAL || stat[1] < GYRO_CAL || stat[2] < ACC_CAL || stat[3] < MAG_CAL ){
 			sb.append("PERFORM CALIBRATION KATA NOW!");
 			sb.append("\r\n");
 			sb.append("When all status reaches target, message appears, file is written, and process completes");
@@ -1033,7 +1033,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 			sb.append("-^-----^-----^-----^-----^-----^-----^-----^-----^-----^---");
 			sb.append("\r\n");
 		} else {
-			// loop exits when all status reaches 3, then we write after retrieving calibration bytes
+			// loop exits when all status reaches target, then we write after retrieving calibration bytes
 			sb.append("<< CALIBRATION ACHIEVED! >>");
 			sb.append("\r\n");
 			set_mode(OPERATION_MODE_CONFIG);
