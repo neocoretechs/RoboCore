@@ -33,7 +33,7 @@ import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  */
 public class IMUPubs extends AbstractNodeMain  {
-	private static final boolean DEBUG = false;
+	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 	float volts;
 	Object statMutex = new Object(); 
@@ -78,6 +78,7 @@ public class IMUPubs extends AbstractNodeMain  {
 	boolean imu_changed = false;
 	boolean system_needs_calibrating = true; // if mode is calibration and its first time through
 	boolean display_revision = true;
+	String ttyPort = "/dev/ttyS1";
 	
 	
 	public IMUPubs(String[] args) {
@@ -103,6 +104,11 @@ public void onStart(final ConnectedNode connectedNode) {
 	final std_msgs.Header header = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 	// check command line remappings for __mode:=calibrate
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	if( remaps.containsKey("__debug") )
+		if(remaps.get("__debug").equals("true")) {
+			DEBUG = true;
+			IMUSerialDataPort.DEBUG = true;
+		}
 	if( remaps.containsKey("__mode") )
 		mode = remaps.get("__mode");
 	if( remaps.containsKey("__system_cal") )
@@ -117,6 +123,8 @@ public void onStart(final ConnectedNode connectedNode) {
 		IMU_TOL = Integer.parseInt(remaps.get("__imu_tol"));// number of decimal places of position readout
 	if( remaps.containsKey("__imu_freq") )
 		IMU_FREQ = Integer.parseInt(remaps.get("__imu_freq"));// number of milliseconds between maximum publication times (should data remain constant)
+	if( remaps.containsKey("__port") )
+		ttyPort = remaps.get("__port");// tty port
 	
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 			connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -135,7 +143,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			time1 = System.currentTimeMillis();
 			startTime = time1;
 			time2 = System.currentTimeMillis();
-			imuPort = IMUSerialDataPort.getInstance();
+			imuPort = IMUSerialDataPort.getInstance(ttyPort);
 			imuPort.setSYSTEM_CAL(SYSTEM_CAL);
 			imuPort.setACC_CAL(ACC_CAL);
 			imuPort.setGYRO_CAL(GYRO_CAL);

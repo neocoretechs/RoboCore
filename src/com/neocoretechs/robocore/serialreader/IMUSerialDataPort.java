@@ -23,7 +23,7 @@ import java.math.RoundingMode;
  *
  */
 public class IMUSerialDataPort implements DataPortInterface {
-	private static boolean DEBUG = false;
+	public static boolean DEBUG = false;
 	private static boolean PORTDEBUG = true;
 	private static boolean INFO = true;
 	private SerialPort serialPort;
@@ -35,7 +35,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	// On RasPi its /dev/ttyS0, on OdroidC2, ttyS0 is hardwired console so we use ttyS1 on header
 	// On C1 we have ttyS2 so basically, if we have ttyS2 use that, if we have a ttyS1, use it, otherwise, use ttyS0
 	// 
-	private static String portName = "/dev/ttyS1";
+	private static String portName = "/dev/ttyS0";
 	private static int baud = 115200;
 	private static int datab = 8;
 	private static int stopb = 1;
@@ -45,8 +45,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	private static Object writeMx = new Object();
 	private static boolean EOT = false;
 
-	private static int[] readBuffer = new int[512];
-	private static int[] writeBuffer = new int[256];
+	private static int[] readBuffer = new int[1024];
+	private static int[] writeBuffer = new int[512];
 	private static int readBufferHead = 0;
 	private static int readBufferTail = 0;
 	private static int writeBufferHead = 0;
@@ -154,7 +154,21 @@ public class IMUSerialDataPort implements DataPortInterface {
 			return instance;
 		}
 	}
-
+	public static IMUSerialDataPort getInstance(String ttyPort) {
+		synchronized(mutex) {
+			if( instance == null ) {
+				try {
+					portName = ttyPort;
+					instance = new IMUSerialDataPort(portName, baud, datab, stopb, parityb);									 
+				} catch (IOException e) {
+					System.out.println("Could not initialize IMUSerialDataPort of:"+portName+" because "+e);
+					e.printStackTrace();
+					throw new RuntimeException(e);
+				}
+			}
+			return instance;
+		}
+	}
 	@Override
 	public int bytesToRead() throws IOException {
 		return serialPort.bytesAvailable();
@@ -197,7 +211,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 
 	public void connect(boolean writeable) throws IOException {
         SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
-		//getSerialPort();
+		getSerialPort();
 		SerialPort.allowPortOpenForEnumeration();
 		SerialPort.autoCleanupAtShutdown();
 		SerialPort.addShutdownHook(new Thread() { public void run() { System.out.println("\nRunning shutdown hook"); } });
@@ -1405,7 +1419,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 				try {
 					inChar = this.in.read();
 					//System.out.println("SR="+inChar+" "+(char)inChar);
-					// rxtx returns -1 on timeout of port
 					if( inChar == 255 ) {
 						EOT = true;
 						inChar = -1;
@@ -1424,16 +1437,14 @@ public class IMUSerialDataPort implements DataPortInterface {
 					if( readBufferTail == readBuffer.length)
 				    		readBufferTail = 0;
 					readBuffer[readBufferTail++] = inChar;
-					if( readBufferTail == readBufferHead )
+					if( readBufferTail == readBufferHead ) {
 						System.out.println("Possible buffer overrun "+readBufferHead+" "+readBufferTail);
+					}
 					readMx.notify();
 				}
 				try {
 					Thread.sleep(2);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
+				} catch (InterruptedException e) {}
 			}
             isRunning = false;
         }
@@ -1474,9 +1485,7 @@ public class IMUSerialDataPort implements DataPortInterface {
             	catch ( IOException ioe ) {
 					System.out.println("Write exception on serial write:"+ioe);
             	} 
-            	catch (InterruptedException e) {
-            	}
-
+            	catch (InterruptedException e) {}
 			}
             isRunning = false;
         }
