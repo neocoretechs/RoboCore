@@ -1,7 +1,9 @@
 package com.neocoretechs.robocore.navigation;
 
 import java.io.IOException;
-
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
@@ -318,10 +320,15 @@ public void onStart(final ConnectedNode connectedNode) {
 				} // hasDataChanged
 				
 			} catch (IOException e) {
-				System.out.println("IMU publishing loop malfunction "+e.getMessage());
+				System.out.println("IMU publishing loop malfunction "+e.getMessage()+" at "+LocalDateTime.ofInstant(Instant.ofEpochMilli(System.currentTimeMillis()), ZoneId.systemDefault()));
 				statPub.add("IMU publishing loop malfunction:");
 				statPub.add(e.getMessage());
 				e.printStackTrace();
+				try {
+					imuPort.resetCalibration();
+				} catch (IOException e1) {
+					e1.printStackTrace();
+				}
 			}
 			if(!statPub.isEmpty()) {
 				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU STATUS", 
