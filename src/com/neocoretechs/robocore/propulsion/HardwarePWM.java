@@ -1,8 +1,10 @@
-package com.neocoretechs.robocore.serialreader.marlinspikeport;
+package com.neocoretechs.robocore.propulsion;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+
+import com.neocoretechs.robocore.serialreader.marlinspikeport.InterruptServiceInterface;
 /**
 * Handle the hardware PWM pins on microcontroller of Odroid, RPi, etc
 * since support for the hardware PWM under Odroid is inexplicably absent from the Hardkernel WiringPi
@@ -14,12 +16,6 @@ import java.io.RandomAccessFile;
 * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
 */
 public abstract class HardwarePWM {
-	private static final String duty0 = "/sys/devices/platform/pwm-ctrl/duty0"; // 0-1023
-	private static final String freq0 = "/sys/devices/platform/pwm-ctrl/freq0"; // in Hz 0 - 1000000
-	private static final String enable0 = "/sys/devices/platform/pwm-ctrl/enable0"; // 0 or 1
-	private static final String duty1 = "/sys/devices/platform/pwm-ctrl/duty1";
-	private static final String freq1 = "/sys/devices/platform/pwm-ctrl/freq1"; // in Hz 0 - 1000000
-	private static final String enable1 = "/sys/devices/platform/pwm-ctrl/enable1"; // 0 or 1
 	static RandomAccessFile pwmDuty0 = null, pwmFreq0 = null, pwmEnable0 = null, pwmDuty1 = null, pwmFreq1 = null, pwmEnable1 = null;
 	public int pin;
 	public enum mode { INPUT, OUTPUT };
@@ -28,12 +24,12 @@ public abstract class HardwarePWM {
 	// explicitly disable PWM for safety
 	static {
 		try {
-			pwmEnable0 = new RandomAccessFile(enable0,"rw");
+			pwmEnable0 = new RandomAccessFile(PWMDevice.getEnable0(),"rw");
 			pwmEnable0.writeBytes(String.valueOf(0));
 			pwmEnable0.seek(0);
 		} catch (IOException e) {}
 		try {
-			pwmEnable1 = new RandomAccessFile(enable1,"rw");
+			pwmEnable1 = new RandomAccessFile(PWMDevice.getEnable1(),"rw");
 			pwmEnable1.writeBytes(String.valueOf(0));
 			pwmEnable1.seek(0);
 		} catch (IOException e) {}
@@ -47,8 +43,8 @@ public abstract class HardwarePWM {
 			switch(pin) {
 				case 19:
 					if(pwmDuty1 == null) {
-						pwmDuty1 = new RandomAccessFile(duty1,"rw");
-						pwmFreq1 = new RandomAccessFile(freq1,"rw");
+						pwmDuty1 = new RandomAccessFile(PWMDevice.getDuty1(),"rw");
+						pwmFreq1 = new RandomAccessFile(PWMDevice.getFreq1(),"rw");
 						//pwmEnable1 = new RandomAccessFile(enable1,"rw");
 						pwmFreq1.writeBytes(String.valueOf(timer_freq));
 						pwmFreq1.seek(0);
@@ -56,8 +52,8 @@ public abstract class HardwarePWM {
 				break;
 				case 33:
 					if(pwmDuty0 == null) {
-						pwmDuty0 = new RandomAccessFile(duty0,"rw");
-						pwmFreq0 = new RandomAccessFile(freq0,"rw");
+						pwmDuty0 = new RandomAccessFile(PWMDevice.getDuty0(),"rw");
+						pwmFreq0 = new RandomAccessFile(PWMDevice.getFreq0(),"rw");
 						//pwmEnable0 = new RandomAccessFile(enable0,"rw");
 						pwmFreq0.writeBytes(String.valueOf(timer_freq));
 						pwmFreq0.seek(0);

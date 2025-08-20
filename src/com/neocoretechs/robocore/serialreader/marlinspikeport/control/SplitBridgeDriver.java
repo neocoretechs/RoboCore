@@ -2,7 +2,7 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 
 import java.io.IOException;
 
-import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
+import com.neocoretechs.robocore.propulsion.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 

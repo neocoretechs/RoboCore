@@ -4,13 +4,23 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Graphics;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.HeadlessException;
+import java.awt.Image;
+import java.awt.Transparency;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.PixelGrabber;
+import java.awt.image.Raster;
 import java.awt.image.WritableRaster;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -18,10 +28,16 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.Arrays;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -83,7 +99,88 @@ public class VideoListenerStereo extends AbstractNodeMain
 	static {
 		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"VIDEOLISTENERSTEREO"} );
 	}
-	
+	static final byte[] DHTFULL = {(byte)0xFF, (byte)0xC4, (byte)0x01, (byte)0xA2, (byte)0x00, 
+		(byte)0x00, (byte)0x01, (byte)0x05, (byte)0x01, (byte)0x01, (byte)0x01, 
+		(byte)0x01, (byte)0x01, (byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, 
+		(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01, (byte)0x02, 
+		(byte)0x03, (byte)0x04, (byte)0x05, (byte)0x06, (byte)0x07, (byte)0x08, 
+		(byte)0x09, (byte)0x0A, (byte)0x0B, (byte)0x10, (byte)0x00, (byte)0x02, 
+		(byte)0x01, (byte)0x03, (byte)0x03, (byte)0x02, (byte)0x04, (byte)0x03, 
+		(byte)0x05, (byte)0x05, (byte)0x04, (byte)0x04, (byte)0x00, (byte)0x00, 
+		(byte)0x01, (byte)0x7D, (byte)0x01, (byte)0x02, (byte)0x03, (byte)0x00, 
+		(byte)0x04, (byte)0x11, (byte)0x05, (byte)0x12, (byte)0x21, (byte)0x31, 
+		(byte)0x41, (byte)0x06, (byte)0x13, (byte)0x51, (byte)0x61, (byte)0x07, 
+		(byte)0x22, (byte)0x71, (byte)0x14, (byte)0x32, (byte)0x81, (byte)0x91, 
+		(byte)0xA1, (byte)0x08, (byte)0x23, (byte)0x42, (byte)0xB1, (byte)0xC1, 
+		(byte)0x15, (byte)0x52, (byte)0xD1, (byte)0xF0, (byte)0x24, (byte)0x33, 
+		(byte)0x62, (byte)0x72, (byte)0x82, (byte)0x09, (byte)0x0A, (byte)0x16, 
+		(byte)0x17, (byte)0x18, (byte)0x19, (byte)0x1A, (byte)0x25, (byte)0x26, 
+		(byte)0x27, (byte)0x28, (byte)0x29, (byte)0x2A, (byte)0x34, (byte)0x35, 
+		(byte)0x36, (byte)0x37, (byte)0x38, (byte)0x39, (byte)0x3A, (byte)0x43, 
+		(byte)0x44, (byte)0x45, (byte)0x46, (byte)0x47, (byte)0x48, (byte)0x49, 
+		(byte)0x4A, (byte)0x53, (byte)0x54, (byte)0x55, (byte)0x56, (byte)0x57, 
+		(byte)0x58, (byte)0x59, (byte)0x5A, (byte)0x63, (byte)0x64, (byte)0x65, 
+		(byte)0x66, (byte)0x67, (byte)0x68, (byte)0x69, (byte)0x6A, (byte)0x73, 
+		(byte)0x74, (byte)0x75, (byte)0x76, (byte)0x77, (byte)0x78, (byte)0x79, 
+		(byte)0x7A, (byte)0x83, (byte)0x84, (byte)0x85, (byte)0x86, (byte)0x87, 
+		(byte)0x88, (byte)0x89, (byte)0x8A, (byte)0x92, (byte)0x93, (byte)0x94, 
+		(byte)0x95, (byte)0x96, (byte)0x97, (byte)0x98, (byte)0x99, (byte)0x9A, 
+		(byte)0xA2, (byte)0xA3, (byte)0xA4, (byte)0xA5, (byte)0xA6, (byte)0xA7, 
+		(byte)0xA8, (byte)0xA9, (byte)0xAA, (byte)0xB2, (byte)0xB3, (byte)0xB4, 
+		(byte)0xB5, (byte)0xB6, (byte)0xB7, (byte)0xB8, (byte)0xB9, (byte)0xBA, 
+		(byte)0xC2, (byte)0xC3, (byte)0xC4, (byte)0xC5, (byte)0xC6, (byte)0xC7, 
+		(byte)0xC8, (byte)0xC9, (byte)0xCA, (byte)0xD2, (byte)0xD3, (byte)0xD4, 
+		(byte)0xD5, (byte)0xD6, (byte)0xD7, (byte)0xD8, (byte)0xD9, (byte)0xDA, 
+		(byte)0xE1, (byte)0xE2, (byte)0xE3, (byte)0xE4, (byte)0xE5, (byte)0xE6, 
+		(byte)0xE7, (byte)0xE8, (byte)0xE9, (byte)0xEA, (byte)0xF1, (byte)0xF2, 
+		(byte)0xF3, (byte)0xF4, (byte)0xF5, (byte)0xF6, (byte)0xF7, (byte)0xF8, 
+		(byte)0xF9, (byte)0xFA, (byte)0x01, (byte)0x00, (byte)0x03, (byte)0x01, 
+		(byte)0x01, (byte)0x01, (byte)0x01, (byte)0x01, (byte)0x01, (byte)0x01, 
+		(byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, 
+		(byte)0x00, (byte)0x01, (byte)0x02, (byte)0x03, (byte)0x04, (byte)0x05, 
+		(byte)0x06, (byte)0x07, (byte)0x08, (byte)0x09, (byte)0x0A, (byte)0x0B, 
+		(byte)0x11, (byte)0x00, (byte)0x02, (byte)0x01, (byte)0x02, (byte)0x04, 
+		(byte)0x04, (byte)0x03, (byte)0x04, (byte)0x07, (byte)0x05, (byte)0x04, 
+		(byte)0x04, (byte)0x00, (byte)0x01, (byte)0x02, (byte)0x77, (byte)0x00, 
+		(byte)0x01, (byte)0x02, (byte)0x03, (byte)0x11, (byte)0x04, (byte)0x05, 
+		(byte)0x21, (byte)0x31, (byte)0x06, (byte)0x12, (byte)0x41, (byte)0x51, 
+		(byte)0x07, (byte)0x61, (byte)0x71, (byte)0x13, (byte)0x22, (byte)0x32, 
+		(byte)0x81, (byte)0x08, (byte)0x14, (byte)0x42, (byte)0x91, (byte)0xA1, 
+		(byte)0xB1, (byte)0xC1, (byte)0x09, (byte)0x23, (byte)0x33, (byte)0x52, 
+		(byte)0xF0, (byte)0x15, (byte)0x62, (byte)0x72, (byte)0xD1, (byte)0x0A, 
+		(byte)0x16, (byte)0x24, (byte)0x34, (byte)0xE1, (byte)0x25, (byte)0xF1, 
+		(byte)0x17, (byte)0x18, (byte)0x19, (byte)0x1A, (byte)0x26, (byte)0x27, 
+		(byte)0x28, (byte)0x29, (byte)0x2A, (byte)0x35, (byte)0x36, (byte)0x37, 
+		(byte)0x38, (byte)0x39, (byte)0x3A, (byte)0x43, (byte)0x44, (byte)0x45, 
+		(byte)0x46, (byte)0x47, (byte)0x48, (byte)0x49, (byte)0x4A, (byte)0x53, 
+		(byte)0x54, (byte)0x55, (byte)0x56, (byte)0x57, (byte)0x58, (byte)0x59, 
+		(byte)0x5A, (byte)0x63, (byte)0x64, (byte)0x65, (byte)0x66, (byte)0x67, 
+		(byte)0x68, (byte)0x69, (byte)0x6A, (byte)0x73, (byte)0x74, (byte)0x75, 
+		(byte)0x76, (byte)0x77, (byte)0x78, (byte)0x79, (byte)0x7A, (byte)0x82, 
+		(byte)0x83, (byte)0x84, (byte)0x85, (byte)0x86, (byte)0x87, (byte)0x88, 
+		(byte)0x89, (byte)0x8A, (byte)0x92, (byte)0x93, (byte)0x94, (byte)0x95, 
+		(byte)0x96, (byte)0x97, (byte)0x98, (byte)0x99, (byte)0x9A, (byte)0xA2, 
+		(byte)0xA3, (byte)0xA4, (byte)0xA5, (byte)0xA6, (byte)0xA7, (byte)0xA8, 
+		(byte)0xA9, (byte)0xAA, (byte)0xB2, (byte)0xB3, (byte)0xB4, (byte)0xB5, 
+		(byte)0xB6, (byte)0xB7, (byte)0xB8, (byte)0xB9, (byte)0xBA, (byte)0xC2, 
+		(byte)0xC3, (byte)0xC4, (byte)0xC5, (byte)0xC6, (byte)0xC7, (byte)0xC8, 
+		(byte)0xC9, (byte)0xCA, (byte)0xD2, (byte)0xD3, (byte)0xD4, (byte)0xD5, 
+		(byte)0xD6, (byte)0xD7, (byte)0xD8, (byte)0xD9, (byte)0xDA, (byte)0xE2, 
+		(byte)0xE3, (byte)0xE4, (byte)0xE5, (byte)0xE6, (byte)0xE7, (byte)0xE8, 
+		(byte)0xE9, (byte)0xEA, (byte)0xF2, (byte)0xF3, (byte)0xF4, (byte)0xF5, 
+		(byte)0xF6, (byte)0xF7, (byte)0xF8, (byte)0xF9, (byte)0xFA, (byte)0x8B, 
+		(byte)0x92, (byte)0x93, (byte)0x94, (byte)0x95, (byte)0x96, (byte)0x97, 
+		(byte)0x98, (byte)0x99, (byte)0x9A, (byte)0xA2, (byte)0xA3, (byte)0xA4, 
+		(byte)0xA5, (byte)0xA6, (byte)0xA7, (byte)0xA8, (byte)0xA9, (byte)0xAA, 
+		(byte)0xB2, (byte)0xB3, (byte)0xB4, (byte)0xB5, (byte)0xB6, (byte)0xB7, 
+		(byte)0xB8, (byte)0xB9, (byte)0xBA, (byte)0xC2, (byte)0xC3, (byte)0xC4, 
+		(byte)0xC5, (byte)0xC6, (byte)0xC7, (byte)0xC8, (byte)0xC9, (byte)0xCA, 
+		(byte)0xD2, (byte)0xD3, (byte)0xD4, (byte)0xD5, (byte)0xD6, (byte)0xD7, 
+		(byte)0xD8, (byte)0xD9, (byte)0xDA, (byte)0xE2, (byte)0xE3, (byte)0xE4, 
+		(byte)0xE5, (byte)0xE6, (byte)0xE7, (byte)0xE8, (byte)0xE9, (byte)0xEA, 
+		(byte)0xF2, (byte)0xF3, (byte)0xF4, (byte)0xF5, (byte)0xF6, (byte)0xF7, 
+		(byte)0xF8, (byte)0xF9, (byte)0xFA};
+	static final byte[] DHT = Arrays.copyOf(DHTFULL, 420);
 	@Override
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("subs_stereovideo");
@@ -92,7 +189,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 	public void onStart(final ConnectedNode connectedNode) {
 
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
-				connectedNode.newSubscriber("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
+				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = 
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 
@@ -269,6 +366,18 @@ public class VideoListenerStereo extends AbstractNodeMain
 						}
 						in.close();
 				} catch (IOException e1) {
+					if(e1.getMessage().contains("Huffman table 0x00 was not defined")) {
+						   try {
+							   	byte[] b = injectHuffman(bufferl);
+							   	InputStream in = new ByteArrayInputStream(b);
+							   	synchronized(mutex) {
+							   	imagel = ImageIO.read(in);
+							   	}
+						        return;
+						    }catch (Exception e){
+						        e.printStackTrace();
+						    }
+					}
 					System.out.println("Could not convert LEFT image payload due to:"+e1.getMessage());
 					return;
 				}
@@ -279,6 +388,18 @@ public class VideoListenerStereo extends AbstractNodeMain
 						}
 						in.close();
 				} catch (IOException e1) {
+					if(e1.getMessage().contains("Huffman table 0x00 was not defined")) {
+						   try {
+							   	byte[] b = injectHuffman(bufferr);
+							   	InputStream in = new ByteArrayInputStream(b);
+							   	synchronized(mutex) {
+							   	imager = ImageIO.read(in);
+							   	}
+						        return;
+						    }catch (Exception e){
+						        e.printStackTrace();
+						    }
+					}
 					System.out.println("Could not convert RIGHT image payload due to:"+e1.getMessage());
 					return;
 				}
@@ -335,7 +456,39 @@ public class VideoListenerStereo extends AbstractNodeMain
 			}
 		});
 	}
-	
+	 public static byte[] injectHuffman(byte[] mjpegFrame) throws IOException {
+	        // Check for DHT marker (FFC4) anywhere in the frame
+	        for (int i = 0; i < mjpegFrame.length - 1; i++) {
+	            if ((mjpegFrame[i] & 0xFF) == 0xFF && (mjpegFrame[i + 1] & 0xFF) == 0xC4) {
+	                // Already has Huffman tables
+	            	System.out.println("has huffman?");
+	                return mjpegFrame;
+	            }
+	        }
+	        if (DHT.length < 4) {
+	            System.out.println("[DHTCheck] Segment too short.");
+	            return mjpegFrame;
+	        }
+	        if ((DHT[0] & 0xFF) != 0xFF || (DHT[1] & 0xFF) != 0xC4) {
+	            System.out.println("[DHTCheck] Missing DHT marker.");
+	            return mjpegFrame;
+	        }
+	        int length = ((DHT[2] & 0xFF) << 8) | (DHT[3] & 0xFF);
+	        if (length != DHT.length - 2) {
+	            System.out.printf("[DHTCheck] Length mismatch: expected %d, got %d%n", length, DHT.length - 2);
+	        } else {
+	            System.out.println("[DHTCheck] Segment is valid and narratable.");
+	        }
+
+	        // Inject Huffman tables after SOI marker (FFD8)
+	        ByteArrayOutputStream patched = new ByteArrayOutputStream();
+	        patched.write(mjpegFrame,0,2); // SOI
+	        patched.write(DHT); 
+	        patched.write(mjpegFrame, 2, mjpegFrame.length-2); 
+	        return patched.toByteArray();
+	    }
+
+
 	/**
 	 * Pump the HTTP image payload to the socket connected client, most likely a browser.
 	 * Designed to be spun up in its own thread.

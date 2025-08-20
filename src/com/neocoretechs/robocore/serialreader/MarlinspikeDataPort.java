@@ -3,7 +3,7 @@ package com.neocoretechs.robocore.serialreader;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import com.neocoretechs.robocore.serialreader.marlinspikeport.PWM;
+import com.neocoretechs.robocore.propulsion.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.RoboteqDevice;

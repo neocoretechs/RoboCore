@@ -1,6 +1,10 @@
-package com.neocoretechs.robocore.serialreader.marlinspikeport;
+package com.neocoretechs.robocore.propulsion;
 
 import java.io.IOException;
+
+import com.neocoretechs.robocore.serialreader.marlinspikeport.CounterInterruptService;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.InterruptServiceHandlerInterface;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.InterruptServiceInterface;
 
 /**
  * Handle the hardware PWM pins on microcontroller of Odroid, RPi, etc

@@ -144,11 +144,11 @@ public class MotionController extends AbstractNodeMain {
 	private static boolean DEBUG = false;
 	private static boolean IMUDEBUG = false;
 	private static boolean DEBUGBEARING = true;
-	private String host;
-	private InetSocketAddress master;
+	//private String host;
+	//private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
-	private String serveNode = null;
+	//private String serveNode = null;
 	float rangetop, rangebot;
 	double pressure, temperature;
 	double[] mag = {0, 0, 0};
