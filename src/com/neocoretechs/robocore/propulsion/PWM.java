@@ -10,10 +10,40 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.InterruptServiceIn
  * Handle the hardware PWM pins on microcontroller of Odroid, RPi, etc
  * since support for the hardware PWM under Odroid is inexplicably absent from the Hardkernel WiringPi
  * implementation.<p/>
+ * old:
  * Presupposes a modprobe of these devices has been performed:<br/>
  * sudo modprobe pwm-meson npwm=2 #USING 1 PWM PIN (33, 19)  <br/>
  * sudo modprobe pwm-ctrl									<br/>
  * or that the modprobe directives have been added to /etc/modules <br/>
+ * New way to enable pwm, create /usr/local/bin/pwm-init.sh
+ *#!/bin/bash
+ *# Export PWM channels
+ *echo 0 > /sys/class/pwm/pwmchip0/export
+ *echo 0 > /sys/class/pwm/pwmchip1/export
+ *# Configure pwmchip0
+ *echo 0 > /sys/class/pwm/pwmchip0/pwm0/period
+ *echo 0 > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
+ *echo 0 > /sys/class/pwm/pwmchip0/pwm0/enable
+ *# Configure pwmchip1
+ *echo 0 > /sys/class/pwm/pwmchip1/pwm0/period
+ *echo 0 > /sys/class/pwm/pwmchip1/pwm0/duty_cycle
+ *echo 0 > /sys/class/pwm/pwmchip1/pwm0/enable
+ *# Log the milestone
+ *echo "PWM channels initialized." >> /var/log/pwm-init.log
+ *Create service /etc/systemd/system/pwm-init.service: <br>
+ *[Unit]
+ *Description=Initialize PWM channels for narratable motor control
+ *After=multi-user.target
+ *[Service]
+ *Type=oneshot
+ *ExecStart=/usr/local/bin/pwm-init.sh
+ *RemainAfterExit=true
+ *[Install]
+ *WantedBy=multi-user.target
+ *Then, commands to enable:
+ *sudo systemctl daemon-reexec
+ *sudo systemctl enable pwm-init.service
+ *sudo systemctl start pwm-init.service
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  *
  */
