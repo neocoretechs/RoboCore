@@ -1,8 +1,7 @@
 package com.neocoretechs.robocore.serialreader;
 
 import com.fazecast.jSerialComm.SerialPort;
-import com.fazecast.jSerialComm.SerialPortDataListener;
-import com.fazecast.jSerialComm.SerialPortEvent;
+
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 
 import java.io.BufferedReader;
@@ -126,7 +125,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public static final byte BNO055_SYS_ERR_ADDR                  = (byte)0x3A;
 
 
-	private String CALIBRATION_FILE = "/home/"+System.getProperty("user.name")+"/imu.config";
+	static String CALIBRATION_FILE = "/home/"+System.getProperty("user.name")+"/imu.config";
 
 	// Calibration tolerances for various sensors
 	private int SYSTEM_CAL = 3;
@@ -903,7 +902,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * Assume we switched to configuration mode, as mentioned in section 3.10.4 of datasheet.
 	 * @throws IOException 
 	 */
-	private byte[] getCalibration() throws IOException {
+	byte[] getCalibration() throws IOException {
 		//self._config_mode()
 		// Read the 22 bytes of calibration data and convert it to a list (from
 		// a bytearray) so it's more easily serialized should the caller want to
