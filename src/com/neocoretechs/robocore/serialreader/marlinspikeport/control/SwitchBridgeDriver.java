@@ -3,8 +3,8 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
-import com.pi4j.io.gpio.GpioPinDigital;
-import com.pi4j.io.gpio.GpioPinDigitalOutput;
+//import com.pi4j.io.gpio.GpioPinDigital;
+//import com.pi4j.io.gpio.GpioPinDigitalOutput;
 /**
 *SwitchBridgeDriver:
 * A motor driver that uses straight GPIO switching rather than PWM, for an on/off drive motor setup.<p/>
@@ -49,8 +49,9 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	 * @param pin_numberB the index in the GPIO array defined in 'setMotors' for M2
 	 * @param dir_pin the enable pin for this channel
 	 * @param dir_pinB enable for B
+	 * @throws IOException 
 	 */
-	public void createDigital(int channel, int pin_number, int pin_numberB, int dir_pin, int dir_default) {
+	public void createDigital(int channel, int pin_number, int pin_numberB, int dir_pin, int dir_default) throws IOException {
 		Pins.assignPin(pin_number);
 		setMotorDigitalPin(channel, pin_number);
 		Pins.assignPin(pin_numberB);
@@ -79,7 +80,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		int gioIndex = getMotorDigitalPin(channel); // index to gpio array
 		int gioIndexB = getMotorDigitalPinB(channel); // index to gpio array
 		int dirPinIndex = getMotorEnablePin(channel); // index to dir pin array
-		Pins.getOutputPin(dirPinIndex).high(); // enable motor inputs
+		Pins.getOutputPin(dirPinIndex,1); // enable motor inputs
 		//int freq = motorDrive[channel][2]; // value of freq, no index;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
@@ -88,11 +89,11 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) {
-					Pins.getOutputPin(gioIndexB).low();
-					Pins.getOutputPin(gioIndex).high();
+					Pins.getOutputPin(gioIndexB,0);
+					Pins.getOutputPin(gioIndex,1);
 				} else { 
-					Pins.getOutputPin(gioIndex).low();
-					Pins.getOutputPin(gioIndexB).high();
+					Pins.getOutputPin(gioIndex,0);
+					Pins.getOutputPin(gioIndexB,1);
 				}
 				setCurrentDirection(channel, 0); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
@@ -102,11 +103,11 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) { 
-					Pins.getOutputPin(gioIndex).low();
-					Pins.getOutputPin(gioIndexB).high();
+					Pins.getOutputPin(gioIndex,0);
+					Pins.getOutputPin(gioIndexB,1);;
 				} else {
-					Pins.getOutputPin(gioIndexB).low();
-					Pins.getOutputPin(gioIndex).high();
+					Pins.getOutputPin(gioIndexB,0);
+					Pins.getOutputPin(gioIndex,1);;
 				}
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
@@ -134,9 +135,9 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	public int commandEmergencyStop(int status) throws IOException {
 		for(int j=1; j <= channels; j++) {
 			if(getMotorDigitalPin(j) != 255) {
-				Pins.getOutputPin(getMotorEnablePin(j)).low();
-				Pins.getOutputPin(getMotorDigitalPin(j)).low();
-				Pins.getOutputPin(getMotorDigitalPinB(j)).low();
+				Pins.getOutputPin(getMotorEnablePin(j),0);
+				Pins.getOutputPin(getMotorDigitalPin(j),0);
+				Pins.getOutputPin(getMotorDigitalPinB(j),0);
 			}
 		}
 		fault_flag = 16;

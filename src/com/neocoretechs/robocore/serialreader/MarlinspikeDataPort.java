@@ -13,11 +13,13 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SwitchHBri
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.AbstractPWMControl;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.VariablePWMDriver;
+/*
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.exception.GpioPinExistsException;
+*/
 
 /**
  * RoboCore robotic controller platform to SBC (Odroid, RPi) GPIO headers interface to object model.
@@ -92,8 +94,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	boolean Stopped=false;
 	boolean target_direction;
 	
-	private GpioPinDigitalOutput dpin;
-	private GpioPinDigitalInput ipin;
+	//private GpioPinDigitalOutput dpin;
+	//private GpioPinDigitalInput ipin;
 	int nread = 0;
 	long micros = 0;
 	int[] values;
@@ -459,7 +461,12 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 					if(code_seen('W')) {
 						pin_number = (int) code_value();
-						motorControl[motorController].createEncoder(channel, pin_number, 0); // presume interrupt dealt with internally
+						try {
+							motorControl[motorController].createEncoder(channel, pin_number, 0);
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						} // presume interrupt dealt with internally
 					}
 					if(code_seen('E')) {
 						motorControl[motorController].setDefaultDirection(channel, (int) code_value());
@@ -527,7 +534,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							if(encode_pin != 0) {
 								motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
 							}
-						} catch (IOException | GpioPinExistsException gpioe) {
+						} catch (IOException /*| GpioPinExistsException*/ gpioe) {
 							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
 							return ret;
 						}
@@ -603,7 +610,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					if(encode_pin != 0) {
 						motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
 					}
-				  } catch (IOException | GpioPinExistsException gpioe) {
+				  } catch (IOException /*| GpioPinExistsException*/ gpioe) {
 						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
 						return ret;
 				  }
@@ -665,20 +672,35 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							if( code_seen('I')) {
 								interrupt_pin = (int) code_value();
 							}
-						  try {
+						  //try {
 							  if(onePin)
-								  ((SwitchHBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, dir_pin, dir_default);
-							  else
-								  ((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_default);
+								try {
+									((SwitchHBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, dir_pin, dir_default);
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							else
+								try {
+									((SwitchBridgeDriver)motorControl[motorController]).createDigital(channel, pin_number, pin_numberB, dir_pin, dir_default);
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
 							  if(DEBUG)
 								  System.out.printf("%s Created M5 control %s for slot %d%n", this.getClass().getName(), (SwitchBridgeDriver)motorControl[motorController], motorController);
 							  if(encode_pin != 0) {
-								  motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
+								  try {
+									motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
+								  } catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								  }
 							  }
-						  } catch (GpioPinExistsException gpioe) {
-							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-							return ret;
-						  }
+						  //} catch (GpioPinExistsException gpioe) {
+						//	ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							//return ret;
+						  //}
 						  ret.add(String.format("%sM5%s%n",MSG_BEGIN,MSG_TERMINATE));
 						  return ret;
 					  } // code C
@@ -809,7 +831,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 					try {
 						((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, dir_default, pwm_freq);
-					} catch (IOException | GpioPinExistsException gpioe) {
+					} catch (IOException /*| GpioPinExistsException*/ gpioe) {
 						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
 						return ret;
 					}
@@ -831,7 +853,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					motorController = (int) code_value();
 					if( code_seen('T') ) {
 						int controllerType = (int) code_value();
-						try {
+						//try {
 						switch(controllerType) {
 							case 0: // type 0 smart controller
 								if( motorControl[motorController]  != null) {
@@ -950,10 +972,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 								ret.add(String.format("%sBAD CONTROLLER TYPE:%d%s%n",MSG_BEGIN,controllerType,MSG_TERMINATE));
 								return ret;
 						}
-						} catch (GpioPinExistsException gpioe) {
-							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-							return ret;
-						}
+						//} catch (GpioPinExistsException gpioe) {
+						//	ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						//	return ret;
+						//}
 					} else {
 						ret.add(String.format("%sBAD CONTROLLER TYPE:CONTROLLER TYPE DIRECTIVE NOT SEEN:%d%s%n",MSG_BEGIN,MSG_TERMINATE));
 						return ret;
@@ -1072,12 +1094,17 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						if( code_seen('I')) {
 							interrupt_pin = (int) code_value();
 						}
-						try {
-							motorControl[motorController].createEncoder(channel, pin, analogRangeL, analogRangeH, counts, interrupt_pin);
-						} catch(GpioPinExistsException gpioe) {
-							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-							return ret;
-						}
+						//try {
+							try {
+								motorControl[motorController].createEncoder(channel, pin, analogRangeL, analogRangeH, counts, interrupt_pin);
+							} catch (IOException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						//} catch(GpioPinExistsException gpioe) {
+						//	ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						//	return ret;
+						//}
 						ret.add(String.format("%sM14%s%n",MSG_BEGIN,MSG_TERMINATE));
 						return ret;
 					}
@@ -1106,12 +1133,17 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							if( code_seen('I')) {
 								interrupt_pin = (int) code_value();
 							}
-							try {
-								motorControl[motorController].createDigitalEncoder(channel, pin, (digitalState == 0 ? PinState.LOW : PinState.HIGH), counts, interrupt_pin);
-							} catch(GpioPinExistsException gpioe) {
-								ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-								return ret;
-							}
+							//try {
+								try {
+									motorControl[motorController].createDigitalEncoder(channel, pin, 1, counts, interrupt_pin);
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							//} catch(GpioPinExistsException gpioe) {
+							//	ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+							//	return ret;
+							//}
 							ret.add(String.format("%sM15%s%n",MSG_BEGIN,MSG_TERMINATE));
 							return ret;
 						}
@@ -1139,12 +1171,12 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							dir_face = (int) code_value(); // optional
 						}
 						Ultrasonic psonics = new Ultrasonic();
-						try {
+						//try {
 							motorControl[motorController].linkDistanceSensor( pin_number, (Ultrasonic)psonics, dist, dir_face);
-						} catch(GpioPinExistsException gpioe) {
-							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-							return ret;
-						}
+						//} catch(GpioPinExistsException gpioe) {
+						//	ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+						//	return ret;
+						//}
 						ret.add(String.format("%sM33%s%n",MSG_BEGIN,MSG_TERMINATE));
 						return ret;
 					} // code_seen = 'P'
@@ -1247,14 +1279,19 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			     pin_number = -1;
 			     if (code_seen('P')) {
 				     pin_number = (int)code_value();
-				     try {
-				    	Pins.assignPin(pin_number);
+				    // try {
+				    	try {
+							Pins.assignPin(pin_number);
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
 					 	ret.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
 					 	return ret;
-					} catch(GpioPinExistsException gpioe) {
-							ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-							return ret;
-					}
+					//} catch(GpioPinExistsException gpioe) {
+					//		ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
+					//		return ret;
+					//}
 			     }
 			     break;
 			  //
@@ -1264,8 +1301,9 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			  //
 			  case 42:
 				  pin_number = -1;
-				  if (code_seen('P')) {
+				  if (code_seen('P')) 
 					  pin_number = (int)code_value();
+				  /*
 					  dpin = Pins.getOutputPin(pin_number);
 				      if(code_seen('S')) {
 				    	 codenum = (int)code_value(); // current state
@@ -1289,6 +1327,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					ret.add(String.format("%sM42%s%n",MSG_BEGIN,MSG_TERMINATE));
 					return ret;
 				  }
+				  */
 				  break;
 			  //
 			  // M43 P<pin>
@@ -1302,7 +1341,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				    	 Pins.assignInputPin(pin_number);
 				    	 ret.add(String.format("%sM43%s%n",MSG_BEGIN,MSG_TERMINATE));
 				    	 return ret;
-					} catch(GpioPinExistsException gpioe) {
+					} catch(IOException gpioe) {
 						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
 						return ret;
 					}
@@ -1316,6 +1355,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		        int res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
+		          /*
 		          ipin = Pins.getInputPin(pin_number);
 		          switch(ipin.getState()) {
 		          	case LOW:
@@ -1328,6 +1368,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		          		res = 0;
 		          		break;
 		          }
+		          */
 				  ret.add(String.format("%s%s%s%n",MSG_BEGIN,digitalPinHdr,MSG_DELIMIT));
 				  ret.add(String.format("0 %d%n",pin_number));
 				  ret.add(String.format("1 %d%n",res));
@@ -1379,7 +1420,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		        res = 0;
 		        if (code_seen('P')) {
 		          pin_number = (int)code_value();
-			      GpioPinAnalogInput apin = null;
+			      /*GpioPinAnalogInput apin = null;
 			      apin = Pins.getAnalogInputPin(pin_number);
 			      if(apin == null) {
 					try {
@@ -1390,6 +1431,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 				 }
 			     res = (int) apin.getValue();
+			     */
 		         ret.add(String.format("%s%s%s%n",MSG_BEGIN,analogPinHdr,MSG_DELIMIT));
 		         ret.add(String.format("0 %d%n",pin_number));
 		         ret.add(String.format("1 %d%n",res));
@@ -1406,6 +1448,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				   pin_number = (int)code_value();
 				   digitarg = code_seen('T') ? (int)code_value() : 0;
 			          pin_number = (int)code_value();
+			          /*
 				      GpioPinAnalogInput apin = null;
 				      apin = Pins.getAnalogInputPin(pin_number);
 				      if(apin == null) {
@@ -1423,6 +1466,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						   ret.add(String.format("%sM47%s%n",MSG_BEGIN,MSG_TERMINATE));
 						   return ret;
 					 }
+					 */
 			   }
 			 break;
 			 
@@ -1512,9 +1556,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				ret.add(String.format("1 %d%n", psonics[i].getRange()));
 				ret.add(String.format("%s%s%s%n",MSG_BEGIN,sonicCntrlHdr,MSG_TERMINATE));
 				return ret;	
-		    	} catch(GpioPinExistsException | IOException gpee) {
-		    		
-		    	}
+		    	} catch(/*GpioPinExistsException |*/ IOException gpee) {}
 		      }
 		    break;
 			//
@@ -1562,6 +1604,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					int i = 0;
 					analogRanges[0][i] = code_seen('L') ? code_value() : 0;
 					analogRanges[1][i] = code_seen('H') ? code_value() : 0;
+					/*
 					GpioPinAnalogInput apin = null;
 					apin = Pins.getAnalogInputPin(pin_number);
 					if(apin == null) {
@@ -1580,6 +1623,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						ret.add(String.format(MSG_BEGIN,analogPinHdr,MSG_TERMINATE));
 						return ret;
 					}
+					*/
 				}
 				ret.add(String.format("%sM304%s%n",MSG_BEGIN,MSG_TERMINATE));
 				return ret;
@@ -2013,6 +2057,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			case 802:
 				// Publish <dataset> 0 - pin, 1-S - reading
 		        sb = new StringBuilder();
+		        /*
 		        GpioPinAnalogInput apin = null;
 				if( code_seen('P')) {
 					codenum = (int) code_value();
@@ -2026,6 +2071,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						}
 					}				
 				}
+				*/
 				nread = 0;
 				if( code_seen('S') ) {
 					nread = (int)code_value();
@@ -2036,7 +2082,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 				values = new int[nread];
 				for(int i = 0; i < nread; i++) {
-					values[i] = (int) apin.getValue();
+					//values[i] = (int) apin.getValue();
 					for(int j = 0; j < micros; j++)
 						try {
 							Thread.sleep(0,1000);
@@ -2228,8 +2274,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		* If we have values in analogRanges for this pin, check the reading and if it is between these ranges
 		* reject the reading. This allows us to define a center or rest point for a joystick etc.
 		* If no values were specified on the M code invocation, ignore and process regardless of value.
-		*/
-		void printAnalog(GpioPinAnalogInput apin, int index) {
+		
+		void printAnalog(GpioPinAnalogInput pin, int index) {
 			//pin = new Analog(upin);
 			double nread = apin.getValue();
 			// jitter comp.
@@ -2256,9 +2302,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			//delete pin;
 			System.out.println(sb.toString());
 		}
+		*/
 		/**
 		* 'target' represents the expected value. Two elements returned in sequence. 1 - Pin, 2 - reading
-		*/
+		
 		void printDigital(GpioPinDigitalOutput dpin, boolean target) {
 			//dpin = new Digital(upin);
 			//dpin->pinMode(INPUT);
@@ -2286,6 +2333,6 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			}
 			System.out.println(sb.toString());
 		}
-
+		*/
 	
 }

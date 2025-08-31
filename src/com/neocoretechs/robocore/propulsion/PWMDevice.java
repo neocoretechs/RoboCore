@@ -4,7 +4,12 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 /**
  * Relies on -DPWMDevices=legacy or be absent to support older distros
- * @author Jonathan Groff Copyright (C) NeoCoreTEchs 2025
+ * must be exported first: echo 0 > /sys/class/pwm/pwmchip0/export
+ * echo 500000 > /sys/class/pwm/pwmchip0/pwm0/duty_cycle 
+ * the duty cycle (in nanoseconds). This value should be less than or equal to the period.
+ * If you want a PWM signal with a frequency of 1 kHz and a 50% duty cycle, you would set the period to 
+ * 1,000,000 ns (1 ms) and the duty cycle to 500,000 ns (0.5 ms).
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  */
 public class PWMDevice {
 	private static String duty0 = "/sys/devices/platform/pwm-ctrl/duty0"; // 0-1023
@@ -17,7 +22,7 @@ public class PWMDevice {
 		if(System.getProperty("PWMDevices") != null && !System.getProperty("PWMDevices").equals("legacy")) {
 			duty0 = "/sys/class/pwm/pwmchip0/pwm0/duty_cycle"; // 0-1023
 			freq0 = "/sys/class/pwm/pwmchip0/pwm0/period"; // in Hz 0 - 1000000
-			enable0 = ":/sys/class/pwm/pwmchip0/pwm0/enable"; // 0 or 1
+			enable0 = "/sys/class/pwm/pwmchip0/pwm0/enable"; // 0 or 1
 			duty1 = "/sys/class/pwm/pwmchip0/pwm1/duty_cycle";
 			freq1 = "/sys/class/pwm/pwmchip0/pwm1/period"; // in Hz 0 - 1000000
 			enable1 = "/sys/class/pwm/pwmchip0/pwm1/enable"; // 0 or 1
@@ -60,14 +65,20 @@ public class PWMDevice {
 		return enable1;
 	}
 	public static void main(String[] args) throws IOException {
-		try (RandomAccessFile pwm = new RandomAccessFile("/sys/devices/platform/pwm-ctrl/duty0","rw")) {
-			for(int i = 0; i < args.length; i++) {
-				pwm.writeBytes(args[i]);
-				pwm.seek(0);
-				String pwmr = pwm.readLine();
-				System.out.println(pwmr);
+		try (RandomAccessFile pwmE = new RandomAccessFile(enable0,"rw")) {
+		try (RandomAccessFile pwmD = new RandomAccessFile(duty0,"rw")) {
+			try (RandomAccessFile pwmP = new RandomAccessFile(freq0,"rw")) {
+					pwmE.writeBytes("1");
+					pwmD.writeBytes("1000000");
+					pwmP.writeBytes("1000000");
+					try {
+						Thread.sleep(30000);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+					pwmE.writeBytes("0"); // disable
 			}
-			//FileDescriptor fd = pwm.getFD();
+		}
 		}
 
 	}

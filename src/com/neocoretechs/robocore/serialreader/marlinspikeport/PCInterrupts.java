@@ -3,7 +3,7 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
-
+/*
 import com.pi4j.io.gpio.GpioPinAnalogInput;
 import com.pi4j.io.gpio.GpioPinDigitalInput;
 import com.pi4j.io.gpio.OdroidC1Pin;
@@ -14,6 +14,7 @@ import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
 import com.pi4j.io.gpio.event.GpioPinListenerAnalog;
 import com.pi4j.io.gpio.event.GpioPinListenerDigital;
 import com.pi4j.util.CommandArgumentParser;
+*/
 /**
  * The 'pins' referred to here are the WiringPi GPIO pin designations which map to the physical 40 pin header as follows:<p/>
  * Phy | WPi <br/>
@@ -41,22 +42,24 @@ import com.pi4j.util.CommandArgumentParser;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  *
  */
-public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnalog {
+public class PCInterrupts /*implements GpioPinListenerDigital, GpioPinListenerAnalog*/ {
 	private static boolean DEBUG = false;
-	static PinState[] PCintMode = new PinState[28];
+	//static PinState[] PCintMode = new PinState[28];
 	static double[] PCintLoValue = new double[2];
 	static double[] PCintHiValue = new double[2];
-	static ConcurrentHashMap<Pin, InterruptServiceInterface> PCintFunc = new ConcurrentHashMap<Pin, InterruptServiceInterface>();
+	static ConcurrentHashMap<Integer, InterruptServiceInterface> PCintFunc = new ConcurrentHashMap<Integer, InterruptServiceInterface>();
 	/**
 	 * Attach analog input pin to state change interrupt
 	 * @param pin
 	 * @param userFunc
 	 * @param value
+	 * @throws IOException 
 	 */
-	public void attachInterrupt(int pin, InterruptServiceInterface userFunc, double loValue, double hiValue) {
-		GpioPinAnalogInput ppin = Pins.assignAnalogInputPin(pin);
-		ppin.addListener(this);
-		Pin pipin = Pins.getPin(pin);
+	public void attachInterrupt(int pin, InterruptServiceInterface userFunc, double loValue, double hiValue) throws IOException {
+		/*GpioPinAnalogInput ppin =*/ Pins.assignAnalogInputPin(pin);
+		//ppin.addListener(this);
+		//Pin pipin = Pins.getPin(pin);
+		/*
 		switch(pin) {
 			case 37:
 				Pins.apins[1] = ppin;
@@ -71,7 +74,8 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			default:
 				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to attach interrupt, but got pin:"+pin);
 		}
-		PCintFunc.put(pipin,userFunc);	
+		*/
+		PCintFunc.put(pin,userFunc);	
 	}
 	
 	/**
@@ -79,33 +83,39 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 	 * @param pin
 	 * @param userFunc
 	 * @param mode
+	 * @throws IOException 
 	 */
-	public void attachInterrupt(int pin, InterruptServiceInterface userFunc, PinState mode) {
-		if(pin >= PCintMode.length)
-			throw new RuntimeException("Pin number "+pin+" out of range to provision as digital input to attach interrupt, are you trying to attach a digital pin state to an analog pin?");
-		PCintMode[pin] = mode;
-		Pin pipin = Pins.getPin(pin);
-		PCintFunc.put(pipin,userFunc);
-		Pins.pinsIn[pin] = Pins.assignInputPin(pin);
-		Pins.pinsIn[pin].addListener(this);
+	public void attachInterrupt(int pin, InterruptServiceInterface userFunc, int mode) throws IOException {
+		//if(pin >= PCintMode.length)
+		//	throw new RuntimeException("Pin number "+pin+" out of range to provision as digital input to attach interrupt, are you trying to attach a digital pin state to an analog pin?");
+		//PCintMode[pin] = mode;
+		//Pin pipin = Pins.getPin(pin);
+		Pins.assignAnalogInputPin(pin);
+		PCintFunc.put(pin,userFunc);
+		//Pins.pinsIn[pin] = Pins.assignInputPin(pin);
+		//Pins.pinsIn[pin].addListener(this);
 	}
 	
 	/**
 	 * Detach digital interrupt from pin
 	 * @param pin
+	 * @throws IOException 
 	 */
-	public void detachDigitalInterrupt(int pin) {
-		Pin pipin = Pins.getPin(pin);
-		PCintFunc.remove(pipin);
-		Pins.pinsIn[pin].removeListener(this);
-		Pins.pinsIn[pin] = null;
+	public void detachDigitalInterrupt(int pin) throws IOException {
+		//Pin pipin = Pins.getPin(pin);
+		PCintFunc.remove(pin);
+		//Pins.pinsIn[pin].removeListener(this);
+		Pins.pinsIn[pin] = 0;
+		Pins.unassignPin(pin);
 	}
 	
 	/**
 	 * Detach analog interrupt from analog input pin
 	 * @param pin
+	 * @throws IOException 
 	 */
-	public void detachAnalogInterrupt(int pin) {
+	public void detachAnalogInterrupt(int pin) throws IOException {
+		/*
 		Pin pipin = null;
 		switch(pin) {
 			case 37:
@@ -125,10 +135,12 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			default:
 				throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0 to detach interrupt, but got pin:"+pin);
 		}
-		PCintFunc.remove(pipin);	
+		*/
+		PCintFunc.remove(pin);	
+		Pins.unassignPin(pin);
 	}
 	
-	@Override
+	/*
 	public void handleGpioPinDigitalStateChangeEvent(GpioPinDigitalStateChangeEvent event) {
 		InterruptServiceInterface ints =  PCintFunc.get(event.getPin().getPin());
 		if(ints == null)
@@ -148,8 +160,8 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 			}
 		}
 	}
-
-	@Override
+	*/
+	/*
 	public void handleGpioPinAnalogValueChangeEvent(GpioPinAnalogValueChangeEvent event) {
 		InterruptServiceInterface ints =  PCintFunc.get(event.getPin().getPin());
 		if(ints == null)
@@ -182,7 +194,7 @@ public class PCInterrupts implements GpioPinListenerDigital, GpioPinListenerAnal
 		}
 		
 	}
-	
+	*/
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder("Pin Change Interrupts:\r\n");

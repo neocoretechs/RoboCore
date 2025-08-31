@@ -5,7 +5,7 @@ import java.io.IOException;
 import com.neocoretechs.robocore.propulsion.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
-import com.pi4j.io.gpio.GpioPinDigitalOutput;
+//import com.pi4j.io.gpio.GpioPinDigitalOutput;
 /**
  * Abstract driver for a collection of H bridge driven brushed DC motor channels.
  * Structure:
@@ -23,7 +23,8 @@ import com.pi4j.io.gpio.GpioPinDigitalOutput;
  */
 public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	protected PWM[] ppwms = new PWM[channels];
-	protected GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels];
+	//protected GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels];
+	protected int pdigitals[] = new int[channels];
 	// 10 possible drive wheels, index is by channel-1. 
 	// motorDrive[channel] {{PWM array index],[dir pin],[timer freq}}
 	// PWM params array by channel:
@@ -46,14 +47,16 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	public void createPWM(int channel, int pin_number, int dir_pin, int dir_default, int timer_freq) throws IOException {
 		// Attempt to assign PWM pin
 		if( getChannels() < channel ) setChannels(channel);
-		GpioPinDigitalOutput opin = Pins.assignPin(dir_pin);
+		/*GpioPinDigitalOutput opin =*/ Pins.assignPin(dir_pin);
+		
 		int dirpin;
 		for(dirpin = 0;dirpin < channels; dirpin++) {
-			if(pdigitals[dirpin] == null) {
-				pdigitals[dirpin] = opin;
+			if(pdigitals[dirpin] == 0) {
+				pdigitals[dirpin] = dir_pin;
 				break;
 			}
 		}
+		
 		int pindex;
 		for(pindex = 0; pindex < channels; pindex++) {
 			if( ppwms[pindex] == null ) {

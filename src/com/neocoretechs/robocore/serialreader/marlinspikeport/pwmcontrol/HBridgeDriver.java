@@ -3,8 +3,8 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.propulsion.PWM;
-import com.pi4j.io.gpio.GpioPinDigitalOutput;
-import com.pi4j.io.gpio.PinMode;
+//import com.pi4j.io.gpio.GpioPinDigitalOutput;
+//import com.pi4j.io.gpio.PinMode;
 
 /**
  * Generic driver for a collection of H bridge driven brushed DC motor channels.
@@ -57,7 +57,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		setMotorSpeed(channel, motorPower);
 		int pwmIndex = motorDrive[channel-1][0]; // index to PWM array
 		int dirPinIndex = motorDrive[channel-1][1]; // index to dir pin array
-		//int freq = motorDrive[channel][2]; // value of freq, no index;
+		int freq = motorDrive[channel][2]; // value of freq, no index;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
 		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
@@ -65,9 +65,9 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex].high();
+					pdigitals[dirPinIndex] = 1;//.high();
 				else 
-					pdigitals[dirPinIndex].low();
+					pdigitals[dirPinIndex] = 0;//.low();
 				setCurrentDirection(channel, 0); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
@@ -76,9 +76,9 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex].low();
+					pdigitals[dirPinIndex] = 0;//.low();
 				else
-					pdigitals[dirPinIndex].high();
+					pdigitals[dirPinIndex] = 1;//.high();
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
@@ -107,7 +107,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		//ppwms[pwmIndex].freq(freq);
+		ppwms[pwmIndex].freq(freq);
 		ppwms[pwmIndex].pwmWrite(motorPower);
 		return 0;
 	}
@@ -148,7 +148,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		if( motorDrive[ch-1][0] == 255 ) {
 			return String.format("HB-PWM UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("HB-PWM Channel %d Pin:%d, Dir Pin:%s%n",ch, ppwms[motorDrive[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]].getPin());	
+		return String.format("HB-PWM Channel %d Pin:%d, Dir Pin:%d%n",ch, ppwms[motorDrive[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]]);	
 	}
 
 	@Override

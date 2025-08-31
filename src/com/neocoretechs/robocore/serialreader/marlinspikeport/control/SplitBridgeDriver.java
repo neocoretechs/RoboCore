@@ -4,7 +4,7 @@ import java.io.IOException;
 
 import com.neocoretechs.robocore.propulsion.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
-import com.pi4j.io.gpio.GpioPinDigitalOutput;
+//import com.pi4j.io.gpio.GpioPinDigitalOutput;
 
 /**
 * SplitBridgeDriver<p/>
@@ -100,9 +100,9 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex].high();
+					pdigitals[dirPinIndex] = 1;//.high();
 				else 
-					pdigitals[dirPinIndex].low();
+					pdigitals[dirPinIndex] = 0;//.low();
 				setCurrentDirection(channel, 0); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
@@ -111,9 +111,9 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex].low();
+					pdigitals[dirPinIndex] = 0;//.low();
 				else
-					pdigitals[dirPinIndex].high();
+					pdigitals[dirPinIndex] = 1;//.high();
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
@@ -155,9 +155,9 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex].high();
+					pdigitals[dirPinIndex] = 1;//.high();
 				else 
-					pdigitals[dirPinIndex].low();
+					pdigitals[dirPinIndex] = 0;//.low();
 				setCurrentDirection(channel, 0); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
@@ -166,9 +166,9 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex].low();
+					pdigitals[dirPinIndex] = 0;//.low();
 				else
-					pdigitals[dirPinIndex].high();
+					pdigitals[dirPinIndex] = 1;//.high();
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
@@ -225,7 +225,7 @@ public class SplitBridgeDriver extends HBridgeDriver {
 		if( motorDrive[ch-1][0] == 255 ) {
 			return String.format("SplitBridge-PWM UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("SplitBridge-PWM Channel %d PinA:%d, PinB:%d Dir Pin:%s%n",ch, ppwms[motorDrive[ch-1][0]].pin, ppwms[motorDriveB[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]].getPin());	
+		return String.format("SplitBridge-PWM Channel %d PinA:%d, PinB:%d Dir Pin:%d%n",ch, ppwms[motorDrive[ch-1][0]].pin, ppwms[motorDriveB[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]]);	
 	}
 	
 	@Override

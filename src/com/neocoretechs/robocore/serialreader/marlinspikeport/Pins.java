@@ -1,7 +1,8 @@
 package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
+import java.io.IOException;
 import java.util.Arrays;
-
+/*
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPin;
@@ -17,6 +18,8 @@ import com.pi4j.platform.Platform;
 import com.pi4j.platform.PlatformAlreadyAssignedException;
 import com.pi4j.platform.PlatformManager;
 import com.pi4j.util.CommandArgumentParser;
+*/
+import com.neocoretechs.robocore.GpioNative;
 /**
  * If we are not using the default Raspberry Pi platform, we should
  * explicitly assign the platform as the Odroid platform.<p/>
@@ -50,10 +53,19 @@ import com.pi4j.util.CommandArgumentParser;
  */
 public class Pins {
 	public static boolean DEBUG = false;
+	public static int pinsIn[] = new int[80];
+	public static int pinsOut[] = new int[80];
+	public static int Pin[] = new int[80];
+	public static int err;
+	/*
 	private static GpioController gpioController = null;
 	static GpioPinDigitalInput[] pinsIn = new GpioPinDigitalInput[28];
 	static GpioPinDigitalOutput[] pinsOut = new GpioPinDigitalOutput[28];
 	static GpioPinAnalogInput[] apins = new GpioPinAnalogInput[2];
+	*/
+	public static GpioNative gpio = new GpioNative();
+	public static String gpioChip = "gpiochip0";
+	public static boolean chipOpen = false;
 	static int analogPollRate = 100; // ms between analog change for firing
 	static int analogChangeThreshold = 511; // amount analog input has to change before firing
 	public static double MAXVOLTS = 5.0; //normally analog in is limited to 1.8 volts, but if you are using a level shifter (as you should) it can be up to 5
@@ -62,7 +74,19 @@ public class Pins {
 	 * @param pin
 	 * @return
 	 */
-	public static Pin getPin(int pin) {
+	public static int getPin(String spin) throws IOException {
+		if(!chipOpen) {
+		  	if((err = gpio.openChip(gpioChip)) < 0)
+	    		throw new IOException("chipOpen error "+err);	
+			chipOpen = true;
+		}
+	   	// get handle to line struct
+    	int pin = gpio.findChipLine(spin);
+      	if(pin < 0)
+    		throw new IOException("findChipLine error:"+pin);
+    	Pin[pin] = 1;
+    	return pin;
+		/*
 		if(gpioController == null) {
 			try {
 				PlatformManager.setPlatform(Platform.ODROID);
@@ -84,6 +108,7 @@ public class Pins {
 		//Pin[] allPins = OdroidC1Pin.allPins();
 		//for(Pin p: allPins)
 			//System.out.println("Pin "+p);
+		
 		Pin pipin = null;
 	    // ####################################################################
         //
@@ -202,39 +227,55 @@ public class Pins {
 				throw new RuntimeException("Digital Pins limited to numbers 0,1,2,3,4,5,6,7 10,11,12,13,14 21,22,23,24 26,27 and analog in 37,40 (Pins 19 and 33 are PWM and cannot be assigned to digital)");
 		}
 		return pipin;
+		*/
 	}
 	/**
 	 * Assign pin as output
 	 * @param pin
 	 * @return
+	 * @throws IOException 
 	 */
-	public static GpioPinDigitalOutput assignPin(int pin) {
-		Pin xpin = getPin(pin);
-		GpioPinDigitalOutput opin = gpioController.provisionDigitalOutputPin(xpin,String.valueOf(pin),PinState.LOW);
+	public static void assignPin(int pin) throws IOException {
+		//Pin xpin = getPin(pin);
+		//GpioPinDigitalOutput opin = gpioController.provisionDigitalOutputPin(xpin,String.valueOf(pin),PinState.LOW);
 		//opin.setMode(PinMode.DIGITAL_OUTPUT);
-		opin.setShutdownOptions(false, PinState.LOW); // false = unexport
-		pinsOut[pin] = opin;
+		//opin.setShutdownOptions(false, PinState.LOW); // false = unexport
+		if((err = gpio.lineRequestOutput(pin)) < 0)
+	 		throw new IOException("lineRequestOutput error:"+err);
+		pinsOut[pin] = 1;
 		if(DEBUG)
-			System.out.printf("Pins.assignPin output pin set %d to %s%n", pin, opin);
-		return opin;
+			System.out.printf("Pins.assignPin output pin set %d%n", pin);
 	}
 	
-	public static void unassignPin(GpioPin pin) {
-		pin.removeAllListeners();
-		gpioController.unprovisionPin(pin);
+	public static void unassignPin(int pin) throws IOException {
+		//pin.removeAllListeners();
+		//gpioController.unprovisionPin(pin);
+	  	if((err = gpio.lineRelease(pin)) < 0)
+	  		throw new IOException("unassignPin error:"+err);
+	  	Pin[pin] = 0;
+	  	pinsIn[pin] = 0;
+	  	pinsOut[pin] = 0;
 	}
 	
-	public static GpioPinDigitalInput assignInputPin(int pin) {
-		Pin xpin = getPin(pin);
-		GpioPinDigitalInput ipin = gpioController.provisionDigitalInputPin(xpin,String.valueOf(pin));
+	public static void assignInputPin(int pin) throws IOException {
+		//Pin xpin = getPin(pin);
+		//GpioPinDigitalInput ipin = gpioController.provisionDigitalInputPin(xpin,String.valueOf(pin));
 		//ipin.setMode(PinMode.DIGITAL_INPUT);
-		pinsIn[pin] = ipin;
+		if((err = gpio.lineRequestInput(pin)) < 0)
+	 		throw new IOException("lineRequestOutput error:"+err);
+		Pin[pin] = 1;
+		pinsIn[pin] = pin;
 		if(DEBUG)
-			System.out.printf("Pins.assignInputPin input pin set %d to %s%n", pin, ipin);
-		return ipin;
+			System.out.printf("Pins.assignInputPin input pin set %d%n", pin);
+		//return ipin;
 	}
 	
-	public static GpioPinAnalogInput assignAnalogInputPin(int pin) {
+	public static /*GpioPinAnalogInput*/ void assignAnalogInputPin(int pin) throws IOException {
+		 if((err = gpio.lineRequestRisingEdgeEvents(pin)) < 0)
+			 throw new IOException("lineRequestRisingEdgeEvents error:"+err);
+			Pin[pin] = 1;
+			pinsIn[pin] = pin;
+		/*
 			Pin pipin = null;
 			GpioPinAnalogInput apin;
 			if(gpioController == null) {
@@ -275,17 +316,39 @@ public class Pins {
 			if(DEBUG)
 				System.out.printf("Pins.assignAnalogInputPin input pin set %d to %s%n", pin, apin);
 			return apin;
+			*/
 	}
 	
-	public static GpioPinDigitalInput getInputPin(int pin) {
-		return pinsIn[pin];
+	public static /*GpioPinDigitalInput*/ int getInputPin(int pin) throws IOException {
+		//return pinsIn[pin];
+		int ret = gpio.lineGetValue(pin);
+		if(ret < 0)
+			throw new IOException("lineGetValue error:"+ret);
+		return ret;
 	}
 	
-	public static GpioPinDigitalOutput getOutputPin(int pin) {
-		return pinsOut[pin];
+	public static /*GpioPinDigitalOutput*/ void getOutputPin(int pin, int val) throws IOException{
+		//return pinsOut[pin];
+		int ret = gpio.lineSetValue(pin, val);
+		if(ret < 0)
+			throw new IOException("lineSetValue error:"+ret);
 	}
-	
-	public static GpioPinAnalogInput getAnalogInputPin(int pin) {
+	/**
+	 * 
+	 * @param pin
+	 * @return 1 rising edge, 3 falling edge, 0 unknown
+	 * @throws IOException
+	 */
+	public static /*GpioPinAnalogInput*/ int getAnalogInputPin(int pin) throws IOException {
+		while((err = gpio.lineEventWait(pin)) == 0) {		
+		}
+		if(err < 0)
+			throw new IOException("lineEventWait error:"+err);
+		int ret = gpio.lineEventRead(pin);
+		if(ret < 0)
+			throw new IOException("lineEventRead error:"+ret);
+		return ret;
+		/*
 		switch(pin) {
 		case 37:
 			return apins[1];
@@ -294,6 +357,7 @@ public class Pins {
 		default:
 			throw new RuntimeException("Analog pin values limited to 37, 40 for AIN1, AIN0, but got pin:"+pin);
 		}
+		*/
 	}
 	
 	public static void setAnalogPollRate(int rate) {
@@ -303,7 +367,7 @@ public class Pins {
 	public static void setAnalogChangeDelta(int delta) {
 		analogChangeThreshold = delta;
 	}
-
+	
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Input pins:");
@@ -312,8 +376,8 @@ public class Pins {
 		sb.append("Output pins:");
 		sb.append(Arrays.toString(pinsOut));
 		sb.append("\r\n");
-		sb.append("Analog Input pins:");
-		sb.append(Arrays.toString(apins));
+		//sb.append("Analog Input pins:");
+		//sb.append(Arrays.toString(apins));
 		sb.append("\r\n");
 		return sb.toString();
 	}

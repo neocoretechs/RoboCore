@@ -2,9 +2,9 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
 import java.io.IOException;
 
-import com.pi4j.io.gpio.PinState;
-import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
-import com.pi4j.io.gpio.event.GpioPinListenerDigital;
+//import com.pi4j.io.gpio.PinState;
+//import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
+//import com.pi4j.io.gpio.event.GpioPinListenerDigital;
 
 /**
  * Interrupt service that increments a counter. It can be attached to any timer or pin change to provide a monotomically

@@ -29,8 +29,9 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 	 * @param pin_number the index in the GPIO pin array defined in 'setMotors' for M1
 	 * @param pin_numberB the index in the GPIO array defined in 'setMotors' for M2
 	 * @param dir_pin the enable pin for this channel
+	 * @throws IOException 
 	 */
-	public void createDigital(int channel, int pin_number, int dir_pin, int dir_default) {
+	public void createDigital(int channel, int pin_number, int dir_pin, int dir_default) throws IOException {
 		Pins.assignPin(pin_number);
 		setMotorDigitalPin(channel, pin_number);
 		Pins.assignPin(dir_pin);
@@ -54,9 +55,9 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
-					Pins.getOutputPin(dirPinIndex).high();
+					Pins.getOutputPin(dirPinIndex,1);
 				else 
-					Pins.getOutputPin(dirPinIndex).low();
+					Pins.getOutputPin(dirPinIndex,0);
 				setCurrentDirection(channel, 0); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
@@ -65,9 +66,9 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
-					Pins.getOutputPin(dirPinIndex).low();
+					Pins.getOutputPin(dirPinIndex,0);
 				else
-					Pins.getOutputPin(dirPinIndex).high();
+					Pins.getOutputPin(dirPinIndex,1);
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
@@ -96,9 +97,9 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 		}
 		fault_flag = 0;
 		if(motorPower == 0)
-			Pins.getOutputPin(pIndex).low();
+			Pins.getOutputPin(pIndex,0);
 		else
-			Pins.getOutputPin(pIndex).high();
+			Pins.getOutputPin(pIndex,1);
 		return 0;
 	}
 
@@ -107,8 +108,8 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 		for(int j=1; j <= channels; j++) {
 			int pindex = getMotorDigitalPin(j);
 			if(pindex != 255) {
-				Pins.getOutputPin(getMotorEnablePin(j)).low(); // enable off
-				Pins.getOutputPin(pindex).low(); // drive off
+				Pins.getOutputPin(getMotorEnablePin(j),0); // enable off
+				Pins.getOutputPin(pindex,0); // drive off
 			}
 		}
 		fault_flag = status;
@@ -122,7 +123,7 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 		if( getMotorDigitalPin(ch) == 255 ) {
 			return String.format("HB-SWITCH UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("HB-SWITCH Channel %d Pin:%s, Dir Pin:%s%n",ch, Pins.getPin(getMotorDigitalPin(ch)), Pins.getPin(getMotorEnablePin(ch)));	
+		return String.format("HB-SWITCH Channel %d Pin:%d, Dir Pin:%d%n",ch, getMotorDigitalPin(ch), getMotorEnablePin(ch));	
 	}
 
 }

@@ -4,8 +4,8 @@ import java.io.IOException;
 
 import com.neocoretechs.robocore.propulsion.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
-import com.pi4j.io.gpio.GpioPinDigitalOutput;
-import com.pi4j.io.gpio.PinMode;
+//import com.pi4j.io.gpio.GpioPinDigitalOutput;
+//import com.pi4j.io.gpio.PinMode;
 
 /**
 * VariablePWMDriver
@@ -35,7 +35,7 @@ import com.pi4j.io.gpio.PinMode;
 public class VariablePWMDriver extends AbstractPWMControl {
 	public static int MAXPWMLEVEL = 2000;
 	PWM[] ppwms = new PWM[channels];
-	GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels];
+	/*GpioPinDigitalOutput[]*/int[] pdigitals = new /*GpioPinDigitalOutput*/int[channels];
 	public int getPWMLevelPin(int channel) { return pwmDrive[channel-1][0]; }
 	public int getPWMEnablePin(int channel) {return pwmDrive[channel-1][1]; }
 		
@@ -59,11 +59,11 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	public void createPWM(int channel, int pin_number, int enable_pin, int dir_default, int timer_freq) throws IOException {
 		// Attempt to assign PWM pin
 		if( getChannels() < channel ) setChannels(channel);
-		GpioPinDigitalOutput opin = Pins.assignPin(enable_pin);
+		/*GpioPinDigitalOutput opin =*/ Pins.assignPin(enable_pin);
 		int dirpin;
 		for(dirpin = 0;dirpin < channels; dirpin++) {
-			if(pdigitals[dirpin] == null) {
-				pdigitals[dirpin] = opin;
+			if(pdigitals[dirpin] == 0) {
+				pdigitals[dirpin] = pin_number;//opin;
 				break;
 			}
 		}
@@ -100,9 +100,9 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		pwmLevel[pwmChannel-1] = pwmPower;
 		// get mapping of channel to pin
 		int ePin = getPWMEnablePin(pwmChannel);
-		if(pdigitals[ePin] != null  ) {
-				pdigitals[ePin].setMode(PinMode.DIGITAL_OUTPUT);
-				pdigitals[ePin].high();
+		if(pdigitals[ePin] != 0  ) {
+				//pdigitals[ePin].setMode(PinMode.DIGITAL_OUTPUT);
+				pdigitals[ePin] = 1;
 				foundPin = true;
 		}
 		if(!foundPin) {
@@ -136,7 +136,7 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		for(int j=0; j < channels; j++) {
 			int pindex = pwmDrive[j][0];
 			if(pindex != 255) {
-					pdigitals[pindex].low();
+					pdigitals[pindex] = 0;//.low();
 			}
 			pindex = pwmDrive[j][0];
 			if(pindex != 255) {
@@ -158,7 +158,7 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		if( pwmDrive[ch-1][0] == 255 ) {
 			return String.format("Variable-PWM UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("Variable-PWM Channel %d Pin:%d, Dir Pin:%s%n",ch, ppwms[pwmDrive[ch-1][0]].pin, pdigitals[pwmDrive[ch-1][0]].getPin());	
+		return String.format("Variable-PWM Channel %d Pin:%d, Dir Pin:%d%n",ch, ppwms[pwmDrive[ch-1][0]].pin, pdigitals[pwmDrive[ch-1][0]]);	
 	}
 
 	@Override
