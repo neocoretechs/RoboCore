@@ -5,7 +5,6 @@ import java.io.IOException;
 import com.neocoretechs.robocore.serialreader.Ultrasonic;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.CounterInterruptService;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.PCInterrupts;
-//import com.pi4j.io.gpio.PinState;
 
 /**
 * AbstractMotorControl
@@ -74,7 +73,7 @@ public abstract class AbstractMotorControl {
 	protected int[] minMotorPower = new int[]{0,0,0,0,0,0,0,0,0,0}; // Offset to add to G5, use with care, meant to compensate for mechanical differences
 	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[channels]; // encoder service
 	protected PCInterrupts[] wheelEncoder = new PCInterrupts[channels];
-	protected int MOTORPOWERSCALE = 0; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
+	protected int MOTORPOWERSCALE = 1; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
 	protected boolean MOTORSHUTDOWN = false; // Override of motor controls, puts it up on blocks
 	protected int MAXMOTORPOWER = 1000; // Max motor power in PWM final timer units
 	protected int fault_flag = 0;
@@ -88,6 +87,8 @@ public abstract class AbstractMotorControl {
 	public abstract String getMotorFaultDescriptor(int fault);
 	public abstract String getMotorStatusDescriptor(int status);
 	public abstract void setInterruptServiceHandler(int intPin);
+	public abstract void enable(int ch) throws IOException;
+	public abstract void disable(int ch) throws IOException;
 
 	public void linkDistanceSensor(int channel, Ultrasonic us, int distance, int facing) {
 		int i;

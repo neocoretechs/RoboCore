@@ -146,9 +146,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 				p = -MAXMOTORPOWER;
 		}
 		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
-		if( MOTORPOWERSCALE != 0 ) {
-			p /= MOTORPOWERSCALE;
-		}
+		p /= MOTORPOWERSCALE;
 		command = String.format("!G %02d %d\r", ch, p);
 		fault_flag = 0;
 		return sendCommand(command);
@@ -212,7 +210,6 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		return buf.toString().length();
 	}
 
-
 	private int sendQuery(String commandx, StringBuilder response) {
 		if(DEBUG)
 			System.out.printf("%s sending query:%s%n", this.getClass().getName(),commandx);
@@ -226,7 +223,18 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		}
 		return readResponse(response);
 	}
-
+	
+	@Override
+	public void enable(int ch) throws IOException {
+		// enabled by default
+	}
+	
+	@Override
+	public void disable(int ch) throws IOException {
+		command = String.format("!G %02d %d\r", ch+1, 0); // channel to speed 0
+		this.sendCommand(command);
+	}
+	
 	@Override
     /**
      * send soft emergency stop command by setting all channels to 0 speed. fault_flag set to 16.
@@ -774,4 +782,5 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		*/
 		System.out.println(rd.getDriverInfo(1));
 	}
+
 }

@@ -22,22 +22,10 @@ import java.io.IOException;
  */
 public class DelayedHBridgeDriver extends HBridgeDriver {
 	public static boolean DEBUG = false;
-	final static String MSG_MOTORCONTROL_5= "Emergency stop";
-	int status_flag = 0;
 	
 	public DelayedHBridgeDriver(int maxPower) {
 		super(maxPower);
 	}
-	
-	public int getMotorPWMPin(int channel) { return motorDrive[channel-1][0]; }
-	public int getMotorEnablePin(int channel) {return motorDrive[channel-1][1]; }
-	int getPWMFrequency(int channel) {return motorDrive[channel-1][2]; }
-
-	@Override
-	public int queryFaultFlag() { return fault_flag; }
-	
-	@Override
-    public int queryStatusFlag() { return status_flag; }
 	
 	@Override
 	public void resetMaxMotorPower() {
@@ -63,7 +51,11 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 					pdigitals[dirPinIndex] = 1;//.high();
 				else 
 					pdigitals[dirPinIndex] = 0;//.low();
-				setCurrentDirection(channel, 0); // set new direction value
+				disable(channel-1);
+				try {
+					Thread.sleep(200);
+				} catch (InterruptedException e) {}
+				setCurrentDirection(channel, pdigitals[dirPinIndex]); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
 		} else { // dir is 0
@@ -74,14 +66,18 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 					pdigitals[dirPinIndex] = 0;//.low();
 				else
 					pdigitals[dirPinIndex] = 1;//.high();
-				setCurrentDirection(channel, 1);
+				disable(channel-1);
+				try {
+					Thread.sleep(200);
+				} catch (InterruptedException e) {}
+				setCurrentDirection(channel, pdigitals[dirPinIndex]);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
 				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
 			}
 		}
 
-		// scale motor power from 0-1000 
+		// scale motor power 
 		if( motorPower != 0 && motorPower < getMinMotorPower(channel))
 				motorPower = getMinMotorPower(channel);
 		if( motorPower > getMaxMotorPower() ) // cap it at max
@@ -103,62 +99,18 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 		}
 		fault_flag = 0;
 		ppwms[pwmIndex].freq(motorPower);
-		ppwms[pwmIndex].duty(motorPower/2);
+		ppwms[pwmIndex].duty(motorPower/2); //50% duty cycle
+		enable(channel-1);
 		return 0;
 	}
 
 	@Override
-	public int commandEmergencyStop(int status) throws IOException {
-		for(int j=0; j < channels; j++) {
-			int pindex = motorDrive[j][0];
-			if(pindex != 255) {
-				//ppwms[pindex].init(ppwms[pindex].pin);
-				ppwms[pindex].pwmOff();
-			}
-		}
-		fault_flag = status;
-		resetSpeeds();
-		resetEncoders();
-		return status;
-	}
-
-	@Override
-	public int isConnected() {
-		return 1;
-	}
-
-	@Override
-	public String getMotorFaultDescriptor(int fault) {
-		if(fault != 0)
-			return MSG_MOTORCONTROL_5;
-		return "";
-	}
-
-	@Override
-	public String getMotorStatusDescriptor(int status) {
-		return "";
-	}
-	@Override
 	public String getDriverInfo(int ch) {
 		if( motorDrive[ch-1][0] == 255 ) {
-			return String.format("HB-PWM UNINITIALIZED Channel %d%n",ch);
+			return String.format("Delayed HB-PWM UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("HB-PWM Channel %d Pin:%d, Dir Pin:%d%n",ch, ppwms[motorDrive[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]]);	
+		return String.format("Delayed HB-PWM Channel %d Pin:%d, Dir Pin:%d%n",ch, ppwms[motorDrive[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]]);	
 	}
 
-	@Override
-	public void setInterruptServiceHandler(int intPin) {
-		if(DEBUG)
-			System.out.printf("%s.setInterrupterviceHandler pin %d%n", this.getClass().getName(),intPin);
-		for(int j=0; j < channels; j++) {
-			int pindex = motorDrive[j][0];
-			if(pindex != 255 && intPin != 0 && intPin == ppwms[pindex].pin) {
-				wheelEncoderService[j].setInterruptServiceHandler(ppwms[pindex]);
-				if(DEBUG)
-					System.out.printf("%s.setInterrupterviceHandler pin %d pindex %d channel %d encoder service %s pwm %s%n", this.getClass().getName(),intPin,pindex,j,wheelEncoderService[j],ppwms[pindex]);
-				break;
-			}
-		}
-	}
 
 }

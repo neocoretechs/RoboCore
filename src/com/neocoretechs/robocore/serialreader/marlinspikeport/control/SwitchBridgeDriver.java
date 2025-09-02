@@ -145,7 +145,19 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		resetEncoders();
 		return status;
 	}
+	
+	@Override
+	public void enable(int ch) throws IOException {
+		int dirPinIndex = getMotorEnablePin(ch); // index to dir pin array
+		Pins.getOutputPin(dirPinIndex,1); // enable motor inputs	
+	}
 
+	@Override
+	public void disable(int ch) throws IOException {
+		int dirPinIndex = getMotorEnablePin(ch); // index to dir pin array
+		Pins.getOutputPin(dirPinIndex,0); // disable motor inputs		
+	}
+	
 	@Override
 	public int isConnected() {
 		return 1;
@@ -189,5 +201,6 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	public void setInterruptServiceHandler(int intPin) {
 		
 	}
+
 
 }

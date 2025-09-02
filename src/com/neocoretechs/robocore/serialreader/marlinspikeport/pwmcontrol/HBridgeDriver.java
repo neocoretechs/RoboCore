@@ -53,7 +53,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		setMotorSpeed(channel, motorPower);
 		int pwmIndex = motorDrive[channel-1][0]; // index to PWM array
 		int dirPinIndex = motorDrive[channel-1][1]; // index to dir pin array
-		int freq = motorDrive[channel][2]; // value of freq, no index;
+
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
 		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
@@ -64,7 +64,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 					pdigitals[dirPinIndex] = 1;//.high();
 				else 
 					pdigitals[dirPinIndex] = 0;//.low();
-				setCurrentDirection(channel, 0); // set new direction value
+				setCurrentDirection(channel, pdigitals[dirPinIndex]); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
 		} else { // dir is 0
@@ -75,7 +75,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 					pdigitals[dirPinIndex] = 0;//.low();
 				else
 					pdigitals[dirPinIndex] = 1;//.high();
-				setCurrentDirection(channel, 1);
+				setCurrentDirection(channel, pdigitals[dirPinIndex]);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
 				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
@@ -103,8 +103,8 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		ppwms[pwmIndex].freq(freq);
-		ppwms[pwmIndex].duty(motorPower);
+		ppwms[pwmIndex].freq(motorPower);
+		ppwms[pwmIndex].duty(motorPower/2); //50% duty
 		return 0;
 	}
 

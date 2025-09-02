@@ -88,6 +88,16 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	public abstract void resetMaxMotorPower();
 	
 	@Override
+	public void enable(int ch) throws IOException {
+		ppwms[motorDrive[ch-1][0]].enable(true);
+	}
+	
+	@Override
+	public void disable(int ch) throws IOException {
+		ppwms[motorDrive[ch-1][0]].enable(false);
+	}
+	
+	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		for(int i = 0; i < channels; i ++) {
