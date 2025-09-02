@@ -5,7 +5,7 @@ import java.io.IOException;
 import com.neocoretechs.robocore.propulsion.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
-//import com.pi4j.io.gpio.GpioPinDigitalOutput;
+
 /**
  * Abstract driver for a collection of H bridge driven brushed DC motor channels.
  * Structure:
@@ -18,12 +18,11 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
  * then the range is 0 to 2000 to reflect the fact that no reverse operation is going to be in effect for something like a LED or pump.
  * 4) Optionally, a duration and a minimum PWM level, or here a minimum motor power. The duration represents a maximum interval before the PWM timer
  * is automatically shut down. In this case, the hall effect interrupts that are serviced by an interrupt handler that detect wheel rotation.
- * @author groff
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  *
  */
 public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	protected PWM[] ppwms = new PWM[channels];
-	//protected GpioPinDigitalOutput[] pdigitals = new GpioPinDigitalOutput[channels];
 	protected int pdigitals[] = new int[channels];
 	// 10 possible drive wheels, index is by channel-1. 
 	// motorDrive[channel] {{PWM array index],[dir pin],[timer freq}}
@@ -31,7 +30,17 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	// 0-pin index to pwm array(default 255)
 	// 1-direction pin
 	// 2-timer frequency Hz
-	protected int[][] motorDrive=new int[][]{{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000}};
+	protected int[][] motorDrive=new int[][]{
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000}};
 	public AbstractPWMMotorControl(int maxPower) {
 		MAXMOTORPOWER = maxPower;
 	}
@@ -41,13 +50,14 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	* @param pin_number - the index in the PWM array defined in 'setMotors', this is the next blank slot available
 	* @param dir_pin - the direction pin for this channel
 	* @param dir_default - the default direction the motor starts in
-	* @param timer_freq - timer frequency 0 - 1000000 Hz
+	* @param freq - timer frequency 0 - 1000000 Hz
+	* @param duty - duty cycle must be < freq
 	* @throws IOException 
 	*/ 
-	public void createPWM(int channel, int pin_number, int dir_pin, int dir_default, int timer_freq) throws IOException {
+	public void createPWM(int channel, int pin_number, int dir_pin, int dir_default, int freq, int duty) throws IOException {
 		// Attempt to assign PWM pin
 		if( getChannels() < channel ) setChannels(channel);
-		/*GpioPinDigitalOutput opin =*/ Pins.assignPin(dir_pin);
+		Pins.assignPin(dir_pin);
 		
 		int dirpin;
 		for(dirpin = 0;dirpin < channels; dirpin++) {
@@ -68,10 +78,11 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 		setMotorSpeed(channel, 0);	
 		motorDrive[channel-1][0] = pindex;
 		motorDrive[channel-1][1] = dirpin;
-		motorDrive[channel-1][2] = timer_freq;
+		motorDrive[channel-1][2] = freq;
+		motorDrive[channel-1][3] = duty;
 		PWM ppin = new PWM(pin_number);
 		ppwms[pindex] = ppin;
-		ppwms[pindex].init(pin_number, timer_freq);
+		ppwms[pindex].init(pin_number, freq, duty);
 					
 	}
 	public abstract void resetMaxMotorPower();

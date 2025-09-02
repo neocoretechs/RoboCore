@@ -36,12 +36,22 @@ public abstract class AbstractPWMControl {
 	protected int channels = 10;
 	protected int status_flag = 0;
 	// 10 possible drive channels, index is by channel-1.
-	// pwmDrive[channel] [[PWM array index][dir pin][pwm freq]
+	// pwmDrive[channel] [[PWM array index][dir pin][pwm freq][pwm_duty]
 	// PWM params array by channel:
 	// 0-pin index to pwm array(default 255)
 	// 1-enable pin
 	// 2-pwm frequency
-	protected int[][] pwmDrive=new int[][]{{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000},{255,0,10000}};
+	protected int[][] pwmDrive=new int[][]{
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000},
+		{255,0,50000,25000}};
 	protected int[] maxPWMDuration = new int[]{-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}; // number of milliseconds operation before auto shutdown
 	// 10 channels of last PWM value
 	protected int[] pwmLevel = new int[]{0,0,0,0,0,0,0,0,0,0};

@@ -35,7 +35,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 public class VariablePWMDriver extends AbstractPWMControl {
 	public static int MAXPWMLEVEL = 2000;
 	PWM[] ppwms = new PWM[channels];
-	/*GpioPinDigitalOutput[]*/int[] pdigitals = new /*GpioPinDigitalOutput*/int[channels];
+	int[] pdigitals = new int[channels];
 	public int getPWMLevelPin(int channel) { return pwmDrive[channel-1][0]; }
 	public int getPWMEnablePin(int channel) {return pwmDrive[channel-1][1]; }
 		
@@ -53,10 +53,11 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	* @param pin_number - the index in the PWM array defined in 'setPWM', this is the next blank slot available
 	* @param enable_pin - the enable pin for this channel. Assumed that low is disabled, high is enable.
 	* @param dir_default - default 'direction' normally on or off
-	* @param timer_freq - timer prescale default 1 = no prescale
+	* @param freq - timer frequency in ns
+	* @param duty - duty cycle ns < freq
 	* @throws IOException 
 	*/
-	public void createPWM(int channel, int pin_number, int enable_pin, int dir_default, int timer_freq) throws IOException {
+	public void createPWM(int channel, int pin_number, int enable_pin, int dir_default, int freq, int duty) throws IOException {
 		// Attempt to assign PWM pin
 		if( getChannels() < channel ) setChannels(channel);
 		/*GpioPinDigitalOutput opin =*/ Pins.assignPin(enable_pin);
@@ -75,10 +76,11 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		}
 		pwmDrive[channel-1][0] = pindex;
 		pwmDrive[channel-1][1] = dirpin;
-		pwmDrive[channel-1][2] = timer_freq;
+		pwmDrive[channel-1][2] = freq;
+		pwmDrive[channel-1][3] = duty;
 		PWM ppin = new PWM(pin_number);
 		ppwms[pindex] = ppin;
-		ppwms[pindex].init(pin_number, timer_freq);
+		ppwms[pindex].init(pin_number, freq, duty);
 	}	
 	
 	@Override
@@ -121,12 +123,13 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		//
 		// find the PWM pin and get the object we set up in M3 to write to power level
 		int timer_freq = pwmDrive[pwmChannel-1][3]; // timer resolution in bits from M3
+		int duty = pwmDrive[pwmChannel-1][4];
 		// element 0 of motorDrive has index to PWM array
 		int pindex = pwmDrive[pwmChannel-1][0];
 		// writing power 0 sets mode 0 and timer turnoff
-		ppwms[pindex].init(ppwms[pindex].pin, timer_freq);
+		ppwms[pindex].init(ppwms[pindex].pin, timer_freq, duty);
 		//ppwms[pindex]->attachInterrupt(motorDurationService[motorChannel-1]);// last param TRUE indicates an overflow interrupt
-		ppwms[pindex].pwmWrite(pwmPower);
+		ppwms[pindex].duty(pwmPower);
 		fault_flag = 0;
 		return 0;
 	}
@@ -172,7 +175,7 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		for(pindex = 0; pindex < channels; pindex++) {
 			if( ppwms[pindex] != null ) {
 					try {
-						ppwms[pindex].pwmWrite(0);
+						ppwms[pindex].duty(0);
 					} catch (IOException e) {
 						e.printStackTrace();
 					}

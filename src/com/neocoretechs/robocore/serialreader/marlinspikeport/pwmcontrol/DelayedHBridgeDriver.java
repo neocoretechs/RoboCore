@@ -3,7 +3,7 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 import java.io.IOException;
 
 /**
- * Generic driver for a collection of H bridge driven brushed DC motor channels.
+ * H bridge driven brushed DC gear motor with delayed reverse.
  * Structure:
  * 1) Top level, a master list of pins in either the PWM or digitals arrays. Slots to which physical pins are assigned.
  * these are ppwms and pdigitals here, which hold pointers to these top level arrays.
@@ -17,16 +17,15 @@ import java.io.IOException;
  * The minimum PWM level is the bottom limit for the PWM value, or in this case the minimum motor power. It is indexed by channel and the value is
  * the range that comes from the main controller, before any processing into a timer value.
  * the top level abstract class AbstractMotorControl contains these values.
- * Created: 10/2/2016 1:42:24 PM
- * @author groff
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  *
  */
-public class HBridgeDriver extends AbstractPWMMotorControl {
+public class DelayedHBridgeDriver extends HBridgeDriver {
 	public static boolean DEBUG = false;
 	final static String MSG_MOTORCONTROL_5= "Emergency stop";
 	int status_flag = 0;
 	
-	public HBridgeDriver(int maxPower) {
+	public DelayedHBridgeDriver(int maxPower) {
 		super(maxPower);
 	}
 	
@@ -42,7 +41,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 	
 	@Override
 	public void resetMaxMotorPower() {
-		MAXMOTORPOWER = 1000;	
+		MAXMOTORPOWER = 50000;	
 	}
 	
 	@Override
@@ -53,7 +52,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		setMotorSpeed(channel, motorPower);
 		int pwmIndex = motorDrive[channel-1][0]; // index to PWM array
 		int dirPinIndex = motorDrive[channel-1][1]; // index to dir pin array
-		int freq = motorDrive[channel][2]; // value of freq, no index;
+	
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
 		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
@@ -103,8 +102,8 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		ppwms[pwmIndex].freq(freq);
-		ppwms[pwmIndex].duty(motorPower);
+		ppwms[pwmIndex].freq(motorPower);
+		ppwms[pwmIndex].duty(motorPower/2);
 		return 0;
 	}
 

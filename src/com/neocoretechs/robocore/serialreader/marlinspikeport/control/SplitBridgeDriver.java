@@ -61,11 +61,12 @@ public class SplitBridgeDriver extends HBridgeDriver {
 	 * @param dir_pinA - the enable pin for channel A
 	 * @param dir_pinB - the enable pin for channel B (may be same as A)
 	 * @param dir_default - the default direction the motor starts in
-	 * @param timer_freq - timer resolution in bits - default 8
+	 * @param freq - timer resolution in bits - default 8
+	 * @param duty TODO
 	 * @throws IOException 
 	 */ 
-	public void createPWM(int channel, int pin_numberA, int pin_numberB, int dir_pinA, int dir_pinB, int dir_default, int timer_freq) throws IOException {
-		super.createPWM(channel, pin_numberA, dir_pinA, dir_default, timer_freq);
+	public void createPWM(int channel, int pin_numberA, int pin_numberB, int dir_pinA, int dir_pinB, int dir_default, int freq, int duty) throws IOException {
+		super.createPWM(channel, pin_numberA, dir_pinA, dir_default, freq, duty);
 		// Attempt to assign PWM pin
 		int pindex;
 		for(pindex = 0; pindex < channels; pindex++) {
@@ -78,10 +79,11 @@ public class SplitBridgeDriver extends HBridgeDriver {
 		setMotorSpeed(channel, 0);	
 		motorDriveB[channel-1][0] = pindex;
 		motorDriveB[channel-1][1] = dir_pinB;
-		motorDriveB[channel-1][2] = timer_freq;
+		motorDriveB[channel-1][2] = freq;
+		motorDriveB[channel-1][3] = duty;
 		PWM ppin = new PWM(pin_numberB);
 		ppwms[pindex] = ppin;
-		ppwms[pindex].init(pin_numberB, timer_freq);				
+		ppwms[pindex].init(pin_numberB, freq, duty);				
 	}
 	
 	@Override
@@ -142,8 +144,8 @@ public class SplitBridgeDriver extends HBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		//ppwms[pwmIndex].freq(freq);
-		ppwms[pwmIndex].pwmWrite(motorPower);
+		ppwms[pwmIndex].freq(motorPower);
+		ppwms[pwmIndex].duty(motorPower/2);
 		// now do B, if dir pin is same, values should match, otherwise pin may be written
 		pwmIndex = motorDriveB[channel][0]; // index to PWM array
 		dirPinIndex = motorDriveB[channel][1]; // index to dir pin array
@@ -196,8 +198,8 @@ public class SplitBridgeDriver extends HBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		//ppwms[pwmIndex].freq(freq);
-		ppwms[pwmIndex].pwmWrite(motorPower);
+		ppwms[pwmIndex].freq(motorPower);
+		ppwms[pwmIndex].duty(motorPower/2);
 		return 0;
 	}
 

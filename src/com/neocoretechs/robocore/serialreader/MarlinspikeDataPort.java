@@ -13,13 +13,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.SwitchHBri
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.AbstractPWMControl;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.VariablePWMDriver;
-/*
-import com.pi4j.io.gpio.GpioPinDigitalOutput;
-import com.pi4j.io.gpio.GpioPinDigitalInput;
-import com.pi4j.io.gpio.GpioPinAnalogInput;
-import com.pi4j.io.gpio.PinState;
-import com.pi4j.io.gpio.exception.GpioPinExistsException;
-*/
+
 
 /**
  * RoboCore robotic controller platform to SBC (Odroid, RPi) GPIO headers interface to object model.
@@ -70,7 +64,8 @@ import com.pi4j.io.gpio.exception.GpioPinExistsException;
 public class MarlinspikeDataPort implements DataPortCommandInterface {
 	public static boolean DEBUG = true;
 	private static final int MAX_CMD_SIZE = 1024;
-	public static int DEFAULT_PWM_FREQUENCY = 10000;
+	public static int DEFAULT_PWM_FREQUENCY = 50000;
+	public static int DEFAULT_PWM_DUTY = 25000;
 	public static int MAX_MOTOR_POWER = 1000;
 	static int gcode_N, gcode_LastN, Stopped_gcode_LastN = 0;
 
@@ -114,6 +109,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	// PWM control block
 	static PWM[] ppwms = new PWM[12];//{0,0,0,0,0,0,0,0,0,0,0,0};
 	static int pwm_freq = DEFAULT_PWM_FREQUENCY;
+	static int pwm_duty = DEFAULT_PWM_DUTY;
 
 	// &roboteqDevice, new HBridgeDriver, new SplitBridgeDriver...
 	static AbstractMotorControl[] motorControl = new AbstractMotorControl[10];
@@ -477,7 +473,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 				break;
 			//
-			// M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> [F PWM frequency] [W<encoder pin>] 
+			// M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> [F PWM frequency] [G PWM Duty cycle] [W<encoder pin>] 
 			// Set HBridge PWM motor driver, map pin to channel.
 			// For a motor control subsequent G5 commands are affected here.
 			// and then D a direction pin that determines forward/backward , then E, the default value of the direction pin.
@@ -493,6 +489,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				encode_pin = 0;
 				interrupt_pin = 0;
 				pwm_freq = DEFAULT_PWM_FREQUENCY;
+				pwm_duty = DEFAULT_PWM_DUTY;
 				if(code_seen('Z')) {
 					motorController = (int) code_value();
 				}
@@ -523,6 +520,9 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						if(code_seen('F')) {
 							pwm_freq = (int) code_value();
 						}
+						if(code_seen('G')) {
+							pwm_duty = (int) code_value();
+						}
 						if( code_seen('W')) {
 							encode_pin = (int) code_value();
 						}
@@ -530,7 +530,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							interrupt_pin = (int) code_value();
 						}
 						try {
-							((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, pwm_freq);
+							((HBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, dir_pin, dir_default, pwm_freq, pwm_duty);
 							if(encode_pin != 0) {
 								motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
 							}
@@ -546,7 +546,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					  return ret;
 				}
 			//
-			// M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> B<enable pin b> E<default dir> [W<encoder pin>] [F<frequency 1-1000000>]
+			// M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> B<enable pin b> E<default dir> [W<encoder pin>] [F<frequency 1-1000000>] [G<duty < freq>]
 			// Split bridge or 2 half bridge motor controller. Takes 2 inputs: one for forward,called P, one for backward,called Q, then motor channel, 
 			// and then D, an enable pin. Finally, W<encoder pin>  to receive hall wheel sensor signals and 
 			// optionally PWM timer setup [R<resolution 8,9,10 bits>] [X<prescale 0-7>].
@@ -554,6 +554,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			//
 			case 4:
 			  pwm_freq = DEFAULT_PWM_FREQUENCY; // frequency
+			  pwm_duty = DEFAULT_PWM_DUTY;
 			  pin_number = -1;
 			  pin_numberB = -1;
 			  int dir_pinb = -1;
@@ -606,7 +607,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						pwm_freq = (int) code_value();
 				  }
 				  try {
-					((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default, pwm_freq);
+					((SplitBridgeDriver)motorControl[motorController]).createPWM(channel, pin_number, pin_numberB, dir_pin, dir_pinb, dir_default, pwm_freq, pwm_duty);
 					if(encode_pin != 0) {
 						motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
 					}
@@ -792,7 +793,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 				break;
 			//
-			// M9 [Z<slot>] P<pin> C<channel> D<enable pin> E<dir default> [F<PWM frequency>]
+			// M9 [Z<slot>] P<pin> C<channel> D<enable pin> E<dir default> [F<PWM frequency>] [G<PWM duty cycle>]
 			// PWM control <br/>
 			// Activate a previously created PWM controller of type AbstractPWMControl - a non propulsion PWM device such as LED or pump
 			// Note there is no encoder or direction pin, and no possibility of reverse. What would be reverse in a motor control is 
@@ -800,6 +801,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			//
 			case 9:
 				pwm_freq = DEFAULT_PWM_FREQUENCY; // resolution in bits
+				pwm_duty = DEFAULT_PWM_DUTY;
 				pin_number = -1;
 				encode_pin = 0;
 				if(code_seen('Z')) {
@@ -829,8 +831,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					if(code_seen('F')) {
 						pwm_freq = (int) code_value();
 					}
+					if(code_seen('G')) {
+						pwm_duty = (int) code_value();
+					}
 					try {
-						((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, dir_default, pwm_freq);
+						((VariablePWMDriver)pwmControl[PWMDriver]).createPWM(channel, pin_number, enable_pin, dir_default, pwm_freq, pwm_duty);
 					} catch (IOException /*| GpioPinExistsException*/ gpioe) {
 						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
 						return ret;
@@ -1403,7 +1408,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							PWM ppin = new PWM(pin_number);
 							try {
 								ppin.freq(pwm_freq);
-								ppin.pwmWrite(pin_status); // default is 2, clear on match. to turn off, use 0
+								ppin.duty(pin_status); // default is 2, clear on match. to turn off, use 0
 							} catch (IOException e) {
 								e.printStackTrace();
 							}
@@ -1638,7 +1643,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				for(int i = 0; i < ppwms.length; i++) {
 					if(ppwms[i] != null && ppwms[i].pin == pin_number) {
 						try {
-							ppwms[i].pwmWrite(0);
+							ppwms[i].duty(0);
 						} catch (IOException e) {
 							e.printStackTrace();
 						} // default is 2, clear on match. to turn off, use 0 

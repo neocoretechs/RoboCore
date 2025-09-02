@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore;
 
+import java.util.Scanner;
+
 public class GpioNative {
     static {
         System.loadLibrary("gpiodjni"); // Your compiled .so
@@ -18,12 +20,29 @@ public class GpioNative {
     public native void closeChip();
 
     public static void main(String[] args) {
+    	if(args.length < 3) {
+    		System.out.println("usage: java GpioNative <chipname> <chip line name> <value to set line to>");
+    		System.exit(1);
+    	}
     	GpioNative gpio = new GpioNative();
-    	gpio.openChip(args[0]);
+    	int ret = gpio.openChip(args[0]);
+    	if(ret < 0)
+    		throw new RuntimeException("cant open "+args[0]);
     	// get handle to line struct
     	int lineNum = gpio.findChipLine(args[1]);
-    	gpio.lineRequestInput(lineNum);
-    	System.out.println(gpio.lineGetValue(lineNum));
+    	if(lineNum < 0)
+    		throw new RuntimeException("cant find chip line "+args[1]);
+    	ret = gpio.lineRequestOutput(lineNum);
+    	if(ret < 0)
+    		throw new RuntimeException("cant get output for line "+args[1]);
+    	ret = gpio.lineSetValue(lineNum, Integer.parseInt(args[2]));
+    	if(ret < 0)
+    		throw new RuntimeException("cant set line "+args[1]+" to "+args[2]);
+    	System.out.println("Success!");
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Press Enter to close chip and finish...");
+        scanner.nextLine(); // Wait for user input
+        scanner.close();
     	// release optional but good practice
     	gpio.lineRelease(lineNum);
     	gpio.closeChip();

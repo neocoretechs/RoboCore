@@ -10,7 +10,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.InterruptServiceIn
 * since support for the hardware PWM under Odroid is inexplicably absent from the Hardkernel WiringPi
 * implementation.<p/>
 * Presupposes a modprobe of these devices has been performed:<br/>
-* sudo modprobe pwm-meson npwm=2 #USING 1 PWM PIN (0 = pin 33, 1 = pin 19)  <br/>
+* sudo modprobe pwm-meson npwm=2 #USING 1 PWM PIN (0 = pin 7, 1 = pin 12)  <br/>
 * sudo modprobe pwm-ctrl									<br/>
 * or that the modprobe directives have been added to /etc/modules <br/>
 * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
@@ -38,29 +38,33 @@ public abstract class HardwarePWM {
 		this.pin = pin;
 	}
 	
-	public synchronized void init(int pin, int timer_freq) throws IOException {
+	public synchronized void init(int pin, int freq, int duty) throws IOException {
 		try {
 			switch(pin) {
-				case 19:
+				case 12:
 					if(pwmDuty1 == null) {
 						pwmDuty1 = new RandomAccessFile(PWMDevice.getDuty1(),"rw");
 						pwmFreq1 = new RandomAccessFile(PWMDevice.getFreq1(),"rw");
 						//pwmEnable1 = new RandomAccessFile(enable1,"rw");
-						pwmFreq1.writeBytes(String.valueOf(timer_freq));
+						pwmFreq1.writeBytes(String.valueOf(freq));
 						pwmFreq1.seek(0);
+						pwmDuty1.writeBytes(String.valueOf(duty));
+						pwmDuty1.seek(0);
 					}
 				break;
-				case 33:
+				case 7:
 					if(pwmDuty0 == null) {
 						pwmDuty0 = new RandomAccessFile(PWMDevice.getDuty0(),"rw");
 						pwmFreq0 = new RandomAccessFile(PWMDevice.getFreq0(),"rw");
 						//pwmEnable0 = new RandomAccessFile(enable0,"rw");
-						pwmFreq0.writeBytes(String.valueOf(timer_freq));
+						pwmFreq0.writeBytes(String.valueOf(freq));
 						pwmFreq0.seek(0);
+						pwmDuty0.writeBytes(String.valueOf(duty));
+						pwmDuty0.seek(0);
 					}
 				break;
 				default:
-					throw new RuntimeException("PWM pins limited to PWM0 - Pin 33, PWM1 = Pin 19");
+					throw new RuntimeException("PWM pins limited to PWM0 - Pin 7, PWM1 = Pin 12");
 			}
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -69,15 +73,14 @@ public abstract class HardwarePWM {
 	}
 	public abstract void enable(boolean enable) throws IOException;
 	public abstract void freq(int hZ) throws IOException;
-	public abstract void pwmWrite(int val) throws IOException;
+	public abstract void duty(int val) throws IOException;
 	public void pwmOff() throws IOException {
 		enable(false);
-		pwmWrite(0); 
+		//duty(0); 
 	};
 	public abstract void setCounter(int cntx);
 	public abstract int getCounter();
-	public abstract void digitalWrite(int val) throws IOException;
-	public abstract void pinModeOut();
+
 	public abstract void attachInterrupt(InterruptServiceInterface cins, boolean overflow);
 	public abstract void detachInterrupt(boolean overflow);
 }

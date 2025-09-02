@@ -24,10 +24,10 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.InterruptServiceIn
  *echo 0 > /sys/class/pwm/pwmchip0/pwm0/period
  *echo 0 > /sys/class/pwm/pwmchip0/pwm0/duty_cycle
  *echo 0 > /sys/class/pwm/pwmchip0/pwm0/enable
- *# Configure pwmchip1
- *echo 0 > /sys/class/pwm/pwmchip1/pwm0/period
- *echo 0 > /sys/class/pwm/pwmchip1/pwm0/duty_cycle
- *echo 0 > /sys/class/pwm/pwmchip1/pwm0/enable
+ *# Configure pwmchip4
+ *echo 0 > /sys/class/pwm/pwmchip4/pwm0/period
+ *echo 0 > /sys/class/pwm/pwmchip4/pwm0/duty_cycle
+ *echo 0 > /sys/class/pwm/pwmchip4/pwm0/enable
  *# Log the milestone
  *echo "PWM channels initialized." >> /var/log/pwm-init.log
  *Create service /etc/systemd/system/pwm-init.service: <br>
@@ -59,16 +59,16 @@ public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface
 	public synchronized String read() throws IOException {
 		String level = null;
 		switch(pin) {
-			case 19:
-				level = pwmDuty1.readLine();
-				pwmDuty1.seek(0);
-				return level;
-			case 33:
+			case 7:
 				level = pwmDuty0.readLine();
 				pwmDuty0.seek(0);
 				return level;
+			case 12:
+				level = pwmDuty1.readLine();
+				pwmDuty1.seek(0);
+				return level;
 			default:
-				System.out.println("Must specify  1 or 2 for hardware PWM read!");
+				System.out.println("Must specify 7 or 12 for hardware PWM read!");
 				return null;
 		}
 	}
@@ -76,16 +76,16 @@ public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface
 	public synchronized void enable(boolean enable) throws IOException {
 		enabled = enable;
 		switch(pin) {
-			case 19:
-				pwmEnable1.writeBytes(enable ? "1" : "0");
-				pwmEnable1.seek(0);
-				break;
-			case 33:
+			case 7:
 				pwmEnable0.writeBytes(enable ? "1" : "0");
 				pwmEnable0.seek(0);
 				break;
+			case 12:
+				pwmEnable1.writeBytes(enable ? "1" : "0");
+				pwmEnable1.seek(0);
+				break;
 			default:
-				System.out.println("Pin must specify 19 or 33 for hardware PWM enable!");
+				System.out.println("Pin must specify 7 or 12 for hardware PWM enable!");
 				return;
 		}
 		if(DEBUG || DEBUGENABLE)
@@ -95,68 +95,50 @@ public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface
 	
 	public synchronized void freq(int hZ) throws IOException {
 		switch(pin) {
-			case 19:
-				pwmFreq1.writeBytes(String.valueOf(hZ));
-				pwmFreq1.seek(0);
-				break;
-			case 33:
+			case 7:
 				pwmFreq0.writeBytes(String.valueOf(hZ));
 				pwmFreq0.seek(0);
 				break;
+			case 12:
+				pwmFreq1.writeBytes(String.valueOf(hZ));
+				pwmFreq1.seek(0);
+				break;
 			default:
-				System.out.println("Pin Must specify 19 or 33 for hardware PWM frequency!");
+				System.out.println("Pin Must specify 7 or 12 for hardware PWM frequency!");
 				return;
 		}
 	}
 
 	@Override
-	public synchronized void pwmWrite(int val) throws IOException {
+	public synchronized void duty(int val) throws IOException {
 		if(!enabled)
 			enable(true);
 		switch(pin) {
-			case 19:
-				pwmDuty1.writeBytes(String.valueOf(val));
-				pwmDuty1.seek(0);
-				break;
-			case 33:
+			case 7:
 				pwmDuty0.writeBytes(String.valueOf(val));
 				pwmDuty0.seek(0);
 				break;
+			case 12:
+				pwmDuty1.writeBytes(String.valueOf(val));
+				pwmDuty1.seek(0);
+				break;
 			default:
-				System.out.println("Must specify 19 or 33 for hardware PWM write!");
+				System.out.println("Must specify 7 or 12 for hardware PWM write!");
 				return;
 		}
 		if(DEBUG)
 			System.out.printf("%s pwmWrite pin %d value %d%n", this.getClass().getName(), pin, val);
 	}
 
-
 	@Override
 	public synchronized void setCounter(int cntx) {
 		((CounterInterruptService)interruptService).set_counter(cntx);
 	}
 
-
 	@Override
 	public synchronized int getCounter() {
 		return ((CounterInterruptService)interruptService).get_counter();
 	}
-
-
-	@Override
-	public synchronized void digitalWrite(int val) throws IOException {
-		if(val == 0)
-			pwmWrite(0);
-		else
-			pwmWrite(1000);
-	}
-
-
-	@Override
-	public synchronized void pinModeOut() {
-		
-	}
-
 
 	@Override
 	public synchronized void attachInterrupt(InterruptServiceInterface cins, boolean overflow) {
@@ -164,11 +146,9 @@ public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface
 		cins.setInterruptServiceHandler(this);
 	}
 
-
 	@Override
 	public synchronized void detachInterrupt(boolean overflow) {
-		this.interruptService = null;
-		
+		this.interruptService = null;	
 	}
 
 	@Override
