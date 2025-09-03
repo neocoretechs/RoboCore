@@ -41,6 +41,7 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 		{255,0,50000,25000},
 		{255,0,50000,25000},
 		{255,0,50000,25000}};
+		
 	public AbstractPWMMotorControl(int maxPower) {
 		MAXMOTORPOWER = maxPower;
 	}

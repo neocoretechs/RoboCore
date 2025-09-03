@@ -33,6 +33,11 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 	}
 	
 	@Override
+	public int getMotorPowerMultiplier() {
+		return 50; // scale the 0-1000 from controller to 0-50000 for PWM freq
+	}
+	
+	@Override
 	public int commandMotorPower(int channel, int motorPower) throws IOException {
 		// check shutdown override
 		if( MOTORSHUTDOWN )
@@ -83,8 +88,8 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 		if( motorPower > getMaxMotorPower() ) // cap it at max
 				motorPower = getMaxMotorPower();
 		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
-		if( getMotorPowerScale() != 0 )
-				motorPower /= getMotorPowerScale();
+		motorPower /= getMotorPowerScale();
+		motorPower *= getMotorPowerMultiplier();
 		//
 		// Reset encoders on new speed setting
 		resetEncoders();

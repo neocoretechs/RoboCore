@@ -75,14 +75,13 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
 			}
 		}
-		// scale motor power from 0-1000 
+		// scale motor power
 		if( motorPower != 0 && motorPower < getMinMotorPower(channel))
 				motorPower = getMinMotorPower(channel);
 		if( motorPower > getMaxMotorPower() ) // cap it at max
 				motorPower = getMaxMotorPower();
-		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
-		if( getMotorPowerScale() != 0 )
-				motorPower /= getMotorPowerScale();
+		// Scale motor power
+		motorPower /= getMotorPowerScale();
 		//
 		// Reset encoders on new speed setting
 		resetEncoders();

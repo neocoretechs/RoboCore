@@ -7,11 +7,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.config.Robot;
@@ -33,6 +29,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M12;
 import com.neocoretechs.robocore.marlinspike.mcodes.M13;
 import com.neocoretechs.robocore.marlinspike.mcodes.M14;
 import com.neocoretechs.robocore.marlinspike.mcodes.M15;
+import com.neocoretechs.robocore.marlinspike.mcodes.M16;
 import com.neocoretechs.robocore.marlinspike.mcodes.M2;
 import com.neocoretechs.robocore.marlinspike.mcodes.M3;
 import com.neocoretechs.robocore.marlinspike.mcodes.M301;
@@ -176,7 +173,7 @@ public class AsynchDemuxer implements Runnable {
 		EEPROM("eeprom"),
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),M13("M13"),
-		M14("M14"),M15("M15"),M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),
+		M14("M14"),M15("M15"),M16("M16"),M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),
 		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),
 		M445("M445"),M500("M500"),M501("M501"),M502("M502"),M799("M799"),M999("M999"),
 		M115("FIRMWARE_NAME:Marlinspike RoboCore"); // followed by FIRMWARE_URL,PROTOCOL_VERSION,MACHINE_TYPE,MACHINE NAME,MACHINE_UUID
@@ -373,6 +370,12 @@ public class AsynchDemuxer implements Runnable {
 		//if(DEBUG)
 		//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.M15.val());
 		topics.put(topicNames.M15.val(), new M15(this).getTopicList());
+		//
+		// M16
+		//
+		//if(DEBUG)
+		//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.M15.val());
+		topics.put(topicNames.M16.val(), new M16(this).getTopicList());
 		//
 		// M33
 		//

@@ -15,47 +15,48 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
  * Type 5=PWM driver which uses slots separate from controller types. Its different because it doesnt have directions and encoders etc.
  * and as such is derived from a different base class in the Marlinspike object hierarchy so the polymorphism is
  * Separately arranged..<p/>
- * Example organization of Robocore.Properties parameters:<br/>
- * LUN[0].Name:LeftWheel<br/>
- * LUN[0].NodeName:CONTROL1<br/>
- * #LUN[0].Controller:/dev/ttyACM0 (this is commented out optional configuration 1)<br/>
- * LUN[0].Controller:MarlinspikeDataPort<br/>
- * LUN[0].Type:H-Bridge<br/>
- * LUN[0].Slot:0<br/>
- * #LUN[0].SignalPin0:8 (optional alternate config 1)<br/>
- * LUN[0].SignalPin0:33<br/>
- * LUN[0].Channel:1<br/>
- * #LUN[0].EnablePin:38 (optional alternate config 1)<br/>
- * LUN[0].EnablePin:2<br/>
- * LUN[0].Direction:0<br/>
- * #LUN[0].EncoderPin:68 (optional alternate config 1)<br/>
- * LUN[0].EncoderPin:40<br/>
- * LUN[0].EncoderType:Analog<br/>
- * LUN[0].EncoderCount:1<br/>
- * LUN[0].EncoderLoRange:1023<br/>
- * LUN[0].EncoderHiRange:1023<br/>
- * After M10 definition, these codes configure the defined driver:<br/>
- * M2 - define SmartController. M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] <br/>
- * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F<frequency>]<br/>
- * M4 - define SplitBridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F<frequency>] <br/>
- * M5 - define SwitchBridge or SwitchHBridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>] if no Q pin, SwitchHBridge and enable pin is direction<br/>
- * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [] <br/>
- * M41 - define basic GPIO output pin linked to control axis. M41 P<pin><br/>
- * Additionally, after M10, an M14 or M15 encoder directive may be issued depending on default encoder status.<br/>
+ * Example organization of Robocore.Properties parameters:<br>
+ * LUN[0].Name:LeftWheel<br>
+ * LUN[0].NodeName:CONTROL1<br>
+ * #LUN[0].Controller:/dev/ttyACM0 (this is commented out optional configuration 1)<br>
+ * LUN[0].Controller:MarlinspikeDataPort<br>
+ * LUN[0].Type:H-Bridge<br>
+ * LUN[0].Slot:0<br>
+ * #LUN[0].SignalPin0:8 (optional alternate config 1)<br>
+ * LUN[0].SignalPin0:33<br>
+ * LUN[0].Channel:1<br>
+ * #LUN[0].EnablePin:38 (optional alternate config 1)<br>
+ * LUN[0].EnablePin:2<br>
+ * LUN[0].Direction:0<br>
+ * #LUN[0].EncoderPin:68 (optional alternate config 1)<br>
+ * LUN[0].EncoderPin:40<br>
+ * LUN[0].EncoderType:Analog<br>
+ * LUN[0].EncoderCount:1<br>
+ * LUN[0].EncoderLoRange:1023<br>
+ * LUN[0].EncoderHiRange:1023<br>
+ * After M10 definition, these codes configure the defined driver:<br>
+ * M2 - define SmartController. M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] <br>
+ * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F<frequency>] [G <duty>]<br>
+ * M4 - define SplitBridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F<frequency>] [G<duty>]<br>
+ * M5 - define SwitchBridge or SwitchHBridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>] if no Q pin, SwitchHBridge and enable pin is direction<br>
+ * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [] <br>
+ * M16 - define delayed H-bridge. M16 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F<frequency>] [G <duty>]<br>
+ * M41 - define basic GPIO output pin linked to control axis. M41 P<pin><br>
+ * Additionally, after M10, an M14 or M15 encoder directive may be issued depending on default encoder status.<br>
  * M14 Z<slot> C<channel> P<pin> L<lo> H<hi> N<count>
- * Create digital encoder:<br/>
+ * Create digital encoder:<br>
  * M15 Z<slot> C<channel> P<pin> S<state 0-LOW 1-HIGH> N<count><p/>
  * <b>If the Type ends with 'Pin' such as OutputPin LEDDRiver config below, we assume the control is a standalone GPIO pin of some type, 
  * so these names are reserved directives:</b><p/>
- * LUN[3].Name:LEDDriver<br/>
- * LUN[3].NodeName:AMI0<br/>
- * LUN[3].Controller:MarlinspikeDataPort<br/>
- * LUN[3].Type:OutputPin<br/>
- * LUN[3].Pin:13<br/>
+ * LUN[3].Name:LEDDriver<br>
+ * LUN[3].NodeName:AMI0<br>
+ * LUN[3].Controller:MarlinspikeDataPort<br>
+ * LUN[3].Type:OutputPin<br>
+ * LUN[3].Pin:13<br>
  * LUN[3].Toggle:True
- * AXIS[3].AxisType:Trigger<br/>
+ * AXIS[3].AxisType:Trigger<br>
  * AXIS[3].Axis:4<p/>
- * Create analog encoder:<br/>
+ * Create analog encoder:<br>
  *
  * @author Jonathan Groff (C) NeoCoreTechs 2021,2022
  *
@@ -86,6 +87,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	public enum typeNames {
 		SMARTCONTROLLER("SmartController"),
 		HBRIDGE("H-Bridge"),
+		DELAYHBRIDGE("DelayH-Bridge"),
 		SPLITBRIDGE("SplitBridge"),
 		SWITCHBRIDGE("SwitchBridge"),
 		SWITCHHBRIDGE("SwitchHBridge"),
@@ -99,6 +101,7 @@ public class TypeSlotChannelEnable implements Serializable {
 			switch(this) {
 				case SMARTCONTROLLER:
 				case HBRIDGE:
+				case DELAYHBRIDGE:
 				case SPLITBRIDGE:
 				case SWITCHBRIDGE:
 				case SWITCHHBRIDGE:
@@ -119,7 +122,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	};
 	
 	// M code to generate for ordinal of typeNames
-	String[] configCodes = {"2","3","4","5","5","9","43","41"};
+	String[] configCodes = {"2","3","16","4","5","5","9","43","41"};
 	
 	// This interface is responsible for generating the actual M or G code that is passed to the Marlinspike to activate the device
 	private ActivationInterface activator = null;
@@ -188,13 +191,14 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * in subsequent M codes. Different controller types occupy different 'slots' depending on the object type hierarchy<p/>
 	 * Types 0-3 occupy the 'motor control' slots while type 4 occupies the 'PWM' slot. Each has its own sequence.<p/>
 	 * If we are just configuring pins for I/O, dont generate an M10, but perhaps a different M-code such as M41 for an output pin.<p/>
-	 * M10 Z(slot) T(type) <br/>
-	 * M10 Z0 T0 - Smart controller type 0 , slot 0<br/>
-	 * M10 Z1 T1 - H-Bridge controller type 1, slot 1 <br/>
-	 * M10 Z2 T2 - Split bridge, type 2 slot 2; each channel has 2 PWM pins and an enable pin, so up to 5 channels <br/>
-	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel 2 GPIO pins for full forward and back, no PWM, and an enable pin <br/>
-	 * M10 Z0 T4 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br/>
+	 * M10 Z(slot) T(type) <br>
+	 * M10 Z0 T0 - Smart controller type 0 , slot 0<br>
+	 * M10 Z1 T1 - H-Bridge controller type 1, slot 1 <br>
+	 * M10 Z2 T2 - Split bridge, type 2 slot 2; each channel has 2 PWM pins and an enable pin, so up to 5 channels <br>
+	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel 2 GPIO pins for full forward and back, no PWM, and an enable pin <br>
+	 * M10 Z0 T4 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br>
 	 * M10 Z0 T5 - Switch H bridge, type 5 slot 0, each channel has 1 GPIO pin, no PWN, and enable which functions as direction when<p/>
+	 * M10 Z1 T6 - Delay H-Bridge Type 6 slot 1<br>
 	 * @param ipin1 PWM primary drive pin0 from MarlinspikeManager.configureMarlinspike and properties file
 	 * @param ipin0 PWM secondary drive pin1
 	 * @return The M10 directive string, possibly multiple c/r delimited directives relating to configuring the type in the M10 preamble
@@ -228,11 +232,12 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * Generate preamble to control<p/>
 	 * sequence is genTypeAndSlot().genDrivePins(pri, sec).genChannelDirDefaultEncoder(encoder);
 	 * M2 - define smart controller. M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>]
- 	 * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F frequency]
-	 * M4 - define Split Bridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F frequency ]
+ 	 * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F frequency] [G duty]
+	 * M4 - define Split Bridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F frequency] [G duty]
  	 * M5 - define Switch Bridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>]
  	 * M5 - define Switch H Bridge. M5 Z<slot> P<pin> C<channel> D<enable pin> E<default dir> [W<encoder>]
-	 * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [F frequency]
+	 * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [F frequency] [G Duty]
+	 * M16 - define delay H-bridge. M16 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F frequency] [G duty]
 	 * @return The partially formed directive to send to Marlinspike for config
 	 */
 	private String genTypeAndSlot() {
@@ -277,12 +282,13 @@ public class TypeSlotChannelEnable implements Serializable {
 	}
 	/**
 	 * Generate remaining portion of config for direction and encoder based on M10 type<p/>
-	 * M10 Z0 T0 - Smart controller type 0 , slot 0<br/>
-	 * M10 Z1 T1 - H-Bridge controller type 1, slot 1 <br/>
-	 * M10 Z2 T2 - Split bridge, type 2 slot 2; each channel has 2 PWM pins and an enable pin, so up to 5 channels <br/>
-	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel has 2 GPIO pins for full forward and back, no PWM, and an enable pin <br/>
-	 * M10 Z0 T4 - Switch H bridge, type 4, slot 0, each channel has 1 signal gpio pin and 1 direction gpio pin<br/>
-	 * M10 Z0 T5 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br/>
+	 * M10 Z0 T0 - Smart controller type 0 , slot 0<br>
+	 * M10 Z1 T1 - H-Bridge controller type 1, slot 1 <br>
+	 * M10 Z2 T2 - Split bridge, type 2 slot 2; each channel has 2 PWM pins and an enable pin, so up to 5 channels <br>
+	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel has 2 GPIO pins for full forward and back, no PWM, and an enable pin <br>
+	 * M10 Z0 T4 - Switch H bridge, type 4, slot 0, each channel has 1 signal gpio pin and 1 direction gpio pin<br>
+	 * M10 Z0 T5 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br>
+	 * M10 Z1 T6 - Delay H-Bridge controller type 6, slot 1 <br>
 	 * @param encoder The pin that receives hall effect or other encoder pulses per rotation of wheel. If 0, possibly add additional config
 	 * @return
 	 */

@@ -3,8 +3,7 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
-//import com.pi4j.io.gpio.GpioPinDigital;
-//import com.pi4j.io.gpio.GpioPinDigitalOutput;
+
 /**
 *SwitchBridgeDriver:
 * A motor driver that uses straight GPIO switching rather than PWM, for an on/off drive motor setup.<p/>

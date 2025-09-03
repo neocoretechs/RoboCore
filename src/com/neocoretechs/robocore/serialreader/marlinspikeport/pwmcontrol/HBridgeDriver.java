@@ -50,7 +50,6 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return 0;
-		setMotorSpeed(channel, motorPower);
 		int pwmIndex = motorDrive[channel-1][0]; // index to PWM array
 		int dirPinIndex = motorDrive[channel-1][1]; // index to dir pin array
 
@@ -82,14 +81,13 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			}
 		}
 
-		// scale motor power from 0-1000 
+		// scale motor power
 		if( motorPower != 0 && motorPower < getMinMotorPower(channel))
 				motorPower = getMinMotorPower(channel);
 		if( motorPower > getMaxMotorPower() ) // cap it at max
 				motorPower = getMaxMotorPower();
 		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
-		if( getMotorPowerScale() != 0 )
-				motorPower /= getMotorPowerScale();
+		motorPower /= getMotorPowerScale();
 		//
 		// Reset encoders on new speed setting
 		resetEncoders();
@@ -103,8 +101,10 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 			return fault_flag;
 		}
 		fault_flag = 0;
+		setMotorSpeed(channel, motorPower);
 		ppwms[pwmIndex].freq(motorPower);
 		ppwms[pwmIndex].duty(motorPower/2); //50% duty
+		enable(channel);
 		return 0;
 	}
 

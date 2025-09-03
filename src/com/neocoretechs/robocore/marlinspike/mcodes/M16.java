@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
-* Set HBridge PWM motor driver, map pin to channel, this will check to prevent free running motors during inactivity
+* Set Delay HBridge PWM motor driver, map pin to channel, this will check to prevent free running motors during inactivity
 * For a PWM motor control subsequent G5 commands are affected here.
 * and then D a direction pin that determines forward/backward , then E, the default value of the direction pin.
 * The D and E pins determine whether a HIGH or LOW determines FORWARD/BACK on the given controller channel. This is
@@ -25,9 +25,9 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
 *
 */
-public class M3 extends AbstractBasicResponse {
+public class M16 extends AbstractBasicResponse {
 	private boolean DEBUG;
-	public M3(AsynchDemuxer asynchDemuxer) {
-		super(asynchDemuxer, topicNames.M3.val());
+	public M16(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.M16.val());
 	}
 }

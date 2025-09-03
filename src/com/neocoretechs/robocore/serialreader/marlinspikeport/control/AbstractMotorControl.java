@@ -73,9 +73,10 @@ public abstract class AbstractMotorControl {
 	protected int[] minMotorPower = new int[]{0,0,0,0,0,0,0,0,0,0}; // Offset to add to G5, use with care, meant to compensate for mechanical differences
 	protected CounterInterruptService[] wheelEncoderService = new CounterInterruptService[channels]; // encoder service
 	protected PCInterrupts[] wheelEncoder = new PCInterrupts[channels];
-	protected int MOTORPOWERSCALE = 1; // Motor scale, divisor for motor power to reduce 0-1000 scale if non zero
+	protected int MOTORPOWERSCALE = 1; // Motor scale, divisor for motor power to reduce 0-1000 scale from controller
+	protected int MOTORPOWERMULTIPLIER = 1; // multiplier to scale controller power level to PWM freq
 	protected boolean MOTORSHUTDOWN = false; // Override of motor controls, puts it up on blocks
-	protected int MAXMOTORPOWER = 1000; // Max motor power in PWM final timer units
+	protected int MAXMOTORPOWER = 1000; // Max motor power in controller
 	protected int fault_flag = 0;
 
 	public abstract int commandMotorPower(int ch, int p) throws IOException;//make AbstractMotorControl not instantiable
@@ -267,4 +268,6 @@ public abstract class AbstractMotorControl {
 	public boolean getMotorShutdown() { return MOTORSHUTDOWN; }
 	public void setMotorPowerScale(int p) { MOTORPOWERSCALE = p;}
 	public int getMotorPowerScale() { return MOTORPOWERSCALE; }
+	public void setMotorPowerMultiplier(int p) { MOTORPOWERMULTIPLIER = p; }
+	public int getMotorPowerMultiplier() { return MOTORPOWERMULTIPLIER; }
 }
