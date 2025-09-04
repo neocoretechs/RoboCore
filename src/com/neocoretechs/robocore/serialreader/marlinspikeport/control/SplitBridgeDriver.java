@@ -83,7 +83,6 @@ public class SplitBridgeDriver extends HBridgeDriver {
 		motorDriveB[channel-1][3] = duty;
 		PWM ppin = new PWM(pin_numberB);
 		ppwms[pindex] = ppin;
-		ppwms[pindex].init(pin_numberB, freq, duty);				
 	}
 	
 	@Override

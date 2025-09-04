@@ -80,7 +80,6 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		pwmDrive[channel-1][3] = duty;
 		PWM ppin = new PWM(pin_number);
 		ppwms[pindex] = ppin;
-		ppwms[pindex].init(pin_number, freq, duty);
 	}	
 	
 	@Override
@@ -127,7 +126,6 @@ public class VariablePWMDriver extends AbstractPWMControl {
 		// element 0 of motorDrive has index to PWM array
 		int pindex = pwmDrive[pwmChannel-1][0];
 		// writing power 0 sets mode 0 and timer turnoff
-		ppwms[pindex].init(ppwms[pindex].pin, timer_freq, duty);
 		//ppwms[pindex]->attachInterrupt(motorDurationService[motorChannel-1]);// last param TRUE indicates an overflow interrupt
 		ppwms[pindex].duty(pwmPower);
 		fault_flag = 0;

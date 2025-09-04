@@ -1496,14 +1496,14 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			}
 			for(int i = 0; i < ppwms.length; i++) {
 				if(ppwms[i] == null) {
-					PWM ppin = new PWM(pin_number);
 					try {
+						PWM ppin = new PWM(pin_number);
 						ppin.freq(pwm_freq);
 						ppin.duty(pin_status); // default is 2, clear on match. to turn off, use 0
+						ppwms[i] = ppin;
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
-					ppwms[i] = ppin;
 				}
 			}
 			ret.add(String.format("%sM45%s%n",MSG_BEGIN,MSG_TERMINATE));

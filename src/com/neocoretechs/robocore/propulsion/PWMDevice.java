@@ -20,22 +20,18 @@ import java.io.RandomAccessFile;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  */
 public class PWMDevice {
-	private static String duty0 = "/sys/devices/platform/pwm-ctrl/duty0"; // 0-1023
-	private static String freq0 = "/sys/devices/platform/pwm-ctrl/freq0"; // in Hz 0 - 1000000
-	private static String enable0 = "/sys/devices/platform/pwm-ctrl/enable0"; // 0 or 1
-	private static String duty1 = "/sys/devices/platform/pwm-ctrl/duty1";
-	private static String freq1 = "/sys/devices/platform/pwm-ctrl/freq1"; // in Hz 0 - 1000000
-	private static String enable1 = "/sys/devices/platform/pwm-ctrl/enable1"; // 0 or 1
-	static {
-		if(System.getProperty("PWMDevices") != null && !System.getProperty("PWMDevices").equals("legacy")) {
-			duty0 = "/sys/class/pwm/pwmchip0/pwm0/duty_cycle"; // 0-1023
-			freq0 = "/sys/class/pwm/pwmchip0/pwm0/period"; // in Hz 0 - 1000000
-			enable0 = "/sys/class/pwm/pwmchip0/pwm0/enable"; // 0 or 1
-			duty1 = "/sys/class/pwm/pwmchip4/pwm0/duty_cycle";
-			freq1 = "/sys/class/pwm/pwmchip4/pwm0/period"; // in Hz 0 - 1000000
-			enable1 = "/sys/class/pwm/pwmchip4/pwm0/enable"; // 0 or 1
-		}
-	}
+	private static String duty0 = ((System.getProperty("PWMDevices") != null && System.getProperty("PWMDevices").equals("legacy")) ?
+			"/sys/devices/platform/pwm-ctrl/duty0" : "/sys/class/pwm/pwmchip0/pwm0/duty_cycle"); 
+	private static String freq0 = ((System.getProperty("PWMDevices") != null && System.getProperty("PWMDevices").equals("legacy")) ?
+			"/sys/devices/platform/pwm-ctrl/freq0" : "/sys/class/pwm/pwmchip0/pwm0/period"); 
+	private static String enable0 = ((System.getProperty("PWMDevices") != null && System.getProperty("PWMDevices").equals("legacy")) ?
+			"/sys/devices/platform/pwm-ctrl/enable0" : "/sys/class/pwm/pwmchip0/pwm0/enable"); // 0 or 1
+	private static String duty1 = ((System.getProperty("PWMDevices") != null && System.getProperty("PWMDevices").equals("legacy")) ?
+			"/sys/devices/platform/pwm-ctrl/duty1" : "/sys/class/pwm/pwmchip4/pwm0/duty_cycle");
+	private static String freq1 =((System.getProperty("PWMDevices") != null && System.getProperty("PWMDevices").equals("legacy")) ?
+			"/sys/devices/platform/pwm-ctrl/freq1" : "/sys/class/pwm/pwmchip4/pwm0/period");
+	private static String enable1 = ((System.getProperty("PWMDevices") != null && System.getProperty("PWMDevices").equals("legacy")) ?
+			"/sys/devices/platform/pwm-ctrl/enable1" : "/sys/class/pwm/pwmchip4/pwm0/enable"); // 0 or 1
 	/**
 	 * @return the duty0
 	 */

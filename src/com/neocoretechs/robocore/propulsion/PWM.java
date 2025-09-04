@@ -52,7 +52,7 @@ public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface
 	public static boolean DEBUGENABLE = false;
 	private boolean enabled = false;
 	
-	public PWM(int pin) {
+	public PWM(int pin) throws IOException {
 		super(pin);
 	}
 	

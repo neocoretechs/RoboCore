@@ -24,53 +24,49 @@ public abstract class HardwarePWM {
 	// explicitly disable PWM for safety
 	static {
 		try {
-			pwmEnable0 = new RandomAccessFile(PWMDevice.getEnable0(),"rw");
-			pwmEnable0.writeBytes(String.valueOf(0));
-			pwmEnable0.seek(0);
+			init0();
 		} catch (IOException e) {}
 		try {
-			pwmEnable1 = new RandomAccessFile(PWMDevice.getEnable1(),"rw");
-			pwmEnable1.writeBytes(String.valueOf(0));
-			pwmEnable1.seek(0);
+			init1();
 		} catch (IOException e) {}
 	}
-	public HardwarePWM(int pin) {
+	public HardwarePWM(int pin) throws IOException {
+		switch(pin) {
+			case 7 -> init0();
+			case 12 -> init1();
+			default -> throw new IOException("Only pins 7 and 12 are valid for PWM");
+		}
 		this.pin = pin;
 	}
 	
-	public synchronized void init(int pin, int freq, int duty) throws IOException {
-		try {
-			switch(pin) {
-				case 12:
-					if(pwmDuty1 == null) {
-						pwmDuty1 = new RandomAccessFile(PWMDevice.getDuty1(),"rw");
-						pwmFreq1 = new RandomAccessFile(PWMDevice.getFreq1(),"rw");
-						//pwmEnable1 = new RandomAccessFile(enable1,"rw");
-						pwmFreq1.writeBytes(String.valueOf(freq));
-						pwmFreq1.seek(0);
-						pwmDuty1.writeBytes(String.valueOf(duty));
-						pwmDuty1.seek(0);
-					}
-				break;
-				case 7:
-					if(pwmDuty0 == null) {
-						pwmDuty0 = new RandomAccessFile(PWMDevice.getDuty0(),"rw");
-						pwmFreq0 = new RandomAccessFile(PWMDevice.getFreq0(),"rw");
-						//pwmEnable0 = new RandomAccessFile(enable0,"rw");
-						pwmFreq0.writeBytes(String.valueOf(freq));
-						pwmFreq0.seek(0);
-						pwmDuty0.writeBytes(String.valueOf(duty));
-						pwmDuty0.seek(0);
-					}
-				break;
-				default:
-					throw new RuntimeException("PWM pins limited to PWM0 - Pin 7, PWM1 = Pin 12");
-			}
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-			throw new RuntimeException(e);
+	private static void init0() throws IOException {
+		if(pwmDuty0 == null) {
+			pwmDuty0 = new RandomAccessFile(PWMDevice.getDuty0(),"rw");
+			pwmFreq0 = new RandomAccessFile(PWMDevice.getFreq0(),"rw");
+			pwmFreq0.writeBytes(String.valueOf(0));
+			pwmFreq0.seek(0);
+			pwmDuty0.writeBytes(String.valueOf(0));
+			pwmDuty0.seek(0);
+			pwmEnable0 = new RandomAccessFile(PWMDevice.getEnable0(),"rw");		
+			pwmEnable0.writeBytes(String.valueOf(0));
+			pwmEnable0.seek(0);
 		}
 	}
+	
+	private static void init1() throws IOException {
+		if(pwmDuty1 == null) {
+			pwmDuty1 = new RandomAccessFile(PWMDevice.getDuty1(),"rw");
+			pwmFreq1 = new RandomAccessFile(PWMDevice.getFreq1(),"rw");
+			pwmFreq1.writeBytes(String.valueOf(0));
+			pwmFreq1.seek(0);
+			pwmDuty1.writeBytes(String.valueOf(0));
+			pwmDuty1.seek(0);
+			pwmEnable1 = new RandomAccessFile(PWMDevice.getEnable1(),"rw");
+			pwmEnable1.writeBytes(String.valueOf(0));
+			pwmEnable1.seek(0);
+		}
+	}
+	
 	public abstract void enable(boolean enable) throws IOException;
 	public abstract void freq(int hZ) throws IOException;
 	public abstract void duty(int val) throws IOException;
@@ -83,4 +79,25 @@ public abstract class HardwarePWM {
 
 	public abstract void attachInterrupt(InterruptServiceInterface cins, boolean overflow);
 	public abstract void detachInterrupt(boolean overflow);
+	
+	public String toString() {
+		if(this.pin == 0)
+			return "PWM pin/devices uninitialized";
+		switch(pin) {
+		case 12:
+			if(pwmDuty1 == null) {
+				return "PWM pin set to:"+String.valueOf(pin)+" but PWM device files uninitialized";
+			} else {
+				return("PWM pin:"+String.valueOf(pin)+" Duty:"+pwmDuty1.toString()+" Freq:"+pwmFreq1.toString()+" Enable:"+pwmEnable1.toString());
+			}
+		case 7:
+			if(pwmDuty0 == null) {
+				return "PWM pin set to:"+String.valueOf(pin)+" but PWM device files uninitialized";
+			} else {
+				return("PWM pin:"+String.valueOf(pin)+" Duty:"+pwmDuty0.toString()+" Freq:"+pwmFreq0.toString()+" Enable:"+pwmEnable0.toString());
+			}
+		default:
+			return ("PWM pin "+String.valueOf(pin)+" invalid, only 7 and 12 apply");
+		}
+	}
 }

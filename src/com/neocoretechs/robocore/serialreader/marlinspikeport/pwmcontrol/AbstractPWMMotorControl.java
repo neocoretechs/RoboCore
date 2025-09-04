@@ -22,6 +22,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
  *
  */
 public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
+	private static boolean DEBUG = true;
 	protected PWM[] ppwms = new PWM[channels];
 	protected int pdigitals[] = new int[channels];
 	// 10 possible drive wheels, index is by channel-1. 
@@ -57,16 +58,24 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	*/ 
 	public void createPWM(int channel, int pin_number, int dir_pin, int dir_default, int freq, int duty) throws IOException {
 		// Attempt to assign PWM pin
-		if( getChannels() < channel ) setChannels(channel);
+		if( channel < 0 || channel >= getChannels()  ) {
+				throw new IOException(String.format("%s channel NOT set to:%d since getChannels() reported %d%n",this.getClass().getName(), channel, getChannels()));
+		}	
 		Pins.assignPin(dir_pin);
+		if(DEBUG)
+			System.out.printf("%s direction pin %d assigned%n",this.getClass().getName(), dir_pin);
 		
 		int dirpin;
-		for(dirpin = 0;dirpin < channels; dirpin++) {
+		for(dirpin = 0; dirpin < channels; dirpin++) {
 			if(pdigitals[dirpin] == 0) {
 				pdigitals[dirpin] = dir_pin;
 				break;
 			}
 		}
+		if(dirpin == channels)
+			System.out.println("Direction pin slot exceeded available channels:"+dirpin);
+		if(DEBUG)
+			System.out.printf("%s direction pin slot set to:%d%n",this.getClass().getName(), dirpin);
 		
 		int pindex;
 		for(pindex = 0; pindex < channels; pindex++) {
@@ -74,6 +83,11 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 					break;
 			}
 		}
+		if(pindex == channels)
+			System.out.println("PWM pin slot exceeded available channels:"+pindex);
+		if(DEBUG)
+			System.out.printf("%s PWM pin slot set to:%d%n",this.getClass().getName(), pindex);
+		
 		setCurrentDirection(channel, dir_default);
 		setDefaultDirection(channel, dir_default);
 		setMotorSpeed(channel, 0);	
@@ -82,8 +96,11 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 		motorDrive[channel-1][2] = freq;
 		motorDrive[channel-1][3] = duty;
 		PWM ppin = new PWM(pin_number);
+		if(DEBUG)
+			System.out.printf("%s PWM instance set to:%s%n",this.getClass().getName(), ppin);
 		ppwms[pindex] = ppin;
-		ppwms[pindex].init(pin_number, freq, duty);
+		if(DEBUG)
+			System.out.printf("%s PWM instance initialized to:%s%n",this.getClass().getName(), ppwms[pindex]);
 					
 	}
 	public abstract void resetMaxMotorPower();
