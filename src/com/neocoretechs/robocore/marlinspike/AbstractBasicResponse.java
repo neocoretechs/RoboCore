@@ -29,6 +29,7 @@ public abstract class AbstractBasicResponse implements ResponseInterface {
 		this.asynchDemuxer = asynchDemuxer;
 		this.topicName = topicName;
 		this.topicList = new TopicList(topicName, 2) {
+			private static final long serialVersionUID = 1L;
 			@Override
 			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				run(readLine);
@@ -45,6 +46,7 @@ public abstract class AbstractBasicResponse implements ResponseInterface {
 		this.asynchDemuxer = asynchDemuxer;
 		this.topicName = topicName;
 		this.topicList = new TopicList(topicName, queueSize) {
+			private static final long serialVersionUID = 1L;
 			@Override
 			public void retrieveData(ArrayList<String> readLine) throws InterruptedException {
 				run(readLine);

@@ -92,7 +92,7 @@ public class NodeDeviceDemuxer implements Serializable {
 	
 	public void init() throws IOException {
 		if(startup.size() > 0)
-			asynchDemuxer.config(startup);
+			AsynchDemuxer.config(asynchDemuxer,startup);
 	}
 	
 	@Override

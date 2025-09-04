@@ -21,10 +21,12 @@ import java.io.IOException;
  *
  */
 public class DelayedHBridgeDriver extends HBridgeDriver {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	
 	public DelayedHBridgeDriver(int maxPower) {
 		super(maxPower);
+		if(DEBUG)
+			System.out.printf("%s maxPower=%d%n", this.getClass().getName(), maxPower);
 	}
 	
 	@Override
@@ -39,6 +41,8 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 	
 	@Override
 	public int commandMotorPower(int channel, int motorPower) throws IOException {
+		if(DEBUG)
+			System.out.printf("%s channel=%d, motorPower=%d%n", this.getClass().getName(), channel, motorPower);
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return 0;
@@ -56,7 +60,7 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 					pdigitals[dirPinIndex] = 1;//.high();
 				else 
 					pdigitals[dirPinIndex] = 0;//.low();
-				disable(channel-1);
+				disable(channel);
 				try {
 					Thread.sleep(200);
 				} catch (InterruptedException e) {}
@@ -71,7 +75,7 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 					pdigitals[dirPinIndex] = 0;//.low();
 				else
 					pdigitals[dirPinIndex] = 1;//.high();
-				disable(channel-1);
+				disable(channel);
 				try {
 					Thread.sleep(200);
 				} catch (InterruptedException e) {}
@@ -103,9 +107,11 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
+		if(DEBUG)
+			System.out.printf("%s channel=%d, motorPower=%d for %s%n", this.getClass().getName(), channel, motorPower, getDriverInfo(channel));
 		ppwms[pwmIndex].freq(motorPower);
 		ppwms[pwmIndex].duty(motorPower/2); //50% duty cycle
-		enable(channel-1);
+		enable(channel);
 		return 0;
 	}
 

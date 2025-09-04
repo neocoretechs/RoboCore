@@ -87,13 +87,13 @@ public class TypeSlotChannelEnable implements Serializable {
 	public enum typeNames {
 		SMARTCONTROLLER("SmartController"),
 		HBRIDGE("H-Bridge"),
-		DELAYHBRIDGE("DelayH-Bridge"),
 		SPLITBRIDGE("SplitBridge"),
 		SWITCHBRIDGE("SwitchBridge"),
 		SWITCHHBRIDGE("SwitchHBridge"),
 		PWM("PWM"),
 		INPUTPIN("InputPin"),
-		OUTPUTPIN("OutputPin");
+		OUTPUTPIN("OutputPin"),
+		DELAYHBRIDGE("DelayH-Bridge");
 		String name;
 		typeNames(String name) { this.name = name;} 
 		public String val() { return name; }
@@ -101,11 +101,11 @@ public class TypeSlotChannelEnable implements Serializable {
 			switch(this) {
 				case SMARTCONTROLLER:
 				case HBRIDGE:
-				case DELAYHBRIDGE:
 				case SPLITBRIDGE:
 				case SWITCHBRIDGE:
 				case SWITCHHBRIDGE:
 				case PWM:
+				case DELAYHBRIDGE:
 					//return String.format("G5 Z%d C%d P%d%n",slot,channel,deviceLevel);
 					return new G5(tsce);
 				case INPUTPIN:
@@ -122,7 +122,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	};
 	
 	// M code to generate for ordinal of typeNames
-	String[] configCodes = {"2","3","16","4","5","5","9","43","41"};
+	String[] configCodes = {"2","3","4","5","5","9","43","41","16"};
 	
 	// This interface is responsible for generating the actual M or G code that is passed to the Marlinspike to activate the device
 	private ActivationInterface activator = null;
@@ -131,7 +131,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * Create a template to initialize a logical controller within the Marlinspike where we have an enable pin and no direction pin.
 	 * @param cntrltype One of SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
 	 * @param slot The numerical slot for the controller there are 10 for motor types and 10 for non motor types.
-	 * @param channel The channel within the controller at the numerical slot; 10 channels per sloted controller
+	 * @param channel The channel within the controller at the numerical slot; 10 channels per slotted controller
 	 * @param enable The pin to enable the controller at the slot at the channel in the Marlinspike on the node.
 	 */
 	public TypeSlotChannelEnable(typeNames cntrltype, int slot, int channel, int enable) {
@@ -198,7 +198,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel 2 GPIO pins for full forward and back, no PWM, and an enable pin <br>
 	 * M10 Z0 T4 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br>
 	 * M10 Z0 T5 - Switch H bridge, type 5 slot 0, each channel has 1 GPIO pin, no PWN, and enable which functions as direction when<p/>
-	 * M10 Z1 T6 - Delay H-Bridge Type 6 slot 1<br>
+	 * M10 Z1 T8 - Delay H-Bridge Type 8 slot 1<br>
 	 * @param ipin1 PWM primary drive pin0 from MarlinspikeManager.configureMarlinspike and properties file
 	 * @param ipin0 PWM secondary drive pin1
 	 * @return The M10 directive string, possibly multiple c/r delimited directives relating to configuring the type in the M10 preamble
@@ -288,7 +288,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * M10 Z3 T3 - Switch bridge, type 3, slot 3, each channel has 2 GPIO pins for full forward and back, no PWM, and an enable pin <br>
 	 * M10 Z0 T4 - Switch H bridge, type 4, slot 0, each channel has 1 signal gpio pin and 1 direction gpio pin<br>
 	 * M10 Z0 T5 - PWM driver Type 4 control in slot 0, Type 4 is a PWM driver in separate slots from motor drivers<br>
-	 * M10 Z1 T6 - Delay H-Bridge controller type 6, slot 1 <br>
+	 * M10 Z1 T8 - Delay H-Bridge controller type 8, slot 1 <br>
 	 * @param encoder The pin that receives hall effect or other encoder pulses per rotation of wheel. If 0, possibly add additional config
 	 * @return
 	 */

@@ -18,7 +18,7 @@ import java.io.IOException;
  * the range that comes from the main controller, before any processing into a timer value.
  * the top level abstract class AbstractMotorControl contains these values.
  * Created: 10/2/2016 1:42:24 PM
- * @author groff
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  *
  */
 public class HBridgeDriver extends AbstractPWMMotorControl {

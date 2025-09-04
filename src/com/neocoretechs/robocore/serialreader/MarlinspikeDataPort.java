@@ -859,7 +859,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			// T3 - Switch bridge, each channel has 2 GPIO pins for full forward and back, no PWM, and an enable pin
 			// T4 - Switch H-bridge
 			// T5 - non-propulsion PWM driver
-			// T6 - Delayed H-bridge. H-bridge with delay between direction change
+			// T8 - Delayed H-bridge. H-bridge with delay between direction change
 		case 10:
 			if( code_seen('Z') ) {
 				motorController = (int) code_value();
@@ -978,7 +978,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						pwmControl[motorController] = new VariablePWMDriver();
 						ret.add(String.format("%sM10%s%n",MSG_BEGIN,MSG_TERMINATE));
 						return ret;
-					case 6: // type 6 delayed H-bridge. Like a regular H-bridge but with a reverse direction delay
+					case 8: // type 8 delayed H-bridge. Like a regular H-bridge but with a reverse direction delay
 						// up to 10 channels, each channel has a direction pin (1), and a PWM pin (0)
 						if(motorControl[motorController] != null) {
 							// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
