@@ -21,6 +21,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	private SerialPort serialPort;
 	private OutputStream outStream;
 	private InputStream inStream;
+	private boolean connected = false;
 	// serial settings
 	//Port=/dev/ttyACM0
 	//PortSettings=115200,n,8,1
@@ -71,13 +72,13 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		serialPort.setBaudRate(baud);
 		serialPort.setNumDataBits(datab);
 		switch(stopb) {
-		case 1 -> serialPort.setNumStopBits(SerialPort.ONE_STOP_BIT);
-		case 2 -> serialPort.setNumStopBits(SerialPort.TWO_STOP_BITS);
+			case 1 -> serialPort.setNumStopBits(SerialPort.ONE_STOP_BIT);
+			case 2 -> serialPort.setNumStopBits(SerialPort.TWO_STOP_BITS);
 		}
 		switch(parityb) {
-		case 0 -> serialPort.setParity(SerialPort.NO_PARITY);
-		case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
-		case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
+			case 0 -> serialPort.setParity(SerialPort.NO_PARITY);
+			case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
+			case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
 		}
 
 		// Open the input and output streams for the connection. If they won't
@@ -94,7 +95,6 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 				Thread.sleep(1);
 			} catch (InterruptedException e) {}
 
-
 		if( writeable) {
 			outStream = serialPort.getOutputStream();
 			if( outStream == null ) {
@@ -108,12 +108,16 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 					Thread.sleep(1);
 				} catch (InterruptedException e) {}
 		}
-
-
+		connected = true;
 		if( PORTDEBUG ) 
 			System.out.println("Connected to "+portName);
 	}
 
+	@Override
+	public boolean isConnected() {
+		return connected;
+	}
+	
 	@Override
 	public void close() {
 		serialPort.closePort();

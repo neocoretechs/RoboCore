@@ -26,6 +26,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	private static boolean PORTDEBUG = true;
 	private static boolean INFO = true;
 	private SerialPort serialPort;
+	private boolean openedSuccessfully = false;
+	private boolean connected = false;
 	
     private OutputStream outStream;
     private InputStream inStream;
@@ -168,6 +170,12 @@ public class IMUSerialDataPort implements DataPortInterface {
 			return instance;
 		}
 	}
+	
+	@Override
+	public boolean isConnected() {
+		return connected;
+	}
+	
 	@Override
 	public int bytesToRead() throws IOException {
 		return serialPort.bytesAvailable();
@@ -216,7 +224,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		SerialPort.addShutdownHook(new Thread() { public void run() { System.out.println("\nRunning shutdown hook"); } });
 		serialPort = SerialPort.getCommPort(portName);
 		serialPort.allowElevatedPermissionsRequest();
-		boolean openedSuccessfully = serialPort.openPort(0);
+		openedSuccessfully = serialPort.openPort(0);
 		System.out.println("\nOpening " + serialPort.getSystemPortName() + ": " + serialPort.getDescriptivePortName() + " - " + serialPort.getPortDescription() + ": " + (openedSuccessfully ? "Opened successfully!" : "FAILED!"));
 		if (!openedSuccessfully)
 		{
@@ -298,6 +306,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		if( PORTDEBUG ) {
 			System.out.println("Connected to "+portName+" and BNO055 IMU is ready !"+stringSettings());
 		}
+		connected = true;
 	}
 	private SerialPort getSerialPort() {
 	    SerialPort[] serialPortList = SerialPort.getCommPorts();

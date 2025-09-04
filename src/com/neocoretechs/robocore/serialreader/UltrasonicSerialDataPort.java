@@ -24,6 +24,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 	// serial settings
 	// PortSettings=9600,n,8,1
 	// On RasPi its /dev/ttyAMA0 or /dev/ttyS0, on OdroidC2, ttyS0 is hardwired console so we use ttyS1 on header
+	// or better yet, /dev/ttyUSB0 for TTL to USB converter
 	// On C1 we have ttyS2 so basically, if we have ttyS2 use that, if we have a ttyS1, use it, otherwise, use ttyS0
 	// 
 	private static String portName = "/dev/ttyS1";
@@ -31,6 +32,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 	private static int datab = 8;
 	private static int stopb = 1;
 	private static int parityb = 0;
+	private boolean connected = false;
 	//
 	private static Object readMx = new Object();// mutex
 	private static Object writeMx = new Object();
@@ -151,11 +153,16 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 					Thread.sleep(1);
 				} catch (InterruptedException e) {}
 		}
-
+		connected = true;
 		if( PORTDEBUG ) 
 			System.out.println("Connected:"+stringSettings());
 	}
 
+	@Override
+	public boolean isConnected() {
+		return connected;
+	}
+	
 	@Override
 	public void close() {
 		serialPort.closePort();

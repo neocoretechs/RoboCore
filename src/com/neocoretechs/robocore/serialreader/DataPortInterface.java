@@ -9,6 +9,7 @@ import java.io.IOException;
  */
 public interface DataPortInterface {
 	public void connect(boolean writeable) throws IOException;
+	public boolean isConnected() throws IOException;
 	public int read() throws IOException;
 	public void write(int c) throws IOException;
 	public void close();

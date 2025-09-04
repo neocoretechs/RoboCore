@@ -23,6 +23,7 @@ public class StreamDataPort implements DataPortCommandInterface {
 	protected BufferedReader br = null;
 	protected BufferedWriter bw = null;
 	protected boolean writeable = false;
+	private boolean connected = false;
 	
 	public StreamDataPort() {}
 	
@@ -30,6 +31,7 @@ public class StreamDataPort implements DataPortCommandInterface {
 		port = "Stream";
 		fin = in;
 		fout = out;
+		connected = true;
 	}
 	/**
 	 * Assume stream connect is handled elsewhere before we get here, so do little
@@ -38,7 +40,12 @@ public class StreamDataPort implements DataPortCommandInterface {
 	public void connect(boolean writeable) throws IOException { 
 		this.writeable = writeable;
 	}
-
+	
+	@Override
+	public boolean isConnected() {
+		return connected;
+	}
+	
 	@Override
 	public int read() throws IOException {
 		return fin.read();

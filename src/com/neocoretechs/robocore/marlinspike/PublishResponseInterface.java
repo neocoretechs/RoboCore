@@ -5,7 +5,7 @@ import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 /**
  * Interface defining the contract to accept Marlinspike status output and queue that to status reporting
  * channel in publish/subscribe framework.
- * @author Jonathan Groff Copyright (C0 NeoCoreTEchs 2020,2021,2022
+ * @author Jonathan Groff Copyright (C0 NeoCoreTechs 2020,2021,2022
  *
  * @param <T>
  */

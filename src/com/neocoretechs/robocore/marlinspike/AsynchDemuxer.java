@@ -190,9 +190,9 @@ public class AsynchDemuxer implements Runnable {
 	
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
-	public synchronized void clearWriteBuffer() { requestQueue.clear(); }
+	public void clearWriteBuffer() { requestQueue.clear(); }
 	
-	public synchronized TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
+	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
 		try {
 			return marlinSpikeManager.getTypeSlotChannelEnableByName(name);
 		} catch(NoSuchElementException npe) {
@@ -209,11 +209,9 @@ public class AsynchDemuxer implements Runnable {
 	 * @param req The request to be enqueued.
 	 */
 	public static void addWrite(AsynchDemuxer ad, String req) {
-		synchronized(mutex) {
-			ad.requestQueue.addLast(req);
-			if(DEBUG)
-				System.out.println("Adding request to demuxer:"+ad+" "+req+" len:"+ad.requestQueue.length());
-		}
+		ad.requestQueue.addLast(req);
+		if(DEBUG)
+			System.out.println("Adding request to demuxer:"+ad+" "+req+" len:"+ad.requestQueue.length());
 	}
 	/**
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
@@ -224,13 +222,10 @@ public class AsynchDemuxer implements Runnable {
 	 * @param req The request to be enqueued.
 	 */
 	public static void addWrite(AsynchDemuxer ad, List<String> req) {
-		synchronized(mutex) {
-			ad.requestQueue.addLast(req);
-			if(DEBUG) {
-				for(String reqs: req)
-					System.out.println("Adding request from list to demuxer:"+ad+" "+reqs+" len:"+ad.requestQueue.length());
-			}
-		}
+		ad.requestQueue.addLast(req);
+		if(DEBUG)
+			for(String reqs: req)
+				System.out.println("Adding request from list to demuxer:"+ad+" "+reqs+" len:"+ad.requestQueue.length());
 	}
 	
 	public MachineBridge getMachineBridge(String group) {
@@ -240,6 +235,11 @@ public class AsynchDemuxer implements Runnable {
 	public synchronized void connect(DataPortCommandInterface dataPort) throws IOException {
 		this.dataPort = dataPort;
 		dataPort.connect(true);
+		while(!dataPort.isConnected()) {
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {}
+		}
 		init();
 	}
 	/**
@@ -248,7 +248,6 @@ public class AsynchDemuxer implements Runnable {
 	private synchronized void init() {
 		// initialize the fixed thread pool manager
 		SynchronizedFixedThreadPoolManager.init(3, Integer.MAX_VALUE, new String[]{dataPort.getPortName()});
-		synchronized(mutex) {
 			//
 			// G4
 			//
@@ -706,7 +705,6 @@ public class AsynchDemuxer implements Runnable {
 			//if(DEBUG)
 			//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMPINSETTING.val());
 			topics.put(topicNames.PWMPINSETTING.val(), new pwmpinsetting(this).getTopicList());
-		}
 		// spin the main loop to read lines from the Marlinspike and muxx them
 		SynchronizedFixedThreadPoolManager.spin(this, dataPort.getPortName());
 
@@ -846,14 +844,11 @@ public class AsynchDemuxer implements Runnable {
 							if( tl != null ) {
 								if(DEBUG)
 									System.out.println("AsynchDemux "+this+" call out to topic:"+tl.getMachineBridge().getGroup());
-
 								// consume the lines from the Marlinspike response until we see a terminal directive
 								// once this happens we pass it to the proper TopicList {@link AbstractBasicResponse}
-								// retrieveData method that consumes the payload line(s) and issues the await on mutexWrite cyclicbarrier
-								// so that read/write cycle to port can resume
+								// retrieveData method that consumes the payload line(s) 
 								if(DEBUG)
 									System.out.println(this.getClass().getName()+" "+tl+" payload:"+Arrays.toString(payload.toArray()));
-								// triggers mutexWrite.await when entire message retrieved for given topic, should be 3rd cyclic barrier awaiter
 								tl.retrieveData(payload);
 							} else {
 								throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+

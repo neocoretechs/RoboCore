@@ -201,9 +201,13 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	 * Null method
 	 */
 	public void connect(boolean writeable) throws IOException {
-
 	}
-
+	
+	@Override
+	public boolean isConnected() {
+		return true;
+	}
+	
 	@Override
 	public int read() throws IOException {
 			return -1;
