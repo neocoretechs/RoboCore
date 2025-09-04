@@ -36,11 +36,11 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
  * LUN[0].EncoderHiRange:1023<br>
  * After M10 definition, these codes configure the defined driver:<br>
  * M2 - define SmartController. M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] <br>
- * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F<frequency>] [G <duty>]<br>
- * M4 - define SplitBridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F<frequency>] [G<duty>]<br>
+ * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F<frequency>] [H <duty>]<br>
+ * M4 - define SplitBridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F<frequency>] [H<duty>]<br>
  * M5 - define SwitchBridge or SwitchHBridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>] if no Q pin, SwitchHBridge and enable pin is direction<br>
  * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [] <br>
- * M16 - define delayed H-bridge. M16 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F<frequency>] [G <duty>]<br>
+ * M16 - define delayed H-bridge. M16 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F<frequency>] [H <duty>]<br>
  * M41 - define basic GPIO output pin linked to control axis. M41 P<pin><br>
  * Additionally, after M10, an M14 or M15 encoder directive may be issued depending on default encoder status.<br>
  * M14 Z<slot> C<channel> P<pin> L<lo> H<hi> N<count>
@@ -260,12 +260,12 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * Generate preamble to control<p/>
 	 * sequence is genTypeAndSlot().genDrivePins(pri, sec).genChannelDirDefaultEncoder(encoder);
 	 * M2 - define smart controller. M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>]
- 	 * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F frequency] [G duty]
-	 * M4 - define Split Bridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F frequency] [G duty]
+ 	 * M3 - define H-bridge. M3 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F frequency] [H duty]
+	 * M4 - define Split Bridge. M4 [Z<slot>] P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder pin>] [F frequency] [H duty]
  	 * M5 - define Switch Bridge. M5 Z<slot> P<pin> Q<pin> C<channel> D<enable pin> E<default dir> [W<encoder>]
  	 * M5 - define Switch H Bridge. M5 Z<slot> P<pin> C<channel> D<enable pin> E<default dir> [W<encoder>]
-	 * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [F frequency] [G Duty]
-	 * M16 - define delay H-bridge. M16 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F frequency] [G duty]
+	 * M9 - define PWM driver. M9 [Z<slot>] P<pin> C<channel> D<enable pin> [F frequency] [H Duty]
+	 * M16 - define delay H-bridge. M16 [Z<slot>] P<pin> C<channel> D<direction pin> E<default dir> W<encoder pin> [F frequency] [H duty]
 	 * @return The partially formed directive to send to Marlinspike for config
 	 */
 	private String genTypeAndSlot() {
@@ -328,12 +328,12 @@ public class TypeSlotChannelEnable implements Serializable {
 					sb.append(" W").append(encoder);
 				return sb.append(" E").append(dirdefault).append("\r\n").toString();
 			case 5:// straight PWM driver, no motor, hence, no encoder
-				return sb.append(" D").append(dirdefault).append(" F").append(freq).append(" G").append(duty).append("\r\n").toString();
+				return sb.append(" D").append(dirdefault).append(" F").append(freq).append(" H").append(duty).append("\r\n").toString();
 			default:
 				break;
 		}
 		// types 1, 2 and 3 have standard D-enable, E-default dir, W-optional encoder
-		sb.append(" D").append(enable).append(" E").append(dirdefault).append(" F").append(freq).append(" G").append(duty).toString();
+		sb.append(" D").append(enable).append(" E").append(dirdefault).append(" F").append(freq).append(" H").append(duty).toString();
 		if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder) {
 			sb.append(" W").append(encoder);
 			if(encInterrupt != 0)

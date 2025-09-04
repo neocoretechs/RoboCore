@@ -524,7 +524,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					if(code_seen('F')) {
 						pwm_freq = (int) code_value();
 					}
-					if(code_seen('G')) {
+					if(code_seen('H')) {
 						pwm_duty = (int) code_value();
 					}
 					if( code_seen('W')) {
@@ -835,7 +835,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					if(code_seen('F')) {
 						pwm_freq = (int) code_value();
 					}
-					if(code_seen('G')) {
+					if(code_seen('H')) {
 						pwm_duty = (int) code_value();
 					}
 					try {
@@ -1220,7 +1220,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					} else {
 						break;
 					}
-					if(code_seen('G')) {
+					if(code_seen('H')) {
 						pwm_duty = (int) code_value();
 					} else {
 						break;
