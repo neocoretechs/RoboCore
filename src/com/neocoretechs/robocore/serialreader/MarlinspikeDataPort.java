@@ -474,7 +474,6 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				}
 				ret.add(String.format("%sM2%s%n",MSG_BEGIN,MSG_TERMINATE));
 				return ret;
-
 			}
 			break;
 			//
@@ -1218,9 +1217,13 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					}
 					if(code_seen('F')) {
 						pwm_freq = (int) code_value();
+					} else {
+						break;
 					}
 					if(code_seen('G')) {
 						pwm_duty = (int) code_value();
+					} else {
+						break;
 					}
 					if( code_seen('W')) {
 						encode_pin = (int) code_value();
@@ -1233,17 +1236,15 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 						if(encode_pin != 0) {
 							motorControl[motorController].createEncoder(channel, encode_pin, interrupt_pin);
 						}
-					} catch (IOException /*| GpioPinExistsException*/ gpioe) {
+					} catch (IOException gpioe) {
 						ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
 						return ret;
 					}
 				}
-				ret.add(String.format("%sM3%s%n",MSG_BEGIN,MSG_TERMINATE));
-				return ret;
-			} else { //motorcontrol[motorcontroller]
-				ret.add(String.format("%s%s%s%n",MSG_BEGIN,MSG_NO_CONTROL,MSG_TERMINATE));
+				ret.add(String.format("%sM16%s%n",MSG_BEGIN,MSG_TERMINATE));
 				return ret;
 			}
+			break;
 			//
 			// M33 [Z<slot>] P<ultrasonic pin> D<min. distance in cm> [E<direction 1- forward facing, 0 - reverse facing sensor>] 
 			// link Motor controller to ultrasonic sensor, the sensor must exist via M301

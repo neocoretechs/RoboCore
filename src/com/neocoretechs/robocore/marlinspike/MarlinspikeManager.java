@@ -146,6 +146,8 @@ public class MarlinspikeManager {
 				// pins. etc. 
 				Optional<Object> dir = Optional.ofNullable(lun[i].get("Direction"));
 				Optional<Object> enable = Optional.ofNullable(lun[i].get("EnablePin"));
+				Optional<Object> freq = Optional.ofNullable(lun[i].get("Frequency"));
+				Optional<Object> duty = Optional.ofNullable(lun[i].get("DutyCycle"));
 				int ienable = enable.isPresent() ? Integer.parseInt((String)enable.get()) : 0;
 				// standalone controls?
 				// if pin2 is present we assume pin1 is present and we are using a 2 PWM pin type
@@ -161,7 +163,7 @@ public class MarlinspikeManager {
 					if(et.name.equals(type)) {
 						eType = et;
 						break;
-					}		
+					}
 				}
 				if(eType == null) {
 					//Arrays.toString(typeNames.values()) gives enum types, not values of names
@@ -178,10 +180,18 @@ public class MarlinspikeManager {
 					if(channel == null)
 						throw new IOException("Must specify Channel paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controller+" Type:"+type);
 					if(dir.isPresent()) {
-						tsce = new TypeSlotChannelEnable(eType, 
+						if(freq.isPresent()) {
+							tsce = new TypeSlotChannelEnable(eType, 
+									Integer.parseInt(slot), 
+									Integer.parseInt(channel), 
+									ienable, Integer.parseInt((String)dir.get()),
+									Integer.parseInt((String)freq.get()), Integer.parseInt((String)duty.get()));
+						} else {
+							tsce = new TypeSlotChannelEnable(eType, 
 								Integer.parseInt(slot), 
 								Integer.parseInt(channel), 
-								ienable, Integer.parseInt((String) dir.get()));
+								ienable, Integer.parseInt((String)dir.get()));
+						}
 					} else {
 						tsce = new TypeSlotChannelEnable(eType, 
 								Integer.parseInt(slot), 

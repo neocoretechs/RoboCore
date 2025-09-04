@@ -12,7 +12,7 @@ import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
  *
  */
 public class G5 extends AbstractBasicResponse implements ActivationInterface {
-	private boolean DEBUG;
+	private boolean DEBUG = false;
 	private TypeSlotChannelEnable tsce; 
 	public G5(AsynchDemuxer asynchDemuxer) {
 		//

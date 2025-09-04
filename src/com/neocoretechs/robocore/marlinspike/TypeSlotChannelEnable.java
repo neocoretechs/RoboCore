@@ -80,6 +80,8 @@ public class TypeSlotChannelEnable implements Serializable {
 	int digitalEncoderState = 0; // low
 	int maxValue = 1000;
 	int minValue = -1000;
+	int freq = 50000;
+	int duty = 25000;
 	boolean pinToggle = false;
 	/**
 	 * M10 controller types
@@ -164,6 +166,17 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.activator = cntrltype.activatorFactory(this);
 	}
 	
+	public TypeSlotChannelEnable(typeNames cntrltype, int slot, int channel, int enable, int dirdefault, int freq, int duty) {
+		this.cntrltype = cntrltype;
+		this.slot = slot;
+		this.channel = channel;
+		this.enable = enable;
+		this.dirdefault = dirdefault;
+		this.freq = freq;
+		this.duty = duty;
+		this.activator = cntrltype.activatorFactory(this);
+	}
+	
 	public void setEncoderPin(int ienc) {
 		this.encoder = ienc;	
 	}
@@ -185,6 +198,19 @@ public class TypeSlotChannelEnable implements Serializable {
 	}
 	
 	public int getMaxValue() { return maxValue; }
+	
+	public int getFreq() { return freq; }
+	
+	public int getDuty() { return duty; }
+	
+	public void setDuty(int duty) {
+		this.duty = duty;
+	}
+	
+	public void setFreq(int freq) {
+		this.freq = freq;
+	}
+	
 	/**
 	 * CALL THIS FIRST to establish instance of controller for further operations and to refer to it numerically by type.<p/>
 	 * M10 initializes a type of controller in a specific 'slot' that becomes an ordinal number we use to refer to the controller
@@ -201,7 +227,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * M10 Z1 T8 - Delay H-Bridge Type 8 slot 1<br>
 	 * @param ipin1 PWM primary drive pin0 from MarlinspikeManager.configureMarlinspike and properties file
 	 * @param ipin0 PWM secondary drive pin1
-	 * @return The M10 directive string, possibly multiple c/r delimited directives relating to configuring the type in the M10 preamble
+	 * @return The M10 directive list of strings, possibly multiple c/r delimited directives relating to configuring the type in the M10 preamble
 	 */
 	public List<String> genM10(int ipin0, int ipin1) {
 		M10CtrlType = cntrltype.ordinal();
@@ -212,8 +238,10 @@ public class TypeSlotChannelEnable implements Serializable {
 		} else {
 			// Generate the M10 followed by the the M codes to create the type, the encoder, the interrupt linkage, etc.
 			ab.add(sb.append("M10 ").append("Z").append(getSlot()).append(" T").append(M10CtrlType).append("\r\n").toString());
+			// build a line to add to list
 			sb = new StringBuilder();
 			sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder());
+			// add the channel/dir/default encoder line, then add the lines for channel encoders, if present
 			ab.add(sb.toString());
 			ab.add(genChannelEncoder());
 		}
@@ -300,12 +328,12 @@ public class TypeSlotChannelEnable implements Serializable {
 					sb.append(" W").append(encoder);
 				return sb.append(" E").append(dirdefault).append("\r\n").toString();
 			case 5:// straight PWM driver, no motor, hence, no encoder
-				return sb.append(" D").append(dirdefault).append("\r\n").toString();
+				return sb.append(" D").append(dirdefault).append(" F").append(freq).append(" G").append(duty).append("\r\n").toString();
 			default:
 				break;
 		}
 		// types 1, 2 and 3 have standard D-enable, E-default dir, W-optional encoder
-		sb.append(" D").append(enable).append(" E").append(dirdefault).toString();
+		sb.append(" D").append(enable).append(" E").append(dirdefault).append(" F").append(freq).append(" G").append(duty).toString();
 		if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder) {
 			sb.append(" W").append(encoder);
 			if(encInterrupt != 0)
@@ -353,8 +381,8 @@ public class TypeSlotChannelEnable implements Serializable {
 		if(cntrltype.val().endsWith("Pin")) {
 			ret = String.format("Control type: %s pin:%d%n",cntrltype, pin);
 		} else {
-			ret = String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d M10 type:%d%n",  
-				cntrltype, getSlot(), channel, enable, dirdefault, M10CtrlType);
+			ret = String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d freq:%d duty%d M10 type:%d%n",  
+				cntrltype, getSlot(), channel, enable, dirdefault, freq, duty, M10CtrlType);
 			if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder) {
 				ret += String.format(" Default encoder at pin:%d",encoder);
 				if(encInterrupt != 0)
