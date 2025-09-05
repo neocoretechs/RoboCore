@@ -61,11 +61,11 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	 * @throws IOException 
 	 */
 	public void createDigital(int channel, int pin_number, int pin_numberB, int dir_pin, int dir_default) throws IOException {
-		Pins.assignPin(pin_number);
+		//Pins.assignOutputPin(pin_number);
 		setMotorDigitalPin(channel, pin_number);
-		Pins.assignPin(pin_numberB);
+		//Pins.assignOutputPin(pin_numberB);
 		setMotorDigitalPinB(channel, pin_numberB);
-		Pins.assignPin(dir_pin);
+		//Pins.assignOutputPin(dir_pin);
 		setMotorEnablePin(channel, dir_pin);			
 		currentDirection[channel-1] = dir_default;
 		defaultDirection[channel-1] = dir_default;

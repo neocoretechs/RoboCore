@@ -60,7 +60,7 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 		if( channel < 0 || channel >= getChannels()  ) {
 				throw new IOException(String.format("%s channel NOT set to:%d since getChannels() reported %d%n",this.getClass().getName(), channel, getChannels()));
 		}	
-		Pins.assignPin(dir_pin);
+		//Pins.assignOutputPin(dir_pin);
 		if(DEBUG)
 			System.out.printf("%s direction pin %d assigned%n",this.getClass().getName(), dir_pin);
 		

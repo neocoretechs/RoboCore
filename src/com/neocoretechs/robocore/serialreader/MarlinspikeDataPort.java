@@ -1379,19 +1379,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			pin_number = -1;
 			if (code_seen('P')) {
 				pin_number = (int)code_value();
-				// try {
-				try {
-					Pins.assignPin(pin_number);
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
 				ret.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
 				return ret;
-				//} catch(GpioPinExistsException gpioe) {
-				//		ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-				//		return ret;
-				//}
 			}
 			break;
 			//
@@ -1437,14 +1426,8 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			pin_number = -1;
 			if (code_seen('P')) {
 				pin_number = (int)code_value();
-				try {
-					Pins.assignInputPin(pin_number);
-					ret.add(String.format("%sM43%s%n",MSG_BEGIN,MSG_TERMINATE));
-					return ret;
-				} catch(IOException gpioe) {
-					ret.add(String.format("%s%s:%s%s%n",MSG_BEGIN,MALFORMED_MCODE,gpioe,MSG_TERMINATE));
-					return ret;
-				}
+				ret.add(String.format("%sM43%s%n",MSG_BEGIN,MSG_TERMINATE));
+				return ret;
 			}
 			break; 
 			//

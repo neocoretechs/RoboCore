@@ -58,7 +58,7 @@ public class VariablePWMDriver extends AbstractPWMControl {
 	public void createPWM(int channel, int pin_number, int enable_pin, int dir_default, int freq, int duty) throws IOException {
 		// Attempt to assign PWM pin
 		if( getChannels() < channel ) setChannels(channel);
-		Pins.assignPin(enable_pin);
+		//Pins.assignOutputPin(enable_pin);
 		int pindex;
 		for(pindex = 0; pindex < channels; pindex++) {
 			if( ppwms[pindex] == null ) {

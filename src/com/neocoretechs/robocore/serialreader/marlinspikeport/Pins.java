@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.neocoretechs.robocore.GpioNative;
 /**
@@ -35,7 +36,7 @@ public class Pins {
 	public static boolean DEBUG = false;
 	public static int pinsIn[] = new int[80];
 	public static int pinsOut[] = new int[80];
-	public static int Pin[] = new int[80];
+	public static ConcurrentHashMap<String, Integer> Pin = new ConcurrentHashMap<String,Integer>();
 	public static int err;
 	
 	public static GpioNative gpio = new GpioNative();
@@ -49,68 +50,83 @@ public class Pins {
 	 * @param pin
 	 * @return
 	 */
-	public static int getPin(String spin) throws IOException {
+	private static int getPin(String spin) throws IOException {
 		if(!chipOpen) {
 		  	if((err = gpio.openChip(gpioChip)) < 0)
 	    		throw new IOException("chipOpen error "+err);	
 			chipOpen = true;
 		}
 	   	// get handle to line struct
-    	int pin = gpio.findChipLine(spin);
-      	if(pin < 0)
-    		throw new IOException("findChipLine error:"+pin);
-    	Pin[pin] = 1;
-    	return pin;
+		Integer ipin = Pin.get(spin);
+		if(ipin == null) {
+			ipin = gpio.findChipLine(spin);
+			if(ipin < 0)
+				throw new IOException("findChipLine error:"+ipin);
+			Pin.put(spin, ipin);
+		}
+    	return ipin;
 	}
 	/**
 	 * Assign pin as output
 	 * @param pin
-	 * @return
+	 * @return actual pin handle
 	 * @throws IOException 
 	 */
-	public static void assignPin(int spin) throws IOException {
-		int pin = getPin("PIN_"+spin);
-		if((err = gpio.lineRequestOutput(pin)) < 0)
-	 		throw new IOException("lineRequestOutput error:"+err);
-		pinsOut[pin] = 1;
-		if(DEBUG)
-			System.out.printf("Pins.assignPin output pin set %d%n", pin);
+	private static int assignOutputPin(int ipin) throws IOException {
+		int pin = getPin("PIN_"+ipin);
+		if(pinsOut[ipin] == 0) {
+			if((err = gpio.lineRequestOutput(pin)) < 0)
+				throw new IOException("lineRequestOutput error:"+err);
+			pinsOut[ipin] = pin;
+			if(DEBUG)
+				System.out.printf("Pins.assignPin output pin set %d%n", pin);
+		}
+		return pin;
 	}
 	
-	public static void unassignPin(int pin) throws IOException {
-	  	if(pinsOut[pin] == 1 && (err = gpio.lineRelease(pin)) < 0)
-	  		throw new IOException("unassignPin error:"+err);
-	  	Pin[pin] = 0;
-	  	pinsIn[pin] = 0;
-	  	pinsOut[pin] = 0;
+	public static void unassignPin(int ipin) throws IOException {
+		Integer gpin = Pin.get("PIN_"+ipin);
+		if(gpin != null) {
+			if((err = gpio.lineRelease(gpin)) < 0)
+				throw new IOException("unassignPin error:"+err);
+			Pin.remove("PIN_"+ipin);
+	  		pinsIn[gpin] = 0;
+	  		pinsOut[gpin] = 0;
+		}
 	}
 	
-	public static void assignInputPin(int spin) throws IOException {
-		int pin = getPin("PIN_"+spin);
-		if((err = gpio.lineRequestInput(pin)) < 0)
-	 		throw new IOException("lineRequestOutput error:"+err);
-		pinsIn[pin] = pin;
-		if(DEBUG)
-			System.out.printf("Pins.assignInputPin input pin set %d%n", pin);
+	private static int assignInputPin(int ipin) throws IOException {
+		int pin = getPin("PIN_"+ipin);
+		if(pinsIn[ipin] == 0) {
+			if((err = gpio.lineRequestInput(pin)) < 0)
+				throw new IOException("lineRequestOutput error:"+err);
+			pinsIn[ipin] = pin;
+			if(DEBUG)
+				System.out.printf("Pins.assignInputPin input pin set %d%n", pin);
+		}
+		return pin;
 	}
 	
-	public static void assignAnalogInputPin(int spin) throws IOException {
-		int pin = getPin("PIN_"+spin);
-		if((err = gpio.lineRequestRisingEdgeEvents(pin)) < 0)
-			 throw new IOException("lineRequestRisingEdgeEvents error:"+err);
-		pinsIn[pin] = pin;
+	private static int assignAnalogInputPin(int ipin) throws IOException {
+		int pin = getPin("PIN_"+ipin);
+		if(pinsIn[ipin] == 0) {
+			if((err = gpio.lineRequestRisingEdgeEvents(pin)) < 0)
+				throw new IOException("lineRequestRisingEdgeEvents error:"+err);
+			pinsIn[pin] = pin;
+		}
+		return pin;
 	}
 	
-	public static int getInputPin(int pin) throws IOException {
-		//return pinsIn[pin];
+	public static int getInputPin(int ipin) throws IOException {
+		int pin = assignInputPin(ipin);
 		int ret = gpio.lineGetValue(pin);
 		if(ret < 0)
 			throw new IOException("lineGetValue error:"+ret);
 		return ret;
 	}
 	
-	public static void getOutputPin(int pin, int val) throws IOException{
-		//return pinsOut[pin];
+	public static void getOutputPin(int ipin, int val) throws IOException{
+		int pin = assignOutputPin(ipin);
 		int ret = gpio.lineSetValue(pin, val);
 		if(ret < 0)
 			throw new IOException("lineSetValue error:"+ret);
@@ -121,8 +137,12 @@ public class Pins {
 	 * @return 1 rising edge, 3 falling edge, 0 unknown
 	 * @throws IOException
 	 */
-	public static int getAnalogInputPin(int pin) throws IOException {
-		while((err = gpio.lineEventWait(pin)) == 0) {		
+	public static int getAnalogInputPin(int ipin) throws IOException {
+		int pin = assignAnalogInputPin(ipin);
+		while((err = gpio.lineEventWait(pin)) == 0) {
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException e) {}
 		}
 		if(err < 0)
 			throw new IOException("lineEventWait error:"+err);
