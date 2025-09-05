@@ -143,8 +143,7 @@ public class SplitBridgeDriver extends HBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		ppwms[pwmIndex].freq(motorPower);
-		ppwms[pwmIndex].duty(motorPower/2);
+		ppwms[pwmIndex].freqDuty(motorPower, motorPower/2);
 		// now do B, if dir pin is same, values should match, otherwise pin may be written
 		pwmIndex = motorDriveB[channel][0]; // index to PWM array
 		dirPinIndex = motorDriveB[channel][1]; // index to dir pin array
@@ -197,8 +196,7 @@ public class SplitBridgeDriver extends HBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		ppwms[pwmIndex].freq(motorPower);
-		ppwms[pwmIndex].duty(motorPower/2);
+		ppwms[pwmIndex].freqDuty(motorPower, motorPower/2);
 		return 0;
 	}
 

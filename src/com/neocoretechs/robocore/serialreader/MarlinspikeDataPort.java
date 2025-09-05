@@ -259,6 +259,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	 
 	void get_command() {
 		serial_count = 0;
+		if(cmdbuffer.length() == 0) {
+			System.out.println("Empty command buffer..");
+			return;
+		}
 		serial_char = (char)cmdbuffer.charAt(0);
 		if(serial_char == '\n' || serial_char == '\r' || serial_char == '#' ||  serial_char == ';' || serial_count >= (MAX_CMD_SIZE - 1) ) {
 			return;
@@ -1498,8 +1502,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				if(ppwms[i] == null) {
 					try {
 						PWM ppin = new PWM(pin_number);
-						ppin.freq(pwm_freq);
-						ppin.duty(pin_status); // default is 2, clear on match. to turn off, use 0
+						ppin.freqDuty(pwm_freq, pin_status);// default is 2, clear on match. to turn off, use 0
 						ppwms[i] = ppin;
 					} catch (IOException e) {
 						e.printStackTrace();
@@ -1734,11 +1737,10 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				for(int i = 0; i < ppwms.length; i++) {
 					if(ppwms[i] != null && ppwms[i].pin == pin_number) {
 						try {
-							ppwms[i].duty(0);
+							ppwms[i].enable(false);
 						} catch (IOException e) {
 							e.printStackTrace();
 						} // default is 2, clear on match. to turn off, use 0 
-						//delete ppwms[i];
 						ppwms[i] = null;
 						break;
 					}

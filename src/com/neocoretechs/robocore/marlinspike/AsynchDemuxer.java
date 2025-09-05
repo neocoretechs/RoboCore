@@ -856,10 +856,8 @@ public class AsynchDemuxer implements Runnable {
 							}
 						}
 					}
-				} catch(IndexOutOfBoundsException | IOException ioob) {
-					if(DEBUG || PORTDEBUG)
-						System.out.println(ioob.getMessage());
-				} catch (InterruptedException e) {
+				} catch(Exception e) {
+					e.printStackTrace();
 					shouldRun = false;
 				}				
 		}

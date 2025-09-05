@@ -109,18 +109,29 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 		fault_flag = 0;
 		if(DEBUG)
 			System.out.printf("%s channel=%d, motorPower=%d for %s%n", this.getClass().getName(), channel, motorPower, getDriverInfo(channel));
-		ppwms[pwmIndex].freq(motorPower);
-		ppwms[pwmIndex].duty(motorPower/2); //50% duty cycle
+		ppwms[pwmIndex].freqDuty(motorPower, motorPower/2); //50% duty cycle
 		enable(channel);
 		return 0;
 	}
 
 	@Override
 	public String getDriverInfo(int ch) {
+		if(ch == 0)
+			return "INVALID CHANNEL 0! Must be 1-n!";
 		if( motorDrive[ch-1][0] == 255 ) {
 			return String.format("Delayed HB-PWM UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("Delayed HB-PWM Channel %d Pin:%d, Dir Pin:%d%n",ch, ppwms[motorDrive[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]]);	
+		StringBuilder sb = new StringBuilder("Delayed HB-PWM Channel:");
+		sb.append(motorDrive[ch-1][0]);
+		if(ppwms[motorDrive[ch-1][0]] == null) {
+			sb.append(" PWM instance is NULL, it was not properly initialized!");
+			return sb.toString();
+		}
+		sb.append(" Pin:");
+		sb.append(ppwms[motorDrive[ch-1][0]].pin);
+		sb.append(" Dir pin:");
+		sb.append(pdigitals[motorDrive[ch-1][0]]);
+		return sb.toString();
 	}
 
 

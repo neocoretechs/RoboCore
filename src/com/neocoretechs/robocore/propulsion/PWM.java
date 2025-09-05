@@ -56,33 +56,14 @@ public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface
 		super(pin);
 	}
 	
-	public synchronized String read() throws IOException {
-		String level = null;
-		switch(pin) {
-			case 7:
-				level = pwmDuty0.readLine();
-				pwmDuty0.seek(0);
-				return level;
-			case 12:
-				level = pwmDuty1.readLine();
-				pwmDuty1.seek(0);
-				return level;
-			default:
-				System.out.println("Must specify 7 or 12 for hardware PWM read!");
-				return null;
-		}
-	}
-	
 	public synchronized void enable(boolean enable) throws IOException {
 		enabled = enable;
 		switch(pin) {
 			case 7:
-				pwmEnable0.writeBytes(enable ? "1" : "0");
-				pwmEnable0.seek(0);
+				enable0();
 				break;
 			case 12:
-				pwmEnable1.writeBytes(enable ? "1" : "0");
-				pwmEnable1.seek(0);
+				enable1();
 				break;
 			default:
 				System.out.println("Pin must specify 7 or 12 for hardware PWM enable!");
@@ -92,42 +73,20 @@ public class PWM extends HardwarePWM implements InterruptServiceHandlerInterface
 			System.out.printf("%s enable pin %d value %b%n", this.getClass().getName(), pin, enabled);
 
 	}
-	
-	public synchronized void freq(int hZ) throws IOException {
+	@Override
+	public synchronized void freqDuty(int hZ, int val) throws IOException {
 		switch(pin) {
 			case 7:
-				pwmFreq0.writeBytes(String.valueOf(hZ));
-				pwmFreq0.seek(0);
+				pwm0(String.valueOf(hZ),String.valueOf(val));
 				break;
 			case 12:
-				pwmFreq1.writeBytes(String.valueOf(hZ));
-				pwmFreq1.seek(0);
+				pwm1(String.valueOf(hZ),String.valueOf(val));
 				break;
 			default:
 				System.out.println("Pin Must specify 7 or 12 for hardware PWM frequency!");
-				return;
-		}
-	}
-
-	@Override
-	public synchronized void duty(int val) throws IOException {
-		if(!enabled)
-			enable(true);
-		switch(pin) {
-			case 7:
-				pwmDuty0.writeBytes(String.valueOf(val));
-				pwmDuty0.seek(0);
-				break;
-			case 12:
-				pwmDuty1.writeBytes(String.valueOf(val));
-				pwmDuty1.seek(0);
-				break;
-			default:
-				System.out.println("Must specify 7 or 12 for hardware PWM write!");
-				return;
 		}
 		if(DEBUG)
-			System.out.printf("%s pwmWrite pin %d value %d%n", this.getClass().getName(), pin, val);
+			System.out.printf("%s freqDuty pin %d freq:%d duty:%d%n", this.getClass().getName(), pin, hZ, val);
 	}
 
 	@Override

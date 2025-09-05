@@ -102,8 +102,7 @@ public class HBridgeDriver extends AbstractPWMMotorControl {
 		}
 		fault_flag = 0;
 		setMotorSpeed(channel, motorPower);
-		ppwms[pwmIndex].freq(motorPower);
-		ppwms[pwmIndex].duty(motorPower/2); //50% duty
+		ppwms[pwmIndex].freqDuty(motorPower, motorPower/2); //50% duty
 		enable(channel);
 		return 0;
 	}
