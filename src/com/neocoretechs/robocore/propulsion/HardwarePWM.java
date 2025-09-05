@@ -45,27 +45,39 @@ public abstract class HardwarePWM {
 	 * @throws IOException
 	 */
 	private static void init0() throws IOException {
-		pwm0("0","0");
-		enable0();
+		pwm0("100000","0");
+		disable0();
+		try {
+			Thread.sleep(50);
+		} catch (InterruptedException e) {}
 	}
 	/**
 	 * Order freq - duty - enable
 	 * @throws IOException
 	 */
 	private static void init1() throws IOException {
-		pwm1("0","0");
-		enable1();
+		pwm1("100000","0");
+		disable1();
+		try {
+			Thread.sleep(50);
+		} catch (InterruptedException e) {}
 	}
 	
 	public static void pwm0(String freq, String duty) throws IOException {
 		writeSysfs(PWMDevice.getFreq0(), freq);
 		writeSysfs(PWMDevice.getDuty0(), duty);
 		enable0();
+		try {
+			Thread.sleep(50);
+		} catch (InterruptedException e) {}
 	}
 	public static void pwm1(String freq, String duty) throws IOException {
 		writeSysfs(PWMDevice.getFreq1(), freq);
 		writeSysfs(PWMDevice.getDuty1(), duty);
 		enable1();
+		try {
+			Thread.sleep(50);
+		} catch (InterruptedException e) {}
 	}
 	public static void enable0() throws IOException {
 		writeSysfs(PWMDevice.getEnable0(), "1");
@@ -82,7 +94,7 @@ public abstract class HardwarePWM {
 	
 	public static void writeSysfs(String path, String value) throws IOException {
 	    try (FileWriter fw = new FileWriter(path)) {
-	        fw.write(value + "\n");
+	        fw.write(value);
 	        fw.flush();
 	    }
 	}

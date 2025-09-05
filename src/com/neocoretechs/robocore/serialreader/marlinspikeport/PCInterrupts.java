@@ -1,20 +1,9 @@
 package com.neocoretechs.robocore.serialreader.marlinspikeport;
 
 import java.io.IOException;
-import java.util.Arrays;
+
 import java.util.concurrent.ConcurrentHashMap;
-/*
-import com.pi4j.io.gpio.GpioPinAnalogInput;
-import com.pi4j.io.gpio.GpioPinDigitalInput;
-import com.pi4j.io.gpio.OdroidC1Pin;
-import com.pi4j.io.gpio.Pin;
-import com.pi4j.io.gpio.PinState;
-import com.pi4j.io.gpio.event.GpioPinAnalogValueChangeEvent;
-import com.pi4j.io.gpio.event.GpioPinDigitalStateChangeEvent;
-import com.pi4j.io.gpio.event.GpioPinListenerAnalog;
-import com.pi4j.io.gpio.event.GpioPinListenerDigital;
-import com.pi4j.util.CommandArgumentParser;
-*/
+
 /**
  * The 'pins' referred to here are the WiringPi GPIO pin designations which map to the physical 40 pin header as follows:<p/>
  * Phy | WPi <br/>

@@ -3,8 +3,8 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.propulsion.PWM;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridgeDriver;
-//import com.pi4j.io.gpio.GpioPinDigitalOutput;
 
 /**
 * SplitBridgeDriver<p/>
@@ -29,9 +29,9 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridge
 *<p/>
 * Structure:<p/>
 * 1) Top level, a master list of pins in either the PWM or digitals arrays. Slots to which physical pins are assigned.
-* these are ppwms and pdigitals here, which hold pointers to these top level arrays.<p/>
+* these are ppwms and pins here, which hold pointers to these top level arrays.<p/>
 * 2) In each class and subclass, a sublist of pins. Multidimensional arrays which hold the index to the top level pins.
-* these are indexed by channel. motorDrive here. All PWM has a pin, a prescale, and a resolution. We standardize the resolution to 8 bits typically.
+* these are indexed by channel. motorDrive here. All PWM has a pin, a freq and a duty cycle.
 * Since the M1 and M2 inputs are split, we add an additional motorDriveB multidimensional array for the second input.<p/>
 * 3) A PWM level indexed by channel. The current power or level value of the PWM timer. Standardized to reflect the control applied.
 * for instance, if the PS3 controller delivers -1000 to 1000 thats the range. If the controller is using the button that has -1 off and a max of 1000
@@ -48,11 +48,22 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.HBridge
 public class SplitBridgeDriver extends HBridgeDriver {
 	// frequency value held in superclass
 	// channels 1-10 no 0, pad, always sub 1
-	private int[][] motorDriveB= new int[][]{{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0},{255,0}};
+	private int[][] motorDriveB= new int[][]{
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0},
+		{255,0,50000,0}};
 	public SplitBridgeDriver(int maxPower) {
 		super(maxPower);
 	}
-	public int getMotorPWMPinB(int channel) { return motorDriveB[channel-1][0]; }
+	public int getMotorPWMIndexB(int channel) { return motorDriveB[channel-1][0]; }
+	public int getMotorEnablePinB(int channel) { return motorDriveB[channel-1][1];}
 	/**
 	 * Add a new PWM instance to this motor controller.
 	 * @param channel - the controller channel from 1 to 10
@@ -91,9 +102,10 @@ public class SplitBridgeDriver extends HBridgeDriver {
 		if( MOTORSHUTDOWN )
 			return 0;
 		setMotorSpeed(channel, motorPower);
-		int pwmIndex = motorDrive[channel][0]; // index to PWM array
-		int dirPinIndex = motorDrive[channel][1]; // index to dir pin array
-		//int freq = motorDrive[channel][2]; // value of freq, no index;
+		int pwmIndex = getMotorPWMIndex(channel); // index to PWM array
+		int dirPin = getMotorEnablePin(channel);
+		int direction;
+		int freq = motorDrive[channel][2]; // value of freq, no index;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
 		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
@@ -101,10 +113,11 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex] = 1;//.high();
+					direction = 1;//.high();
 				else 
-					pdigitals[dirPinIndex] = 0;//.low();
-				setCurrentDirection(channel, 0); // set new direction value
+					direction = 0;//.low()
+				Pins.getOutputPin(dirPin, direction);
+				setCurrentDirection(channel, direction); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
 		} else { // dir is 0
@@ -112,10 +125,11 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex] = 0;//.low();
+					direction = 0;//.low();
 				else
-					pdigitals[dirPinIndex] = 1;//.high();
-				setCurrentDirection(channel, 1);
+					direction = 1;//.high();
+				Pins.getOutputPin(dirPin, direction);
+				setCurrentDirection(channel, direction);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
 				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
@@ -143,10 +157,11 @@ public class SplitBridgeDriver extends HBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		ppwms[pwmIndex].freqDuty(motorPower, motorPower/2);
+		ppwms[pwmIndex].freqDuty(freq, motorPower*25);
+		ppwms[pwmIndex].enable(true);
 		// now do B, if dir pin is same, values should match, otherwise pin may be written
-		pwmIndex = motorDriveB[channel][0]; // index to PWM array
-		dirPinIndex = motorDriveB[channel][1]; // index to dir pin array
+		pwmIndex = getMotorPWMIndexB(channel); // index to PWM array
+		dirPin =getMotorEnablePinB(channel); // index to dir pin array
 		//int freq = motorDrive[channel][2]; // value of freq, no index;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
@@ -155,10 +170,11 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex] = 1;//.high();
+					direction = 1;//.high();
 				else 
-					pdigitals[dirPinIndex] = 0;//.low();
-				setCurrentDirection(channel, 0); // set new direction value
+					direction = 0;//.low()
+				Pins.getOutputPin(dirPin, direction);
+				setCurrentDirection(channel, direction); // set new direction value
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
 		} else { // dir is 0
@@ -166,15 +182,17 @@ public class SplitBridgeDriver extends HBridgeDriver {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex] = 0;//.low();
+					direction = 0;//.low();
 				else
-					pdigitals[dirPinIndex] = 1;//.high();
-				setCurrentDirection(channel, 1);
+					direction = 1;//.high();
+				Pins.getOutputPin(dirPin, direction);
+				setCurrentDirection(channel, direction);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
 				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
 			}
 		}
+
 		// scale motor power from 0-1000 
 		if( motorPower != 0 && motorPower < getMinMotorPower(channel))
 				motorPower = getMinMotorPower(channel);
@@ -196,19 +214,19 @@ public class SplitBridgeDriver extends HBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		ppwms[pwmIndex].freqDuty(motorPower, motorPower/2);
+		ppwms[pwmIndex].freqDuty(freq, motorPower*25);
+		ppwms[pwmIndex].enable(true);
 		return 0;
 	}
 
 	@Override
 	public int commandEmergencyStop(int status) throws IOException {
-		for(int j=0; j < channels; j++) {
-			int pindex = motorDrive[j][0];
+		for(int j=1; j <= channels; j++) {
+			int pindex = getMotorPWMIndex(j);
 			if(pindex != 255) {
-				//ppwms[pindex].init(ppwms[pindex].pin);
 				ppwms[pindex].pwmOff();
 			}
-			pindex = motorDriveB[j][0];
+			pindex = getMotorPWMIndexB(j);
 			if(pindex != 255) {
 				ppwms[pindex].pwmOff();
 			}
@@ -221,10 +239,10 @@ public class SplitBridgeDriver extends HBridgeDriver {
 	
 	@Override
 	public String getDriverInfo(int ch) {
-		if( motorDrive[ch-1][0] == 255 ) {
+		if( getMotorPWMIndex(ch) == 255 ) {
 			return String.format("SplitBridge-PWM UNINITIALIZED Channel %d%n",ch);
 		}
-		return String.format("SplitBridge-PWM Channel %d PinA:%d, PinB:%d Dir Pin:%d%n",ch, ppwms[motorDrive[ch-1][0]].pin, ppwms[motorDriveB[ch-1][0]].pin, pdigitals[motorDrive[ch-1][0]]);	
+		return String.format("SplitBridge-PWM Channel %d PinA:%d, PinB:%d Dir Pin:%d Dir PinB%d%n",ch, ppwms[getMotorPWMIndex(ch)].pin, ppwms[getMotorPWMIndexB(ch)].pin, getMotorEnablePin(ch), getMotorEnablePinB(ch));	
 	}
 	
 	@Override

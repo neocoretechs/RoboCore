@@ -26,7 +26,17 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	// motorDrive[channel] [[Digitals array index][dir pin]
 	// 0-pin index to Digital pins array(default 255)
 	// 1-direction pin
-	int[][] motorDrive= new int[][]{{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0},{255,255,0}};
+	int[][] motorDrive= new int[][]{
+		{255,255,0},
+		{255,255,0},
+		{255,255,0},
+		{255,255,0},
+		{255,255,0},
+		{255,255,0},
+		{255,255,0},
+		{255,255,0},
+		{255,255,0},
+		{255,255,0}};
 	int status_flag = 0;
 	
 	public int getMotorDigitalPin(int channel) { return motorDrive[channel-1][0]; }
@@ -78,8 +88,8 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 		setMotorSpeed(channel, motorPower == 0 ? 0 : (motorPower < 0 ? -MAXMOTORPOWER : MAXMOTORPOWER));
 		int gioIndex = getMotorDigitalPin(channel); // index to gpio array
 		int gioIndexB = getMotorDigitalPinB(channel); // index to gpio array
-		int dirPinIndex = getMotorEnablePin(channel); // index to dir pin array
-		Pins.getOutputPin(dirPinIndex,1); // enable motor inputs
+		int dirPin = getMotorEnablePin(channel); // dir pin
+		Pins.getOutputPin(dirPin,1); // enable motor inputs
 		//int freq = motorDrive[channel][2]; // value of freq, no index;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
@@ -174,7 +184,7 @@ public class SwitchBridgeDriver extends AbstractMotorControl {
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		for(int i = 1; i <= channels; i++) {
-			if(motorDrive[i-1][0] != 255)
+			if(getMotorDigitalPin(i) != 255)
 				sb.append(getDriverInfo(i));
 		}
 		return sb.toString();

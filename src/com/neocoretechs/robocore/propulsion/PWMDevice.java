@@ -68,23 +68,5 @@ public class PWMDevice {
 	public static String getEnable1() {
 		return enable1;
 	}
-	public static void main(String[] args) throws IOException {
-		try (RandomAccessFile pwmE = new RandomAccessFile(enable0,"rw")) {
-		try (RandomAccessFile pwmD = new RandomAccessFile(duty0,"rw")) {
-			try (RandomAccessFile pwmP = new RandomAccessFile(freq0,"rw")) {
-					// order is important!
-					pwmP.writeBytes("50000");
-					pwmD.writeBytes("25000");
-					pwmE.writeBytes("1");
-					try {
-						Thread.sleep(30000);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-					pwmE.writeBytes("0"); // disable
-			}
-		}
-		}
-
-	}
+	
 }

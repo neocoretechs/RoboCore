@@ -24,7 +24,6 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
 public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	private static boolean DEBUG = true;
 	protected PWM[] ppwms = new PWM[channels];
-	protected int pdigitals[] = new int[channels];
 	// 10 possible drive wheels, index is by channel-1. 
 	// motorDrive[channel] {{PWM array index],[dir pin],[timer freq}}
 	// PWM params array by channel:
@@ -65,18 +64,6 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 		if(DEBUG)
 			System.out.printf("%s direction pin %d assigned%n",this.getClass().getName(), dir_pin);
 		
-		int dirpin;
-		for(dirpin = 0; dirpin < channels; dirpin++) {
-			if(pdigitals[dirpin] == 0) {
-				pdigitals[dirpin] = dir_pin;
-				break;
-			}
-		}
-		if(dirpin == channels)
-			System.out.println("Direction pin slot exceeded available channels:"+dirpin);
-		if(DEBUG)
-			System.out.printf("%s direction pin slot set to:%d%n",this.getClass().getName(), dirpin);
-		
 		int pindex;
 		for(pindex = 0; pindex < channels; pindex++) {
 			if( ppwms[pindex] == null ) {
@@ -92,7 +79,7 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 		setDefaultDirection(channel, dir_default);
 		setMotorSpeed(channel, 0);	
 		motorDrive[channel-1][0] = pindex;
-		motorDrive[channel-1][1] = dirpin;
+		motorDrive[channel-1][1] = dir_pin;
 		motorDrive[channel-1][2] = freq;
 		motorDrive[channel-1][3] = duty;
 		PWM ppin = new PWM(pin_number);
@@ -100,9 +87,9 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 			System.out.printf("%s PWM instance set to:%s%n",this.getClass().getName(), ppin);
 		ppwms[pindex] = ppin;
 		if(DEBUG)
-			System.out.printf("%s PWM instance initialized to:%s%n",this.getClass().getName(), ppwms[pindex]);
-					
+			System.out.printf("%s PWM instance initialized to:%s%n",this.getClass().getName(), ppwms[pindex]);				
 	}
+	
 	public abstract void resetMaxMotorPower();
 	
 	@Override
@@ -118,9 +105,9 @@ public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		for(int i = 0; i < channels; i ++) {
-			if(motorDrive[i+1][0] != 255)
-				sb.append(getDriverInfo(i+1));
+		for(int i = 1; i < channels; i++) {
+			if(motorDrive[i][0] != 255)
+				sb.append(getDriverInfo(i));
 		}
 		return sb.toString();
 	}

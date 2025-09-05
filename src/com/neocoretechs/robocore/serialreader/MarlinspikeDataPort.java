@@ -892,7 +892,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 							// each controller can have up to 10 channels, each with its own PWM and direction pin
 							for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
-								int pMotor1 = ((HBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
+								int pMotor1 = ((HBridgeDriver)motorControl[motorController]).getMotorPWMIndex(i);
 								int pMotor2 = ((HBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 								System.out.println("Existing control using pwm pin:"+pMotor1+", and enable pin:"+pMotor2);
 								//if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
@@ -912,7 +912,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 							// each controller can have up to 10 channels, each with its own PWM and direction pin
 							for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
-								int pMotor1 = ((SplitBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
+								int pMotor1 = ((SplitBridgeDriver)motorControl[motorController]).getMotorPWMIndex(i);
 								int pMotor2 = ((SplitBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 								System.out.println("Existing control using PWM pin:"+pMotor1+", and enable pin:"+pMotor2);
 								//if(pMotor2 != 255 && pdigitals[pMotor2] != null) {
@@ -991,7 +991,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 							// for each channel, delete the direction pin and PWM created in main pin array to prepare new assignment
 							// each controller can have up to 10 channels, each with its own PWM and direction pin
 							for(int i = 1; i <= motorControl[motorController].getChannels(); i++) {
-								int pMotor1 = ((HBridgeDriver)motorControl[motorController]).getMotorPWMPin(i);
+								int pMotor1 = ((HBridgeDriver)motorControl[motorController]).getMotorPWMIndex(i);
 								int pMotor2 = ((HBridgeDriver)motorControl[motorController]).getMotorEnablePin(i);
 								System.out.println("Existing control using PWM pin:"+pMotor1+", and enable pin:"+pMotor2);
 							}
@@ -1477,8 +1477,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			break;
 			//	
 			// M45 - set up PWM P<pin> S<power val 0-255> [F<frequency>]
-			// PWM value between 0 and 255, default timer mode is 2; clear on match, default resolution is 8 bits, default prescale is 1
-			// Prescale: 1,2,4,6,7,8,9 = none, 8, 64, 256, 1024, external falling, external rising
+			// PWM duty cycle value between 0 and 255 multiplied by 100
 			// Use M445 to disable pin permanently or use timer more 0 to stop pulse without removing pin assignment
 			//
 		case 45:
@@ -1495,14 +1494,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 					pin_status = 0;
 				}
 			}
-			if( code_seen('F')) {
-				pwm_freq = (int)code_value();
-			}
 			for(int i = 0; i < ppwms.length; i++) {
 				if(ppwms[i] == null) {
 					try {
 						PWM ppin = new PWM(pin_number);
-						ppin.freqDuty(pwm_freq, pin_status);// default is 2, clear on match. to turn off, use 0
+						ppin.freqDuty(pwm_freq, pin_status*100);// default is 2, clear on match. to turn off, use 0
 						ppwms[i] = ppin;
 					} catch (IOException e) {
 						e.printStackTrace();

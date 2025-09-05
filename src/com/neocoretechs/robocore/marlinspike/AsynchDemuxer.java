@@ -858,7 +858,7 @@ public class AsynchDemuxer implements Runnable {
 					}
 				} catch(Exception e) {
 					e.printStackTrace();
-					shouldRun = false;
+					//shouldRun = false;
 				}				
 		}
 		System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" exiting run...");

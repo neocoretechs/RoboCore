@@ -2,6 +2,8 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
+
 /**
  * H bridge driven brushed DC gear motor with delayed reverse.
  * Structure:
@@ -36,7 +38,7 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 	
 	@Override
 	public int getMotorPowerMultiplier() {
-		return 50; // scale the 0-1000 from controller to 0-50000 for PWM freq
+		return 1;
 	}
 	
 	@Override
@@ -47,9 +49,9 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 		if( MOTORSHUTDOWN )
 			return 0;
 		setMotorSpeed(channel, motorPower);
-		int pwmIndex = motorDrive[channel-1][0]; // index to PWM array
-		int dirPinIndex = motorDrive[channel-1][1]; // index to dir pin array
-	
+		int pwmIndex = getMotorPWMIndex(channel); // index to PWM array
+		int dirPin = getMotorEnablePin(channel); // dir pin
+		int direction;
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
 		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
@@ -57,14 +59,15 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
-					pdigitals[dirPinIndex] = 1;//.high();
+					direction = 1;//.high();
 				else 
-					pdigitals[dirPinIndex] = 0;//.low();
+					direction = 0;//.low()
 				disable(channel);
 				try {
 					Thread.sleep(200);
 				} catch (InterruptedException e) {}
-				setCurrentDirection(channel, pdigitals[dirPinIndex]); // set new direction value
+				setCurrentDirection(channel, direction); // set new direction value
+				Pins.getOutputPin(dirPin, direction);
 				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
 		} else { // dir is 0
@@ -72,14 +75,15 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
-					pdigitals[dirPinIndex] = 0;//.low();
+					direction = 0;//.low();
 				else
-					pdigitals[dirPinIndex] = 1;//.high();
+					direction = 1;//.high();
 				disable(channel);
 				try {
 					Thread.sleep(200);
 				} catch (InterruptedException e) {}
-				setCurrentDirection(channel, pdigitals[dirPinIndex]);
+				setCurrentDirection(channel, direction);
+				Pins.getOutputPin(dirPin, direction);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
 				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
@@ -108,8 +112,8 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 		}
 		fault_flag = 0;
 		if(DEBUG)
-			System.out.printf("%s channel=%d, motorPower=%d for %s%n", this.getClass().getName(), channel, motorPower, getDriverInfo(channel));
-		ppwms[pwmIndex].freqDuty(motorPower, motorPower/2); //50% duty cycle
+			System.out.printf("%s motorPower=%d for %s%n", this.getClass().getName(), motorPower, getDriverInfo(channel));
+		ppwms[pwmIndex].freqDuty(50000, (motorPower*25)); //vary duty cycle 0-25000
 		enable(channel);
 		return 0;
 	}
@@ -118,19 +122,21 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 	public String getDriverInfo(int ch) {
 		if(ch == 0)
 			return "INVALID CHANNEL 0! Must be 1-n!";
-		if( motorDrive[ch-1][0] == 255 ) {
-			return String.format("Delayed HB-PWM UNINITIALIZED Channel %d%n",ch);
+		if(ch >= getChannels())
+			return "INVALID CHANNEL "+ch+" ! Must be 1-n!";
+		if(getMotorPWMIndex(ch) == 255 ) {
+			return String.format("DelayedHB-PWM UNINITIALIZED Channel %d%n",ch);
 		}
-		StringBuilder sb = new StringBuilder("Delayed HB-PWM Channel:");
-		sb.append(motorDrive[ch-1][0]);
-		if(ppwms[motorDrive[ch-1][0]] == null) {
+		StringBuilder sb = new StringBuilder("DelayedHB-PWM Channel:");
+		sb.append(ch);
+		if(ppwms[getMotorPWMIndex(ch)] == null) {
 			sb.append(" PWM instance is NULL, it was not properly initialized!");
 			return sb.toString();
 		}
 		sb.append(" Pin:");
-		sb.append(ppwms[motorDrive[ch-1][0]].pin);
+		sb.append(ppwms[getMotorPWMIndex(ch)].pin);
 		sb.append(" Dir pin:");
-		sb.append(pdigitals[motorDrive[ch-1][0]]);
+		sb.append(getMotorEnablePin(ch));
 		return sb.toString();
 	}
 
