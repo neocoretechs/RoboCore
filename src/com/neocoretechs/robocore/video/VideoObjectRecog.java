@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.ros.concurrent.CancellableLoop;
-import org.ros.internal.message.Message;
 import org.ros.message.MessageListener;
 import org.ros.message.Time;
 import org.ros.namespace.GraphName;
@@ -31,8 +30,10 @@ import com.neocoretechs.rknn4j.image.detect_result;
 import com.neocoretechs.rknn4j.image.detect_result.Rectangle;
 import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
+
 import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+
 import com.neocoretechs.rocksack.Alias;
 import com.neocoretechs.rocksack.TransactionId;
 
@@ -50,12 +51,11 @@ public class VideoObjectRecog extends AbstractNodeMain
 {
 	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
+	private static boolean DEBUGJSON = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 	AsynchRelatrixClientTransaction session = null;
 	TransactionId xid = null;
 	Alias tensorAlias = null;
-    private static Object mutex = new Object();
-
     ByteBuffer cbl;
     byte[] bufferl = new byte[0];
     ByteBuffer cbr;
@@ -74,8 +74,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private long lastSequenceNumber2;
 	long time1 = System.currentTimeMillis();
 	long time2 = System.currentTimeMillis();
-	protected static boolean shouldStore = true;
-	private static int MAXIMUM = 0;
+	protected static boolean shouldStore = false;
 	int commitRate = 500;
 	
 	// NPU constants
@@ -103,9 +102,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 	float[][] boxPriors;
 	//
 	// z = f*(B/xl-xr)
-	final static float f = 4.4f; // focal length mm
-	final static float B = 205.0f; // baseline mm
+	final static float f = 3.7f; // focal length mm
+	final static float B = 100.0f; // baseline mm
 	final static float IOU_THRESHOLD = .40f;
+	
+	double eulers[] = new double[]{0.0,0.0,0.0}; // set from loop
+	long eulerTime = 0L;
 	
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
@@ -120,23 +122,16 @@ public class VideoObjectRecog extends AbstractNodeMain
 		long time;
 		byte[] leftImage;
 		byte[] rightImage;
-		double eulers[] = new double[]{0.0,0.0,0.0};
+		double eulersCorrelated[] = new double[]{0.0,0.0,0.0};
 		public TimedImage(byte[] leftImage, byte[] rightImage, long sequence) {
 			this.leftImage = leftImage;
 			this.rightImage = rightImage;
 			this.sequence = sequence;
 			this.time = System.currentTimeMillis();
-		}
-		/**
-		 * Set time IMU data if it is a close enough match, if not, dont set erroneous data.
-		 * Lets consider 1 ms a good enough match. When we get new IMU data go through
-		 * the queue and set all eligible instances
-		 * @param time
-		 * @param eulers
-		 */
-		public void setIMU(long time, double[] eulers) {
-			if(this.time == time)
-				this.eulers = eulers;
+			if(Math.abs(this.time-eulerTime) <= 1000)
+				synchronized(eulers) {
+					this.eulersCorrelated = eulers;
+				}
 		}
 		public String toJson() throws IOException{
 			Instance rimage = createImage(rightImage);
@@ -151,13 +146,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 			sb.append("\"timestamp\":");
 			sb.append(time);
 			sb.append(",\r\n");
-			if(eulers[0] != 0) {
+			if(eulersCorrelated[0] != 0) {
 				sb.append("\"imu\":{\"heading\":");
-				sb.append(eulers[0]);
+				sb.append(eulersCorrelated[0]);
 				sb.append(",\"roll\":");
-				sb.append(eulers[1]);
+				sb.append(eulersCorrelated[1]);
 				sb.append(",\"pitch\":");
-				sb.append(eulers[2]);
+				sb.append(eulersCorrelated[2]);
 				sb.append("},\r\n");
 			}
 			sb.append("\"LeftImage\":[");
@@ -269,9 +264,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 				ByteBuffer cbr = img.getData2();
 				byte[] bufferr = cbr.array(); // 3 byte BGR
 				// sequenceNumber is the publishing number, it may repeat here if more images come in than are published
-				synchronized(mutex) {
-					queue.add(new TimedImage(bufferl, bufferr, sequenceNumber));
-				}
+				try {
+					queue.addLastWait(new TimedImage(bufferl, bufferr, sequenceNumber));
+				} catch (InterruptedException e) {}
 				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
 			}
 		});
@@ -282,12 +277,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
-				synchronized(mutex) {
-					double[] eulers = message.getOrientationCovariance();
-					long currentTime = System.currentTimeMillis();
-					queue.forEach(e->{
-						e.setIMU(currentTime, eulers);
-					});
+				synchronized(eulers) {
+					eulers = message.getOrientationCovariance();
+					eulerTime = System.currentTimeMillis();
+					//queue.forEach(e->{
+					//	e.setIMU(currentTime, eulers);
+					//});
 				}
 			}
 		});
@@ -315,72 +310,65 @@ public class VideoObjectRecog extends AbstractNodeMain
 			//stereo_msgs.StereoImage imagemess = imgpub.newMessage();
 			stereo_msgs.StereoImage imagemess = connectedNode.getTopicMessageFactory().newFromType(stereo_msgs.StereoImage._TYPE);
 
-			// publish all images in the queue sorted by time
-			// we have a circular deque, so we may have overwritten images at the head
-			// and/or out of order images inline.
-			ArrayList<TimedImage> imageArray = new ArrayList<>();
-			synchronized(mutex) {
-				queue.drainTo(imageArray);
-			}
-			// sort ascending timestamp for publication
-			imageArray.sort(null);
-			imageArray.forEach(e->{	
-				try {
-					if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
-						time1 = System.currentTimeMillis();
-						System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/*+limage+" "+rimage*/);
-						lastSequenceNumber = sequenceNumber;
-					}
-					if( DEBUG )
-						System.out.println(sequenceNumber+":Added frame ");
-					//synchronized(mutex) {
-					//leftPayload = limage.detectionsToJPEGBytes(ldrg);
-					//rightPayload = rimage.detectionsToJPEGBytes(rdrg);
-					//storeImage(ldrg, rdrg, leftPayload, rightPayload, imagemess, sequenceNumber);
-					//if(leftPayload != null && rightPayload != null) {
-					// for image resize back to 640x480
-					//if(RESIZE_TO_ORIG) {
-					//try {
-					//	leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-					//	rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-					//} catch(Exception e) {
-					//	e.printStackTrace();
-					//}
-					//}
-					imagemess.setData(ByteBuffer.wrap(e.toJson().getBytes()));
-					//imagemess.setEncoding("JPG");
-					imagemess.setEncoding("UTF8_JSON");
-					imagemess.setWidth(dimsImage[0]);
-					imagemess.setHeight(dimsImage[1]);
-					imagemess.setStep(dimsImage[0]);
-					imagemess.setIsBigendian((byte)0);
-					imagemess.setHeader(imghead);
-					imgpub.publish(imagemess);
-					//}	
-					//
-					imageReadyL = false;
-					imageReadyR = false;
-					//}
-					//
-					//caminfomsg.setHeader(imghead);
-					//caminfomsg.setWidth(imwidth);
-					//caminfomsg.setHeight(imheight);
-					//caminfomsg.setDistortionModel("plumb_bob");
-					//caminfomsg.setK(K);
-					//caminfomsg.setP(P);
-					//caminfopub.publish(caminfomsg);
-					//System.out.println("Pub cam:"+imagemess);
-				} catch (IOException ex) {
-					ex.printStackTrace();
-					if(DEBUG)
-						System.out.println("Image(s) not ready "+sequenceNumber);
-					try {
-						Thread.sleep(1);
-					} catch (InterruptedException e1) {}
-					++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
+			TimedImage e = queue.takeFirstNotify();
+			try {
+				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
+					time1 = System.currentTimeMillis();
+					System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/*+limage+" "+rimage*/);
+					lastSequenceNumber = sequenceNumber;
 				}
-				++sequenceNumber; // we want to inc seq regardless to see how many we drop	
-			});
+				if( DEBUG )
+					System.out.println(sequenceNumber+":Added frame ");
+				//synchronized(mutex) {
+				//leftPayload = limage.detectionsToJPEGBytes(ldrg);
+				//rightPayload = rimage.detectionsToJPEGBytes(rdrg);
+				//storeImage(ldrg, rdrg, leftPayload, rightPayload, imagemess, sequenceNumber);
+				//if(leftPayload != null && rightPayload != null) {
+				// for image resize back to 640x480
+				//if(RESIZE_TO_ORIG) {
+				//try {
+				//	leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+				//	rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
+				//} catch(Exception e) {
+				//	e.printStackTrace();
+				//}
+				//}
+				String toJSON = e.toJson();
+				if(DEBUGJSON)
+					System.out.println(toJSON);
+				imagemess.setData(ByteBuffer.wrap(toJSON.getBytes()));
+				//imagemess.setEncoding("JPG");
+				imagemess.setEncoding("UTF8_JSON");
+				imagemess.setWidth(dimsImage[0]);
+				imagemess.setHeight(dimsImage[1]);
+				imagemess.setStep(dimsImage[0]);
+				imagemess.setIsBigendian((byte)0);
+				imagemess.setHeader(imghead);
+				imgpub.publish(imagemess);
+				//}	
+				//
+				imageReadyL = false;
+				imageReadyR = false;
+				//}
+				//
+				//caminfomsg.setHeader(imghead);
+				//caminfomsg.setWidth(imwidth);
+				//caminfomsg.setHeight(imheight);
+				//caminfomsg.setDistortionModel("plumb_bob");
+				//caminfomsg.setK(K);
+				//caminfomsg.setP(P);
+				//caminfopub.publish(caminfomsg);
+				//System.out.println("Pub cam:"+imagemess);
+			} catch (IOException ex) {
+				ex.printStackTrace();
+				if(DEBUG)
+					System.out.println("Image(s) not ready "+sequenceNumber);
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e1) {}
+				++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
+			}
+			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
 	});
 	}
@@ -626,7 +614,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 					float z2 = (f*B)/(f*(B/lmax));
 					// z= (f*B)/d
 					if(DEBUG)
-						System.out.println("Person "+i+" distance:"+z1+","+z2);
+						System.out.println("Correlation "+i+" disparity:"+z1+","+z2);
 					imgpubstore.publish(imagemess);
 					if( DEBUG )
 						System.out.println("Pub. Image:"+sequenceNumber);
