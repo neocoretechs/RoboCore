@@ -79,9 +79,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	// NPU constants
 	long ctx; // context for NPU
-	String MODEL_FILE = "RK3588/yolov5s-640-640.rknn";
-	//String MODEL_FILE = "RK3588/ssd_inception_v2.rknn";
-	boolean INCEPTIONSSD = false;
+	static String MODELS_FILE[] = {"yolov5s-640-640.rknn","yolo11s.rknn","ssd_inception_v2.rknn"};
+	static String LABELS_FILE[] = {"coco_80_labels_list.txt","coco_80_labels_list.txt","coco_labels_list.txt"};
+	static int MODEL = 1;
+	static String INCEPT_LABELS_FILE="coco_labels_list.txt";
+	static String MODEL_FILE = MODELS_FILE[MODEL];
+	static String LABEL_FILE = LABELS_FILE[MODEL];
 	boolean wantFloat = false;
 	static boolean RESIZE_TO_ORIG = false; // resize model image back to original cam capture size, false for YOLO, true for Inception
 	
@@ -90,9 +93,7 @@ public class VideoObjectRecog extends AbstractNodeMain
  	float scale_w;//(float)widthHeightChannel[0] / (float)dimsImage[0];
   	float scale_h;//(float)widthHeightChannel[1] / (float)dimsImage[1];
 	String[] labels = null;
-	String MODEL_DIR = "/etc/model/";
-	String LABELS_FILE = "coco_80_labels_list.txt"; //YOLOv5
-	String INCEPT_LABELS_FILE = "coco_labels_list.txt";
+	static String MODEL_DIR = "/etc/model/RK3588";
 	//
 	Model model = new Model();
 	rknn_input_output_num ioNum;
@@ -210,7 +211,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 		if( remaps.containsKey("__modelDir") )
 			MODEL_DIR = remaps.get("__modelDir");
 		if( remaps.containsKey("__labelsFile") )
-			LABELS_FILE = remaps.get("__labelsFile");
+			LABEL_FILE = remaps.get("__labelsFile");
 		if( remaps.containsKey("__modelFile") )
 			MODEL_FILE = remaps.get("__modelFile");
 		if(!MODEL_DIR.endsWith(("/")))
@@ -436,7 +437,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			System.out.println("Init time:"+(System.currentTimeMillis()-tim)+" ms.");
 		rknn_sdk_version sdk = model.querySDK(ctx);
 		ioNum = model.queryIONumber(ctx);
-		if(DEBUG)
+		//if(DEBUG)
 			System.out.printf("%s %s%n", sdk, ioNum);
 		//BufferedImage bimage = Instance.readBufferedImage(args[1]);
 		//Instance image = null;
@@ -448,7 +449,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				System.out.println(RKNN.dump_tensor_attr(inputAttrs[i]));
 			}
 		}
-		widthHeightChannel = Model.getWidthHeightChannel(inputAttrs[0]);
+		widthHeightChannel = inputAttrs[0].getWidthHeightChannel();
 		//int[] dimsImage = Instance.computeDimensions(bimage);
 	 	scale_w = 1.0f;//(float)widthHeightChannel[0] / (float)dimsImage[0];
 	  	scale_h = 1.0f;//(float)widthHeightChannel[1] / (float)dimsImage[1];
@@ -475,7 +476,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 		// no preallocation of output image buffers for YOLO, no force floating output
 		// InceptionSSD required want_float = true, it has 2 layers of output vs 3 for YOLO
 		tim = System.currentTimeMillis();
-		if(INCEPTIONSSD) { // InceptionSSD
+		if(MODEL_FILE.contains("inception")) { // InceptionSSD
 			//wantFloat = true;
 			labels = Model.loadLines(MODEL_DIR+INCEPT_LABELS_FILE);
 			boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
@@ -525,22 +526,32 @@ public class VideoObjectRecog extends AbstractNodeMain
 				scales.add(outputAttr.getScale());
 			}
 		}
-		if(INCEPTIONSSD) { // InceptionSSD 
-			if(wantFloat) {
-				detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
+		switch(MODEL) {
+			case 0: //YOLOv5
+				detect_result.post_process(outputs, widthHeightChannel[1], widthHeightChannel[0], 
+					detect_result.BOX_THRESH, detect_result.NMS_THRESH, 
+					scale_w, scale_h, zps, scales, drg, labels);
+			break;
+			case 1:// YOLOv11
+				detect_result.post_process(outputs, tensorAttrs, ioNum, scale_w, scale_h, widthHeightChannel[1], widthHeightChannel[0], 
+						detect_result.BOX_THRESH, detect_result.NMS_THRESH, drg, labels);
+				//image.drawDetections(drg);
+			break;
+			case 2:  // InceptionSSD 
+				if(wantFloat) {
+					detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
 						widthHeightChannel[1], widthHeightChannel[0], detect_result.NMS_THRESH_SSD, 
-					scale_w, scale_h, drg, labels);
-			} else {
-				detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
+						scale_w, scale_h, drg, labels);
+				} else {
+					detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
 						widthHeightChannel[1], widthHeightChannel[0], detect_result.NMS_THRESH_SSD, 
 						scale_w, scale_h, zps, scales, drg, labels);	
-			}
-			//image.detectionsToJPEGBytes(drg);
-		} else { //YOLOv5 
-			detect_result.post_process(outputs,
-				widthHeightChannel[1], widthHeightChannel[0], detect_result.BOX_THRESH, detect_result.NMS_THRESH, 
-				scale_w, scale_h, zps, scales, drg, labels);
-			//image.drawDetections(drg);
+				}
+				//image.detectionsToJPEGBytes(drg);
+			break;
+			default:
+				System.out.println("MODEL unknown...");
+				System.exit(1);
 		}
 		if(DEBUG)
 			System.out.println("Detected Result Group:"+drg);
@@ -635,7 +646,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	 * @throws IOException
 	 */
 	Instance createImage(byte[] imgBuff) throws IOException {
-	  	return new Instance("img",dimsImage[0],dimsImage[1],widthHeightChannel[2],imgBuff,widthHeightChannel[0],widthHeightChannel[1],"img",!INCEPTIONSSD);
+	  	return new Instance("img",dimsImage[0],dimsImage[1],widthHeightChannel[2],imgBuff,widthHeightChannel[0],widthHeightChannel[1],"img",(MODEL != 2)); // not INCEPTION_SSD
 	}
 	/**
 	 * Translate the image Instance and detect_result_group into raw JPEG byte array
