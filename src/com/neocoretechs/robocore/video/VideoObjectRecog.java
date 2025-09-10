@@ -214,7 +214,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			if(MODEL_FILE.contains("inception")) { // InceptionSSD
 				boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
 			}
-			labels = Model.loadLines(MODEL_DIR+LABELS_FILE);
+			labels = Model.loadLines(MODEL_DIR+LABEL_FILE);
 			if(DEBUG)
 				System.out.println("Total category labels="+labels.length);
 			//initialize the NPU with the proper model file, labels, and box priors or null
