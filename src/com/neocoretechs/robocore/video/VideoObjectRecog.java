@@ -78,7 +78,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private static String MODELS_FILE[] = {"yolov5s-640-640.rknn","yolo11s.rknn","ssd_inception_v2.rknn"};
 	private static String LABELS_FILE[] = {"coco_80_labels_list.txt","coco_80_labels_list.txt","coco_labels_list.txt"};
 	static int MODEL = 1;
-	static String INCEPT_LABELS_FILE="coco_labels_list.txt";
 	static String MODEL_FILE;
 	static String LABEL_FILE;
 	boolean wantFloat = false;
@@ -212,6 +211,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 		if( remaps.containsKey("__storeDetect") )
 			detectAndStore = remaps.get("__storeDetect");
 		try {
+			if(MODEL_FILE.contains("inception")) { // InceptionSSD
+				boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
+			}
+			labels = Model.loadLines(MODEL_DIR+LABELS_FILE);
+			if(DEBUG)
+				System.out.println("Total category labels="+labels.length);
 			//initialize the NPU with the proper model file, labels, and box priors or null
 			model.initNPU(MODEL_DIR+MODEL_FILE, labels, boxPriors);
 		} catch (IOException e2) {
