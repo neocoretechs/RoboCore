@@ -20,11 +20,7 @@ import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.relatrix.key.NoIndex;
-import com.neocoretechs.rknn4j.RKNN;
-import com.neocoretechs.rknn4j.rknn_input_output_num;
-import com.neocoretechs.rknn4j.rknn_output;
-import com.neocoretechs.rknn4j.rknn_sdk_version;
-import com.neocoretechs.rknn4j.rknn_tensor_attr;
+
 import com.neocoretechs.rknn4j.image.Instance;
 import com.neocoretechs.rknn4j.image.detect_result;
 import com.neocoretechs.rknn4j.image.detect_result.Rectangle;
