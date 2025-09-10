@@ -132,6 +132,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 			Instance limage = createImage(leftImage);
 			detect_result_group ldrg = model.inference(limage, MODEL);
 			imageReadyL = true;
+			if(ldrg.getCount() == 0 && rdrg.getCount() == 0)
+				return null;
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
 			StringBuilder sb = new StringBuilder("{\r\n");
@@ -333,18 +335,20 @@ public class VideoObjectRecog extends AbstractNodeMain
 				//}
 				//}
 				String toJSON = e.toJson();
-				if(DEBUGJSON)
-					System.out.println(toJSON);
-				imagemess.setData(ByteBuffer.wrap(toJSON.getBytes()));
-				//imagemess.setEncoding("JPG");
-				imagemess.setEncoding("UTF8_JSON");
-				imagemess.setWidth(dimsImage[0]);
-				imagemess.setHeight(dimsImage[1]);
-				imagemess.setStep(dimsImage[0]);
-				imagemess.setIsBigendian((byte)0);
-				imagemess.setHeader(imghead);
-				imgpub.publish(imagemess);
-				//}	
+				// Did we detect anything in either image?
+				if(toJSON != null) {
+					if(DEBUGJSON)
+						System.out.println(toJSON);
+					imagemess.setData(ByteBuffer.wrap(toJSON.getBytes()));
+					//imagemess.setEncoding("JPG");
+					imagemess.setEncoding("UTF8_JSON");
+					imagemess.setWidth(dimsImage[0]);
+					imagemess.setHeight(dimsImage[1]);
+					imagemess.setStep(dimsImage[0]);
+					imagemess.setIsBigendian((byte)0);
+					imagemess.setHeader(imghead);
+					imgpub.publish(imagemess);
+				}	
 				//
 				imageReadyL = false;
 				imageReadyR = false;
