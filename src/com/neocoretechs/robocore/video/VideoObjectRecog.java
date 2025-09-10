@@ -79,12 +79,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	// NPU constants
 	long ctx; // context for NPU
-	static String MODELS_FILE[] = {"yolov5s-640-640.rknn","yolo11s.rknn","ssd_inception_v2.rknn"};
-	static String LABELS_FILE[] = {"coco_80_labels_list.txt","coco_80_labels_list.txt","coco_labels_list.txt"};
+	private static String MODELS_FILE[] = {"yolov5s-640-640.rknn","yolo11s.rknn","ssd_inception_v2.rknn"};
+	private static String LABELS_FILE[] = {"coco_80_labels_list.txt","coco_80_labels_list.txt","coco_labels_list.txt"};
 	static int MODEL = 1;
 	static String INCEPT_LABELS_FILE="coco_labels_list.txt";
-	static String MODEL_FILE = MODELS_FILE[MODEL];
-	static String LABEL_FILE = LABELS_FILE[MODEL];
+	static String MODEL_FILE;
+	static String LABEL_FILE;
 	boolean wantFloat = false;
 	static boolean RESIZE_TO_ORIG = false; // resize model image back to original cam capture size, false for YOLO, true for Inception
 	
@@ -93,7 +93,7 @@ public class VideoObjectRecog extends AbstractNodeMain
  	float scale_w;//(float)widthHeightChannel[0] / (float)dimsImage[0];
   	float scale_h;//(float)widthHeightChannel[1] / (float)dimsImage[1];
 	String[] labels = null;
-	static String MODEL_DIR = "/etc/model/RK3588";
+	static String MODEL_DIR = "/etc/model/RK3588/";
 	//
 	Model model = new Model();
 	rknn_input_output_num ioNum;
@@ -204,7 +204,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	}
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-
+		MODEL_FILE = MODELS_FILE[MODEL];
+		LABEL_FILE = LABELS_FILE[MODEL];
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.containsKey("__commitRate") )
 			commitRate = Integer.parseInt(remaps.get("__commitRate"));
@@ -481,7 +482,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			labels = Model.loadLines(MODEL_DIR+INCEPT_LABELS_FILE);
 			boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
 		} else
-			labels = Model.loadLines(MODEL_DIR+LABELS_FILE);
+			labels = Model.loadLines(MODEL_DIR+LABEL_FILE);
 		if(DEBUG)
 			System.out.println("Total category labels="+labels.length);
 		//System.out.println("Setup time:"+(System.currentTimeMillis()-tim)+" ms.");
