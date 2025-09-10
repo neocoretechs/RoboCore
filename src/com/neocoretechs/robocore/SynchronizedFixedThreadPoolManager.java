@@ -67,6 +67,8 @@ public class SynchronizedFixedThreadPoolManager {
 			}
 			//executor.put(tgn, getInstance(maxExecution, executionLimit).new ExtendedExecutor(maxExecution, executionLimit, new ArrayBlockingQueue<Runnable>(executionLimit)));
 			DaemonThreadFactory dtf = (getInstance().new DaemonThreadFactory(tgn));
+			//ExecutorService tpx = Executors.newVirtualThreadPerTaskExecutor();
+			// no need to prestart core thread with virtual threads
 			ExecutorService tpx = (getInstance().new ExtendedExecutor(maxThreads, executionLimit, new LinkedBlockingQueue<Runnable>(), dtf));
 			executor.put(tgn, getInstance().new FactoryThreadsLimit(tgn, dtf, tpx, maxThreads, executionLimit));
 			((ExtendedExecutor)tpx).prestartAllCoreThreads();

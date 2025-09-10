@@ -88,17 +88,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 	boolean wantFloat = false;
 	static boolean RESIZE_TO_ORIG = false; // resize model image back to original cam capture size, false for YOLO, true for Inception
 	
-	int[] widthHeightChannel; // parameters from loaded model
 	int[] dimsImage = new int[] {640,480};
- 	float scale_w;//(float)widthHeightChannel[0] / (float)dimsImage[0];
-  	float scale_h;//(float)widthHeightChannel[1] / (float)dimsImage[1];
+ 
 	String[] labels = null;
 	static String MODEL_DIR = "/etc/model/RK3588/";
 	//
 	Model model = new Model();
-	rknn_input_output_num ioNum;
-	rknn_tensor_attr[] inputAttrs;
-	ArrayList<rknn_tensor_attr> tensorAttrs = new ArrayList<rknn_tensor_attr>();
+
 	// InceptSSD specific constants
 	float[][] boxPriors;
 	//
@@ -136,10 +132,10 @@ public class VideoObjectRecog extends AbstractNodeMain
 		}
 		public String toJson() throws IOException{
 			Instance rimage = createImage(rightImage);
-			detect_result_group rdrg = imageDiff(rimage);
+			detect_result_group rdrg = model.inference(rimage, MODEL);
 			imageReadyR = true;
 			Instance limage = createImage(leftImage);
-			detect_result_group ldrg = imageDiff(limage);
+			detect_result_group ldrg = model.inference(limage, MODEL);
 			imageReadyL = true;
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
@@ -220,8 +216,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 		if( remaps.containsKey("__storeDetect") )
 			detectAndStore = remaps.get("__storeDetect");
 		try {
-			//initialize the NPU with the proper model file
-			initNPU(MODEL_DIR+MODEL_FILE);
+			//initialize the NPU with the proper model file, labels, and box priors or null
+			model.initNPU(MODEL_DIR+MODEL_FILE, labels, boxPriors);
 		} catch (IOException e2) {
 			throw new RuntimeException(e2);
 		}
@@ -430,136 +426,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 		return (u <= 0.f ? 0.f : (i / u));
 	}
 	
-	void initNPU(String modelFile) throws IOException {
-		byte[] bmodel = model.load(modelFile);
-		long tim = System.currentTimeMillis();
-		ctx = model.init(bmodel);
-		if(DEBUG)
-			System.out.println("Init time:"+(System.currentTimeMillis()-tim)+" ms.");
-		rknn_sdk_version sdk = model.querySDK(ctx);
-		ioNum = model.queryIONumber(ctx);
-		//if(DEBUG)
-			System.out.printf("%s %s%n", sdk, ioNum);
-		//BufferedImage bimage = Instance.readBufferedImage(args[1]);
-		//Instance image = null;
-		inputAttrs = new rknn_tensor_attr[ioNum.getN_input()];
-		for(int i = 0; i < ioNum.getN_input(); i++) {
-			inputAttrs[i] = model.queryInputAttrs(ctx, i);
-			if(DEBUG) {
-				System.out.println("Tensor input layer "+i+" attributes:");
-				System.out.println(RKNN.dump_tensor_attr(inputAttrs[i]));
-			}
-		}
-		widthHeightChannel = inputAttrs[0].getWidthHeightChannel();
-		//int[] dimsImage = Instance.computeDimensions(bimage);
-	 	scale_w = 1.0f;//(float)widthHeightChannel[0] / (float)dimsImage[0];
-	  	scale_h = 1.0f;//(float)widthHeightChannel[1] / (float)dimsImage[1];
-	  	//File fi = new File(args[1]);
-	  	//byte[] imageInByte = Files.readAllBytes(fi.toPath());
-	  	//image = new Instance(args[1],dimsImage[0],dimsImage[1],widthHeightChannel[2],imageInByte,widthHeightChannel[0],widthHeightChannel[1],args[1]);
-		//if(widthHeightChannel[0] != dimsImage[0] || widthHeightChannel[1] != dimsImage[1]) {
-		//	System.out.printf("Resizing image from %s to %s%n",Arrays.toString(dimsImage),Arrays.toString(widthHeightChannel));
-		//	image = new Instance(args[1], bimage, args[1], widthHeightChannel[0], widthHeightChannel[1]);
-			//ImageIO.write(image.getImage(), "jpg", new File("resizedImage.jpg"));
-		//} else {
-		//	image = new Instance(args[1], bimage, args[1]);
-		//}
-		for(int i = 0; i < ioNum.getN_output(); i++) {
-			rknn_tensor_attr outputAttr = model.queryOutputAttrs(ctx, i);
-			if(DEBUG) {
-				System.out.println("Tensor output layer "+i+" attributes:");
-				System.out.println(RKNN.dump_tensor_attr(outputAttr));
-			}
-			tensorAttrs.add(outputAttr);
-		}
-		//
-		//System.out.println("Setting up I/O..");
-		// no preallocation of output image buffers for YOLO, no force floating output
-		// InceptionSSD required want_float = true, it has 2 layers of output vs 3 for YOLO
-		tim = System.currentTimeMillis();
-		if(MODEL_FILE.contains("inception")) { // InceptionSSD
-			//wantFloat = true;
-			labels = Model.loadLines(MODEL_DIR+INCEPT_LABELS_FILE);
-			boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
-		} else
-			labels = Model.loadLines(MODEL_DIR+LABEL_FILE);
-		if(DEBUG)
-			System.out.println("Total category labels="+labels.length);
-		//System.out.println("Setup time:"+(System.currentTimeMillis()-tim)+" ms.");
-	}
-	
-	detect_result_group imageDiff(Instance image) throws IOException {
-		// Set input data
-		if(DEBUG)
-		System.out.println(ctx+" "+widthHeightChannel[0]+" "+widthHeightChannel[1]+" "+widthHeightChannel[2]+" "+inputAttrs[0].getType()+" "+
-				inputAttrs[0].getFmt()+" "+image.getRGB888().length);
-		
-		model.setInputs(ctx,inputAttrs[0].getSize(),inputAttrs[0].getType(),inputAttrs[0].getFmt(),image.getRGB888());
-		if(DEBUG)
-			System.out.println("Inputs set");
-		rknn_output[] outputs = model.setOutputs(ioNum.getN_output(), false, wantFloat); // last param is wantFloat, to force output to floating
-		if(DEBUG)
-			System.out.println("Outputs set");
-		
-		long tim = System.currentTimeMillis();
-		model.run(ctx);
-		if(DEBUG) {
-			System.out.println("Run time:"+(System.currentTimeMillis()-tim)+" ms.");
-			System.out.println("Getting outputs...");
-		}
-		
-		tim = System.currentTimeMillis();
-		model.getOutputs(ctx, ioNum.getN_output(), outputs);
-		if(DEBUG) {
-			System.out.println("Get outputs time:"+(System.currentTimeMillis()-tim)+" ms.");
-			System.out.println("Outputs:"+Arrays.toString(outputs));
-		}
-		detect_result_group drg = new detect_result_group();
-		ArrayList<Float> scales = null;
-		ArrayList<Integer> zps = null;
-		// If wantFloat is false, we would need the zero point and scaling
-		if(!wantFloat) {
-			scales = new ArrayList<Float>();
-			zps = new ArrayList<Integer>();
-			for(int i = 0; i < ioNum.getN_output(); i++) {
-				rknn_tensor_attr outputAttr = tensorAttrs.get(i);
-				zps.add(outputAttr.getZp());
-				scales.add(outputAttr.getScale());
-			}
-		}
-		switch(MODEL) {
-			case 0: //YOLOv5
-				detect_result.post_process(outputs, widthHeightChannel[1], widthHeightChannel[0], 
-					detect_result.BOX_THRESH, detect_result.NMS_THRESH, 
-					scale_w, scale_h, zps, scales, drg, labels);
-			break;
-			case 1:// YOLOv11
-				detect_result.post_process(outputs, tensorAttrs, ioNum, scale_w, scale_h, widthHeightChannel[1], widthHeightChannel[0], 
-						detect_result.BOX_THRESH, detect_result.NMS_THRESH, drg, labels);
-				//image.drawDetections(drg);
-			break;
-			case 2:  // InceptionSSD 
-				if(wantFloat) {
-					detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
-						widthHeightChannel[1], widthHeightChannel[0], detect_result.NMS_THRESH_SSD, 
-						scale_w, scale_h, drg, labels);
-				} else {
-					detect_result.post_process(outputs[0].getBuf(), outputs[1].getBuf(), boxPriors,
-						widthHeightChannel[1], widthHeightChannel[0], detect_result.NMS_THRESH_SSD, 
-						scale_w, scale_h, zps, scales, drg, labels);	
-				}
-				//image.detectionsToJPEGBytes(drg);
-			break;
-			default:
-				System.out.println("MODEL unknown...");
-				System.exit(1);
-		}
-		if(DEBUG)
-			System.out.println("Detected Result Group:"+drg);
-		return drg;
-		//m.destroy(ctx);
-	}
-	
 	public void storeImage(detect_result_group ldrg, detect_result_group rdrg, byte[] leftPayload, byte[] rightPayload, StereoImage imagemess, Integer sequenceNumber) {
 		//
 		// see if we send this detection to storage channel as well
@@ -647,7 +513,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	 * @throws IOException
 	 */
 	Instance createImage(byte[] imgBuff) throws IOException {
-	  	return new Instance("img",dimsImage[0],dimsImage[1],widthHeightChannel[2],imgBuff,widthHeightChannel[0],widthHeightChannel[1],"img",(MODEL != 2)); // not INCEPTION_SSD
+	  	return new Instance("img",dimsImage[0],dimsImage[1],model.getChannel(),imgBuff,model.getWidth(),model.getHeight(),"img",(MODEL != 2)); // not INCEPTION_SSD
 	}
 	/**
 	 * Translate the image Instance and detect_result_group into raw JPEG byte array
