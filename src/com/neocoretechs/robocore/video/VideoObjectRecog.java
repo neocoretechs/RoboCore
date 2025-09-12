@@ -48,6 +48,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
 	private static boolean DEBUGJSON = true;
+	private static boolean DEBUGDISPARITY = true;
+	private static boolean SAVE_DETECTIONS = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 	AsynchRelatrixClientTransaction session = null;
 	TransactionId xid = null;
@@ -134,6 +136,29 @@ public class VideoObjectRecog extends AbstractNodeMain
 			imageReadyL = true;
 			if(ldrg.getCount() == 0 && rdrg.getCount() == 0)
 				return null;
+			if(ldrg.getCount() > 0 && SAVE_DETECTIONS)
+				limage.saveDetections(ldrg,"leftImage"+time);
+			if(rdrg.getCount() > 0 && SAVE_DETECTIONS)
+				rimage.saveDetections(rdrg,"rightimage"+time);
+			if(ldrg.getCount() != 0 && rdrg.getCount() != 0) {
+				detect_result[] d1 = ldrg.getResults();
+				detect_result[] d2 = rdrg.getResults();
+				// blocks of 8 coords overlapping xmin,ymin, xmax, ymax
+				Object[] regions = correlateRegions(d1, d2);
+				for(int i = 0; i < regions.length; i+=2) {
+					detect_result dl = d1[(int)regions[i]];
+					detect_result dr = d2[(int)regions[i+1]];
+					//float lmin = xlmin-xrmin;
+					//float lmax = xlmax-xrmax;
+					float lmin = Math.abs(dl.getBox().xmin-dr.getBox().xmin);
+					float lmax = Math.abs(dl.getBox().xmax-dr.getBox().xmax);
+					float z1 = (f*B)/(f*(B/lmin));
+					float z2 = (f*B)/(f*(B/lmax));
+					// z= (f*B)/d
+					if(DEBUG || DEBUGDISPARITY)
+						System.out.println("Correlation left="+dl.getBox()+" right="+dr.getBox()+" disparity:"+z1+","+z2);
+				}
+			}
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
 			StringBuilder sb = new StringBuilder("{\r\n");
@@ -337,7 +362,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				String toJSON = e.toJson();
 				// Did we detect anything in either image?
 				if(toJSON != null) {
-					if(DEBUGJSON)
+					if(DEBUG || DEBUGJSON)
 						System.out.println(toJSON);
 					imagemess.setData(ByteBuffer.wrap(toJSON.getBytes()));
 					//imagemess.setEncoding("JPG");
@@ -379,16 +404,16 @@ public class VideoObjectRecog extends AbstractNodeMain
 	/**
 	 * Correlate all left boxes to right boxes, if there is overlap of better than threshold, return coords in out array
 	 * called by storeImage
-	 * @param lbox
-	 * @param rbox
-	 * @return Array of Integer objects
+	 * @param lbox left detection result array
+	 * @param rbox right detection result array
+	 * @return Object array of Integer of correlated detect_results for N result N(lbox[index]) = left N+1(rbox[index]) = right for overlap regardless of category
 	 */
-	Object[] correlateRegions(ArrayList<Rectangle> lbox, ArrayList<Rectangle> rbox) {
-		float[][] ious = new float[lbox.size()][rbox.size()];
-		for(int i = 0; i < lbox.size(); i++) {
-			for(int j = 0; j < rbox.size(); j++) {
-				ious[i][j] = calculateOverlap(lbox.get(i).xmin,lbox.get(i).ymin,lbox.get(i).xmax,lbox.get(i).ymax,
-					rbox.get(j).xmin,rbox.get(j).ymin,rbox.get(j).xmax,rbox.get(j).ymax);
+	Object[] correlateRegions(detect_result[] lbox, detect_result[] rbox) {
+		float[][] ious = new float[lbox.length][rbox.length];
+		for(int i = 0; i < lbox.length; i++) {
+			for(int j = 0; j < rbox.length; j++) {
+				ious[i][j] = calculateOverlap(lbox[i].getBox().xmin,lbox[i].getBox().ymin,lbox[i].getBox().xmax,lbox[i].getBox().ymax,
+					rbox[j].getBox().xmin,rbox[j].getBox().ymin,rbox[j].getBox().xmax,rbox[j].getBox().ymax);
 			}
 		}
 		if(DEBUG)
@@ -396,10 +421,10 @@ public class VideoObjectRecog extends AbstractNodeMain
 				System.out.println("IOU["+k+"]="+Arrays.toString(ious[k]));
 		ArrayList<Integer> outBoxes = new ArrayList<Integer>();
 		// iterate 2d array of left box to all right overlaps
-		for(int k = 0; k < lbox.size(); k++) {
+		for(int k = 0; k < lbox.length; k++) {
 			float bestIou = 0.0f;
 			int bestNum = 0;
-			for(int m = 0; m < rbox.size(); m++) {
+			for(int m = 0; m < rbox.length; m++) {
 				if(ious[k][m] > IOU_THRESHOLD && ious[k][m] > bestIou) {
 					bestIou = ious[k][m];
 					bestNum = m;
@@ -410,19 +435,24 @@ public class VideoObjectRecog extends AbstractNodeMain
 			// did we get one above threshold?
 			if(bestIou > 0.0f) {
 				// put left box in output array
-				outBoxes.add(lbox.get(k).xmin);
-				outBoxes.add(lbox.get(k).ymin);
-				outBoxes.add(lbox.get(k).xmax);
-				outBoxes.add(lbox.get(k).ymax);
-				outBoxes.add(rbox.get(bestNum).xmin);
-				outBoxes.add(rbox.get(bestNum).ymin);
-				outBoxes.add(rbox.get(bestNum).xmax);
-				outBoxes.add(rbox.get(bestNum).ymax);
+				outBoxes.add(k);
+				outBoxes.add(bestNum);
 			}
 		}
 		return outBoxes.toArray();
 	}
-	
+	/**
+	 * Perform the intersection over union operation IoU
+	 * @param xmin0 minx region 1
+	 * @param ymin0 miny region 1
+	 * @param xmax0 maxx region 1
+	 * @param ymax0 maxy region 1
+	 * @param xmin1 minx region 2
+	 * @param ymin1 miny region 2
+	 * @param xmax1 maxx region 2
+	 * @param ymax1 maxy region 2
+	 * @return intersection amount divided by union amount of the 2 regions
+	 */
 	static float calculateOverlap(float xmin0, float ymin0, float xmax0, float ymax0, float xmin1, float ymin1, float xmax1, float ymax1) {
 		float w = Math.max(0.0f, Math.min(xmax0, xmax1) - Math.max(xmin0, xmin1));
 		float h = Math.max(0.0f, Math.min(ymax0, ymax1) - Math.max(ymin0, ymin1));
@@ -444,8 +474,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 		//float xrmin = 0.0f;
 		//float xrmax = 0.0f;
 		if(imgpubstore != null) {
-			ArrayList<Rectangle> leftBox = new ArrayList<Rectangle>();
-			ArrayList<Rectangle> rightBox = new ArrayList<Rectangle>();
 			for(detect_result dr: ldrg.getResults()) {
 				if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
 					float prob = dr.getProbability();
@@ -458,10 +486,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 						System.out.println("L Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
 						//break;
 					//}
-					leftBox.add(dr.getBox());
 				}
 			}
-			if(leftBox.size() > 0) { // artifact?
+			if(ldrg.getCount() > 0) { // artifact?
 				for(detect_result dr: rdrg.getResults()) {
 					if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
 						float prob = dr.getProbability();
@@ -475,38 +502,20 @@ public class VideoObjectRecog extends AbstractNodeMain
 							//break;
 						//}
 					}
-					rightBox.add(dr.getBox());
 				}
 			}
 			//if(sendl && sendr)
 			//	System.out.println("person "+areal+" "+arear+" "+Math.abs(areal-arear));
 			//if(sendl && sendr && Math.abs(areal-arear) < (.1f * areal)) {
-			if(leftBox.size() > 0 && rightBox.size() > 0) { // possible correlation
-				Object[] outBoxes = correlateRegions(leftBox, rightBox);
-				for(int i = 0; i < outBoxes.length; i+=8) {
-					//float lmin = xlmin-xrmin;
-					//float lmax = xlmax-xrmax;
-					float lmin = ((Integer)outBoxes[i]).floatValue()-((Integer)outBoxes[i+4]).floatValue();
-					float lmax = ((Integer)outBoxes[i+2]).floatValue()-((Integer)outBoxes[i+6]).floatValue();
-					if(lmin <= 0)
-						lmin = .00001f;
-					if(lmax <= 0)
-						lmax = .00001f;
-					float z1 = (f*B)/(f*(B/lmin));
-					//float z2 = f*(B/lmax); disparity
-					float z2 = (f*B)/(f*(B/lmax));
-					// z= (f*B)/d
-					if(DEBUG)
-						System.out.println("Correlation "+i+" disparity:"+z1+","+z2);
-					imgpubstore.publish(imagemess);
-					if( DEBUG )
-						System.out.println("Pub. Image:"+sequenceNumber);
-					if(detectAndStore != null) {
-						List<byte[]> sib = new ArrayList<byte[]>();
-						sib.add(leftPayload);
-						sib.add(rightPayload);
-						session.store(xid, Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), NoIndex.create(sib));
-					}
+			if(ldrg.getCount() > 0 && rdrg.getCount() > 0) { // possible correlation
+				imgpubstore.publish(imagemess);
+				if( DEBUG )
+					System.out.println("Pub. Image:"+sequenceNumber);
+				if(detectAndStore != null) {
+					List<byte[]> sib = new ArrayList<byte[]>();
+					sib.add(leftPayload);
+					sib.add(rightPayload);
+					session.store(xid, Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), NoIndex.create(sib));
 				}
 			}
 		}
