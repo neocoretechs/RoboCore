@@ -14,18 +14,13 @@ import org.ros.internal.node.server.ThreadPoolManager;
 
 import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 import com.neocoretechs.robocore.GpioNative;
-//import com.pi4j.io.gpio.GpioController;
-//import com.pi4j.io.gpio.GpioFactory;
-//import com.pi4j.io.gpio.GpioPinDigitalInput;
-//import com.pi4j.io.gpio.GpioPinDigitalOutput;
-//import com.pi4j.io.gpio.PinPullResistance;
-//import com.pi4j.io.gpio.PinState;
-//import com.pi4j.io.gpio.RaspiPin;
-
 
 /**
- * Use the Pi4J GPIO libraries to drive an ultrasonic range finder attached to GPIO pins 2 and 3 on the RasPi.
- * Pin2 being the trigger and pin 3 being the resulting signal.
+ * Use the jSerialComm or libgpio GPIO libraries to drive an ultrasonic range finder attached to 
+ * the UART pins or the GPIO pins 2 and 3 on linux. <p>
+ * The mode is controlled by the presence and value of command line parameter __PORT:= <p>
+ * IF PORT:= isnt specified, then Pin2 being the trigger and pin 3 being the resulting signal. <br>
+ * In this case, YOU MUST RUN AS ROOT.
  * The trigger pulse goes high to low with a 10 microsecond wait.
  * There is a 2 second window where the result pin goes from low to high that we use as our interval
  * for sensing an object.
@@ -40,12 +35,12 @@ import com.neocoretechs.robocore.GpioNative;
 public class RangeFinderPubs extends AbstractNodeMain {
 	private static boolean DEBUG = false;
 	static long count = 0;
-	/*GpioPinDigitalOutput*/ int firepulse;
-	/*GpioPinDigitalInput*/ int result_pin;
+	int firepulse;
+	int result_pin;
 	static int err;
-	static GpioNative gpio;
+	static GpioNative gpio = null;
 	public static String gpioChip = "gpiochip0";
-	public static String spin = "GPIO_22";
+	public static String spin = "PIN_22";
 	public static boolean chipOpen = false;
 	private static final int PULSE_DELAY = 2000;        // #2 us pulse = 2,000 ns
 	private static final int PULSE = 10000;        // #10 us pulse = 10,000 ns
@@ -66,27 +61,23 @@ public class RangeFinderPubs extends AbstractNodeMain {
 
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-		if(!chipOpen) {
-		  	if((err = gpio.openChip(gpioChip)) < 0)
-	    		throw new RuntimeException("chipOpen error "+err);	
-			chipOpen = true;
-		}
 		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-		if( remaps.containsKey("__PORT") )
-			portName = remaps.get("__PORT");
-		//final Log log = connectedNode.getLog();
-		final Publisher<std_msgs.String> statpub =
-				connectedNode.newPublisher("robocore/alerts", std_msgs.String._TYPE);
+		Runnable readThread = null;
+		if( remaps.containsKey("__port") ) {
+			portName = remaps.get("__port");
+			readThread = new UltraRead();
+		} else {
+			readThread = new UltraPing();
+		}
 
-		//UltraPing up = new UltraPing();
-		UltraRead up = new UltraRead();
-		ThreadPoolManager.getInstance().spin(up, "SYSTEM");
+		ThreadPoolManager.getInstance().spin(readThread, "SYSTEM");
 		// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
 		awaitStart.countDown();
 		// This CancellableLoop will be canceled automatically when the node shuts
 		// down.
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
+			final Publisher<std_msgs.String> statpub  = connectedNode.newPublisher("robocore/range", std_msgs.String._TYPE);
 			std_msgs.String statmsg = statpub.newMessage();
 			@Override
 			protected void setup() {
@@ -105,11 +96,10 @@ public class RangeFinderPubs extends AbstractNodeMain {
 						statpub.publish(statmsg);
 					}
 				}
-				Thread.sleep(1);
+				Thread.sleep(10);
 			}
 		});
 	}
-	
 	
 	 /**
 	  * 
@@ -117,7 +107,7 @@ public class RangeFinderPubs extends AbstractNodeMain {
 	  * https://www.tutorialspoint.com/arduino/arduino_ultrasonic_sensor.htm
 	  * @return
 	  */
-	 public static double getRangeHCSR04(/*GpioPinDigitalOutput*/int rangefindertrigger, /*GpioPinDigitalInput*/int rangefinderresult ) {
+	 public static double getRangeHCSR04(int rangefindertrigger, int rangefinderresult ) {
 	  double distance = -1;
 	  int rejection_start = 0;
 	  try {
@@ -199,17 +189,17 @@ public class RangeFinderPubs extends AbstractNodeMain {
 				chipOpen = true;
 			}
 		  //range finder pins 
-		  int rangefindertrigger = gpio.findChipLine("GPIO_02");
+		  int rangefindertrigger = gpio.findChipLine("PIN_5");
 		  try {
 			Thread.sleep(250);
 		  } catch (InterruptedException e) {}
 		  int rangefinderresult = 0;
 		  switch(SENSOR_TYPE) {
 		  	case HCSR04:
-		  	  rangefinderresult = gpio.findChipLine("GPIO_03");
+		  	  rangefinderresult = gpio.findChipLine("PIN_3");
 		  	  break;
 		  	case URM37:
-		  	  rangefinderresult = gpio.findChipLine("GPIO_03");
+		  	  rangefinderresult = gpio.findChipLine("PIN_3");
 		  	  break;
 		  	default:
 		  		break;
@@ -251,25 +241,30 @@ class UltraPing implements Runnable {
 	
 	@Override
 	public void run() {
+		if(gpio == null)
+			gpio = new GpioNative();
 		// Setup GPIO Pins 
-		//GpioController gpio = GpioFactory.getInstance();
+		if(!chipOpen) {
+		  	if((err = gpio.openChip(gpioChip)) < 0)
+	    		throw new RuntimeException("chipOpen error "+err);	
+			chipOpen = true;
+		}
 	   	// get handle to line struct
     	int pin = gpio.findChipLine(spin);
       	if(pin < 0)
     		throw new RuntimeException("findChipLine error:"+pin);
 		//range finder pins
-		final /*GpioPinDigitalOutput*/int rangefindertrigger = gpio.lineRequestOutput(pin);
-		//rangefindertrigger.setShutdownOptions(true, PinState.LOW);
+		final int rangefindertrigger = gpio.lineRequestOutput(pin);
 		try {
 			Thread.sleep(250);
 		} catch (InterruptedException e) {}
-		/*GpioPinDigitalInput*/int rangefinderresult = 0;;
+		int rangefinderresult = 0;;
 		switch(SENSOR_TYPE) {
 		  	case HCSR04:
-		  	  rangefinderresult = gpio.findChipLine("GPIO_03");
+		  	  rangefinderresult = gpio.findChipLine("PIN_3");
 		  	  break;
 		  	case URM37:
-		  	  rangefinderresult = gpio.findChipLine("GPIO_06");
+		  	  rangefinderresult = gpio.findChipLine("PIN_3");
 		  	  break;
 		  	default:
 		  		break;

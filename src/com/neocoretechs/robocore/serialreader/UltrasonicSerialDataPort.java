@@ -111,9 +111,26 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 	public boolean isEOT() { return EOT; }
 
 	public void connect(boolean writeable) throws IOException {
+		getSerialPort();
+		SerialPort.allowPortOpenForEnumeration();
+		SerialPort.autoCleanupAtShutdown();
+		SerialPort.addShutdownHook(new Thread() { public void run() { System.out.println("\nRunning shutdown hook"); } });
 		serialPort = SerialPort.getCommPort(portName);
+		serialPort.allowElevatedPermissionsRequest();
+		boolean openedSuccessfully = serialPort.openPort(0);
+		System.out.println("\nOpening " + serialPort.getSystemPortName() + ": " + serialPort.getDescriptivePortName() + " - " + serialPort.getPortDescription() + ": " + (openedSuccessfully ? "Opened successfully!" : "FAILED!"));
+		if (!openedSuccessfully)
+		{
+			System.out.println("Error code was " + serialPort.getLastErrorCode() + " at Line " + serialPort.getLastErrorLocation());
+			return;
+		}
 		serialPort.setBaudRate(baud);
 		serialPort.setNumDataBits(datab);
+		serialPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
+		serialPort.clearDTR();
+		serialPort.clearRTS();
+		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 0, 0);
+		SerialPort.autoCleanupAtShutdown();
 		switch(stopb) {
 		case 1 -> serialPort.setNumStopBits(SerialPort.ONE_STOP_BIT);
 		case 2 -> serialPort.setNumStopBits(SerialPort.TWO_STOP_BITS);
@@ -123,7 +140,13 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 		case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
 		case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
 		}
-
+		//serialPort.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 1000, 0);
+		// Open the input and output streams for the connection. If they won't
+		// open, close the port before throwing an exception.
+		// give port time to config
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {}
 		// Open the input and output streams for the connection. If they won't
 		// open, close the port before throwing an exception.
 		inStream = serialPort.getInputStream();
@@ -157,7 +180,20 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 		if( PORTDEBUG ) 
 			System.out.println("Connected:"+stringSettings());
 	}
-
+	
+	private SerialPort getSerialPort() {
+	    SerialPort[] serialPortList = SerialPort.getCommPorts();
+	    SerialPort preferredPort = null;
+	    for (SerialPort port : serialPortList) {
+	        String systemPortName = port.getSystemPortName();
+	        System.out.println("Existing Port:"+port+" System name: "+ systemPortName);
+	        if (systemPortName.equals("ttyS0") || systemPortName.equals("COM1")) {
+	            preferredPort = port;
+	            //break;
+	        }
+	    }
+	    return preferredPort;
+	}
 	@Override
 	public boolean isConnected() {
 		return connected;
@@ -270,43 +306,6 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 		return dist;
 	}
 
-
-	/**
-	 * Sets the serial port parameters
-	 * @param parityb 
-	 * @param stopb 
-	 * @param datab 
-	 * @param baud 
-	 * @throws UnsupportedCommOperationException 
-	 */
-	private void setSerialPortParameters(int baud, int datab, int stopb, int parityb) throws IOException {
-		//if( Props.DEBUG ) System.out.println("Setting serial port "+baud+" "+datab+" "+stopb+" "+parityb);
-
-		// Set serial port
-		// serialPort.setSerialPortParams(57600,SerialPort.DATABITS_8,SerialPort.STOPBITS_1,SerialPort.PARITY_NONE);
-		serialPort.setBaudRate(baud);
-		serialPort.setNumDataBits(datab);
-		switch(stopb) {
-			case 1 -> serialPort.setNumStopBits(SerialPort.ONE_STOP_BIT);
-			case 2 -> serialPort.setNumStopBits(SerialPort.TWO_STOP_BITS);
-		}
-		switch(parityb) {
-			case 0 -> serialPort.setParity(SerialPort.NO_PARITY);
-			case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
-			case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
-		}
-		serialPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
-
-
-		//SerialPort.RtsEnable = true;
-		//SerialPort.ReadBufferSize = 4096;
-		//SerialPort.WriteBufferSize = 512;
-		//SerialPort.ReceivedBytesThreshold = 1;
-		//SerialPort.ReadTimeout = 5500;
-		//SerialPort.WriteTimeout = 5500;
-	}
-
-
 	/**
 	 * Data about machine and port settings
 	 */
@@ -386,7 +385,6 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 				try {
 					Thread.sleep(2);
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 			}
