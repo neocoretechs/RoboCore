@@ -22,7 +22,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
  *
  */
 public abstract class AbstractPWMMotorControl extends AbstractMotorControl {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	protected PWM[] ppwms = new PWM[channels];
 	// 10 possible drive wheels, index is by channel-1. 
 	// motorDrive[channel] {{PWM array index],[dir pin],[timer freq}}

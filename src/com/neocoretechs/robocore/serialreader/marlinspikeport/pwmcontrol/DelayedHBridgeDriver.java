@@ -23,7 +23,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
  *
  */
 public class DelayedHBridgeDriver extends HBridgeDriver {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	
 	public DelayedHBridgeDriver(int maxPower) {
 		super(maxPower);

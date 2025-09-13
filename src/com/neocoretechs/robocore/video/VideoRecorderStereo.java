@@ -38,7 +38,7 @@ import com.neocoretechs.rocksack.TransactionId;
  */
 public class VideoRecorderStereo extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 

@@ -41,7 +41,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
  */
 public class VideoRecorderStereoClient extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 

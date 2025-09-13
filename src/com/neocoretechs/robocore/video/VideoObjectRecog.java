@@ -143,7 +143,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			if(ldrg.getCount() != 0 && rdrg.getCount() != 0) {
 				detect_result[] d1 = ldrg.getResults();
 				detect_result[] d2 = rdrg.getResults();
-				// blocks of 8 coords overlapping xmin,ymin, xmax, ymax
+				//detect overlapping xmin,ymin, xmax, ymax
 				Object[] regions = correlateRegions(d1, d2);
 				for(int i = 0; i < regions.length; i+=2) {
 					detect_result dl = d1[(int)regions[i]];
@@ -152,8 +152,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 					//float lmax = xlmax-xrmax;
 					float lmin = Math.abs(dl.getBox().xmin-dr.getBox().xmin);
 					float lmax = Math.abs(dl.getBox().xmax-dr.getBox().xmax);
-					float z1 = (f*B)/(f*(B/lmin));
-					float z2 = (f*B)/(f*(B/lmax));
+					float z1 = (f*B)/lmin; //(f*(B/lmin));
+					float z2 = (f*B)/lmax; //(f*(B/lmax));
 					// z= (f*B)/d
 					if(DEBUG || DEBUGDISPARITY)
 						System.out.println("Correlation left="+dl.getBox()+" right="+dr.getBox()+" disparity:"+z1+","+z2);

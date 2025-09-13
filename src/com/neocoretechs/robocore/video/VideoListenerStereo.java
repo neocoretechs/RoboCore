@@ -69,7 +69,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
  */
 public class VideoListenerStereo extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 
     private BufferedImage imagel = null;

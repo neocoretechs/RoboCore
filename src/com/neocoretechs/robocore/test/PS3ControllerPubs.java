@@ -53,7 +53,7 @@ import org.ros.internal.loader.CommandLineLoader;
  * Button 8	Stick Press
  * Button 9	Stick Press
  * 
- * @author jg
+ * @author JOnathan Groff Copyright (C) NeoCoreTechs 2025
  */
 public class PS3ControllerPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;
@@ -271,7 +271,6 @@ private static class AnalogAxis extends Axis {
 /**
  * ControllerManager for a particular controller. A controller has a list of Axis.
  * A list of Axis starts with a list of components by controller. 
- * @author jg
  *
  * @param <T>
  */
