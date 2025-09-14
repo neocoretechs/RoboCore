@@ -148,12 +148,39 @@ public class VideoObjectRecog extends AbstractNodeMain
 			Instance limage = createImage(leftImage);
 			detect_result_group ldrg = model.inference(limage, MODEL);
 			imageReadyL = true;
-			if(ldrg.getCount() == 0 && rdrg.getCount() == 0)
-				return null;
+			String slbuf = ldrg.toJson();
+			String srbuf = rdrg.toJson();
+			StringBuilder sb = new StringBuilder("{\r\n");
+			sb.append("\"timestamp\":");
+			sb.append(time);
+			sb.append(",\r\n");
+			if(rangeCorrelated != 0) {
+				sb.append("\"ultrasonic\":{\"distance\":");
+				synchronized(ranges) {
+					sb.append(ranges.range);
+				}
+				sb.append("},\r\n");
+			}
+			if(eulersCorrelated[0] != 0) {
+				sb.append("\"imu\":{\"heading\":");
+				synchronized(euler) {
+					sb.append(eulersCorrelated[0]);
+					sb.append(",\"roll\":");
+					sb.append(eulersCorrelated[1]);
+					sb.append(",\"pitch\":");
+					sb.append(eulersCorrelated[2]);
+				}
+				sb.append("},\r\n");
+			}
+			if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
+				sb.append("},\r\n");
+				return sb.toString();
+			}
 			if(ldrg.getCount() > 0 && SAVE_DETECTIONS)
 				limage.saveDetections(ldrg,"leftImage"+time);
 			if(rdrg.getCount() > 0 && SAVE_DETECTIONS)
 				rimage.saveDetections(rdrg,"rightimage"+time);
+			/*
 			if(ldrg.getCount() != 0 && rdrg.getCount() != 0) {
 				detect_result[] d1 = ldrg.getResults();
 				detect_result[] d2 = rdrg.getResults();
@@ -173,35 +200,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 						System.out.println("Correlation left="+dl.getBox()+" right="+dr.getBox()+" disparity:"+z1+","+z2);
 				}
 			}
-			String slbuf = ldrg.toJson();
-			String srbuf = rdrg.toJson();
-			StringBuilder sb = new StringBuilder("{\r\n");
-			sb.append("\"timestamp\":");
-			sb.append(time);
-			sb.append(",\r\n");
-			if(eulersCorrelated[0] != 0) {
-				sb.append("\"imu\":{\"heading\":");
-				synchronized(euler) {
-					sb.append(eulersCorrelated[0]);
-					sb.append(",\"roll\":");
-					sb.append(eulersCorrelated[1]);
-					sb.append(",\"pitch\":");
-					sb.append(eulersCorrelated[2]);
-				}
-				sb.append("},\r\n");
-			}
-			if(rangeCorrelated != 0) {
-				sb.append("\"ultrasonic\":{\"distance\":");
-				synchronized(ranges) {
-					sb.append(ranges.range);
-				}
-				sb.append("},\r\n");
-			}
+			*/
 			sb.append("\"LeftImage\":[");
 			sb.append(slbuf);
 			sb.append("\r\n],\r\n\"RightImage\":[");
 			sb.append(srbuf);
 			sb.append("\r\n]");
+			sb.append("},\r\n");
 			return sb.toString();
 		}
 		@Override
