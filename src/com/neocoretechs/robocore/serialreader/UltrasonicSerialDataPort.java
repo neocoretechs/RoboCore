@@ -15,7 +15,7 @@ import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
  *
  */
 public class UltrasonicSerialDataPort implements DataPortInterface {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static boolean PORTDEBUG = true;
 	private static boolean INFO = true;
 	private SerialPort serialPort;
@@ -264,8 +264,15 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 		for(int i = 0; i < DISTANCE_RETURN.length; i++)
 			DISTANCE_RETURN[i] = (byte)( read() & 0xFF);
 		// check checksum
-		if((DISTANCE_RETURN[0]+DISTANCE_RETURN[1]+DISTANCE_RETURN[2]) != DISTANCE_RETURN[3])
-			throw new IOException("Bad checksum:"+Integer.toHexString(DISTANCE_RETURN[3]));
+		if(DEBUG)
+			System.out.printf("Response: %02X %02X %02X %02X\n", DISTANCE_RETURN[0], DISTANCE_RETURN[1], DISTANCE_RETURN[2], DISTANCE_RETURN[3]);
+		int sum = (DISTANCE_RETURN[0] & 0xFF) +
+		          (DISTANCE_RETURN[1] & 0xFF) +
+		          (DISTANCE_RETURN[2] & 0xFF);
+		int checksum = DISTANCE_RETURN[3] & 0xFF;
+		if ((sum & 0xFF) != checksum) {
+		    throw new IOException("Bad checksum: " + Integer.toHexString(checksum));
+		}
 		return DISTANCE_RETURN;
 	}
 
