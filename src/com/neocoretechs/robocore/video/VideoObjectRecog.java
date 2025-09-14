@@ -100,8 +100,17 @@ public class VideoObjectRecog extends AbstractNodeMain
 	final static float B = 100.0f; // baseline mm
 	final static float IOU_THRESHOLD = .40f;
 	
-	double eulers[] = new double[]{0.0,0.0,0.0}; // set from loop
-	long eulerTime = 0L;
+	static class EulerTime {
+		double eulers[] = new double[]{0.0,0.0,0.0}; // set from loop
+		long eulerTime = 0L;
+	}
+	EulerTime euler = new EulerTime();
+	
+	static class RangeTime {
+		float range;
+		long rangeTime = 0L;
+	}
+	RangeTime ranges = new RangeTime();
 	
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
@@ -117,14 +126,19 @@ public class VideoObjectRecog extends AbstractNodeMain
 		byte[] leftImage;
 		byte[] rightImage;
 		double eulersCorrelated[] = new double[]{0.0,0.0,0.0};
+		float rangeCorrelated = 0f;
 		public TimedImage(byte[] leftImage, byte[] rightImage, long sequence) {
 			this.leftImage = leftImage;
 			this.rightImage = rightImage;
 			this.sequence = sequence;
 			this.time = System.currentTimeMillis();
-			if(Math.abs(this.time-eulerTime) <= 1000)
-				synchronized(eulers) {
-					this.eulersCorrelated = eulers;
+				synchronized(euler) {
+					if(Math.abs(this.time-euler.eulerTime) <= 1000)
+						this.eulersCorrelated = euler.eulers;
+				}
+				synchronized(ranges) {
+					if(Math.abs(this.time-ranges.rangeTime) <= 1000)
+						this.rangeCorrelated = ranges.range;
 				}
 		}
 		public String toJson() throws IOException{
@@ -167,11 +181,20 @@ public class VideoObjectRecog extends AbstractNodeMain
 			sb.append(",\r\n");
 			if(eulersCorrelated[0] != 0) {
 				sb.append("\"imu\":{\"heading\":");
-				sb.append(eulersCorrelated[0]);
-				sb.append(",\"roll\":");
-				sb.append(eulersCorrelated[1]);
-				sb.append(",\"pitch\":");
-				sb.append(eulersCorrelated[2]);
+				synchronized(euler) {
+					sb.append(eulersCorrelated[0]);
+					sb.append(",\"roll\":");
+					sb.append(eulersCorrelated[1]);
+					sb.append(",\"pitch\":");
+					sb.append(eulersCorrelated[2]);
+				}
+				sb.append("},\r\n");
+			}
+			if(rangeCorrelated != 0) {
+				sb.append("\"ultrasonic\":{\"distance\":");
+				synchronized(ranges) {
+					sb.append(ranges.range);
+				}
 				sb.append("},\r\n");
 			}
 			sb.append("\"LeftImage\":[");
@@ -267,6 +290,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 		}
 		final Subscriber<sensor_msgs.Imu> subsimu = 
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
+		final Subscriber<std_msgs.String> subsrange = 
+				connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		
@@ -303,16 +328,27 @@ public class VideoObjectRecog extends AbstractNodeMain
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
-				synchronized(eulers) {
-					eulers = message.getOrientationCovariance();
-					eulerTime = System.currentTimeMillis();
+				synchronized(euler) {
+					euler.eulers = message.getOrientationCovariance();
+					euler.eulerTime = System.currentTimeMillis();
 					//queue.forEach(e->{
 					//	e.setIMU(currentTime, eulers);
 					//});
 				}
 			}
 		});
-
+		//
+		// Ultrasoic distance sensor also timestamped and correlated
+		//
+		subsrange.addMessageListener(new MessageListener<std_msgs.String>() {
+			@Override
+			public void onNewMessage(std_msgs.String message) {
+				synchronized(ranges) {
+					ranges.range = Float.parseFloat(message.getData());
+					ranges.rangeTime = System.currentTimeMillis();
+				}
+			}
+		});
 	/**
 	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
 	 * mutex appropriate to establish critical sections. A sleep follows each publication to keep the bus arbitrated

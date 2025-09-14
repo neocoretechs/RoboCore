@@ -77,7 +77,7 @@ public class RangeFinderPubs extends AbstractNodeMain {
 		// This CancellableLoop will be canceled automatically when the node shuts
 		// down.
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
-			final Publisher<std_msgs.String> statpub  = connectedNode.newPublisher("robocore/range", std_msgs.String._TYPE);
+			final Publisher<std_msgs.String> statpub  = connectedNode.newPublisher("/sensor_msgs/range", std_msgs.String._TYPE);
 			std_msgs.String statmsg = statpub.newMessage();
 			@Override
 			protected void setup() {
