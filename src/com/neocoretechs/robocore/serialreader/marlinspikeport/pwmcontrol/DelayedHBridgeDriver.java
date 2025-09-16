@@ -122,7 +122,7 @@ public class DelayedHBridgeDriver extends HBridgeDriver {
 	public String getDriverInfo(int ch) {
 		if(ch == 0)
 			return "INVALID CHANNEL 0! Must be 1-n!";
-		if(ch >= getChannels())
+		if(ch > getChannels())
 			return "INVALID CHANNEL "+ch+" ! Must be 1-n!";
 		if(getMotorPWMIndex(ch) == 255 ) {
 			return String.format("DelayedHB-PWM UNINITIALIZED Channel %d%n",ch);

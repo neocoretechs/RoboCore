@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.json.JSONObject;
 import org.ros.concurrent.CancellableLoop;
 import org.ros.message.MessageListener;
 import org.ros.message.Time;
@@ -142,6 +143,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				}
 		}
 		public String toJson() throws IOException{
+			JSONObject jo = new JSONObject();
 			Instance rimage = createImage(rightImage);
 			detect_result_group rdrg = model.inference(rimage, MODEL);
 			imageReadyR = true;
@@ -150,31 +152,21 @@ public class VideoObjectRecog extends AbstractNodeMain
 			imageReadyL = true;
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
-			StringBuilder sb = new StringBuilder("{\r\n");
-			sb.append("\"timestamp\":");
-			sb.append(time);
-			sb.append(",\r\n");
+			jo.append("timestamp",time);
 			if(rangeCorrelated != 0) {
-				sb.append("\"ultrasonic\":{\"distance\":");
 				synchronized(ranges) {
-					sb.append(ranges.range);
+					jo.append("distance",ranges.range);
 				}
-				sb.append("},\r\n");
 			}
 			if(eulersCorrelated[0] != 0) {
-				sb.append("\"imu\":{\"heading\":");
 				synchronized(euler) {
-					sb.append(eulersCorrelated[0]);
-					sb.append(",\"roll\":");
-					sb.append(eulersCorrelated[1]);
-					sb.append(",\"pitch\":");
-					sb.append(eulersCorrelated[2]);
+					jo.append("heading",eulersCorrelated[0]);
+					jo.append("roll", eulersCorrelated[1]);
+					jo.append("pitch", eulersCorrelated[2]);
 				}
-				sb.append("},\r\n");
 			}
 			if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
-				sb.append("},\r\n");
-				return sb.toString();
+				return jo.toString();
 			}
 			if(ldrg.getCount() > 0 && SAVE_DETECTIONS)
 				limage.saveDetections(ldrg,"leftImage"+time);
@@ -201,12 +193,15 @@ public class VideoObjectRecog extends AbstractNodeMain
 				}
 			}
 			*/
+			String preJson = jo.toString();
+			StringBuilder sb = new StringBuilder(preJson.substring(0,preJson.length()-1)+",");
+			
 			sb.append("\"LeftImage\":[");
 			sb.append(slbuf);
 			sb.append("\r\n],\r\n\"RightImage\":[");
 			sb.append(srbuf);
 			sb.append("\r\n]");
-			sb.append("},\r\n");
+			sb.append("}\r\n");
 			return sb.toString();
 		}
 		@Override

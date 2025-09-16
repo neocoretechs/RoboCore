@@ -33,7 +33,7 @@ import com.neocoretechs.robocore.GpioNative;
  *
  */
 public class RangeFinderPubs extends AbstractNodeMain {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	static long count = 0;
 	int firepulse;
 	int result_pin;
