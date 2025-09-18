@@ -18,7 +18,7 @@ import org.ros.node.topic.Subscriber;
 import com.neocoretechs.relatrix.Relation;
 import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.relatrix.key.NoIndex;
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.rocksack.TransactionId;
 
 
@@ -67,7 +67,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	AsynchRelatrixClientTransaction session = null;
 
 	static {
-		SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEORECORDER"});
+		SynchronizedThreadManager.getInstance().init(new String[] {"VIDEORECORDER"});
 	}
 	
 	@Override
@@ -128,7 +128,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 		 */
 		latch = new CountDownLatch(1);
 
-		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+		SynchronizedThreadManager.getInstance().spin(new Runnable() {
 			@Override
 			public void run() {
 				if(DEBUG)

@@ -18,7 +18,7 @@ import org.ros.node.service.ServiceResponseListener;
 import org.ros.internal.loader.CommandLineLoader;
 
 import com.neocoretechs.robocore.RosArrayUtilities;
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
@@ -67,9 +67,9 @@ public void onStart(final ConnectedNode connectedNode) {
 	switch(command) {
 		case "gpio":
 			// spinup reader that will place PWM commands on queue
-			SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"pubdataGPIO"});
+			SynchronizedThreadManager.getInstance().init(new String[] {"pubdataGPIO"});
 			fileReader<Integer> reader = new fileReader<Integer>(pubdataGPIO,"/home/pi/gpio", Integer.class);
-			SynchronizedFixedThreadPoolManager.spin(reader, "pubdataGPIO");
+			SynchronizedThreadManager.getInstance().spin(reader, "pubdataGPIO");
 			break;
 		case "direct":
 			if( remaps.containsKey("__pin") ) {

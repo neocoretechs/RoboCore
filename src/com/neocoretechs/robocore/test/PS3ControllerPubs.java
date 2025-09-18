@@ -24,7 +24,7 @@ import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 import org.ros.internal.loader.CommandLineLoader;
 
@@ -365,8 +365,8 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2) {
 	}
 	if(!foundController)
 		throw new RuntimeException("USB Joystick not found");
-	SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {ca[i].getName()});
-	SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+	SynchronizedThreadManager.getInstance().init(new String[] {ca[i].getName()});
+	SynchronizedThreadManager.getInstance().spin(new Runnable() {
 		public void run(){
 			try {
 				while(true){

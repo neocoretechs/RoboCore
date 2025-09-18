@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 /**
  * Class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
@@ -67,7 +67,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	}
 	@Override	    
 	public void connect(boolean writeable) throws IOException {
-		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
+		SynchronizedThreadManager.getInstance().init(new String[] {"IMU"+portName});
 		serialPort = SerialPort.getCommPort(portName);
 		serialPort.setBaudRate(baud);
 		serialPort.setNumDataBits(datab);
@@ -89,7 +89,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		}   
 		//(new Thread(new SerialReader(inStream))).start();
 		SerialReader readThread = new SerialReader(inStream);
-		SynchronizedFixedThreadPoolManager.spin(readThread, "SYSTEM"+portName);
+		SynchronizedThreadManager.getInstance().spin(readThread, "SYSTEM"+portName);
 		while(!readThread.isRunning)
 			try {
 				Thread.sleep(1);
@@ -102,7 +102,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 			}
 			//(new Thread(new SerialWriter(outStream))).start();
 			SerialWriter writeThread = new SerialWriter(outStream);
-			SynchronizedFixedThreadPoolManager.spin(writeThread, "SYSTEM"+portName);
+			SynchronizedThreadManager.getInstance().spin(writeThread, "SYSTEM"+portName);
 			while(!writeThread.isRunning)
 				try {
 					Thread.sleep(1);

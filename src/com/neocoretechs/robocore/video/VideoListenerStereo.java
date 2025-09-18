@@ -53,7 +53,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -97,7 +97,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
 	static {
-		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"VIDEOLISTENERSTEREO"} );
+		SynchronizedThreadManager.getInstance().init(new String[] {"VIDEOLISTENERSTEREO"} );
 	}
 	static final byte[] DHTFULL = {(byte)0xFF, (byte)0xC4, (byte)0x01, (byte)0xA2, (byte)0x00, 
 		(byte)0x00, (byte)0x01, (byte)0x05, (byte)0x01, (byte)0x01, (byte)0x01, 
@@ -220,7 +220,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 			        latch.countDown();
 			    }
 			});
-			SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+			SynchronizedThreadManager.getInstance().spin(new Runnable() {
 				@Override
 				public void run() {
 					try {
@@ -262,7 +262,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 			if( mode.equals("display_server") ) {
 				if( DEBUG )
 					System.out.println("Pumping frames as MJPEG via HTTP on 127.0.0.1:"+port);
-				SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+				SynchronizedThreadManager.getInstance().spin(new Runnable() {
 					@Override
 					public void run() {
 				        while(true) {
@@ -273,7 +273,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 				        			Socket client_socket = ssocket.accept();
 				        			if( DEBUG )
 				        				System.out.println("Connection established from "+client_socket);
-				        			SynchronizedFixedThreadPoolManager.spin(new StandardImageConnection(client_socket), "VIDEOLISTENERSTEREO");
+				        			SynchronizedThreadManager.getInstance().spin(new StandardImageConnection(client_socket), "VIDEOLISTENERSTEREO");
 				        		}
 				        	} catch (Exception e) {
 				        		System.err.println("Exception occurred: " + e);

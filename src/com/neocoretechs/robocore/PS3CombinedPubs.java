@@ -1013,8 +1013,8 @@ public void ControllerReader(ConcurrentHashMap<Identifier, Float> pubdata2, Conc
 
 	if( !shouldRun )
 		System.out.println("NO CONTROLLER MATCHING "+cotype+" FOUND, CONTROL THREAD WILL EXIT.");
-	SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"PS3CombinedPubs"});
-	SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+	SynchronizedThreadManager.getInstance().init(new String[] {"PS3CombinedPubs"});
+	SynchronizedThreadManager.getInstance().spin(new Runnable() {
 		public void run(){
 			try {
 				while(shouldRun){

@@ -28,7 +28,7 @@ import com.neocoretechs.rknn4j.image.detect_result.Rectangle;
 import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
 
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 import com.neocoretechs.rocksack.Alias;
@@ -118,7 +118,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	static String threadGroup = "VIDEOCLIENT";
 	static {
-		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {threadGroup});
+		SynchronizedThreadManager.getInstance().init(new String[] {threadGroup});
 	}
 	
 	final class TimedImage implements Comparable {

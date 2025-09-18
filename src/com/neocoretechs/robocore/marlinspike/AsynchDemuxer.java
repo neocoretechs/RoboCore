@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
@@ -247,7 +247,7 @@ public class AsynchDemuxer implements Runnable {
 	 */
 	private synchronized void init() {
 		// initialize the fixed thread pool manager
-		SynchronizedFixedThreadPoolManager.init(3, Integer.MAX_VALUE, new String[]{dataPort.getPortName()});
+		SynchronizedThreadManager.getInstance().init(new String[]{dataPort.getPortName()});
 			//
 			// G4
 			//
@@ -706,7 +706,7 @@ public class AsynchDemuxer implements Runnable {
 			//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMPINSETTING.val());
 			topics.put(topicNames.PWMPINSETTING.val(), new pwmpinsetting(this).getTopicList());
 		// spin the main loop to read lines from the Marlinspike and muxx them
-		SynchronizedFixedThreadPoolManager.spin(this, dataPort.getPortName());
+		SynchronizedThreadManager.getInstance().spin(this, dataPort.getPortName());
 
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init END OF INITIALIZATION of Marlinspike topic listeners");

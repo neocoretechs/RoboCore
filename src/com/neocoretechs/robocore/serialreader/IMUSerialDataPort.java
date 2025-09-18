@@ -2,7 +2,7 @@ package com.neocoretechs.robocore.serialreader;
 
 import com.fazecast.jSerialComm.SerialPort;
 
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -217,7 +217,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public boolean isEOT() { return EOT; }
 
 	public void connect(boolean writeable) throws IOException {
-        SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"IMU"+portName});
+        SynchronizedThreadManager.getInstance().init(new String[] {"IMU"+portName});
 		getSerialPort();
 		SerialPort.allowPortOpenForEnumeration();
 		SerialPort.autoCleanupAtShutdown();
@@ -262,7 +262,7 @@ public class IMUSerialDataPort implements DataPortInterface {
         }
         
         SerialReader readThread = new SerialReader(inStream);
-        SynchronizedFixedThreadPoolManager.spin(readThread, "IMU"+portName);
+        SynchronizedThreadManager.getInstance().spin(readThread, "IMU"+portName);
         while(!readThread.isRunning)
 			try {
 				Thread.sleep(1);
@@ -275,7 +275,7 @@ public class IMUSerialDataPort implements DataPortInterface {
             }
             //(new Thread(new SerialWriter(outStream))).start();
             SerialWriter writeThread = new SerialWriter(outStream);
-            SynchronizedFixedThreadPoolManager.spin(writeThread, "IMU"+portName);
+            SynchronizedThreadManager.getInstance().spin(writeThread, "IMU"+portName);
             while(!writeThread.isRunning)
 				try {
 					Thread.sleep(1);

@@ -36,7 +36,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -96,8 +96,8 @@ public class VideoListener extends AbstractNodeMain
 			        displayPanel.paintPanel();
 			    }
 			});
-			SynchronizedFixedThreadPoolManager.init(1, Integer.MAX_VALUE, new String[] {"VIDEOLISTENER"});
-			SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+			SynchronizedThreadManager.getInstance().init(new String[] {"VIDEOLISTENER"});
+			SynchronizedThreadManager.getInstance().spin(new Runnable() {
 				@Override
 				public void run() {
 			        while(true) {
@@ -128,11 +128,11 @@ public class VideoListener extends AbstractNodeMain
 			}, "VIDEOLISTENER");
 		} else {
 			// Spin up a server to server multipart image types
-			SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"VIDEOLISTENER"});
+			SynchronizedThreadManager.getInstance().init(new String[] {"VIDEOLISTENER"});
 			if( mode.equals("display_server") ) {
 				if( DEBUG )
 					System.out.println("Pumping frames as MJPEG via HTTP on 127.0.0.1:"+port);
-				SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+				SynchronizedThreadManager.getInstance().spin(new Runnable() {
 					@Override
 					public void run() {
 				        while(true) {
@@ -143,7 +143,7 @@ public class VideoListener extends AbstractNodeMain
 				        			Socket client_socket = ssocket.accept();
 				        			if( DEBUG )
 				        				System.out.println("Connection established from "+client_socket);
-				        			SynchronizedFixedThreadPoolManager.spin(new StandardImageConnection(client_socket), "VIDEOLISTENER");
+				        			SynchronizedThreadManager.getInstance().spin(new StandardImageConnection(client_socket), "VIDEOLISTENER");
 				        		}
 				        	} catch (Exception e) {
 				        		System.err.println("Exception occurred: " + e);

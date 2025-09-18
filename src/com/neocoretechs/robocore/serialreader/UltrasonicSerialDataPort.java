@@ -7,7 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 /**
  * Uses the serial UART mode of the URM037 serial ultrasonic sensor.
@@ -49,7 +49,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 	private static Object mutex = new Object();
 
 	static {
-		SynchronizedFixedThreadPoolManager.init(2, Integer.MAX_VALUE, new String[] {"URM37"+portName});
+		SynchronizedThreadManager.getInstance().init(new String[] {"URM37"+portName});
 	}
 
 	// URM37 request distance every 25 ms max
@@ -156,7 +156,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 
 		//(new Thread(new SerialReader(inStream))).start();
 		SerialReader readThread = new SerialReader(inStream);
-		SynchronizedFixedThreadPoolManager.spin(readThread, "URM37"+portName);
+		SynchronizedThreadManager.getInstance().spin(readThread, "URM37"+portName);
 		while(!readThread.isRunning)
 			try {
 				Thread.sleep(1);
@@ -170,7 +170,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 			}
 			//(new Thread(new SerialWriter(outStream))).start();
 			SerialWriter writeThread = new SerialWriter(outStream);
-			SynchronizedFixedThreadPoolManager.spin(writeThread, "URM37"+portName);
+			SynchronizedThreadManager.getInstance().spin(writeThread, "URM37"+portName);
 			while(!writeThread.isRunning)
 				try {
 					Thread.sleep(1);

@@ -1,0 +1,1 @@
+rosrun com.neocoretechs.robocore.test.ChatTester VOLVATRON COREPLEX

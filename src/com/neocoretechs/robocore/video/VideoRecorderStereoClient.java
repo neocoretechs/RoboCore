@@ -25,7 +25,7 @@ import com.neocoretechs.relatrix.Result;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
 import com.neocoretechs.relatrix.key.NoIndex;
-import com.neocoretechs.robocore.SynchronizedFixedThreadPoolManager;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 /**
@@ -73,7 +73,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	CannyEdgeDetector detector;
 	BufferedImage imagel, imager;
 	static {
-		SynchronizedFixedThreadPoolManager.init(5, Integer.MAX_VALUE, new String[] {"VIDEORECORDERCLIENT"});
+		SynchronizedThreadManager.getInstance().init(new String[] {"VIDEORECORDERCLIENT"});
 	}
 	
 	@Override
@@ -140,7 +140,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	*/
 		//latch = new CountDownLatch(1);
 		
-		SynchronizedFixedThreadPoolManager.spin(new Runnable() {
+		SynchronizedThreadManager.getInstance().spin(new Runnable() {
 			@Override
 			public void run() {
 				if(DEBUG)
