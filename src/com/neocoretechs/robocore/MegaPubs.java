@@ -59,47 +59,61 @@ import com.neocoretechs.robocore.services.PWMControlMessageResponse;
 import diagnostic_msgs.DiagnosticStatus;
 
 /**
- * Functions:<br/>
+ * Functions:<br>
  * Process data acquired from the Real-time telemetry from the Marlinspike realtime subsystem.
  * Respond to messages from bus as subscriber to device name in configuration and process via realtime subsystem.
- * <p/>
+ * <p>
  * Messages can relate to Motor control, controller status, ultrasonic sensor, voltage reading, etc, acquired from the attached UART/USB of an aux 
- * board such as Mega2560 via RS-232 or from the SBC running the Ros node using the GPIO header and Pi4j, or from the USB
+ * board such as Mega2560 via RS-232 or from the SBC running the Ros node using the GPIO header and libgpiod, or from the USB
  * port of the SBC talking to a smart controller.
- * <p/> 
- * Serial communications are centralized in the {@link ByteSerialDataPort} class.<p/>
+ * <p> 
+ * Serial communications are centralized in the {@link com.neocoretechs.robocore.serialreader.DataPortInterface} and {@link com.neocoretechs.robocore.serialreader.DataPortCommandInterface} interface class implementors.<p>
  * 
  * As input from realtime subsystem is received, the {@link AsynchDemuxer} decodes the header and prepares the data for publication
- * to the Ros bus. It may also publish various warnings over the 'robocore/status' topic.<p/>
- * The {@link NodeDeviceDemuxer} class encapsulates the device as enumerated in the configuration, the demuxer for the device and node information.<p/>
+ * to the Ros bus. It may also publish various warnings over the 'robocore/status' topic. It will also send motor controller and other configuration information
+ * over the robocore/status topic.<p>
+ * <h3>NodeDeviceDemuxer</h3>
+ * The {@link NodeDeviceDemuxer} class encapsulates the device as enumerated in the configuration, the demuxer for the device and node information.<p>
+ * Iterate the list of device demuxxers we put together in configureMarlinspikeManager method below. The MarlinSpikeManager is
+ * constructed with the static instance of (@link Robot}, then the configureMarlinSpike method is called.
+ * We can then iterate the {@link DeviceEntry} from MarlinSpikeManager.getDevices().
+ * for each NodeDeviceDemuxer in DeviceEntry, create a subscriber on the channel [demuxer device name] of type Int32MultiArray.
+ * The topic name is formed from the name entry in the properties file, which should be unique across the bus.
+ * Add a message listener for each subscriber device key. When a new message comes in
+ * extract the device name from the map based on the subscriber instance associated with the incoming message.
+ * Based on the device name, get the MarlinspikeControlInterface from the MarlinspikeManager.
+ * We can then set the power level etc on the device from the data in the message. When a new message comes in it gets
+ * the device name based on the subscriber hash map. It then gets the {@link MarlinspikeControlInterface} based on device name. The
+ * message has an array if integers as payload. The setDeviceLevel method is called on the control with device name and value for each array value.
+ * <p>
  * <h3>AsynchDemuxer:</h3>
- * The demuxer processes formatted responses from the realtime subsystem in response to various directives.<p/>
- * The messages are organized by topics identifgied by a header delimited by chevrons and containing the message topic identifier.<p/>
+ * The demuxer processes formatted responses from the realtime subsystem in response to various directives.<p>
+ * The messages are organized by topics identified by a header delimited by chevrons and containing the message topic identifier.<p>
  * Each line after the header has a parameter number and value. For instance, for an analog pin input or an ultrasonic reading
  * we have '1 pin', '2 reading' with pin and reading being the numeric values for the distance or pin reading value.
- * The end of the message is delimited with '</topic>' with topic being the matching header element.<p/>
+ * The end of the message is delimited with '</topic>' with topic being the matching header element.<p>
  * 
  * The realtime subsystem is activated by being issued a series of M and G codes similar to 3D printer and CNC standard codes.<br/>
- * Examples:<br/>
- * <code> G5 Z<slot> C<channel> P<power> </code>- Issue move command to controller in slot Z<slot> on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
+ * Examples:<br>
+ * <code> G5 Z[slot] C[channel] P[power] </code>- Issue move command to controller in slot Z<slot> on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
  * H Bridge Driver:
  * <code><br/>
- * M45 P<pin> S<0-255> - start PWM on pin P with value S, many optional arguments for timer setup<br/>
- * M41 P<pin> - Set digital pin P high forward <br/>
- * M42 P<pin> - Set digital pin P low reverse <br/>
+ * M45 P[pin] S[0-255] - start PWM on pin P with value S, many optional arguments for timer setup<br>
+ * M41 P[pin] - Set digital pin P high forward <br>
+ * M42 P[pin] - Set digital pin P low reverse <br>
  * </code>
- * Certain command line remappings are used to affect behavior as follows:<br/>
- * determine debugging directives __debug:=publisher,demuxer,marlinspike any of these 3 arguments are optional to turn on debugging<br/>
- * __pwm:=controller<br/>
+ * Certain command line remappings are used to affect behavior as follows:<br>
+ * determine debugging directives __debug:=publisher,demuxer,marlinspike any of these 3 arguments are optional to turn on debugging<br>
+ * __pwm:=controller<br>
  * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
- * initialized with a previous M-code<p/>
+ * initialized with a previous M-code<p>
  * __pwm:=direct<br/>
  * Indicates that PWM directives sent as a service are to be directly applied as a set of values working
- * on a PWM pin<p/>
- * GPIO service invocation always works directly on a pin.<p/>  
- * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
+ * on a PWM pin<p>
+ * GPIO service invocation always works directly on a pin.<p>  
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2025
  */
 public class MegaPubs extends AbstractNodeMain  {
 	private static boolean DEBUG = false;
@@ -255,7 +269,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
 	final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 	//
-	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager.
+	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager method below.
 	// for each NodeDeviceDemuxer, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
 	//
 	for(DeviceEntry ndd : marlinspikeManager.getDevices()) {

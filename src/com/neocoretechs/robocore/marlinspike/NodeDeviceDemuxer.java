@@ -4,11 +4,10 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
-import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 /**
+ * Provides the scaffolding for a LUN, or Logical Unit in the configuration file.<p>
+ * Encapsulates the nodeName, deviceName, device, {@link AsynchDemuxer} and {@link MarlinspikeControlInterface}
  * deviceName is a descriptor for the device, such as "LeftWheel" etc. Name from properties file.<p/>
  * The device itself is a process or tty port that the Marlinspike board is attached to. Controller from properties file.<p/> 
  * These demuxers are unique to each device and as such the hash and equals methods are keyed to device field.<p/>

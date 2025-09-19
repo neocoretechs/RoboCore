@@ -36,7 +36,7 @@ import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
  */
 public class IMUPubs extends AbstractNodeMain  {
 	private static boolean DEBUG = false;
-	private static final boolean SAMPLERATE = true; // display pubs per second
+	private static final boolean SAMPLERATE = false; // display pubs per second
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
