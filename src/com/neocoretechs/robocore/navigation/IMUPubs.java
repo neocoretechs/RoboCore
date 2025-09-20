@@ -67,6 +67,15 @@ public class IMUPubs extends AbstractNodeMain  {
 
 	IMUSerialDataPort imuPort;
 	
+	static final String REMAP_PORT = "__port";
+	static final String REMAP_DEBUG = "__debug";
+	static final String REMAP_MODE = "__mode";
+	static final String REMAP_SYSTEM_CAL = "__system_cal";
+	static final String REMAP_ACC_CAL = "__acc_cal";
+	static final String REMAP_GYRO_CAL = "__gyro_cal";
+	static final String REMAP_MAG_CAL = "__mag_cal";
+	static final String REMAP_IMU_TOL = "__imu_tol";
+	static final String REMAP_IMU_FREQ = "__imu_freq";
 	int SYSTEM_CAL = 3; // system calibration
 	int ACC_CAL = 3; // accel calibration
 	int GYRO_CAL = 3; // gyro calibration
@@ -79,6 +88,7 @@ public class IMUPubs extends AbstractNodeMain  {
 	boolean temp_changed = false;
 	boolean imu_changed = false;
 	boolean system_needs_calibrating = true; // if mode is calibration and its first time through
+	static final String REMAP_MODE_CALIBRATE="calibrate"; // REMAP_MODE value for calibration
 	boolean display_revision = true;
 	String ttyPort = "/dev/ttyS1";
 	
@@ -106,27 +116,27 @@ public void onStart(final ConnectedNode connectedNode) {
 	final std_msgs.Header header = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 	// check command line remappings for __mode:=calibrate
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-	if( remaps.containsKey("__debug") )
-		if(remaps.get("__debug").equals("true")) {
+	if( remaps.containsKey(REMAP_DEBUG) )
+		if(remaps.get(REMAP_DEBUG).equals("true")) {
 			DEBUG = true;
 			IMUSerialDataPort.DEBUG = true;
 		}
-	if( remaps.containsKey("__mode") )
-		mode = remaps.get("__mode");
-	if( remaps.containsKey("__system_cal") )
-		SYSTEM_CAL = Integer.parseInt(remaps.get("__system_cal"));// system calibration
-	if( remaps.containsKey("__acc_cal") )
-		ACC_CAL = Integer.parseInt(remaps.get("__acc_del")); // accel calibration
-	if( remaps.containsKey("__gyro_cal") )
-		GYRO_CAL = Integer.parseInt(remaps.get("__gyro_cal")); // gyro calibration
-	if( remaps.containsKey("__mag_cal") )
-		MAG_CAL = Integer.parseInt(remaps.get("__mag_cal"));// magnetometer calibration
-	if( remaps.containsKey("__imu_tol") )
-		IMU_TOL = Integer.parseInt(remaps.get("__imu_tol"));// number of decimal places of position readout
-	if( remaps.containsKey("__imu_freq") )
-		IMU_FREQ = Integer.parseInt(remaps.get("__imu_freq"));// number of milliseconds between maximum publication times (should data remain constant)
-	if( remaps.containsKey("__port") )
-		ttyPort = remaps.get("__port");// tty port
+	if( remaps.containsKey(REMAP_MODE) )
+		mode = remaps.get(REMAP_MODE);
+	if( remaps.containsKey(REMAP_SYSTEM_CAL) )
+		SYSTEM_CAL = Integer.parseInt(remaps.get(REMAP_SYSTEM_CAL));// system calibration
+	if( remaps.containsKey(REMAP_ACC_CAL) )
+		ACC_CAL = Integer.parseInt(remaps.get(REMAP_ACC_CAL)); // accel calibration
+	if( remaps.containsKey(REMAP_GYRO_CAL) )
+		GYRO_CAL = Integer.parseInt(remaps.get(REMAP_GYRO_CAL)); // gyro calibration
+	if( remaps.containsKey(REMAP_MAG_CAL) )
+		MAG_CAL = Integer.parseInt(remaps.get(REMAP_MAG_CAL));// magnetometer calibration
+	if( remaps.containsKey(REMAP_IMU_TOL) )
+		IMU_TOL = Integer.parseInt(remaps.get(REMAP_IMU_TOL));// number of decimal places of position readout
+	if( remaps.containsKey(REMAP_IMU_FREQ) )
+		IMU_FREQ = Integer.parseInt(remaps.get(REMAP_IMU_FREQ));// number of milliseconds between maximum publication times (should data remain constant)
+	if( remaps.containsKey(REMAP_PORT) )
+		ttyPort = remaps.get(REMAP_PORT);// tty port
 	
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 			connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -176,7 +186,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					}
 					Thread.sleep(1000);
 					*/
-			if( mode.equals("calibrate") && system_needs_calibrating) {
+			if( mode.equals(REMAP_MODE_CALIBRATE) && system_needs_calibrating) {
 				try {
 					system_needs_calibrating = false; // assume optimistic success
 					String calibString = "<<BEGIN IMU CALIBRATION KATAS!>>";
@@ -407,7 +417,7 @@ public void getIMU() throws IOException{
 	}
 }
 /**
- * Attemtp to limit publishing of real time data by only sending on deltas
+ * Attempt to limit publishing of real time data by only sending on deltas
  * @return true if any data has changed, then individual flags discern which data has changed and is to be published
  */
 private boolean hasDataChanged() {
