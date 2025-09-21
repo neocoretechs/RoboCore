@@ -37,6 +37,7 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 
+
 import sensor_msgs.Joy;
 import std_msgs.Int32MultiArray;
 
@@ -151,8 +152,42 @@ public class MotionController extends AbstractNodeMain {
 	//private String serveNode = null;
 	float rangetop, rangebot;
 	double pressure, temperature;
-	double[] mag = {0, 0, 0};
-	double[] eulers = {0, 0, 0};
+	static class EulerTime {
+		double eulers[] = new double[]{0.0,0.0,0.0}; // set from loop
+		long eulerTime = 0L;
+		public String toString() {
+			return String.format("Eulers: %d %d %d",eulers[0],eulers[1],eulers[2]);
+		}
+	}
+	EulerTime euler = new EulerTime();
+	
+	static class RangeTime {
+		float range;
+		long rangeTime = 0L;
+	}
+	RangeTime ranges = new RangeTime();
+	
+	static class MagTime {
+		geometry_msgs.Vector3 mag3;
+		long magTime = 0L;
+		public String toString() {
+			return String.format("Mag field: %d %d %d",mag3.getX(),mag3.getY(),mag3.getZ());
+		}
+	}
+	MagTime mags = new MagTime();
+	
+	static class AngularTime {
+		geometry_msgs.Vector3 angular; 
+		geometry_msgs.Vector3 linear; 
+		geometry_msgs.Quaternion orientation;
+		long angTime = 0L;
+		public String toString() {
+			return String.format("Nav:Orientation X:%d Y:%d Z:%d W:%d, Linear: %d %d %d, Angular: %d %d %d",orientation.getX(),orientation.getY(),orientation.getZ(),orientation.getW(),
+					linear.getX(), linear.getY(), linear.getZ(), angular.getX(), angular.getY(), angular.getZ());
+		}
+	}
+	AngularTime angs = new AngularTime();
+	
 	//TwistInfo twistInfo;
 	float last_theta;
 	
@@ -202,11 +237,6 @@ public class MotionController extends AbstractNodeMain {
 	private CircularBlockingDeque<Float> speedQueueL = new CircularBlockingDeque<Float>(5);
 	private CircularBlockingDeque<Float> speedQueueR = new CircularBlockingDeque<Float>(5);
 	private float maxSpeedSlope = 100;
-	
-	Object rngMutex1 = new Object();
-	Object rngMutex2 = new Object();
-	Object navMutex = new Object();
-	Object magMutex = new Object();
 	
 	static RobotInterface robot;
 	public String RPT_SERVICE = "robo_status";
@@ -339,7 +369,7 @@ public class MotionController extends AbstractNodeMain {
 			
 		Subscriber<sensor_msgs.Joy> substick = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
-		//Subscriber<sensor_msgs.Range> subsrangetop = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+		final Subscriber<std_msgs.String> subsrange = connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("/sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
 		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("/sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
@@ -403,54 +433,47 @@ public class MotionController extends AbstractNodeMain {
 			}
 			
 		});
-		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);
-		
+	
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
-			public void onNewMessage(sensor_msgs.Imu message) { 
-				synchronized(navMutex) {
-					orientation.setX(message.getOrientation().getX());
-					orientation.setY(message.getOrientation().getY());
-					orientation.setZ(message.getOrientation().getZ());
-					orientation.setW(message.getOrientation().getW());
-					eulers = message.getOrientationCovariance();
-					if(IMUDEBUG) {
-						System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
-						System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
-					}
-					try {
-					if( message.getAngularVelocity().getX() != angular.getX() ||
-						message.getAngularVelocity().getY() != angular.getY() ||
-						message.getAngularVelocity().getZ() != angular.getZ() ||
-						message.getLinearAcceleration().getX() != linear.getX() ||
-						message.getLinearAcceleration().getY() != linear.getY() ||
-						message.getLinearAcceleration().getZ() != linear.getZ()) {
-							angular.setX(message.getAngularVelocity().getX());
-							angular.setY(message.getAngularVelocity().getY());
-							angular.setZ(message.getAngularVelocity().getZ());
-							linear.setX(message.getLinearAcceleration().getX());
-							linear.setY(message.getLinearAcceleration().getY());
-							linear.setZ(message.getLinearAcceleration().getZ());
+			public void onNewMessage(sensor_msgs.Imu message) {
+				try {
+					synchronized(angs) {
+						if(angs.angular == null || message.getAngularVelocity().getX() != angs.angular.getX() ||
+								message.getAngularVelocity().getY() != angs.angular.getY() ||
+								message.getAngularVelocity().getZ() != angs.angular.getZ() ||
+								message.getLinearAcceleration().getX() != angs.linear.getX() ||
+								message.getLinearAcceleration().getY() != angs.linear.getY() ||
+								message.getLinearAcceleration().getZ() != angs.linear.getZ()) {
+							angs.angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+							angs.linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+							angs.orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);
+							angs.orientation.setX(message.getOrientation().getX());
+							angs.orientation.setY(message.getOrientation().getY());
+							angs.orientation.setZ(message.getOrientation().getZ());
+							angs.orientation.setW(message.getOrientation().getW());
+							euler.eulers = message.getOrientationCovariance();
+							euler.eulerTime = System.currentTimeMillis();
+							angs.angTime = System.currentTimeMillis();
+
+							if(IMUDEBUG) {
+								System.out.println("Nav:"+euler.toString()+" "+angs.toString());
+							}
 							isNav = true;
 							if( SHOCK_THRESHOLD[0] != -1 ) {
-								if( Math.abs(linear.getX()-SHOCK_BASELINE[0]) > SHOCK_THRESHOLD[0] ) {
+								if( Math.abs(angs.linear.getX()-SHOCK_BASELINE[0]) > SHOCK_THRESHOLD[0] ) {
 									isOverShock = true;
 								}
-								if( Math.abs(linear.getY()-SHOCK_BASELINE[1]) > SHOCK_THRESHOLD[1] ) {
+								if( Math.abs(angs.linear.getY()-SHOCK_BASELINE[1]) > SHOCK_THRESHOLD[1] ) {
 									isOverShock = true;
 								}
-								if( Math.abs(linear.getZ()-SHOCK_BASELINE[2]) > SHOCK_THRESHOLD[2] ) {
+								if( Math.abs(angs.linear.getZ()-SHOCK_BASELINE[2]) > SHOCK_THRESHOLD[2] ) {
 									isOverShock = true;
 								}
 							}
-							if(IMUDEBUG) {
-								System.out.printf("Nav:Angular X:%f | Angular Y:%f | Angular Z:%f",angular.getX(),angular.getY(),angular.getZ());
-								System.out.printf("Nav:Linear X:%f | Linear Y:%f | Linear Z:%f",linear.getX(),linear.getY(),linear.getZ());
-							}
-					} else
-						isNav = false;
+						} else
+							isNav = false;
+					}
 				} catch (Throwable e) {
 					isNav = false;
 					//System.out.println("Nav subs exception:"+e.getMessage());
@@ -459,22 +482,17 @@ public class MotionController extends AbstractNodeMain {
 					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU",
 							diagnostic_msgs.DiagnosticStatus.ERROR, st);
 				}
-				}
 			}
-
 		},5); // buffer 5 messages
-		
 
-		/*
-		subsrangetop.addMessageListener(new MessageListener<sensor_msgs.Range>() {
-		@Override
-		public void onNewMessage(sensor_msgs.Range message) {
-			if( DEBUG )
-				System.out.println("New range msg:"+message);
-			synchronized(rngMutex1) {
+		subsrange.addMessageListener(new MessageListener<std_msgs.String>() {
+			@Override
+			public void onNewMessage(std_msgs.String message) {
+				if( DEBUG )
+					System.out.println("New range msg:"+message);
 				try {
-					if( message.getRange() != rangetop) {
-						rangetop = message.getRange();
+					if( Float.parseFloat(message.getData()) != rangetop) {
+						rangetop = Float.parseFloat(message.getData());
 						isRangeUpperFront = true;
 						System.out.println(" Range Top:"+rangetop);
 					} else
@@ -485,9 +503,8 @@ public class MotionController extends AbstractNodeMain {
 					e.printStackTrace();
 				}
 			}
-		}
 		});
-
+		/*
 		subsrangebot.addMessageListener(new MessageListener<sensor_msgs.Range>() {
 		@Override
 		public void onNewMessage(sensor_msgs.Range message) {
@@ -515,26 +532,30 @@ public class MotionController extends AbstractNodeMain {
 			public void onNewMessage(sensor_msgs.MagneticField message) {
 				if( IMUDEBUG )
 					System.out.println("New mag msg:"+message);
-				geometry_msgs.Vector3 mag3 = message.getMagneticField();
-				synchronized(magMutex) {
-				if( mag3.getX() != mag[0] || mag3.getY() != mag[1] || mag3.getZ() != mag[2]) {
-					mag[0] = mag3.getX();
-					mag[1] = mag3.getY();
-					mag[2] = mag3.getZ();
-					isMag = true;
-					if(IMUDEBUG)
-					System.out.println("Magnetic field:"+mag[0]+" "+mag[1]+" "+mag[2]);
-					if( MAG_THRESHOLD[0] != -1 ) {
-						if( mag[0] > MAG_THRESHOLD[0] && mag[1] > MAG_THRESHOLD[1] && mag[2] > MAG_THRESHOLD[2] ) {
-							isOverMag = true;
+				synchronized(mags) {
+					if(mags.mag3 == null)
+						mags.mag3 = message.getMagneticField();
+					if( mags.mag3.getX() != message.getMagneticField().getX() || 
+						mags.mag3.getY() != message.getMagneticField().getY() || 
+						mags.mag3.getZ() != message.getMagneticField().getZ()) {
+						mags.mag3.setX(message.getMagneticField().getX()); 
+						mags.mag3.setY(message.getMagneticField().getY());
+						mags.mag3.setZ(message.getMagneticField().getZ());
+						mags.magTime = System.currentTimeMillis();
+						isMag = true;
+						if(IMUDEBUG)
+							System.out.println(mags);
+						if( MAG_THRESHOLD[0] != -1 ) {
+							if( mags.mag3.getX() > MAG_THRESHOLD[0] && mags.mag3.getY() > MAG_THRESHOLD[1] && mags.mag3.getZ() > MAG_THRESHOLD[2] ) {
+								isOverMag = true;
+							}
 						}
-					}
-				} else
-					isMag = false;
+					} else
+						isMag = false;
 				}
 			}
 		});
-		
+
 		substemp.addMessageListener(new MessageListener<sensor_msgs.Temperature>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Temperature message) {
@@ -585,24 +606,6 @@ public class MotionController extends AbstractNodeMain {
 					//System.out.println("Robot should have Moved to "+(robotTheta *= 57.2957795)+" degrees"); // to degrees		
 				 */
 				
-				synchronized(rngMutex1) {
-					if(isRangeUpperFront) {
-						isRangeUpperFront = false;
-					}
-				}
-				synchronized(rngMutex2) {
-					if(isRangeLowerFront) {
-						isRangeLowerFront = false;
-					}
-				}
-	
-				synchronized(navMutex) {
-					if(isNav) {
-						isNav = false;
-						//System.out.println("Shock:"+accs[0]+" "+accs[1]+" "+accs[2]);
-					}
-				}
-				
 				// publish messages to status listener if applicable
 				
 				if( isOverMag ) {
@@ -610,9 +613,11 @@ public class MotionController extends AbstractNodeMain {
 					if(DEBUG)
 						System.out.println("Mag EXCEEDS threshold..");
 					ArrayList<String> magVals = new ArrayList<String>(3);
-					magVals.add(String.valueOf(mag[0]));
-					magVals.add(String.valueOf(mag[1]));
-					magVals.add(String.valueOf(mag[2]));
+					synchronized(mags) {
+					magVals.add(String.valueOf(mags.mag3.getX()));
+					magVals.add(String.valueOf(mags.mag3.getY()));
+					magVals.add(String.valueOf(mags.mag3.getZ()));
+					}
 					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Magnetic anomaly detected", 
 							diagnostic_msgs.DiagnosticStatus.WARN, magVals);
 				}
@@ -621,8 +626,9 @@ public class MotionController extends AbstractNodeMain {
 					if(DEBUG)
 						System.out.println("OVERSHOCK!");
 					ArrayList<String> shockVals = new ArrayList<String>(2);
-					shockVals.add(String.valueOf(angular));
-					shockVals.add(String.valueOf(linear));
+					synchronized(angs) {
+						shockVals.add(angs.toString());
+					}
 					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Accelerometer shock warning", 
 							diagnostic_msgs.DiagnosticStatus.WARN, shockVals);
 				}
@@ -941,7 +947,10 @@ public class MotionController extends AbstractNodeMain {
 			stickDegrees -= 360.0;
 
 		// we have absolute stickdegrees, offset the current IMU by that quantity to get new desired course
-		float offsetDegrees = (float) (eulers[0] - stickDegrees);
+		float offsetDegrees;
+		synchronized(euler) {
+			offsetDegrees = (float) (euler.eulers[0] - stickDegrees);
+		}
 	    // reduce the angle  
 	    offsetDegrees =  offsetDegrees % 360;
 	    //
@@ -968,12 +977,14 @@ public class MotionController extends AbstractNodeMain {
 				holdBearing = true;
 				outputNeg = false;
 				// Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
-				robot.getIMUSetpointInfo().setDesiredTarget((float) eulers[0]);
+				synchronized(euler) {
+					robot.getIMUSetpointInfo().setDesiredTarget((float) euler.eulers[0]);
+				}
 				robot.getIMUSetpointInfo().setTarget((float)0);
 				robot.getMotionPIDController().clearPID();
 				wasPid = true; // start with PID control until we get out of tolerance
 				if(DEBUG);
-					System.out.println("Stick absolute deg set:"+eulers[0]);	
+					System.out.println("Stick absolute deg set:"+robot.getIMUSetpointInfo());	
 			}
 	    } else {
 	    	holdBearing = false;
@@ -983,7 +994,9 @@ public class MotionController extends AbstractNodeMain {
 	    }
 	    
 	    // eulers[0] is Input: target yaw angle from IMU. If IMU is delivering a 0, then our delta below will just be desiredTarget.
-		robot.getIMUSetpointInfo().setTarget((float) eulers[0]); 
+	    synchronized(euler) {
+	    	robot.getIMUSetpointInfo().setTarget((float) euler.eulers[0]); 
+	    }
 		//
 		// perform the PID processing
 		// IMUSetpointInfo looks like this:
@@ -1035,7 +1048,9 @@ public class MotionController extends AbstractNodeMain {
 		if( holdBearing ) {
 			if(DEBUG || DEBUGBEARING) {
 				System.out.printf("HOLDING BEARING %s\n",robot.getMotionPIDController().toString());
-				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR);
+				synchronized(euler) {
+				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.eulers[0],arcin,arcout,speedL,speedR);
+				}
 			}
 			followIMUSetpoint(radius, arcin, arcout);
 		} else {
@@ -1056,7 +1071,9 @@ public class MotionController extends AbstractNodeMain {
 			speedR = slope(speedR, speedQueueR);
 			if(DEBUG || DEBUGBEARING) {
 				System.out.printf("MANUAL BEARING %s\n",robot.getMotionPIDController().toString());
-				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,eulers[0],arcin,arcout,speedL,speedR);
+				synchronized(euler) {
+					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.eulers[0],arcin,arcout,speedL,speedR);
+				}
 			}
 		}
 
@@ -1331,7 +1348,9 @@ public class MotionController extends AbstractNodeMain {
 				}
 			}
 			if(DEBUG || DEBUGBEARING)
-				System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],speedL,speedR,holdBearing);
+				synchronized(euler) {
+					System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,euler.eulers[0],speedL,speedR,holdBearing);
+				}
 		} else {
 			// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
 			robot.getMotionPIDController().setITerm(0);//ITerm = 0;
@@ -1345,7 +1364,9 @@ public class MotionController extends AbstractNodeMain {
 				if( robot.getMotionPIDController().getError() > 0.0f )
 					speedR *= (arcin/arcout);
 			if(DEBUG || DEBUGBEARING)
-				System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+				synchronized(euler) {
+					System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,euler.eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+				}
 		}
 	}
 	
