@@ -16,8 +16,8 @@ import org.openkinect.DepthFormat;
 import org.openkinect.Device;
 import org.openkinect.Image;
 import org.openkinect.LEDStatus;
+import org.ros.internal.node.server.SynchronizedThreadManager;
 
-import org.ros.internal.node.server.ThreadPoolManager;
 /**
  * Start a thread which populates a blocking queue with successive kinect depth buffers
  * of ShortBuffer type. The intent is to decouple ROS publishing loop from kinect processing pipeline which seem
@@ -36,8 +36,8 @@ public class KinectReader implements Runnable{
 	public static ArrayBlockingQueue<ShortBuffer> depths = new ArrayBlockingQueue<ShortBuffer>(1024);
 	
 	public KinectReader() {
-		ThreadPoolManager.init(new String[]{"kinect"}, true);
-		ThreadPoolManager.getInstance().spin(this, "kinect");
+		SynchronizedThreadManager.getInstance().init(new String[]{"kinect"}, true);
+		SynchronizedThreadManager.getInstance().spin(this, "kinect");
 	}
 	/*
 	private void setup() {

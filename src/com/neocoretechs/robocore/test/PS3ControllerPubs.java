@@ -89,7 +89,6 @@ public class PS3ControllerPubs extends AbstractNodeMain  {
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	//fileReader reader = new fileReader();
-	//ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	
 	final Publisher<std_msgs.Int32MultiArray> velpub =

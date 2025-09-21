@@ -151,7 +151,6 @@ public class PS3CombinedPubs extends AbstractNodeMain  {
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	//fileReader reader = new fileReader();
-	//ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	
 	final Publisher<sensor_msgs.Joy> velpub =

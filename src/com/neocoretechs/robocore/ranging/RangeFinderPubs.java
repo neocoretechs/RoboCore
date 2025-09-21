@@ -10,10 +10,9 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 
-import org.ros.internal.node.server.ThreadPoolManager;
-
 import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 import com.neocoretechs.robocore.GpioNative;
+import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 /**
  * Use the jSerialComm or libgpio GPIO libraries to drive an ultrasonic range finder attached to 
@@ -61,7 +60,7 @@ public class RangeFinderPubs extends AbstractNodeMain {
 
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-		ThreadPoolManager.init(new String[] {"SYSTEM"}, true);
+		SynchronizedThreadManager.getInstance().init(new String[] {"SYSTEM"}, true);
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		Runnable readThread = null;
 		if( remaps.containsKey("__port") ) {
@@ -71,7 +70,7 @@ public class RangeFinderPubs extends AbstractNodeMain {
 			readThread = new UltraPing();
 		}
 
-		ThreadPoolManager.getInstance().spin(readThread, "SYSTEM");
+		SynchronizedThreadManager.getInstance().spin(readThread, "SYSTEM");
 		// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
 		awaitStart.countDown();
 		// This CancellableLoop will be canceled automatically when the node shuts

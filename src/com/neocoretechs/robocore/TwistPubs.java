@@ -77,7 +77,6 @@ public class TwistPubs extends AbstractNodeMain  {
 public void onStart(final ConnectedNode connectedNode) {
 	final AsynchDemuxer asynchDemuxer;
 	//fileReader reader = new fileReader();
-	//ThreadPoolManager.getInstance().spin(reader, "SYSTEM");
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 	
 	final Publisher<geometry_msgs.Twist> twistpub =

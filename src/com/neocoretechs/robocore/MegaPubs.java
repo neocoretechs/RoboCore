@@ -514,13 +514,11 @@ public void onStart(final ConnectedNode connectedNode) {
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
 			sensor_msgs.Range rangemsg = null;	
 			
-			//ThreadPoolManager.init(stopics);
 			// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike
 		
 			for(int i = 0; i < stopics.length; i++) {
 				responses[i].publish();
 			}
-			//ThreadPoolManager.getInstance().spin(ultrasonic, "SYSTEM");
 			//
 			// Poll the outgoing message array for diagnostics enqueued by the above processing
 			//
