@@ -37,6 +37,7 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 
+import org.json.JSONObject;
 
 import sensor_msgs.Joy;
 import std_msgs.Int32MultiArray;
@@ -160,13 +161,13 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}
 	EulerTime euler = new EulerTime();
-	
+
 	static class RangeTime {
 		float range;
 		long rangeTime = 0L;
 	}
 	RangeTime ranges = new RangeTime();
-	
+
 	static class MagTime {
 		geometry_msgs.Vector3 mag3;
 		long magTime = 0L;
@@ -175,7 +176,7 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}
 	MagTime mags = new MagTime();
-	
+
 	static class AngularTime {
 		geometry_msgs.Vector3 angular; 
 		geometry_msgs.Vector3 linear; 
@@ -187,14 +188,14 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}
 	AngularTime angs = new AngularTime();
-	
+
 	//TwistInfo twistInfo;
 	float last_theta;
-	
+
 	static final float TWOPI = (float) (Math.PI * 2.0f);
 	public static boolean isShock = false;
 	public static boolean isOverShock = false;
-	
+
 	// deltas. 971, 136, 36 relatively normal values. seismic: last value swings from rangeTop -40 to 140
 	public static float[] SHOCK_BASELINE = { 971.0f, 136.0f, 36.0f};
 
@@ -220,7 +221,7 @@ public class MotionController extends AbstractNodeMain {
 	// and the arc describing the outer wheel has a radius equivalent to the wheelbase and the 
 	// outer wheel turns at the robot wheelbase through 90 degrees.
 	public static float WHEELBASE = 1000.0f;
-	
+
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
 	static boolean holdBearing = false; // hold steering to current bearing
@@ -237,7 +238,7 @@ public class MotionController extends AbstractNodeMain {
 	private CircularBlockingDeque<Float> speedQueueL = new CircularBlockingDeque<Float>(5);
 	private CircularBlockingDeque<Float> speedQueueR = new CircularBlockingDeque<Float>(5);
 	private float maxSpeedSlope = 100;
-	
+
 	static RobotInterface robot;
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
@@ -245,14 +246,14 @@ public class MotionController extends AbstractNodeMain {
 	Collection<DeviceEntry> deviceEntries;
 	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
 	boolean[] isActive;
-	
+
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
-	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
-	    nodeMainExecutor.execute(this, cl.build());
-	    if( DEBUG ) {
-	    	System.out.println("Bringing up MotionControl with args:"+args[0]+" "+args[1]+" "+args[2]);
-	    }
+		NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
+		nodeMainExecutor.execute(this, cl.build());
+		if( DEBUG ) {
+			System.out.println("Bringing up MotionControl with args:"+args[0]+" "+args[1]+" "+args[2]);
+		}
 	}
 	/**
 	 * The constructor will load but not activate the nodes listed in configuration when {@link MarlinspikeManager}.configureMarlinspike
@@ -270,12 +271,12 @@ public class MotionController extends AbstractNodeMain {
 		deviceEntries = marlinspikeManager.getDevices();
 		isActive = new boolean[deviceEntries.size()];
 	}
-	
+
 	@Override
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("pubsubs_motion");
 	}
-	
+
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 		//robot = new Robot();
@@ -308,65 +309,65 @@ public class MotionController extends AbstractNodeMain {
 			SPEEDSCALE = 1000.0f;
 		if( remaps.containsKey("__speedscale") )
 			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
-		
+
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-		
+
 		final HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel = new HashMap<String, Publisher<std_msgs.Int32MultiArray>>();
-		
+
 		for(DeviceEntry ndd : deviceEntries) {
 			//if(ndd.getNodeName().equals(serveNode)) {
-				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
-				pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
-					@Override
-					public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
-						throw new RuntimeException("Failed to register with master "+pub);					
+			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
+			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
+				@Override
+				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
+					throw new RuntimeException("Failed to register with master "+pub);					
+				}
+				@Override
+				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Successful Master Registration for %s%n", pub);
 					}
-					@Override
-					public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
-						if(DEBUG) {
-							System.out.printf("Successful Master Registration for %s%n", pub);
-						}
-						pubschannel.put(ndd.getName(), pub);
-						if(DEBUG)
-							System.out.println("Bringing up publisher "+ndd.getName());
+					pubschannel.put(ndd.getName(), pub);
+					if(DEBUG)
+						System.out.println("Bringing up publisher "+ndd.getName());
+				}
+				@Override
+				public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
 					}
-					@Override
-					public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
-						if(DEBUG) {
-							System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
-						}
+				}
+				@Override
+				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Successful Master Unregistration for %s%n", pub);
 					}
-					@Override
-					public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
-						if(DEBUG) {
-							System.out.printf("Successful Master Unregistration for %s%n", pub);
-						}
-						pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
+					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
+				}
+				@Override
+				public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
+					if(DEBUG) {
+						System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
+					}				
+				}
+				@Override
+				public void onShutdown(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Shutdown initiated for %s%n", pub);
 					}
-					@Override
-					public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
-						if(DEBUG) {
-							System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
-						}				
-					}
-					@Override
-					public void onShutdown(Publisher<Int32MultiArray> pub) {
-						if(DEBUG) {
-							System.out.printf("Shutdown initiated for %s%n", pub);
-						}
-						pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
-					}	
-				});
-				publishedLUNRestValue.put(ndd.getLUN(),false);
-			}
+					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
+				}	
+			});
+			publishedLUNRestValue.put(ndd.getLUN(),false);
+		}
 		//}	
-		
+
 		final Publisher<geometry_msgs.Twist> twistpub = 
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
-		
+
 		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
-			
+
 		Subscriber<sensor_msgs.Joy> substick = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		final Subscriber<std_msgs.String> subsrange = connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
@@ -383,13 +384,13 @@ public class MotionController extends AbstractNodeMain {
 				if( DEBUG )
 					System.out.println("Kinect.."+cloud.size()+" points..");
 				try {
-			
+
 				} catch (Throwable e) {
 					e.printStackTrace();
 				}	
 			}
 		});
-		*/
+		 */
 		if(DEBUG)
 			System.out.println("Robot:"+robot);
 		ArrayList<String> roboProps = new ArrayList<String>();
@@ -408,7 +409,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 			@Override
 			public void onMasterRegistrationSuccess(Subscriber<Joy> subs) {
-	
+
 			}
 			@Override
 			public void onMasterUnregistrationFailure(Subscriber<Joy> subs) {
@@ -431,9 +432,9 @@ public class MotionController extends AbstractNodeMain {
 				if(DEBUG)
 					System.out.printf("%s Subscsriber %s shutdown!%n", this.getClass().getName(), subs);
 			}
-			
+
 		});
-	
+
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
@@ -526,7 +527,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 		}
 		});
-		*/
+		 */
 		subsmag.addMessageListener(new MessageListener<sensor_msgs.MagneticField>() {
 			@Override
 			public void onNewMessage(sensor_msgs.MagneticField message) {
@@ -536,8 +537,8 @@ public class MotionController extends AbstractNodeMain {
 					if(mags.mag3 == null)
 						mags.mag3 = message.getMagneticField();
 					if( mags.mag3.getX() != message.getMagneticField().getX() || 
-						mags.mag3.getY() != message.getMagneticField().getY() || 
-						mags.mag3.getZ() != message.getMagneticField().getZ()) {
+							mags.mag3.getY() != message.getMagneticField().getY() || 
+							mags.mag3.getZ() != message.getMagneticField().getZ()) {
 						mags.mag3.setX(message.getMagneticField().getX()); 
 						mags.mag3.setY(message.getMagneticField().getY());
 						mags.mag3.setZ(message.getMagneticField().getZ());
@@ -572,10 +573,10 @@ public class MotionController extends AbstractNodeMain {
 					isTemperature = false;
 			}
 		});
-		
+
 		// tell the waiting constructors that we have registered publishers
 		awaitStart.countDown();
-		
+
 		//----------------------------------------
 		// Begin publishing loop
 		//----------------------------------------
@@ -597,7 +598,7 @@ public class MotionController extends AbstractNodeMain {
 
 			@Override
 			protected void loop() throws InterruptedException {	
-			    try {
+				try {
 					awaitStart.await();
 				} catch (InterruptedException e) {}
 				/*
@@ -605,23 +606,23 @@ public class MotionController extends AbstractNodeMain {
 						, np.getTimeVal(), np.getAccs(), np.getRanges());
 					//System.out.println("Robot should have Moved to "+(robotTheta *= 57.2957795)+" degrees"); // to degrees		
 				 */
-				
+
 				// publish messages to status listener if applicable
-				
+
 				if( isOverMag ) {
 					isOverMag = false;
 					if(DEBUG)
 						System.out.println("Mag EXCEEDS threshold..");
 					ArrayList<String> magVals = new ArrayList<String>(3);
 					synchronized(mags) {
-					magVals.add(String.valueOf(mags.mag3.getX()));
-					magVals.add(String.valueOf(mags.mag3.getY()));
-					magVals.add(String.valueOf(mags.mag3.getZ()));
+						magVals.add(String.valueOf(mags.mag3.getX()));
+						magVals.add(String.valueOf(mags.mag3.getY()));
+						magVals.add(String.valueOf(mags.mag3.getZ()));
 					}
 					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Magnetic anomaly detected", 
 							diagnostic_msgs.DiagnosticStatus.WARN, magVals);
 				}
-				
+
 				if( isOverShock && !isMoving) {
 					if(DEBUG)
 						System.out.println("OVERSHOCK!");
@@ -632,21 +633,21 @@ public class MotionController extends AbstractNodeMain {
 					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Accelerometer shock warning", 
 							diagnostic_msgs.DiagnosticStatus.WARN, shockVals);
 				}
-								
+
 				if( isOverPressure ) { // check for dropping
-							//long meas = System.currentTimeMillis()-lastPressureNotification;
-							//if( meas > 1000000) {
-							//	isPress = true;
-							//}
-							//return;
-							//}
-						isOverPressure = false;
-						ArrayList<String> pressVals = new ArrayList<String>(1);
-						pressVals.add(String.valueOf(pressure));
-						new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Atmospheric pressure warning", 
-								diagnostic_msgs.DiagnosticStatus.WARN, pressVals);
+					//long meas = System.currentTimeMillis()-lastPressureNotification;
+					//if( meas > 1000000) {
+					//	isPress = true;
+					//}
+					//return;
+					//}
+					isOverPressure = false;
+					ArrayList<String> pressVals = new ArrayList<String>(1);
+					pressVals.add(String.valueOf(pressure));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Atmospheric pressure warning", 
+							diagnostic_msgs.DiagnosticStatus.WARN, pressVals);
 				}
-				
+
 				if(isOverTemp) {
 					if( DEBUG )
 						System.out.println("DANGER Temp:"+temperature);
@@ -656,7 +657,7 @@ public class MotionController extends AbstractNodeMain {
 					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Temperature warning", 
 							diagnostic_msgs.DiagnosticStatus.WARN, tempVals);
 				}
-				
+
 				while(!statusQueue.isEmpty()) {
 					statpub.publish(statusQueue.takeFirst());
 					++sequenceNumber;
@@ -664,12 +665,12 @@ public class MotionController extends AbstractNodeMain {
 						System.out.println("Sequence:"+sequenceNumber);
 					Thread.sleep(1);
 				}
-				
-		}
-	}); // cancellable loop
+
+			}
+		}); // cancellable loop
 
 	} // onStart
-	
+
 	/**
 	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
 	 * We will be sending [<number> <> <>]
@@ -704,7 +705,7 @@ public class MotionController extends AbstractNodeMain {
 			// Now set up integral to reflect transition state
 			ITerm = -PID_THRESHOLD;
 		}
-		*/
+		 */
 		// Reduce speed of left wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
 		// scale it by speed
 		speedL -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
@@ -723,10 +724,10 @@ public class MotionController extends AbstractNodeMain {
 			if( speedL < 0.0 ) speedL = 0.0f;
 			// and the robot is pivoting at max speed if everything was capped
 		}
-		*/
+		 */
 	}
 	/**
-	 * Increase power of left wheel base don PID results. If we max out we are going to apply the leftover
+	 * Increase power of left wheel based on PID results. If we max out we are going to apply the leftover
 	 * power over maximum to decreasing the right wheel speed.
 	 * @param speed The scaled velocity
 	 */
@@ -745,7 +746,7 @@ public class MotionController extends AbstractNodeMain {
 			// Now set up integral to reflect transition state
 			ITerm = PID_THRESHOLD;
 		}
-		*/
+		 */
 		// Reduce speed of right wheel to affect turn, speed reduction may result in negative values turning wheel backwards if necessary
 		// scale it by speed
 		speedR -= ( Math.abs(robot.getMotionPIDController().getOutput()) * (speed/350) );
@@ -761,8 +762,8 @@ public class MotionController extends AbstractNodeMain {
 			speedR -= speeDif;
 			if( speedR < 0.0) speedR = 0.0f;
 		}
-		*/
-		
+		 */
+
 	}
 	/**
 	 * Apply a solution in triangles as we do with solution in arcs to reduce left wheel speed.
@@ -806,73 +807,73 @@ public class MotionController extends AbstractNodeMain {
 			System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().getWheelTrack()/2))/hypot),holdBearing);
 		speedR *= ((radius+(WHEELBASE/2))/hypot);
 	}
-	
+
 	/**
-	* Process joystick messages. <p/>
-	* The buttons are basically hardwired to predefined functions, and LUN[0] and LUN[1] are typically assigned device names LeftWheel
-	* and RightWheel and the 2 axes of stick specified in the config file are blended into a steering speed and angle based on the 2 axes,
-	* which is published to each wheel channel as a speed in the range -1000 to +1000.<p/>
-	* 
-	* The other device name LUNs can be configured as desired with the values interpolated into a -1000 to +1000 range based on the type
-	* of axis defined and the values(s) published to the DeviceName LUN channel as a Ros int32 multi array.<p/>
-	*
-	* Joystick data will have array of axis and buttons, typically, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
-	* The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
-	* If the joystick chimes in the target point becomes the current course minus relative stick position,
-	* and the speed is modified by the Y value of the stick.
-	* Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
-	* correct for deviation an wheel slippage.<p/>
-	* 
-	* To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
-	* (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0, added to current heading, forming theta.
-	* Theta may also be formed by button press, and the difference in current heading and ongoing IMU headings for bearing on a forward course.
-	* We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
-	* of speeds of each wheel, time and speed being distance, and the fact that both wheels, being attached to the robot,
-	* have to arrive at essentially the same time after covering the desired distance based on desired speed.<p/>
-	* 
-	* The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
-	* in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
-	* So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE, and we generate 2 arc lengths that are taken
-	* as a ratio that is multiplied by the proper wheel depending on direction, to reduce power in one wheel, to affect turn.
-	* The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.<p/>
-	* 
-	* The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
-	* The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
-	* for the inner arc, and the hypotenuse computed by the base and chord formed from course deviation, and half wheelbase, for the outer arc.
-	* The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
-	* us into refined tangents to the crosstrack. At final correction, a PID algorithm is used to maintain fine control.
-	* axis[6] is POV, it has quantized values to represent its states.<p/>
-	* 
-	* @param message --float[] axis:--			<br/>
-	* [0] - left horiz (X)						<br/>
-	* [1] - left vert (Y)						<br/>
-	* [2] - right horiz (X)						<br/>
-	* [3] - right vert (Y) 						<br/>
-	* [4] - left trigger						<br/>
-	* [5] - right trigger						<br/>
-	* [6] - POV									<br/>
-	* --int[] buttons--							<br/>
-	* [0] - select								<br/>
-	* [1] - start								<br/>
-	* [2] - left stick press					<br/>
-	* [3] - right stick press					<br/>
-	* [4] - triangle -- HOLD CURRENT BEARING	<br/>
-	* [5] - circle -- RIGHT PIVOT				<br/>
-	* [6] - X button -- EMERGENCY STOP			<br/>
-	* [7] - square -- LEFT PIVOT				<br/>
-	* [8] - left bumper							<br/>
-	* [9] - right bumper						<br/>
-	* -- joystick only --						<br/>
-	* [10] - back								<br/>
-	* [11] - extra								<br/>
-	* [12] - mode								<br/>
-	* [13] - side								<br/>
-	* @param connectedNode The Ros node we are using here
-	* @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDeviceDemuxer}
-	* @param message The joystick message with all buttons and axes
-	* @param twistpub The twist publisher channel for broadcast messages to all devices for emergency stop, etc.
-	* @param twistmsg The twist message template to populate with data from this method
-	*/
+	 * Process joystick messages. <p/>
+	 * The buttons are basically hardwired to predefined functions, and LUN[0] and LUN[1] are typically assigned device names LeftWheel
+	 * and RightWheel and the 2 axes of stick specified in the config file are blended into a steering speed and angle based on the 2 axes,
+	 * which is published to each wheel channel as a speed in the range -1000 to +1000.<p/>
+	 * 
+	 * The other device name LUNs can be configured as desired with the values interpolated into a -1000 to +1000 range based on the type
+	 * of axis defined and the values(s) published to the DeviceName LUN channel as a Ros int32 multi array.<p/>
+	 *
+	 * Joystick data will have array of axis and buttons, typically, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
+	 * The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
+	 * If the joystick chimes in the target point becomes the current course minus relative stick position,
+	 * and the speed is modified by the Y value of the stick.
+	 * Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
+	 * correct for deviation an wheel slippage.<p/>
+	 * 
+	 * To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
+	 * (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0, added to current heading, forming theta.
+	 * Theta may also be formed by button press, and the difference in current heading and ongoing IMU headings for bearing on a forward course.
+	 * We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
+	 * of speeds of each wheel, time and speed being distance, and the fact that both wheels, being attached to the robot,
+	 * have to arrive at essentially the same time after covering the desired distance based on desired speed.<p/>
+	 * 
+	 * The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
+	 * in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
+	 * So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE, and we generate 2 arc lengths that are taken
+	 * as a ratio that is multiplied by the proper wheel depending on direction, to reduce power in one wheel, to affect turn.
+	 * The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.<p/>
+	 * 
+	 * The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
+	 * The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
+	 * for the inner arc, and the hypotenuse computed by the base and chord formed from course deviation, and half wheelbase, for the outer arc.
+	 * The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
+	 * us into refined tangents to the crosstrack. At final correction, a PID algorithm is used to maintain fine control.
+	 * axis[6] is POV, it has quantized values to represent its states.<p/>
+	 * 
+	 * @param message --float[] axis:--			<br/>
+	 * [0] - left horiz (X)						<br/>
+	 * [1] - left vert (Y)						<br/>
+	 * [2] - right horiz (X)						<br/>
+	 * [3] - right vert (Y) 						<br/>
+	 * [4] - left trigger						<br/>
+	 * [5] - right trigger						<br/>
+	 * [6] - POV									<br/>
+	 * --int[] buttons--							<br/>
+	 * [0] - select								<br/>
+	 * [1] - start								<br/>
+	 * [2] - left stick press					<br/>
+	 * [3] - right stick press					<br/>
+	 * [4] - triangle -- HOLD CURRENT BEARING	<br/>
+	 * [5] - circle -- RIGHT PIVOT				<br/>
+	 * [6] - X button -- EMERGENCY STOP			<br/>
+	 * [7] - square -- LEFT PIVOT				<br/>
+	 * [8] - left bumper							<br/>
+	 * [9] - right bumper						<br/>
+	 * -- joystick only --						<br/>
+	 * [10] - back								<br/>
+	 * [11] - extra								<br/>
+	 * [12] - mode								<br/>
+	 * [13] - side								<br/>
+	 * @param connectedNode The Ros node we are using here
+	 * @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDeviceDemuxer}
+	 * @param message The joystick message with all buttons and axes
+	 * @param twistpub The twist publisher channel for broadcast messages to all devices for emergency stop, etc.
+	 * @param twistmsg The twist message template to populate with data from this method
+	 */
 	private void processJoystickMessages(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, Joy message, 
 			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg) {
 		if(DEBUG) {
@@ -951,27 +952,27 @@ public class MotionController extends AbstractNodeMain {
 		synchronized(euler) {
 			offsetDegrees = (float) (euler.eulers[0] - stickDegrees);
 		}
-	    // reduce the angle  
-	    offsetDegrees =  offsetDegrees % 360;
-	    //
-	    if (offsetDegrees <= -180.0)
-	         offsetDegrees += 360.0;
-	    if (offsetDegrees >= 180)  
-	         offsetDegrees -= 360;
-	    // force it to be the positive remainder, so that 0 <= angle < 360  
-	    //offsetDegrees = (offsetDegrees + 360) % 360;  
-	    // force into the minimum absolute value residue class, so that -180 < angle <= 180  
-	    //if (offsetDegrees > 180)  
-	    //      offsetDegrees -= 360;
-	      
+		// reduce the angle  
+		offsetDegrees =  offsetDegrees % 360;
+		//
+		if (offsetDegrees <= -180.0)
+			offsetDegrees += 360.0;
+		if (offsetDegrees >= 180)  
+			offsetDegrees -= 360;
+		// force it to be the positive remainder, so that 0 <= angle < 360  
+		//offsetDegrees = (offsetDegrees + 360) % 360;  
+		// force into the minimum absolute value residue class, so that -180 < angle <= 180  
+		//if (offsetDegrees > 180)  
+		//      offsetDegrees -= 360;
+
 		//if( DEBUG )
 		//	System.out.println("Axes:"+axes[0]+","+axes[2]+" deg:"+bearingDegrees+" rad:"+radians);
-	    // Button 4 - triangle. Establish setpoint for autonomous course following.
+		// Button 4 - triangle. Establish setpoint for autonomous course following.
 		// If we are pressing the button, dont update the setpoint with IMU yaw, this has the effect of locking
 		// the course onto the absolute track relative to the way the robot is pointing offset by stick position
 		// rather than a continuous update of stick offset added to current orientation. so if you want the robot to track
 		// straight forward on its current orientation, hold triangle/top and push stick forward or back.
-	    if( buttons[4] != 0 ) {   
+		if( buttons[4] != 0 ) {   
 			// is it initial button press? then log current bearing of IMU to hold to
 			if( !holdBearing ) {
 				holdBearing = true;
@@ -984,19 +985,19 @@ public class MotionController extends AbstractNodeMain {
 				robot.getMotionPIDController().clearPID();
 				wasPid = true; // start with PID control until we get out of tolerance
 				if(DEBUG);
-					System.out.println("Stick absolute deg set:"+robot.getIMUSetpointInfo());	
+				System.out.println("Stick absolute deg set:"+robot.getIMUSetpointInfo());	
 			}
-	    } else {
-	    	holdBearing = false;
-	    	// joystick setting becomes desired target yaw angle heading and IMU is disregarded
-	    	robot.getIMUSetpointInfo().setDesiredTarget(stickDegrees);
+		} else {
+			holdBearing = false;
+			// joystick setting becomes desired target yaw angle heading and IMU is disregarded
+			robot.getIMUSetpointInfo().setDesiredTarget(stickDegrees);
 			robot.getIMUSetpointInfo().setTarget((float)0); 
-	    }
-	    
-	    // eulers[0] is Input: target yaw angle from IMU. If IMU is delivering a 0, then our delta below will just be desiredTarget.
-	    synchronized(euler) {
-	    	robot.getIMUSetpointInfo().setTarget((float) euler.eulers[0]); 
-	    }
+		}
+
+		// eulers[0] is Input: target yaw angle from IMU. If IMU is delivering a 0, then our delta below will just be desiredTarget.
+		synchronized(euler) {
+			robot.getIMUSetpointInfo().setTarget((float) euler.eulers[0]); 
+		}
 		//
 		// perform the PID processing
 		// IMUSetpointInfo looks like this:
@@ -1007,16 +1008,16 @@ public class MotionController extends AbstractNodeMain {
 		// public float delta() { return desiredYawAngle - yawAngle; }
 		//
 		// MotionPidController.Compute(SetPointInfo) does this with SetPointInfo before it sets PID terms:
-	    // SetPointInfo.setPrevErr(error);
-	    // error = SetPointInfo.delta();
-	    // error =  error % 360; // angle or 360 - angle
-	    // if (error <= -180.0)
-	    //     error += 360.0;
-	    // if (error >= 180)  
-	    //     error -= 360;  
+		// SetPointInfo.setPrevErr(error);
+		// error = SetPointInfo.delta();
+		// error =  error % 360; // angle or 360 - angle
+		// if (error <= -180.0)
+		//     error += 360.0;
+		// if (error >= 180)  
+		//     error -= 360;  
 		//
 		((MotionPIDController) robot.getMotionPIDController()).Compute(robot.getIMUSetpointInfo());
-		
+
 		// Speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
 		// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
 		// or on the computed derivation from desired course if a straight line course is set.
@@ -1049,7 +1050,7 @@ public class MotionController extends AbstractNodeMain {
 			if(DEBUG || DEBUGBEARING) {
 				System.out.printf("HOLDING BEARING %s\n",robot.getMotionPIDController().toString());
 				synchronized(euler) {
-				System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.eulers[0],arcin,arcout,speedL,speedR);
+					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.eulers[0],arcin,arcout,speedL,speedR);
 				}
 			}
 			followIMUSetpoint(radius, arcin, arcout);
@@ -1078,9 +1079,9 @@ public class MotionController extends AbstractNodeMain {
 		}
 
 		publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
-		
+
 		publishPeripheral(connectedNode, pubschannel, axes);
-		
+
 	}
 	/**
 	 * If slope is negative and coordinate is neg acceleration in reverse
@@ -1092,92 +1093,92 @@ public class MotionController extends AbstractNodeMain {
 	 */
 	private float slope(float speed, CircularBlockingDeque<Float> speedQueue) {
 		speedQueue.addLast(speed);
-	    int n = speedQueue.length();
-	    double m, c, sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
-	    for (int i = 0; i < n; i++) {
-	        sum_x += i;//x[i];
-	        sum_y += speedQueue.get(i);//[i];
-	        sum_xy += i * speedQueue.get(i);//[i] * y[i];
-	        sum_x2 += Math.pow(i, 2);//pow(x[i], 2);
-	    }
-	    m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - Math.pow(sum_x, 2));
-	    //c = (sum_y - m * sum_x) / n;
-	    //System.out.println("m = " + m);
-	    //System.out.println("c = " + c);
-	    if(m == 0)
-	    	return speedQueue.get(n-1);
-	    if(m < 0) {
-	    	if(m < -maxSpeedSlope) {
-    			if(n == 1) {
-    				speedQueue.set(0,speedQueue.get(1)/2); // divide it in half, we only have 1 point
-    			} else {
-    				// slope neg and coord neg, reverse accel
-    				if(speedQueue.get(n-1) < 0) {
-    					// diff of last point and next to last
-    					float diff = speedQueue.get(n-1)-speedQueue.get(n-2);
-    					// split the diff
-    					speedQueue.set(n-1, speedQueue.get(n-2)+(diff/2.0f));
-    				} else {
-    					// slope neg and coord pos, forward decel
-    					// diff of next to last and last
-    					float diff = speedQueue.get(n-2)-speedQueue.get(n-1);
-    					// split the diff
-    					speedQueue.set(n-1, speedQueue.get(n-2)-(diff/2.0f));
-    				}
-    			}
-	    	}
-	    } else {
-	    	// slope pos
-	    	if(m > maxSpeedSlope) {
-    			if(n == 1) {
-    				speedQueue.set(0,speedQueue.get(1)/2); // divide it in half, we only have 1 point
-    			} else {
-    				// slope pos and coord neg, reverse decel
-    				if(speedQueue.get(n-1) < 0) {
-    					// diff of next to last and last
-    					float diff = speedQueue.get(n-2)-speedQueue.get(n-1);
-    					// split the diff
-    					speedQueue.set(n-1, speedQueue.get(n-2)-(diff/2.0f));
-    				} else {
-    					// slope pos and coord pos, forward accel
-    					// diff of last and next to last
-    					float diff = speedQueue.get(n-1)-speedQueue.get(n-2);
-    					// split the diff
-    					speedQueue.set(n-1, speedQueue.get(n-2)+(diff/2.0f));
-    				}
-    			}
-	    	}
-	    }
-	    return speedQueue.get(n-1);
+		int n = speedQueue.length();
+		double m, c, sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
+		for (int i = 0; i < n; i++) {
+			sum_x += i;//x[i];
+			sum_y += speedQueue.get(i);//[i];
+			sum_xy += i * speedQueue.get(i);//[i] * y[i];
+			sum_x2 += Math.pow(i, 2);//pow(x[i], 2);
+		}
+		m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - Math.pow(sum_x, 2));
+		//c = (sum_y - m * sum_x) / n;
+		//System.out.println("m = " + m);
+		//System.out.println("c = " + c);
+		if(m == 0)
+			return speedQueue.get(n-1);
+		if(m < 0) {
+			if(m < -maxSpeedSlope) {
+				if(n == 1) {
+					speedQueue.set(0,speedQueue.get(1)/2); // divide it in half, we only have 1 point
+				} else {
+					// slope neg and coord neg, reverse accel
+					if(speedQueue.get(n-1) < 0) {
+						// diff of last point and next to last
+						float diff = speedQueue.get(n-1)-speedQueue.get(n-2);
+						// split the diff
+						speedQueue.set(n-1, speedQueue.get(n-2)+(diff/2.0f));
+					} else {
+						// slope neg and coord pos, forward decel
+						// diff of next to last and last
+						float diff = speedQueue.get(n-2)-speedQueue.get(n-1);
+						// split the diff
+						speedQueue.set(n-1, speedQueue.get(n-2)-(diff/2.0f));
+					}
+				}
+			}
+		} else {
+			// slope pos
+			if(m > maxSpeedSlope) {
+				if(n == 1) {
+					speedQueue.set(0,speedQueue.get(1)/2); // divide it in half, we only have 1 point
+				} else {
+					// slope pos and coord neg, reverse decel
+					if(speedQueue.get(n-1) < 0) {
+						// diff of next to last and last
+						float diff = speedQueue.get(n-2)-speedQueue.get(n-1);
+						// split the diff
+						speedQueue.set(n-1, speedQueue.get(n-2)-(diff/2.0f));
+					} else {
+						// slope pos and coord pos, forward accel
+						// diff of last and next to last
+						float diff = speedQueue.get(n-1)-speedQueue.get(n-2);
+						// split the diff
+						speedQueue.set(n-1, speedQueue.get(n-2)+(diff/2.0f));
+					}
+				}
+			}
+		}
+		return speedQueue.get(n-1);
 	}
 	/**
-	* 
- 	* Process other axis.<p/>
- 	* Get the list of axis and or buttons according to LUN and publish to each.
- 	* We are going to translate the floating values to integer by scaling them * 1000 as they are typically in the 0-1 range.
- 	* We scale the POV trigger to +1000, -1000 based on AxisUp and AxisDown if we want it to act as a simple up/down control.<br/>
- 	* The DigitalHat POV is 8 positions, left being 1.0, subtracting .125 counterclockwise, so straight up is .25, straight down is .75<p/>
- 	* Configuration:			<br/>
-	* AXIS[0].AxisType:Stick	<br/>
-	* AXIS[0].AxisX:0			<br/>
-	* AXIS[0].AxisY:2			<br/>
-	* ---						<br/>
-  	* AXIS[3].AxisType:Trigger<br/>
-  	* AXIS[3].Axis:4			<br/>
-	* ---						<br/>
-  	* AXIS[4].AxisType:POV	<br/>
-  	* AXIS[4].Axis:6			<br/>
- 	* -- optional:				<br/>
-  	* AXIS[4].AxisUp:0.25		<br/>
-  	* AXIS[4].AxisDown:0.75	<br/>
-	*<br/>
-	* Assume we handle propulsion in other method, so ignore the LUN device names that end in 'Wheel' and process all others, extracting the axis
-	* definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:<br/>
-	* <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
-	* @param connectedNode Our Ros node here
-	* @param pubschannel Collection of publisher channels that represent axes
-	* @param axes the values of the stick axes
-	*/
+	 * 
+	 * Process other axis.<p/>
+	 * Get the list of axis and or buttons according to LUN and publish to each.
+	 * We are going to translate the floating values to integer by scaling them * 1000 as they are typically in the 0-1 range.
+	 * We scale the POV trigger to +1000, -1000 based on AxisUp and AxisDown if we want it to act as a simple up/down control.<br/>
+	 * The DigitalHat POV is 8 positions, left being 1.0, subtracting .125 counterclockwise, so straight up is .25, straight down is .75<p/>
+	 * Configuration:			<br/>
+	 * AXIS[0].AxisType:Stick	<br/>
+	 * AXIS[0].AxisX:0			<br/>
+	 * AXIS[0].AxisY:2			<br/>
+	 * ---						<br/>
+	 * AXIS[3].AxisType:Trigger<br/>
+	 * AXIS[3].Axis:4			<br/>
+	 * ---						<br/>
+	 * AXIS[4].AxisType:POV	<br/>
+	 * AXIS[4].Axis:6			<br/>
+	 * -- optional:				<br/>
+	 * AXIS[4].AxisUp:0.25		<br/>
+	 * AXIS[4].AxisDown:0.75	<br/>
+	 *<br/>
+	 * Assume we handle propulsion in other method, so ignore the LUN device names that end in 'Wheel' and process all others, extracting the axis
+	 * definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:<br/>
+	 * <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
+	 * @param connectedNode Our Ros node here
+	 * @param pubschannel Collection of publisher channels that represent axes
+	 * @param axes the values of the stick axes
+	 */
 	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes) {
 		deviceEntries.forEach( lun -> {
 			if(!(lun.getName().endsWith("Wheel"))) {
@@ -1193,81 +1194,81 @@ public class MotionController extends AbstractNodeMain {
 					System.out.printf("%s axis type %s attribute device %s%n", this.getClass().getName(), axisType, lun);
 				}
 				switch(axisType) {
-					case "Stick":
-						if(robot.getAXIS()[luni].get("AxisX") != null) {
-							String sx = (String) robot.getAXIS()[luni].get("AxisX");
-							String sy = (String) robot.getAXIS()[luni].get("AxisY");
-							float x = -axes[Integer.parseInt(sx)] * 1000;
-							float y = -axes[Integer.parseInt(sy)] * 1000;
-							if( y != 0 || x != 0) {
-								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x);
-								publishedLUNRestValue.replace(luni, false);
-							} else {
-								// rest value here
-								if(!publishedLUNRestValue.get(luni)) {
-									publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x); // not published, so hit once
-									publishedLUNRestValue.replace(luni, true); // and set it as published at rest
-								}
-							}
-						} else {
-							String sy = (String) robot.getAXIS()[luni].get("AxisY");
-							float y = -axes[Integer.parseInt(sy)] * 1000;
-							if( y != 0) {
-								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y);
-								publishedLUNRestValue.replace(luni, false); // rest value not yet sent
-							} else {
-								// rest value here
-								if(!publishedLUNRestValue.get(luni)) {
-									publishAxis(connectedNode, pubschannel, lun.getName(), (int)y); // rest not yet published, so do it
-									publishedLUNRestValue.replace(luni, true); // rest value sent
-								}
-							}
-						}
-					break;
-					case "Trigger":
-						String ax = (String) robot.getAXIS()[luni].get("Axis");
-						float a = axes[Integer.parseInt(ax)] * 1000;
-						if(a != -1000) {
-							publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
+				case "Stick":
+					if(robot.getAXIS()[luni].get("AxisX") != null) {
+						String sx = (String) robot.getAXIS()[luni].get("AxisX");
+						String sy = (String) robot.getAXIS()[luni].get("AxisY");
+						float x = -axes[Integer.parseInt(sx)] * 1000;
+						float y = -axes[Integer.parseInt(sy)] * 1000;
+						if( y != 0 || x != 0) {
+							publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x);
 							publishedLUNRestValue.replace(luni, false);
 						} else {
 							// rest value here
 							if(!publishedLUNRestValue.get(luni)) {
-								publishAxis(connectedNode, pubschannel, lun.getName(), (int)a); // not published, so hit it
+								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x); // not published, so hit once
 								publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 							}
 						}
-					break;
-					case "POV":
-						ax = (String) robot.getAXIS()[luni].get("Axis");
-						a = axes[Integer.parseInt(ax)] * 1000;
-						String saxUp = (String) robot.getAXIS()[luni].get(("AxisUp"));
-						if(saxUp == null) {
-							publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
+					} else {
+						String sy = (String) robot.getAXIS()[luni].get("AxisY");
+						float y = -axes[Integer.parseInt(sy)] * 1000;
+						if( y != 0) {
+							publishAxis(connectedNode, pubschannel, lun.getName(), (int)y);
+							publishedLUNRestValue.replace(luni, false); // rest value not yet sent
 						} else {
-							String saxDown = (String) robot.getAXIS()[luni].get(("AxisDown"));
-							float axUp = Float.parseFloat(saxUp) * 1000;
-							float axDown = Float.parseFloat(saxDown) * 1000;
-							if(a == axUp) {
-								publishAxis(connectedNode, pubschannel, lun.getName(), 1000);
+							// rest value here
+							if(!publishedLUNRestValue.get(luni)) {
+								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y); // rest not yet published, so do it
+								publishedLUNRestValue.replace(luni, true); // rest value sent
+							}
+						}
+					}
+					break;
+				case "Trigger":
+					String ax = (String) robot.getAXIS()[luni].get("Axis");
+					float a = axes[Integer.parseInt(ax)] * 1000;
+					if(a != -1000) {
+						publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
+						publishedLUNRestValue.replace(luni, false);
+					} else {
+						// rest value here
+						if(!publishedLUNRestValue.get(luni)) {
+							publishAxis(connectedNode, pubschannel, lun.getName(), (int)a); // not published, so hit it
+							publishedLUNRestValue.replace(luni, true); // and set it as published at rest
+						}
+					}
+					break;
+				case "POV":
+					ax = (String) robot.getAXIS()[luni].get("Axis");
+					a = axes[Integer.parseInt(ax)] * 1000;
+					String saxUp = (String) robot.getAXIS()[luni].get(("AxisUp"));
+					if(saxUp == null) {
+						publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
+					} else {
+						String saxDown = (String) robot.getAXIS()[luni].get(("AxisDown"));
+						float axUp = Float.parseFloat(saxUp) * 1000;
+						float axDown = Float.parseFloat(saxDown) * 1000;
+						if(a == axUp) {
+							publishAxis(connectedNode, pubschannel, lun.getName(), 1000);
+						} else {
+							if(a == axDown) {
+								publishAxis(connectedNode, pubschannel, lun.getName(), -1000);
 							} else {
-								if(a == axDown) {
-									publishAxis(connectedNode, pubschannel, lun.getName(), -1000);
-								} else {
-									if(a == 0) {
-										publishAxis(connectedNode, pubschannel, lun.getName(), 0);
-									}
+								if(a == 0) {
+									publishAxis(connectedNode, pubschannel, lun.getName(), 0);
 								}
 							}
 						}
+					}
 					break;
-					default:
-						throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+lun.getName());
+				default:
+					throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+lun.getName());
 				}
 			}
 		});	
 	}
-	
+
 	/**
 	 * Send the motor speed values down the wheel channels
 	 * @param connectedNode
@@ -1369,126 +1370,64 @@ public class MotionController extends AbstractNodeMain {
 				}
 		}
 	}
-	
+
 	/**
-	 * Move the robot to an absolute pose of 0-360 degrees and attempt to travel the target distance in the target time
-	 * when the IMU and target coincide distance and time produce linear motion
-	 * otherwise when turning distance determines the radius of the arc segment described by the difference
-	 * of the current IMU and target and time becomes roughly the speed at which to make such traversal
-	 * @param yawIMURads Yaw is delivered in radians -1.0 to 1.0
-	 * @param yawTargetDegrees target final pose is in degrees for easier human input
-	 * @param targetDistance target distance to travel in mm
-	 * @param targetTime time in which to travel desired distance in seconds
-	 * 	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
-	 * @throws IOException 
-	 */
-	public synchronized TwistInfo moveRobotAbsolute(TwistInfo twistInfo, float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
-
-	        //while (true) {
-
-	                //leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
-	                //rightWheel.targetMM = (float)(right_velocity) / clicks_per_mm;
-
-	                //avg_mm = (float) ((leftWheel.targetMM + rightWheel.targetMM) / 2.0);
-	                //total_mm += avg_mm;
-	                // wheel_theta is travel of each wheel with desired velocity, if same angle is 0, forward
-	                //twistInfo.wheelTheta = (leftWheel.targetMM - rightWheel.targetMM) / wheelTrack;
-	        		
-	        		twistInfo.setWheelTheta((float)yawTargetDegrees * 0.0174532925f); // degr to radians
-	                /* read the YAW value from the imu struct and convert to radians */
-	                twistInfo.setImuTheta((float) (yawIMURads * Math.PI));
-	                if( twistInfo.getImuTheta() < 0.0f ) {
-	                	twistInfo.setImuTheta(twistInfo.getImuTheta() + TWOPI);
-	                }
-	                twistInfo.setYawDegrees(IMUSetpointInfo.yawDegrees(twistInfo.getImuTheta()));
-	                
-	                /* calculate rotation rate-of-change  */
-	                twistInfo.setDeltaTheta(twistInfo.getImuTheta() - last_theta);
-	                last_theta = twistInfo.getImuTheta();
-
-	                // this will generate the +- value to turn us properly
-	                twistInfo.setRobotTheta(twistInfo.getWheelTheta() - twistInfo.getImuTheta());
-	                if( twistInfo.getRobotTheta() > TWOPI )
-	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() - TWOPI);
-	                if( twistInfo.getRobotTheta() < 0)
-	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() + TWOPI);
-	                    
-	                twistInfo.setX(twistInfo.getX() + (float)(targetDistance * Math.sin(twistInfo.getRobotTheta()))); 
-	                twistInfo.setY(twistInfo.getY() + (float)(targetDistance * Math.cos(twistInfo.getRobotTheta()))); 
-	                // so X is the arc radius, normally we will set as a call to
-	                // setMotorSpeed as 0 to turn in place or a value of arc radius
-	                // modified by current speed to make a gentle curve.
-	                // if theta is 0, move linear
-	                //stasis(fabs(wheel_theta),fabs(imu_theta));
-	                if( DEBUG )
-	                	System.out.println(twistInfo);
-	                setMotorArcSpeed(twistInfo.getRobotTheta(), yawIMURads);
-	                return twistInfo;//twistInfo.robotTheta;
-	        //}
-	}
-	
-	/**
-	 * Move the robot to an relative pose of 0-360 degrees and attempt to travel the target distance in the target time
+	 * Attempt to travel the target distance in the target time arriving at a final target degrees on the IMU
 	 * Here, targetDegrees can be negative
 	 * when the IMU and target coincide distance and time produce linear motion
 	 * otherwise when turning distance determines the radius of the arc segment described by the difference
 	 * of the current IMU and target and time becomes roughly the speed at which to make such traversal
-	 * @param yawIMURads Yaw is delivered in radians -1.0 to 1.0
+	 * @param yawIMUDegrees Yaw is delivered in degrees
 	 * @param yawTargetDegrees target final pose is in degrees for easier human input and represents motion relative to current pose vs absolute position
-	 * @param targetDistance target distance to travel in mm
-	 * @param targetTime time in which to travel desired distance in seconds
-	 * @return The Twist message with twistInfo.robotTheta as the value to turn (X,Y,deltaTheta,IMUTheta,wheelTheta,yawDegrees as well)
+	 * @param targetDistance target distance to travel in CM, if 0 perform a pivot
 	 * @throws IOException 
 	 */
-	public synchronized TwistInfo moveRobotRelative(TwistInfo twistInfo, float yawIMURads, int yawTargetDegrees, int targetDistance) throws IOException {
-	        //while (true) {
+	public synchronized void moveRobotRelative(float yawIMUDegrees, float yawTargetDegrees, int targetDistance) throws IOException {
+		//while (true) {
 
-	                //leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
-	                //rightWheel.targetMM = (float)(right_velocity) / clicks_per_mm;
+		//leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
+		//rightWheel.targetMM = (float)(right_velocity) / clicks_per_mm;
 
-	                //avg_mm = (float) ((leftWheel.targetMM + rightWheel.targetMM) / 2.0);
-	                //total_mm += avg_mm;
-	                // wheel_theta is travel of each wheel with desired velocity, if same angle is 0, forward
-	                //twistInfo.wheelTheta = (leftWheel.targetMM - rightWheel.targetMM) / wheelTrack;
-	        		
-	        		twistInfo.setWheelTheta((float)yawTargetDegrees * 0.0174532925f); // degr to radians
-	                /* read the YAW value from the imu struct and convert to radians */
-	                twistInfo.setImuTheta((float) (yawIMURads * Math.PI));
-	                if( twistInfo.getImuTheta() < 0.0f ) {
-	                	twistInfo.setImuTheta(twistInfo.getImuTheta() + TWOPI);
-	                }
-	                twistInfo.setYawDegrees(IMUSetpointInfo.yawDegrees(twistInfo.getImuTheta()));
-	                
-	                /* calculate rotation rate-of-change  */
-	                twistInfo.setDeltaTheta(twistInfo.getImuTheta() - last_theta);
-	                last_theta = twistInfo.getImuTheta();
-
-	                twistInfo.setRobotTheta(twistInfo.getImuTheta() + twistInfo.getWheelTheta());
-	                // this will generate the value to turn us properly
-	                if( twistInfo.getRobotTheta() > TWOPI )
-	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() - TWOPI);
-	                if( twistInfo.getRobotTheta() < 0)
-	                	twistInfo.setRobotTheta(twistInfo.getRobotTheta() + TWOPI);
-
-	                twistInfo.setX(twistInfo.getX() + (float)(targetDistance * Math.sin(twistInfo.getRobotTheta()))); 
-	                twistInfo.setY(twistInfo.getY() + (float)(targetDistance * Math.cos(twistInfo.getRobotTheta()))); 
-	                // so X is the arc radius, normally we will set as a call to
-	                // setMotorSpeed as 0 to turn in place or a value of arc radius
-	                // modified by current speed to make a gentle curve.
-	                // if theta is 0, move linear in x
-	                // if x and theta not 0 its rotation about a point in space
-	                //stasis(fabs(wheel_theta),fabs(imu_theta));
-	                if( DEBUG )
-	                	System.out.println(twistInfo);
-	                // slot, channel 1, slot, channel 2, theta, yaw radians
-	                setMotorArcSpeed(twistInfo.getWheelTheta(), yawIMURads);
-	                return twistInfo;//twistInfo.robotTheta;
-	        //}
+		//avg_mm = (float) ((leftWheel.targetMM + rightWheel.targetMM) / 2.0);
+		//total_mm += avg_mm;
+		// wheel_theta is travel of each wheel with desired velocity, if same angle is 0, forward
+		//twistInfo.wheelTheta = (leftWheel.targetMM - rightWheel.targetMM) / wheelTrack;
+		float wheelTheta = 0.0f;
+		float imuTheta = 0.0f;
+		//float yawDegrees = 0.0f;
+		//float deltaTheta = 0.0f;
+		float robotTheta = 0.0f;
+		wheelTheta = ((float)yawTargetDegrees * 0.0174532925f); // degr to radians
+		/* read the YAW value from the imu struct and convert to radians */
+		imuTheta = ((float) (yawIMUDegrees * 0.0174532925f));
+		// if final theta negative, turn left
+		robotTheta = imuTheta - wheelTheta;
+		robotTheta = (float) Math.atan2(Math.sin(robotTheta), Math.cos(robotTheta));
+		/* calculate rotation rate-of-change
+		deltaTheta = imuTheta - last_theta;
+		last_theta = imuTheta;
+		robotTheta = imuTheta + wheelTheta;
+		// this will generate the value to turn us properly
+		if( robotTheta > TWOPI )
+			robotTheta -= TWOPI;
+		if( robotTheta < 0)
+			robotTheta += TWOPI;
+		float X =  (float)(targetDistance * Math.sin(robotTheta)); 
+		float Y = (float)(targetDistance * Math.cos(robotTheta)); 
+		*/
+		// so X is the arc radius, normally we will set as a call to
+		// setMotorSpeed as 0 to turn in place or a value of arc radius
+		// modified by current speed to make a gentle curve.
+		// if theta is 0, move linear in x
+		// if x and theta not 0 its rotation about a point in space
+		//stasis(fabs(wheel_theta),fabs(imu_theta));
+		// slot, channel 1, slot, channel 2, theta, yaw radians
+		setMotorArcSpeed(robotTheta, targetDistance);
 	}
-	
+
 	/**
-	 *  The function computes motor speeds.
-	 *  results in leftWheel.targetSpeed and rightWheel.targetSpeed
+	 * The function computes motor speeds.
+	 * results in leftWheel.targetSpeed and rightWheel.targetSpeed
 	 * so X is the arc radius, normally we will set as a call to
 	 * setMotorSpeed as 0 to turn in place or a value of arc radius
 	 * modified by current speed to make a gentle curve.
@@ -1502,7 +1441,7 @@ public class MotionController extends AbstractNodeMain {
 	public synchronized int[] setMotorArcSpeed(float x, float th) throws IOException {
 
 		float spd_left, spd_right;
-  
+
 		/* Reset the auto stop timer */
 		//motorControl.lastMotorCommand = System.currentTimeMillis();
 
@@ -1527,19 +1466,19 @@ public class MotionController extends AbstractNodeMain {
 				// Rotation about a point in space
 				// Calculate Drive Turn output due to X input
 				if (x > 0) {
-				  // Forward
-				  spd_left = ( th > 0 ) ? robot.getLeftSpeedSetpointInfo().getMaximum() : (robot.getLeftSpeedSetpointInfo().getMaximum() + th);
-				  spd_right = ( th > 0 ) ? (robot.getRightSpeedSetpointInfo().getMaximum() - th) : robot.getRightSpeedSetpointInfo().getMaximum();
+					// Forward
+					spd_left = ( th > 0 ) ? robot.getLeftSpeedSetpointInfo().getMaximum() : (robot.getLeftSpeedSetpointInfo().getMaximum() + th);
+					spd_right = ( th > 0 ) ? (robot.getRightSpeedSetpointInfo().getMaximum() - th) : robot.getRightSpeedSetpointInfo().getMaximum();
 				} else {
-				  // Reverse
-				  spd_left = (th > 0 ) ? (robot.getLeftSpeedSetpointInfo().getMaximum() - th) : robot.getLeftSpeedSetpointInfo().getMaximum();
-				  spd_right = (th > 0 ) ? robot.getRightSpeedSetpointInfo().getMaximum() : (robot.getRightSpeedSetpointInfo().getMaximum() + th);
+					// Reverse
+					spd_left = (th > 0 ) ? (robot.getLeftSpeedSetpointInfo().getMaximum() - th) : robot.getLeftSpeedSetpointInfo().getMaximum();
+					spd_right = (th > 0 ) ? robot.getRightSpeedSetpointInfo().getMaximum() : (robot.getRightSpeedSetpointInfo().getMaximum() + th);
 				}
 
 				// Scale Drive output due to X input (throttle)
 				spd_left = spd_left * x / robot.getLeftSpeedSetpointInfo().getMaximum();
 				spd_right = spd_right * x / robot.getRightSpeedSetpointInfo().getMaximum();
-				
+
 				// Now calculate pivot amount
 				// - Strength of pivot (nPivSpeed) based on  X input
 				// - Blending of pivot vs drive (fPivScale) based on Y input
@@ -1566,7 +1505,7 @@ public class MotionController extends AbstractNodeMain {
 		}
 		if( DEBUG )
 			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+robot.getLeftSpeedSetpointInfo().getTarget()+
-								" R:"+robot.getRightSpeedSetpointInfo().getTarget());
+					" R:"+robot.getRightSpeedSetpointInfo().getTarget());
 		/* Convert speeds to ticks per frame */
 		//robot.getDiffDrive().getLeftWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getLeftMotorPIDController(), robot.getDiffDrive().getLeftWheel());
 		//robot.getDiffDrive().getRightWheel().getSpeedsetPointInfo().SpeedToTicks(robot.getRightMotorPIDController(), robot.getDiffDrive().getRightWheel());
@@ -1590,10 +1529,10 @@ public class MotionController extends AbstractNodeMain {
 		// call to motor controller to update speed using absolute terms
 		//motorControl.updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
 		return new int[]{(int) robot.getLeftSpeedSetpointInfo().getTarget(),
-						 (int) robot.getRightSpeedSetpointInfo().getTarget()};
+				(int) robot.getRightSpeedSetpointInfo().getTarget()};
 	}
-	
-	
+
+
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 
 	double yy = quat.y() * quat.y(); // 2 Uses below
@@ -1618,7 +1557,7 @@ public class MotionController extends AbstractNodeMain {
 		System.out.printf("Diffydrive; %d %d %n", robot.getDiffDrive().getControllerAxisX(), robot.getDiffDrive().getControllerAxisY());
 		System.out.println("----");
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))
-		.findFirst().get());
+				.findFirst().get());
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("BoomActuator"))
 				.findFirst().get());
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("LeftWheel"))

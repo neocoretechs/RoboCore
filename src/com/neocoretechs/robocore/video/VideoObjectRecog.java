@@ -102,13 +102,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 	final static float IOU_THRESHOLD = .40f;
 	
 	static class EulerTime {
-		double eulers[] = new double[]{0.0,0.0,0.0}; // set from loop
+		sensor_msgs.Imu euler;
 		long eulerTime = 0L;
 	}
 	EulerTime euler = new EulerTime();
 	
 	static class RangeTime {
-		float range;
+		std_msgs.String range;
 		long rangeTime = 0L;
 	}
 	RangeTime ranges = new RangeTime();
@@ -128,20 +128,23 @@ public class VideoObjectRecog extends AbstractNodeMain
 		byte[] rightImage;
 		double eulersCorrelated[] = new double[]{0.0,0.0,0.0};
 		float rangeCorrelated = 0f;
-		public TimedImage(byte[] leftImage, byte[] rightImage, long sequence) {
-			this.leftImage = leftImage;
-			this.rightImage = rightImage;
-			this.sequence = sequence;
+		stereo_msgs.StereoImage stereoImage;
+		public TimedImage(stereo_msgs.StereoImage stereoImage, long sequence) {
+			this.stereoImage = stereoImage;
+			this.leftImage = stereoImage.getData().array();
+			this.rightImage = stereoImage.getData2().array();
 			this.time = System.currentTimeMillis();
-				synchronized(euler) {
-					if(Math.abs(this.time-euler.eulerTime) <= 1000)
-						this.eulersCorrelated = euler.eulers;
-				}
-				synchronized(ranges) {
-					if(Math.abs(this.time-ranges.rangeTime) <= 1000)
-						this.rangeCorrelated = ranges.range;
-				}
+			synchronized(euler) {
+				if(Math.abs(this.time-euler.eulerTime) <= 1000)
+					this.eulersCorrelated = euler.euler.getOrientationCovariance();
+			}
+			synchronized(ranges) {
+				if(Math.abs(this.time-ranges.rangeTime) <= 1000)
+					this.rangeCorrelated = Float.parseFloat(ranges.range.getData());
+			}
+			this.sequence = sequence;
 		}
+		
 		public String toJson() throws IOException{
 			JSONObject jo = new JSONObject();
 			Instance rimage = createImage(rightImage);
@@ -310,13 +313,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 					System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
 					lastSequenceNumber2 = sequenceNumber2;
 				}	
-				ByteBuffer cbl = img.getData();
-				byte[] bufferl = cbl.array(); // 3 byte BGR
-				ByteBuffer cbr = img.getData2();
-				byte[] bufferr = cbr.array(); // 3 byte BGR
 				// sequenceNumber is the publishing number, it may repeat here if more images come in than are published
 				try {
-					queue.addLastWait(new TimedImage(bufferl, bufferr, sequenceNumber));
+					queue.addLastWait(new TimedImage(img, sequenceNumber));
 				} catch (InterruptedException e) {}
 				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
 			}
@@ -329,7 +328,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
 				synchronized(euler) {
-					euler.eulers = message.getOrientationCovariance();
+					euler.euler = message;
 					euler.eulerTime = System.currentTimeMillis();
 					//queue.forEach(e->{
 					//	e.setIMU(currentTime, eulers);
@@ -344,7 +343,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			@Override
 			public void onNewMessage(std_msgs.String message) {
 				synchronized(ranges) {
-					ranges.range = Float.parseFloat(message.getData());
+					ranges.range = message; //Float.parseFloat(message.getData());
 					ranges.rangeTime = System.currentTimeMillis();
 				}
 			}

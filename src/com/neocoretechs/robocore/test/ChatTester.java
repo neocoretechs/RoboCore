@@ -4,13 +4,19 @@ import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -88,6 +94,7 @@ public class ChatTester extends AbstractNodeMain  {
 		        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputScroll, outputScroll);
 		        splitPane.setResizeWeight(0.5);
 		        JButton submitButton = new JButton("Submit (Ctrl+Enter)");
+		        JButton fileButton = new JButton("Read File");
 		        JButton exitButton = new JButton("Exit");
 
 		        submitButton.addActionListener(e -> {
@@ -102,6 +109,22 @@ public class ChatTester extends AbstractNodeMain  {
 		                }
 		            }
 		        });
+		        
+		        fileButton.addActionListener(e -> {
+		        	JFileChooser fileChooser = new JFileChooser();
+		        	int result = fileChooser.showOpenDialog(null);
+		        	if (result == JFileChooser.APPROVE_OPTION) {
+		        		File selectedFile = fileChooser.getSelectedFile();
+		        		try {
+		        			String content = Files.readString(selectedFile.toPath(), StandardCharsets.UTF_8);
+		        			inputArea.append(content);
+		        		} catch (IOException ex) {
+		        			ex.printStackTrace();
+		        			JOptionPane.showMessageDialog(null, "Failed to read file: " + ex.getMessage());
+		        		}
+		        	}
+		        });
+
 
 		        exitButton.addActionListener(e -> System.exit(0));
 
@@ -114,6 +137,7 @@ public class ChatTester extends AbstractNodeMain  {
 		        });
 		        JPanel buttonPanel = new JPanel();
 		        buttonPanel.add(submitButton);
+		        buttonPanel.add(fileButton);
 		        buttonPanel.add(exitButton);
 		        frame.getContentPane().add(splitPane, BorderLayout.CENTER);
 		        frame.getContentPane().add(buttonPanel, BorderLayout.SOUTH);
@@ -152,6 +176,7 @@ public class ChatTester extends AbstractNodeMain  {
 				std_msgs.String sm = chatpub.newMessage();
 				sm.setData(inputArea.getText().trim());
 				chatpub.publish(sm);
+				inputArea.setText("");
 			}
 		}
 	});
