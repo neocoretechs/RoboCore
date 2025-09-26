@@ -115,6 +115,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
+	String previousJSON = null;
 	
 	static String threadGroup = "VIDEOCLIENT";
 	static {
@@ -155,17 +156,17 @@ public class VideoObjectRecog extends AbstractNodeMain
 			imageReadyL = true;
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
-			jo.append("timestamp",time);
+			jo.put("timestamp",time);
 			if(rangeCorrelated != 0) {
 				synchronized(ranges) {
-					jo.append("distance",ranges.range);
+					jo.put("distance",ranges.range);
 				}
 			}
 			if(eulersCorrelated[0] != 0) {
 				synchronized(euler) {
-					jo.append("heading",eulersCorrelated[0]);
-					jo.append("roll", eulersCorrelated[1]);
-					jo.append("pitch", eulersCorrelated[2]);
+					jo.put("heading",eulersCorrelated[0]);
+					jo.put("roll", eulersCorrelated[1]);
+					jo.put("pitch", eulersCorrelated[2]);
 				}
 			}
 			if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
@@ -395,10 +396,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 				//}
 				//}
 				String toJSON = e.toJson();
+				
 				// Did we detect anything in either image?
-				if(toJSON != null) {
+				if(toJSON != null && previousJSON != null && !previousJSON.equals(toJSON)) {
 					if(DEBUG || DEBUGJSON)
 						System.out.println(toJSON);
+					previousJSON = toJSON;
 					imagemess.setData(ByteBuffer.wrap(toJSON.getBytes()));
 					//imagemess.setEncoding("JPG");
 					imagemess.setEncoding("UTF8_JSON");

@@ -46,94 +46,96 @@ import std_msgs.Int32MultiArray;
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to send down to the Marlinspike controllers.
  * Subscribing to:
  * sensor_msgs/Joy (joystick information boxed as an array of buttons and axis values common to standard controllers):
- * * NYCO CORE CONTROLLER:
- * Identifies as : USB Joystick
- *Axis x		Left stick (left/right)
- *Axis y		Left stick (up/down)
- *Axis rx		N/A	 
- *Axis ry		N/A	 
- *Axis z	 	Right stick (left/right)
- *Axis rz		Right stick (up/down)
- *Button 0	x  - Thumb 2
- *Button 1	circle - Thumb
- *Button 2	square - Top
- *Button 3	triangle - Trigger
- *Button 4	Left Bumper	- Top2
- *Button 5	Right Bumper - Pinkie
- *Button 6	Select - Base3
- *Button 7	Start - Base4
- *Button 8	Left Stick Press - Base5
- *Button 9	Right Stick Press - Base6
+ * NYCO CORE CONTROLLER: <br>
+ * Identifies as : USB Joystick<br>
+ *Axis x		Left stick (left/right)<br>
+ *Axis y		Left stick (up/down)<br>
+ *Axis rx		N/A	 <br>
+ *Axis ry		N/A	 <br>
+ *Axis z	 	Right stick (left/right)<br>
+ *Axis rz		Right stick (<br>
+ *Button 1	circle - Thumb<br>
+ *Button 2	square - Top<br>
+ *Button 3	triangle - Trigger<br>
+ *Button 4	Left Bumper	- Top2<br>
+ *Button 5	Right Bumper - Pinkie<br>
+ *Button 6	Select - Base3<br>
+ *Button 7	Start - Base4<br>
+ *Button 8	Left Stick Press - Base5<br>
+ *Button 9	Right Stick Press - Base6<br>
+ *<p>
+ * AFTERGLOW CONTROLLER:<br>
+ * Identifies as : Generic X-Box Pad (right, even though its a PS3!)<br>
+ *Axis x		Left stick (left/right)<br>
+ *Axis y		Left stick (up/down)<br>
+ *Axis z	 	Left trigger<br>
+ *Axis rx(rx)	Right stick (left/right)	<br> 
+ *Axis ry(ry)	Right stick (up/down) <br>
+ *Axis rz		Right trigger<br>
+ *Button B(B) - circle<br>
+ *Button X(X) - square<br>
+ *Button A(A) - X<br>
+ *Button Left Thumb - left bumper<br>
+ *Button Right Thumb - right bumper<br>
+ *Button Left Thumb 3 - left stick press<br>
+ *Button Right Thumb 3 - right stick press<br>
+ *Button Select - Select<br>
+ *Button Mode - Mode<br>
+ *Button Unknown - Home<br>
+ *<p>
+ * LOGITECH, INC F310 GAMEPAD<br>
+ * Identifies as : Generic X-box pad (Controls are the same as AfterGlow) or Logitech Gamepad F310<br>
+ *Axis x		Left stick (left/right)<br>
+ *Axis y		Left stick (up/down)<br>
+ *Axis z	 	Left trigger<br>
+ *Axis rx(rx)	Right stick (left/right)	<br> 
+ *Axis ry(ry)	Right stick (up/down) <br>
+ *Axis rz		Right trigger<br>
+ *Button B(B) - circle<br>
+ *Button X(X) - square<br>
+ *Button A(A) - X<br>
+ *Button Y(Y) - triangle<br>
+ *Button Left Thumb - left bumper<br>
+ *Button Right Thumb - right bumper<br>
+ *Button Left Thumb 3 - left stick press<br>
+ *Button Right Thumb 3 - right stick press<br>
+ *Button Select - Select<br>
+ *Button Mode - Mode<br><br>
  *
- * AFTERGLOW CONTROLLER:
- * Identifies as : Generic X-Box Pad (right, even though its a PS3!)
- *Axis x		Left stick (left/right)
- *Axis y		Left stick (up/down)
- *Axis z	 	Left trigger
- *Axis rx(rx)	Right stick (left/right)	 
- *Axis ry(ry)	Right stick (up/down) 
- *Axis rz		Right trigger
- *Button B(B) - circle
- *Button X(X) - square
- *Button A(A) - X
- *Button Y(Y) - triangle
- *Button Left Thumb - left bumper
- *Button Right Thumb - right bumper
- *Button Left Thumb 3 - left stick press
- *Button Right Thumb 3 - right stick press
- *Button Select - Select
- *Button Mode - Mode
- *Button Unknown - Home
+ * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)<br>
+ * sensor_msgs/Temperature (most likely from IMU)<br>
+ * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)<br>
  *
- * LOGITECH, INC F310 GAMEPAD
- * Identifies as : Generic X-box pad (Controls are the same as AfterGlow) or Logitech Gamepad F310
- *Axis x		Left stick (left/right)
- *Axis y		Left stick (up/down)
- *Axis z	 	Left trigger
- *Axis rx(rx)	Right stick (left/right)	 
- *Axis ry(ry)	Right stick (up/down) 
- *Axis rz		Right trigger
- *Button B(B) - circle
- *Button X(X) - square
- *Button A(A) - X
- *Button Y(Y) - triangle
- *Button Left Thumb - left bumper
- *Button Right Thumb - right bumper
- *Button Left Thumb 3 - left stick press
- *Button Right Thumb 3 - right stick press
- *Button Select - Select
- *Button Mode - Mode
- *Button Unknown - Home
- *
- * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)
- * sensor_msgs/Temperature (most likely from IMU)
- * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)
- *
- * Publishing to:
- * All topics enumerated in MegaPubs typeNames which correspond to types that may appear in configuration by LUN.k
- * robocore/status (status update channel to receive information on alerts, etc, derived from IMU and other sensors)
+ * Publishing to:<br>
+ * All topics enumerated in MegaPubs typeNames which correspond to types that may appear in configuration by LUN.k<br>
+ * robocore/status (status update channel to receive information on alerts, etc, derived from IMU and other sensors)<br>
  * 
- * Published are the values from 0-1000 that represent actual power to each differential drive wheel.
- * Subscribers include the process that manages serial data to the motor controller, possibly on a separate computer.
+ * Published are the values from 0-1000 that represent actual power to each differential drive wheel.<p>
+ * Subscribers include the process that manages serial data to the motor controller, possibly on a separate computer.<p>
  * Publishers on robocore/status provide status updates relating to IMU extremes that are picked up by the VoxHumana voice synth or others,
  * again most probably on a completely separate single board computer within the robot.
  *
- * To reduce incoming data, Two sets of flags and a threshold value are used to determine if:
- * a) The values have changed from last message
- * b) The value exceed a threshold deemed noteworthy
+ * To reduce incoming data, Two sets of flags and a threshold value are used to determine if:<br>
+ * a) The values have changed from last message<br>
+ * b) The value exceed a threshold deemed noteworthy<br><p>
  * 
- * We take steps to align the joystick reference frame to the following:
- *      / 0 \
- *   90   |  -90
- *    \   |   /
- *     180,-180
+ * We take steps to align the joystick reference frame to the following:<br>
+ * <code>
+ *      / 0 \<br>
+ *   90   |  -90<br>
+ *    \   |   /<br>
+ *     180,-180<br>
+ * </code>
  * The ratio of arc lengths of radius speed and speed+WHEELBASE, and turn angle theta from course difference 
- * becomes the ratio of speeds at each wheel.
+ * becomes the ratio of speeds at each wheel.<br>
  * When in autonomous mode we use the same steering method for large granularity turns. At mid granularity we compute a solution
- * using a right triangle whose base is speed and whose hypotenuse is computed from scaled speed and course deviation. For the short leg,
- * course deviation and half wheeltrack form a chord with radius of WHEELBASE/2 and angle of course deviation: 2*(wheelbase/2)*sin(deviation/2). 
- * The ratio of hypotenuse to base is our distance and hence speed for each wheel as we do with the arc solution.
- * finally at the smallest granularity a PID controller takes over to maintain critical crosstrack damping.
+ * using a right triangle whose base is speed and whose hypotenuse is computed from scaled speed and course deviation. <p>For the short leg,
+ * course deviation and half wheeltrack form a chord with radius of WHEELBASE/2 and angle of course deviation: 
+ * <code><p>
+ * 2*(wheelbase/2)*sin(deviation/2). 
+ * </code><p>
+ * The ratio of hypotenuse to base is our distance and hence speed for each wheel as we do with the arc solution.<br>
+ * Finally, at the smallest granularity, a PID controller takes over to maintain critical crosstrack damping.<br>
  * This methodology is analogous to a human driver, who upon leaving the road and entering median, must compute a wide arc to re-enter
  * the roadway, then perform adjustments that bring them to a tangent of the center of the lane, and from there perform a series
  * of small corrections to stay on course. Regardless of the amount the machine is knocked off course it can find its way back to the
@@ -256,11 +258,11 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}
 	/**
-	 * The constructor will load but not activate the nodes listed in configuration when {@link MarlinspikeManager}.configureMarlinspike
+	 * The constructor will load but not activate the nodes listed in configuration when {@link MarlinspikeManager#configureMarlinspike(boolean, boolean)}
 	 * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
 	 * want to get configuration for all available control nodes, but not activate them from this module since this module
-	 * issues directives to the attached controllers rather than control them directly.<p/>
-	 * We then create collection of {@link NodeDeviceDemuxer} by calling getNodeDeviceDemuxerByType in the MarlinspikeManager.<p/>
+	 * issues directives to the attached controllers rather than control them directly.<p>
+	 * We then create collection of {@link NodeDeviceDemuxer} by calling {@link MarlinspikeManager#getNodeDeviceDemuxerByType}.<p>
 	 * Finally we create the isActive boolean array to hold/control status of devices.
 	 * @throws IOException 
 	 */
@@ -809,65 +811,65 @@ public class MotionController extends AbstractNodeMain {
 	}
 
 	/**
-	 * Process joystick messages. <p/>
+	 * Process joystick messages. <p>
 	 * The buttons are basically hardwired to predefined functions, and LUN[0] and LUN[1] are typically assigned device names LeftWheel
 	 * and RightWheel and the 2 axes of stick specified in the config file are blended into a steering speed and angle based on the 2 axes,
-	 * which is published to each wheel channel as a speed in the range -1000 to +1000.<p/>
+	 * which is published to each wheel channel as a speed in the range -1000 to +1000.<p>
 	 * 
 	 * The other device name LUNs can be configured as desired with the values interpolated into a -1000 to +1000 range based on the type
-	 * of axis defined and the values(s) published to the DeviceName LUN channel as a Ros int32 multi array.<p/>
+	 * of axis defined and the values(s) published to the DeviceName LUN channel as a Ros int32 multi array.<p>
 	 *
 	 * Joystick data will have array of axis and buttons, typically, axis[0] and axis[2] are left stick x,y axis[1] and axis[3] are right.
 	 * The code calculates the theoretical speed for each wheel in the 0-1000 scale or SPEEDSCALE based on target point vs IMU yaw angle.
 	 * If the joystick chimes in the target point becomes the current course minus relative stick position,
 	 * and the speed is modified by the Y value of the stick.
 	 * Button presses cause rotation in place or emergency stop or cause the robot to hold to current course, using the IMU to 
-	 * correct for deviation an wheel slippage.<p/>
+	 * correct for deviation an wheel slippage.<p>
 	 * 
 	 * To turn, we are going to calculate the arc lengths of the inner wheel and outer wheel based on speed we are presenting by stick y
 	 * (speed) forming the radius of the arc and the offset of stick angle x,y degrees from 0, added to current heading, forming theta.
 	 * Theta may also be formed by button press, and the difference in current heading and ongoing IMU headings for bearing on a forward course.
 	 * We are then going to assume that the distance each wheel has to travel represents a ratio that is also the ratio
 	 * of speeds of each wheel, time and speed being distance, and the fact that both wheels, being attached to the robot,
-	 * have to arrive at essentially the same time after covering the desired distance based on desired speed.<p/>
+	 * have to arrive at essentially the same time after covering the desired distance based on desired speed.<p>
 	 * 
 	 * The net effect that as speed increases the turning radius also increases, as the radius is formed by speed (Y of stick) scaled by 1000
 	 * in the case of the inner wheel, and inner wheel plus 'effective robot width' or WHEELBASE as the outer wheel arc radius to traverse.
 	 * So we have the theta formed by stick and IMU, and 2 radii formed by stick y and WHEELBASE, and we generate 2 arc lengths that are taken
 	 * as a ratio that is multiplied by the proper wheel depending on direction, to reduce power in one wheel, to affect turn.
-	 * The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.<p/>
+	 * The ratio of arc lengths depending on speed and turn angle becomes the ratio of speeds at each wheel.<p>
 	 * 
 	 * The above method is used for interactive control via joystick and for large granularity correction in autonomous mode.
 	 * The same technique is used in autonomous mode for finer correction by substituting the base of a right triangle as the speed 
 	 * for the inner arc, and the hypotenuse computed by the base and chord formed from course deviation, and half wheelbase, for the outer arc.
 	 * The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
 	 * us into refined tangents to the crosstrack. At final correction, a PID algorithm is used to maintain fine control.
-	 * axis[6] is POV, it has quantized values to represent its states.<p/>
+	 * axis[6] is POV, it has quantized values to represent its states.<p>
 	 * 
-	 * @param message --float[] axis:--			<br/>
-	 * [0] - left horiz (X)						<br/>
-	 * [1] - left vert (Y)						<br/>
-	 * [2] - right horiz (X)						<br/>
-	 * [3] - right vert (Y) 						<br/>
-	 * [4] - left trigger						<br/>
-	 * [5] - right trigger						<br/>
-	 * [6] - POV									<br/>
-	 * --int[] buttons--							<br/>
-	 * [0] - select								<br/>
-	 * [1] - start								<br/>
-	 * [2] - left stick press					<br/>
-	 * [3] - right stick press					<br/>
-	 * [4] - triangle -- HOLD CURRENT BEARING	<br/>
-	 * [5] - circle -- RIGHT PIVOT				<br/>
-	 * [6] - X button -- EMERGENCY STOP			<br/>
-	 * [7] - square -- LEFT PIVOT				<br/>
-	 * [8] - left bumper							<br/>
-	 * [9] - right bumper						<br/>
-	 * -- joystick only --						<br/>
-	 * [10] - back								<br/>
-	 * [11] - extra								<br/>
-	 * [12] - mode								<br/>
-	 * [13] - side								<br/>
+	 * @param message --float[] axis:--			<br>
+	 * [0] - left horiz (X)						<br>
+	 * [1] - left vert (Y)						<br>
+	 * [2] - right horiz (X)						<br>
+	 * [3] - right vert (Y) 						<br>
+	 * [4] - left trigger						<br>
+	 * [5] - right trigger						<br>
+	 * [6] - POV									<br>
+	 * --int[] buttons--							<br>
+	 * [0] - select								<br>
+	 * [1] - start								<br>
+	 * [2] - left stick press					<br>
+	 * [3] - right stick press					<br>
+	 * [4] - triangle -- HOLD CURRENT BEARING	<br>
+	 * [5] - circle -- RIGHT PIVOT				<br>
+	 * [6] - X button -- EMERGENCY STOP			<br>
+	 * [7] - square -- LEFT PIVOT				<br>
+	 * [8] - left bumper							<br>
+	 * [9] - right bumper						<br>
+	 * -- joystick only --						<br>
+	 * [10] - back								<br>
+	 * [11] - extra								<br>
+	 * [12] - mode								<br>
+	 * [13] - side								<br><br>
 	 * @param connectedNode The Ros node we are using here
 	 * @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDeviceDemuxer}
 	 * @param message The joystick message with all buttons and axes
@@ -911,7 +913,7 @@ public class MotionController extends AbstractNodeMain {
 		// values to absolute/cmd_periph1 and let the downstream processing handle further scaling
 		// if necessary. If we reach an off state of -1, we want to send it anyway to turn off the LED, 
 		// hence the boolean checks.
-		//
+		//<p>
 		// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
 		// If the button square or circle is depressed, rotate in place at stick position Y speed
 		if( buttons[7] != 0 ) { // left pivot
@@ -1153,27 +1155,27 @@ public class MotionController extends AbstractNodeMain {
 	}
 	/**
 	 * 
-	 * Process other axis.<p/>
+	 * Process other axis.<p>
 	 * Get the list of axis and or buttons according to LUN and publish to each.
 	 * We are going to translate the floating values to integer by scaling them * 1000 as they are typically in the 0-1 range.
-	 * We scale the POV trigger to +1000, -1000 based on AxisUp and AxisDown if we want it to act as a simple up/down control.<br/>
-	 * The DigitalHat POV is 8 positions, left being 1.0, subtracting .125 counterclockwise, so straight up is .25, straight down is .75<p/>
-	 * Configuration:			<br/>
-	 * AXIS[0].AxisType:Stick	<br/>
-	 * AXIS[0].AxisX:0			<br/>
-	 * AXIS[0].AxisY:2			<br/>
-	 * ---						<br/>
-	 * AXIS[3].AxisType:Trigger<br/>
-	 * AXIS[3].Axis:4			<br/>
-	 * ---						<br/>
-	 * AXIS[4].AxisType:POV	<br/>
-	 * AXIS[4].Axis:6			<br/>
-	 * -- optional:				<br/>
-	 * AXIS[4].AxisUp:0.25		<br/>
-	 * AXIS[4].AxisDown:0.75	<br/>
-	 *<br/>
+	 * We scale the POV trigger to +1000, -1000 based on AxisUp and AxisDown if we want it to act as a simple up/down control.<br>
+	 * The DigitalHat POV is 8 positions, left being 1.0, subtracting .125 counterclockwise, so straight up is .25, straight down is .75<p>
+	 * Configuration:			<br>
+	 * AXIS[0].AxisType:Stick	<br>
+	 * AXIS[0].AxisX:0			<br>
+	 * AXIS[0].AxisY:2			<br>
+	 * ---						<br>
+	 * AXIS[3].AxisType:Trigger<br>
+	 * AXIS[3].Axis:4			<br>
+	 * ---						<br>
+	 * AXIS[4].AxisType:POV	<br>
+	 * AXIS[4].Axis:6			<br>
+	 * -- optional:				<br>
+	 * AXIS[4].AxisUp:0.25		<br>
+	 * AXIS[4].AxisDown:0.75	<br>
+	 *<br>
 	 * Assume we handle propulsion in other method, so ignore the LUN device names that end in 'Wheel' and process all others, extracting the axis
-	 * definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:<br/>
+	 * definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:<br>
 	 * <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
 	 * @param connectedNode Our Ros node here
 	 * @param pubschannel Collection of publisher channels that represent axes
@@ -1383,19 +1385,16 @@ public class MotionController extends AbstractNodeMain {
 	 * @throws IOException 
 	 */
 	public synchronized void moveRobotRelative(float yawIMUDegrees, float yawTargetDegrees, int targetDistance) throws IOException {
-		//while (true) {
-
 		//leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
 		//rightWheel.targetMM = (float)(right_velocity) / clicks_per_mm;
-
 		//avg_mm = (float) ((leftWheel.targetMM + rightWheel.targetMM) / 2.0);
 		//total_mm += avg_mm;
-		// wheel_theta is travel of each wheel with desired velocity, if same angle is 0, forward
+		//wheel_theta is travel of each wheel with desired velocity, if same angle is 0, forward
 		//twistInfo.wheelTheta = (leftWheel.targetMM - rightWheel.targetMM) / wheelTrack;
-		float wheelTheta = 0.0f;
-		float imuTheta = 0.0f;
 		//float yawDegrees = 0.0f;
 		//float deltaTheta = 0.0f;
+		float wheelTheta = 0.0f;
+		float imuTheta = 0.0f;
 		float robotTheta = 0.0f;
 		wheelTheta = ((float)yawTargetDegrees * 0.0174532925f); // degr to radians
 		/* read the YAW value from the imu struct and convert to radians */
@@ -1419,10 +1418,7 @@ public class MotionController extends AbstractNodeMain {
 		// setMotorSpeed as 0 to turn in place or a value of arc radius
 		// modified by current speed to make a gentle curve.
 		// if theta is 0, move linear in x
-		// if x and theta not 0 its rotation about a point in space
-		//stasis(fabs(wheel_theta),fabs(imu_theta));
-		// slot, channel 1, slot, channel 2, theta, yaw radians
-		setMotorArcSpeed(robotTheta, targetDistance);
+		setMotorArcSpeed(targetDistance, robotTheta);
 	}
 
 	/**
