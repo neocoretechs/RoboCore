@@ -115,7 +115,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
-	String previousJSON = null;
+	String previousJSON = "";
 	
 	static String threadGroup = "VIDEOCLIENT";
 	static {
@@ -396,9 +396,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 				//}
 				//}
 				String toJSON = e.toJson();
-				
-				// Did we detect anything in either image?
-				if(toJSON != null && previousJSON != null && !previousJSON.equals(toJSON)) {
+				// Did we detect anything in either image? And do we have something other than a basic timestamp
+				// which would create a string of length > 30. Crude but effective.
+				if(toJSON != null && toJSON.length() > 30 && !previousJSON.equals(toJSON)) {
 					if(DEBUG || DEBUGJSON)
 						System.out.println(toJSON);
 					previousJSON = toJSON;
