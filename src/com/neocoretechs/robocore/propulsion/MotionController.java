@@ -41,6 +41,7 @@ import org.json.JSONObject;
 
 import sensor_msgs.Joy;
 import std_msgs.Int32MultiArray;
+import trajectory_msgs.ComeToHeadingStamped;
 
 /**
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to send down to the Marlinspike controllers.
@@ -323,7 +324,11 @@ public class MotionController extends AbstractNodeMain {
 			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
 				@Override
 				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
-					throw new RuntimeException("Failed to register with master "+pub);					
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);
+					//throw new RuntimeException("Failed to register with master "+pub);					
 				}
 				@Override
 				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
@@ -339,6 +344,10 @@ public class MotionController extends AbstractNodeMain {
 					if(DEBUG) {
 						System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
 					}
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);
 				}
 				@Override
 				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
@@ -370,15 +379,15 @@ public class MotionController extends AbstractNodeMain {
 
 		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
 
-		Subscriber<sensor_msgs.Joy> substick = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
-		Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
+		final Subscriber<sensor_msgs.Joy> substick = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
+		final Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		final Subscriber<std_msgs.String> subsrange = connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrangebot = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
-		Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("/sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
-		Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("/sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
+		final Subscriber<sensor_msgs.MagneticField> subsmag = connectedNode.newSubscriber("/sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
+		final Subscriber<sensor_msgs.Temperature> substemp = connectedNode.newSubscriber("/sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
+		final Subscriber<trajectory_msgs.ComeToHeadingStamped> subsmodelmove = connectedNode.newSubscriber("/model_commands/move", ComeToHeadingStamped._TYPE);
 		/*
 		Subscriber<sensor_msgs.PointCloud> subsrange = connectedNode.newSubscriber("robocore/kinect", sensor_msgs.PointCloud._TYPE);
-
 		subsrange.addMessageListener(new MessageListener<sensor_msgs.PointCloud>() {
 			@Override
 			public void onNewMessage(sensor_msgs.PointCloud message) {
@@ -402,7 +411,11 @@ public class MotionController extends AbstractNodeMain {
 			@Override
 			public void onMasterRegistrationFailure(Subscriber<Joy> subs) {
 				if(DEBUG)
-					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);				
+					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);
+				ArrayList<String> st = new ArrayList<String>();
+				st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, this.getClass().getName(),
+						diagnostic_msgs.DiagnosticStatus.ERROR, st);
 			}
 			@Override
 			public void onMasterUnregistrationSuccess(Subscriber<Joy> subs) {
@@ -437,6 +450,55 @@ public class MotionController extends AbstractNodeMain {
 
 		});
 
+		subsmodelmove.addSubscriberListener(new SubscriberListener<trajectory_msgs.ComeToHeadingStamped>() {
+			@Override
+			public void onMasterRegistrationFailure(Subscriber<ComeToHeadingStamped> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);
+				ArrayList<String> st = new ArrayList<String>();
+				st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, this.getClass().getName(),
+						diagnostic_msgs.DiagnosticStatus.ERROR, st);
+			}
+			@Override
+			public void onMasterUnregistrationSuccess(Subscriber<ComeToHeadingStamped> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s unregistered with master!%n", this.getClass().getName(), subs);			
+			}
+			@Override
+			public void onMasterRegistrationSuccess(Subscriber<ComeToHeadingStamped> subs) {
+			}
+			@Override
+			public void onMasterUnregistrationFailure(Subscriber<ComeToHeadingStamped> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);					
+			}
+			@Override
+			public void onNewPublisher(Subscriber<ComeToHeadingStamped> subs, PublisherIdentifier pubs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);
+				subsmodelmove.addMessageListener(new MessageListener<trajectory_msgs.ComeToHeadingStamped>() {
+					@Override
+					public void onNewMessage(trajectory_msgs.ComeToHeadingStamped message) {
+						try {
+							publishRobotMoveRelative(connectedNode, pubschannel, message);
+						} catch (IOException e) {
+							ArrayList<String> st = new ArrayList<String>();
+							st.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "/model_commands/move",
+									diagnostic_msgs.DiagnosticStatus.ERROR, st);
+						}
+					} // onMessage move from model
+				});
+			}
+			@Override
+			public void onShutdown(Subscriber<ComeToHeadingStamped> subs) {
+				if(DEBUG)
+					System.out.printf("%s Subscsriber %s shutdown!%n", this.getClass().getName(), subs);
+			}
+
+		});
+	
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
@@ -463,15 +525,22 @@ public class MotionController extends AbstractNodeMain {
 								System.out.println("Nav:"+euler.toString()+" "+angs.toString());
 							}
 							isNav = true;
+							isOverShock = false;
 							if( SHOCK_THRESHOLD[0] != -1 ) {
-								if( Math.abs(angs.linear.getX()-SHOCK_BASELINE[0]) > SHOCK_THRESHOLD[0] ) {
-									isOverShock = true;
+								for(int i = 0; i < SHOCK_BASELINE.length; i++) {
+									if( Math.abs(angs.linear.getX()-SHOCK_BASELINE[i]) > SHOCK_THRESHOLD[i] ) {
+										isOverShock = true;
+									}
 								}
-								if( Math.abs(angs.linear.getY()-SHOCK_BASELINE[1]) > SHOCK_THRESHOLD[1] ) {
-									isOverShock = true;
-								}
-								if( Math.abs(angs.linear.getZ()-SHOCK_BASELINE[2]) > SHOCK_THRESHOLD[2] ) {
-									isOverShock = true;
+								if( isOverShock && !isMoving) {
+									if(DEBUG)
+										System.out.println("OVERSHOCK!");
+									ArrayList<String> shockVals = new ArrayList<String>(2);
+									synchronized(angs) {
+										shockVals.add(angs.toString());
+									}
+									new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Accelerometer shock warning", 
+											diagnostic_msgs.DiagnosticStatus.WARN, shockVals);
 								}
 							}
 						} else
@@ -504,6 +573,10 @@ public class MotionController extends AbstractNodeMain {
 					isRangeUpperFront = false;
 					System.out.println("Range top subs exception:"+e.getMessage());
 					e.printStackTrace();
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "RANGE",
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);
 				}
 			}
 		});
@@ -549,8 +622,17 @@ public class MotionController extends AbstractNodeMain {
 						if(IMUDEBUG)
 							System.out.println(mags);
 						if( MAG_THRESHOLD[0] != -1 ) {
-							if( mags.mag3.getX() > MAG_THRESHOLD[0] && mags.mag3.getY() > MAG_THRESHOLD[1] && mags.mag3.getZ() > MAG_THRESHOLD[2] ) {
-								isOverMag = true;
+							if( mags.mag3.getX() > MAG_THRESHOLD[0] && 
+								mags.mag3.getY() > MAG_THRESHOLD[1] && 
+								mags.mag3.getZ() > MAG_THRESHOLD[2] ) {
+								if(DEBUG)
+									System.out.println("Mag EXCEEDS threshold..");
+								ArrayList<String> magVals = new ArrayList<String>(3);
+									magVals.add(String.valueOf(mags.mag3.getX()));
+									magVals.add(String.valueOf(mags.mag3.getY()));
+									magVals.add(String.valueOf(mags.mag3.getZ()));		
+								new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Magnetic anomaly detected", 
+										diagnostic_msgs.DiagnosticStatus.WARN, magVals);
 							}
 						}
 					} else
@@ -569,10 +651,25 @@ public class MotionController extends AbstractNodeMain {
 					if(DEBUG || IMUDEBUG)
 						System.out.println(" Temp:"+temperature);
 					isTemperature = true;
-					if( temperature > robot.getTemperatureThreshold() )
+					if( temperature > robot.getTemperatureThreshold() ) {
 						isOverTemp = true;
+							if( DEBUG )
+								System.out.println("DANGER Temp:"+temperature);
+							isOverTemp = false;
+							ArrayList<String> tempVals = new ArrayList<String>(1);
+							tempVals.add(String.valueOf(temperature));
+							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Temperature warning", 
+									diagnostic_msgs.DiagnosticStatus.WARN, tempVals);
+					}
 				} else
 					isTemperature = false;
+				if( isOverPressure ) { // check for dropping
+					isOverPressure = false;
+					ArrayList<String> pressVals = new ArrayList<String>(1);
+					pressVals.add(String.valueOf(pressure));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Atmospheric pressure warning", 
+							diagnostic_msgs.DiagnosticStatus.WARN, pressVals);
+				}
 			}
 		});
 
@@ -603,71 +700,13 @@ public class MotionController extends AbstractNodeMain {
 				try {
 					awaitStart.await();
 				} catch (InterruptedException e) {}
-				/*
-				hasMoved = motorControlListener.move2DRelative(np.getGyros()[0] , courseOffset, linearMove
-						, np.getTimeVal(), np.getAccs(), np.getRanges());
-					//System.out.println("Robot should have Moved to "+(robotTheta *= 57.2957795)+" degrees"); // to degrees		
-				 */
-
+				//
 				// publish messages to status listener if applicable
-
-				if( isOverMag ) {
-					isOverMag = false;
-					if(DEBUG)
-						System.out.println("Mag EXCEEDS threshold..");
-					ArrayList<String> magVals = new ArrayList<String>(3);
-					synchronized(mags) {
-						magVals.add(String.valueOf(mags.mag3.getX()));
-						magVals.add(String.valueOf(mags.mag3.getY()));
-						magVals.add(String.valueOf(mags.mag3.getZ()));
-					}
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Magnetic anomaly detected", 
-							diagnostic_msgs.DiagnosticStatus.WARN, magVals);
-				}
-
-				if( isOverShock && !isMoving) {
-					if(DEBUG)
-						System.out.println("OVERSHOCK!");
-					ArrayList<String> shockVals = new ArrayList<String>(2);
-					synchronized(angs) {
-						shockVals.add(angs.toString());
-					}
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Accelerometer shock warning", 
-							diagnostic_msgs.DiagnosticStatus.WARN, shockVals);
-				}
-
-				if( isOverPressure ) { // check for dropping
-					//long meas = System.currentTimeMillis()-lastPressureNotification;
-					//if( meas > 1000000) {
-					//	isPress = true;
-					//}
-					//return;
-					//}
-					isOverPressure = false;
-					ArrayList<String> pressVals = new ArrayList<String>(1);
-					pressVals.add(String.valueOf(pressure));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Atmospheric pressure warning", 
-							diagnostic_msgs.DiagnosticStatus.WARN, pressVals);
-				}
-
-				if(isOverTemp) {
-					if( DEBUG )
-						System.out.println("DANGER Temp:"+temperature);
-					isOverTemp = false;
-					ArrayList<String> tempVals = new ArrayList<String>(1);
-					tempVals.add(String.valueOf(temperature));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Temperature warning", 
-							diagnostic_msgs.DiagnosticStatus.WARN, tempVals);
-				}
-
-				while(!statusQueue.isEmpty()) {
-					statpub.publish(statusQueue.takeFirst());
-					++sequenceNumber;
-					if( DEBUG )
-						System.out.println("Sequence:"+sequenceNumber);
-					Thread.sleep(1);
-				}
-
+				//
+				statpub.publish(statusQueue.takeFirst());
+				++sequenceNumber;
+				if( DEBUG )
+					System.out.println("Sequence:"+sequenceNumber);
 			}
 		}); // cancellable loop
 
@@ -1382,9 +1421,10 @@ public class MotionController extends AbstractNodeMain {
 	 * @param yawIMUDegrees Yaw is delivered in degrees
 	 * @param yawTargetDegrees target final pose is in degrees for easier human input and represents motion relative to current pose vs absolute position
 	 * @param targetDistance target distance to travel in CM, if 0 perform a pivot
+	 * @return the left and right integer speed array
 	 * @throws IOException 
 	 */
-	public synchronized void moveRobotRelative(float yawIMUDegrees, float yawTargetDegrees, int targetDistance) throws IOException {
+	public synchronized int[] moveRobotRelative(float yawIMUDegrees, float yawTargetDegrees, int targetDistance) throws IOException {
 		//leftWheel.targetMM = (float)(left_velocity) / clicks_per_mm;
 		//rightWheel.targetMM = (float)(right_velocity) / clicks_per_mm;
 		//avg_mm = (float) ((leftWheel.targetMM + rightWheel.targetMM) / 2.0);
@@ -1418,7 +1458,7 @@ public class MotionController extends AbstractNodeMain {
 		// setMotorSpeed as 0 to turn in place or a value of arc radius
 		// modified by current speed to make a gentle curve.
 		// if theta is 0, move linear in x
-		setMotorArcSpeed(targetDistance, robotTheta);
+		return setMotorArcSpeed(targetDistance, robotTheta);
 	}
 
 	/**
@@ -1528,7 +1568,19 @@ public class MotionController extends AbstractNodeMain {
 				(int) robot.getRightSpeedSetpointInfo().getTarget()};
 	}
 
-
+	private void publishRobotMoveRelative(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, ComeToHeadingStamped heading) throws IOException {
+		int[] speeds = null;
+		synchronized(euler) {
+			if((System.currentTimeMillis()-euler.eulerTime) > (System.currentTimeMillis()-heading.getTime().getData())) {
+				speeds = moveRobotRelative(heading.getHeading().getData(), heading.getHeading().getData(), heading.getDist().getData());
+			} else {
+				speeds = moveRobotRelative((float) euler.eulers[0], heading.getHeading().getData(), heading.getDist().getData());
+			}
+		}
+		speedL = speeds[0];
+		speedR = speeds[1];
+		publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
+	}
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 
 	double yy = quat.y() * quat.y(); // 2 Uses below

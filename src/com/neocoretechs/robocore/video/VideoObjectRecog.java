@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.json.JSONObject;
 import org.ros.concurrent.CancellableLoop;
@@ -51,7 +52,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private static boolean DEBUGJSON = true;
 	private static boolean DEBUGDISPARITY = true;
 	private static boolean SAVE_DETECTIONS = false;
-	private static final boolean SAMPLERATE = true; // display pubs per second
+	private static final int SAMPLERATE = 5; // display pubs per SAMPLERATE if > 0
 	AsynchRelatrixClientTransaction session = null;
 	TransactionId xid = null;
 	Alias tensorAlias = null;
@@ -122,6 +123,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 		SynchronizedThreadManager.getInstance().init(new String[] {threadGroup});
 	}
 	
+	TimedImage[] timedImageDebounce = new TimedImage[3];
+	AtomicInteger debounceCount = new AtomicInteger(0);
+	
 	final class TimedImage implements Comparable {
 		long sequence;
 		long time;
@@ -130,6 +134,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 		double eulersCorrelated[] = new double[]{0.0,0.0,0.0};
 		float rangeCorrelated = 0f;
 		stereo_msgs.StereoImage stereoImage;
+		detect_result_group rdrg;
+		detect_result_group ldrg;
 		public TimedImage(stereo_msgs.StereoImage stereoImage, long sequence) {
 			this.stereoImage = stereoImage;
 			this.leftImage = stereoImage.getData().array();
@@ -144,16 +150,25 @@ public class VideoObjectRecog extends AbstractNodeMain
 					this.rangeCorrelated = Float.parseFloat(ranges.range.getData());
 			}
 			this.sequence = sequence;
+			Instance rimage;
+			try {
+				rimage = createImage(rightImage);
+				rdrg = model.inference(rimage, MODEL);
+				imageReadyR = true;
+				Instance limage = createImage(leftImage);
+				ldrg = model.inference(limage, MODEL);
+				imageReadyL = true;
+				if(ldrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
+					limage.saveDetections(ldrg,"leftImage"+time);
+				if(rdrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
+					rimage.saveDetections(rdrg,"rightimage"+time);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 		
 		public String toJson() throws IOException{
 			JSONObject jo = new JSONObject();
-			Instance rimage = createImage(rightImage);
-			detect_result_group rdrg = model.inference(rimage, MODEL);
-			imageReadyR = true;
-			Instance limage = createImage(leftImage);
-			detect_result_group ldrg = model.inference(limage, MODEL);
-			imageReadyL = true;
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
 			jo.put("timestamp",time);
@@ -172,10 +187,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
 				return jo.toString();
 			}
-			if(ldrg.getCount() > 0 && SAVE_DETECTIONS)
-				limage.saveDetections(ldrg,"leftImage"+time);
-			if(rdrg.getCount() > 0 && SAVE_DETECTIONS)
-				rimage.saveDetections(rdrg,"rightimage"+time);
+
 			/*
 			if(ldrg.getCount() != 0 && rdrg.getCount() != 0) {
 				detect_result[] d1 = ldrg.getResults();
@@ -220,10 +232,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 		public int hashCode() {
 			final int prime = 31;
 			int result = 1;
-			result = prime * result + getEnclosingInstance().hashCode();
-			result = prime * result + Objects.hash(time);
+			result = prime * result + Objects.hash(ldrg, rangeCorrelated, rdrg);
 			return result;
 		}
+		/**
+		 * We assume we tossed out anything with zero in both detections
+		 * If the left number matches the right number and each occurrence of name in left and right match, they are 'equal'
+		 */
 		@Override
 		public boolean equals(Object obj) {
 			if (this == obj) {
@@ -232,15 +247,40 @@ public class VideoObjectRecog extends AbstractNodeMain
 			if (!(obj instanceof TimedImage)) {
 				return false;
 			}
-			TimedImage other = (TimedImage) obj;
-			if (!getEnclosingInstance().equals(other.getEnclosingInstance())) {
-				return false;
+			if(ldrg.getCount() == ((TimedImage)obj).ldrg.getCount() &&
+			   rdrg.getCount() == ((TimedImage)obj).rdrg.getCount() ) {
+				int leftSame = 0;
+				int rightSame = 0;
+				for(int i = 0; i < ldrg.getCount();i++) {
+					if(ldrg.getResults() == null)
+						break;
+					for(int j = 0; j <((TimedImage)obj).ldrg.getCount(); j++ ) {
+						if(((TimedImage)obj).ldrg.getResults() == null)
+							break;
+						if(ldrg.getResults()[i].getName().equals(((TimedImage)obj).ldrg.getResults()[j].getName())) {
+							leftSame++;
+							break;
+						}
+					}
+				}
+				for(int i = 0; i < rdrg.getCount();i++) {
+					if(rdrg.getResults() == null)
+						break;
+					for(int j = 0; j <((TimedImage)obj).rdrg.getCount(); j++ ) {
+						if(((TimedImage)obj).rdrg.getResults() == null)
+							break;
+						if(rdrg.getResults()[i].getName().equals(((TimedImage)obj).rdrg.getResults()[j].getName())) {
+							rightSame++;
+							break;
+						}
+					}
+				}
+				if(leftSame == ldrg.getCount() && rightSame == rdrg.getCount())
+					return true;
 			}
-			return time == other.time;
+			return false;
 		}
-		private VideoObjectRecog getEnclosingInstance() {
-			return VideoObjectRecog.this;
-		}
+
 	}
 	
 	@Override
@@ -309,15 +349,32 @@ public class VideoObjectRecog extends AbstractNodeMain
 			@Override
 			public void onNewMessage(stereo_msgs.StereoImage img) {
 				long slew = System.currentTimeMillis() - time2;
-				if( SAMPLERATE && slew >= 1000) {
+				if( SAMPLERATE > 0 && slew >= SAMPLERATE*1000) {
 					time2 = System.currentTimeMillis();
-					System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
+					System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)/SAMPLERATE+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
 					lastSequenceNumber2 = sequenceNumber2;
-				}	
-				// sequenceNumber is the publishing number, it may repeat here if more images come in than are published
-				try {
-					queue.addLastWait(new TimedImage(img, sequenceNumber));
-				} catch (InterruptedException e) {}
+				}
+				if(debounceCount.get() < timedImageDebounce.length) {
+					TimedImage candidate = new TimedImage(img, sequenceNumber);
+					// both zero? toss it
+					if(candidate.ldrg.getCount() != 0 || candidate.rdrg.getCount() != 0) {
+						if(debounceCount.get() > 0) {
+							// if length of debounce array images match, send the first one on and reset
+							if(candidate.equals(timedImageDebounce[debounceCount.get()-1]))
+								timedImageDebounce[debounceCount.getAndIncrement()] = candidate; // 2 sequences match, up the possibility
+							else
+								debounceCount.set(0); // mismatch, reset to zero
+						} else {
+							timedImageDebounce[debounceCount.getAndIncrement()] = candidate; // count is zero, start sequence
+						}
+					}
+				} else { // array is full, we must have had array-length in a row
+					// sequenceNumber is the publishing number, it may repeat here if more images come in than are published
+					try {
+						queue.addLastWait(timedImageDebounce[0]);
+						debounceCount.set(0);
+					} catch (InterruptedException e) {}
+				}
 				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
 			}
 		});
@@ -374,9 +431,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 
 			TimedImage e = queue.takeFirstNotify();
 			try {
-				if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
+				if( SAMPLERATE > 0 && (System.currentTimeMillis() - time1) >= SAMPLERATE*1000) {
 					time1 = System.currentTimeMillis();
-					System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/*+limage+" "+rimage*/);
+					System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/SAMPLERATE/*+limage+" "+rimage*/);
 					lastSequenceNumber = sequenceNumber;
 				}
 				if( DEBUG )
