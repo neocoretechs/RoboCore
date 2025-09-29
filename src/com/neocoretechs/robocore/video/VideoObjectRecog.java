@@ -25,7 +25,6 @@ import com.neocoretechs.relatrix.key.NoIndex;
 
 import com.neocoretechs.rknn4j.image.Instance;
 import com.neocoretechs.rknn4j.image.detect_result;
-import com.neocoretechs.rknn4j.image.detect_result.Rectangle;
 import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
 
@@ -102,17 +101,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	final static float B = 100.0f; // baseline mm
 	final static float IOU_THRESHOLD = .40f;
 	
-	static class EulerTime {
-		sensor_msgs.Imu euler;
-		long eulerTime = 0L;
-	}
-	EulerTime euler = new EulerTime();
-	
-	static class RangeTime {
-		std_msgs.String range;
-		long rangeTime = 0L;
-	}
-	RangeTime ranges = new RangeTime();
+
 	
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
@@ -141,14 +130,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 			this.leftImage = stereoImage.getData().array();
 			this.rightImage = stereoImage.getData2().array();
 			this.time = System.currentTimeMillis();
-			synchronized(euler) {
-				if(Math.abs(this.time-euler.eulerTime) <= 1000)
-					this.eulersCorrelated = euler.euler.getOrientationCovariance();
-			}
-			synchronized(ranges) {
-				if(Math.abs(this.time-ranges.rangeTime) <= 1000)
-					this.rangeCorrelated = Float.parseFloat(ranges.range.getData());
-			}
 			this.sequence = sequence;
 			Instance rimage;
 			try {
@@ -172,22 +153,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
 			jo.put("timestamp",time);
-			if(rangeCorrelated != 0) {
-				synchronized(ranges) {
-					jo.put("distance",ranges.range);
-				}
-			}
-			if(eulersCorrelated[0] != 0) {
-				synchronized(euler) {
-					jo.put("heading",eulersCorrelated[0]);
-					jo.put("roll", eulersCorrelated[1]);
-					jo.put("pitch", eulersCorrelated[2]);
-				}
-			}
 			if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
 				return jo.toString();
 			}
-
 			/*
 			if(ldrg.getCount() != 0 && rdrg.getCount() != 0) {
 				detect_result[] d1 = ldrg.getResults();
@@ -332,10 +300,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 		} catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
-		final Subscriber<sensor_msgs.Imu> subsimu = 
-				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
-		final Subscriber<std_msgs.String> subsrange = 
-				connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
+	
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		
@@ -378,34 +343,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
 			}
 		});
-		//
-		// update all TimedImage in the queue that match the current timestamp to 1 ms with the current
-		// IMU reading
-		//
-		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
-			@Override
-			public void onNewMessage(sensor_msgs.Imu message) {
-				synchronized(euler) {
-					euler.euler = message;
-					euler.eulerTime = System.currentTimeMillis();
-					//queue.forEach(e->{
-					//	e.setIMU(currentTime, eulers);
-					//});
-				}
-			}
-		});
-		//
-		// Ultrasoic distance sensor also timestamped and correlated
-		//
-		subsrange.addMessageListener(new MessageListener<std_msgs.String>() {
-			@Override
-			public void onNewMessage(std_msgs.String message) {
-				synchronized(ranges) {
-					ranges.range = message; //Float.parseFloat(message.getData());
-					ranges.rangeTime = System.currentTimeMillis();
-				}
-			}
-		});
+
 	/**
 	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
 	 * mutex appropriate to establish critical sections. A sleep follows each publication to keep the bus arbitrated

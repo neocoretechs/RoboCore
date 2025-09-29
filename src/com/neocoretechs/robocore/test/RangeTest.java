@@ -1,8 +1,5 @@
 package com.neocoretechs.robocore.test;
 
-
-import java.util.Arrays;
-
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -14,14 +11,14 @@ import org.ros.node.topic.Subscriber;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  *
  */
-public class IMUTest extends AbstractNodeMain  {
+public class RangeTest extends AbstractNodeMain  {
 	private boolean DEBUG = true;
 
     Object mutex = new Object();
     
 	@Override
 	public GraphName getDefaultNodeName() {
-		return GraphName.of("imutest");
+		return GraphName.of("rangetest");
 	}
 
 	/**
@@ -32,12 +29,13 @@ public class IMUTest extends AbstractNodeMain  {
 
 		//final Log log = connectedNode.getLog();
 		
-		Subscriber<sensor_msgs.Imu> imusub = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
-
-		imusub.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
+		final Subscriber<std_msgs.String> subsrange = 
+				connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
+		
+		subsrange.addMessageListener(new MessageListener<std_msgs.String>() {
 			@Override
-			public void onNewMessage(sensor_msgs.Imu message) {
-				System.out.println(Arrays.toString(message.getOrientationCovariance()));
+			public void onNewMessage(std_msgs.String message) {
+				System.out.println(message.getData());
 			}
 		});
 	}
