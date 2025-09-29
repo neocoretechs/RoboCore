@@ -112,7 +112,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 		SynchronizedThreadManager.getInstance().init(new String[] {threadGroup});
 	}
 	
-	TimedImage[] timedImageDebounce = new TimedImage[3];
+	TimedImage[] timedImageDebounce = new TimedImage[5];
 	AtomicInteger debounceCount = new AtomicInteger(0);
 	
 	final class TimedImage implements Comparable {
@@ -149,6 +149,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 		}
 		
 		public String toJson() throws IOException{
+			if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
+				return null;
+			}
 			JSONObject jo = new JSONObject();
 			String slbuf = ldrg.toJson();
 			String srbuf = rdrg.toJson();
@@ -325,12 +328,14 @@ public class VideoObjectRecog extends AbstractNodeMain
 					if(candidate.ldrg.getCount() != 0 || candidate.rdrg.getCount() != 0) {
 						if(debounceCount.get() > 0) {
 							// if length of debounce array images match, send the first one on and reset
-							if(candidate.equals(timedImageDebounce[debounceCount.get()-1]))
-								timedImageDebounce[debounceCount.getAndIncrement()] = candidate; // 2 sequences match, up the possibility
-							else
+							if(candidate.equals(timedImageDebounce[debounceCount.get()-1])) {
+								timedImageDebounce[debounceCount.get()] = candidate; // 2 sequences match, up the possibility
+								debounceCount.getAndIncrement();
+							} else
 								debounceCount.set(0); // mismatch, reset to zero
 						} else {
-							timedImageDebounce[debounceCount.getAndIncrement()] = candidate; // count is zero, start sequence
+							timedImageDebounce[debounceCount.get()] = candidate; // count is zero, start sequence
+							debounceCount.getAndIncrement();
 						}
 					}
 				} else { // array is full, we must have had array-length in a row
