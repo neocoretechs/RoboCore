@@ -19,8 +19,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.machinevision.CannyEdgeDetector;
-import com.neocoretechs.relatrix.DuplicateKeyException;
+//import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.Result;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
@@ -70,7 +69,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 	public static int DATABASE_PORT = 9020;
 	//CountDownLatch latch;
 	RelatrixClient session = null;
-	CannyEdgeDetector detector;
+	//CannyEdgeDetector detector;
 	BufferedImage imagel, imager;
 	static {
 		SynchronizedThreadManager.getInstance().init(new String[] {"VIDEORECORDERCLIENT"});
@@ -256,7 +255,10 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 			//@Override
 			//public void onNewMessage(sensor_msgs.Imu message) {
 				//synchronized(mutex) {
-					//eulers = message.getOrientationCovariance();
+				//compassHeading = message.getCompassHeadingDegrees();
+				//roll = message.getRoll();
+				//pitch = message.getPitch();
+				//temperature = message.getTemperature();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 					//if(DEBUG)
 						//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
@@ -265,7 +267,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 		//});
 		
 	}
-	boolean imageDiff() {
+	/*boolean imageDiff() {
 		detector = new CannyEdgeDetector();
 		detector.setLowThreshold(.75f);
 		detector.setHighThreshold(1f);
@@ -302,7 +304,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 		if(numDiff > (int)(Math.ceil((double)currBuffer.length * .04)))
 			return true;
 		return false;
-	}
+	}*/
 	
 	BufferedImage createImage(byte[] imgBuff) throws IOException {
 		BufferedImage bImg;

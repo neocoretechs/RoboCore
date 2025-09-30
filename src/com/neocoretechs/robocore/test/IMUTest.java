@@ -37,7 +37,7 @@ public class IMUTest extends AbstractNodeMain  {
 		imusub.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
-				System.out.println(Arrays.toString(message.getOrientationCovariance()));
+				System.out.println(Arrays.toString(new float[] {message.getCompassHeadingDegrees(), message.getRoll(), message.getPitch()}));
 			}
 		});
 	}

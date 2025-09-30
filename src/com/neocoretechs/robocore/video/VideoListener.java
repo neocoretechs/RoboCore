@@ -1,15 +1,12 @@
 package com.neocoretechs.robocore.video;
 
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.image.BufferedImage;
-import java.awt.image.WritableRaster;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,8 +24,6 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
-import javax.swing.border.Border;
-import javax.swing.border.TitledBorder;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -62,7 +57,10 @@ public class VideoListener extends AbstractNodeMain
     ByteBuffer cb;
     byte[] buffer = new byte[0];
     
-    double eulers[] = new double[]{0.0,0.0,0.0};
+    float compassHeading;
+    float roll;
+    float pitch;
+    float temperature;
    
 	String mode = "display";
 	String outDir = "/";
@@ -115,7 +113,7 @@ public class VideoListener extends AbstractNodeMain
 			        		synchronized(mutex) {
 			        		displayPanel.setLastFrame((java.awt.Image)/*d*/image);
 			        		synchronized(navMutex) {
-			        			displayPanel.setComputedValues(eulers[0], eulers[1], eulers[2]);
+			        			displayPanel.setComputedValues(compassHeading, roll, pitch);
 			        		}
 			        	//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 						//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
@@ -289,10 +287,13 @@ public class VideoListener extends AbstractNodeMain
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
 				synchronized(navMutex) {
-					eulers = message.getOrientationCovariance();
+					compassHeading = message.getCompassHeadingDegrees();
+					roll = message.getRoll();
+					pitch = message.getPitch();
+					temperature = message.getTemperature();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 					if(DEBUG)
-					System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+						System.out.println("Nav:Eulers "+compassHeading+" "+roll+" "+pitch);	
 				}
 			}
 

@@ -43,7 +43,6 @@ public class IMUPubs extends AbstractNodeMain  {
 	private String mode="";
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	sensor_msgs.Imu imumsg = null;
-	sensor_msgs.Temperature tempmsg = null;
 	sensor_msgs.MagneticField magmsg = null;
 	int[] accels = null;
 	int[] gyros = null;
@@ -112,7 +111,6 @@ public void onStart(final ConnectedNode connectedNode) {
 	
 	final Publisher<sensor_msgs.Imu> imupub = connectedNode.newPublisher("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 	final Publisher<sensor_msgs.MagneticField> magpub = connectedNode.newPublisher("/sensor_msgs/MagneticField", sensor_msgs.MagneticField._TYPE);
-	final Publisher<sensor_msgs.Temperature> temppub = connectedNode.newPublisher("/sensor_msgs/Temperature", sensor_msgs.Temperature._TYPE);
 	final std_msgs.Header header = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 	// check command line remappings for __mode:=calibrate
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
@@ -229,7 +227,11 @@ public void onStart(final ConnectedNode connectedNode) {
 					statPub.clear();
 					e.printStackTrace();
 				}
-			}
+			} // calibration
+			
+			//
+			// Begin IMU message processing
+			//
 			try {
 				if(display_revision) {
 					display_revision = false;
@@ -260,10 +262,8 @@ public void onStart(final ConnectedNode connectedNode) {
 					header.setStamp(time);
 					header.setFrameId(time.toString());
 					imumsg = imupub.newMessage();
-					tempmsg = temppub.newMessage();
 					magmsg = magpub.newMessage();
 					imumsg.setHeader(header);
-					tempmsg.setHeader(header);
 					magmsg.setHeader(header);
 				
 					if( accels != null ) {
@@ -293,11 +293,20 @@ public void onStart(final ConnectedNode connectedNode) {
 						valq.setZ(quats[2]);
 						valq.setW(quats[3]);
 						imumsg.setOrientation(valq);
-						imumsg.setOrientationCovariance(eulers); // we send the euler angles through the covariance matrix
 					} else {
 						statPub.add("QUAT ERROR");
 					}
-					if( accels != null && gyros != null && quats != null && imu_changed) {
+					
+					if(eulers != null) {
+						imumsg.setCompassHeadingDegrees((float) eulers[0]);
+						imumsg.setRoll((float)eulers[1]);
+						imumsg.setPitch((float)eulers[2]);
+						imumsg.setTemperature(temp);
+					} else {
+						statPub.add("EULER ERR");
+					}
+					
+					if( accels != null && gyros != null && quats != null && eulers != null && imu_changed) {
 						if( DEBUG )
 							System.out.println("Publishing IMU:"+imumsg);
 						imupub.publish(imumsg);
@@ -319,14 +328,7 @@ public void onStart(final ConnectedNode connectedNode) {
 						if(mags == null)
 							statPub.add("MAG ERROR");
 					}
-					// Temp
-					if(temp_changed) {
-						tempmsg.setTemperature(temp);
-						temppub.publish(tempmsg);
-						if( DEBUG )
-							System.out.println("Publishing TEMP:"+tempmsg);
-					}
-				
+	
 				} // hasDataChanged
 				
 			} catch (IOException e) {

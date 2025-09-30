@@ -50,8 +50,11 @@ public class VideoRecorderStereo extends AbstractNodeMain
     byte[] bufferr = new byte[0];
     byte[] prevBuffer = new byte[0];
     
-    double eulers[] = new double[]{0.0,0.0,0.0};
-   
+    float compassHeading;
+    float roll;
+    float pitch;
+    float temperature;
+    
 	String outDir = "/";
 	int frames = 0;
     //CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
@@ -227,7 +230,10 @@ public class VideoRecorderStereo extends AbstractNodeMain
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
 				synchronized(mutex) {
-					eulers = message.getOrientationCovariance();
+					compassHeading = message.getCompassHeadingDegrees();
+					roll = message.getRoll();
+					pitch = message.getPitch();
+					temperature = message.getTemperature();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 					//if(DEBUG)
 					//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);

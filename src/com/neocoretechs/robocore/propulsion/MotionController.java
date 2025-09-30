@@ -157,10 +157,13 @@ public class MotionController extends AbstractNodeMain {
 	float rangetop, rangebot;
 	double pressure, temperature;
 	static class EulerTime {
-		double eulers[] = new double[]{0.0,0.0,0.0}; // set from loop
+		float compassHeading;
+		float roll;
+		float pitch;
+		float temperature;
 		long eulerTime = 0L;
 		public String toString() {
-			return String.format("Eulers: %d %d %d",eulers[0],eulers[1],eulers[2]);
+			return String.format("comapss heading:%d roll:%d pitch:%d temperature:%d", compassHeading, roll, pitch, temperature);
 		}
 	}
 	EulerTime euler = new EulerTime();
@@ -517,7 +520,11 @@ public class MotionController extends AbstractNodeMain {
 							angs.orientation.setY(message.getOrientation().getY());
 							angs.orientation.setZ(message.getOrientation().getZ());
 							angs.orientation.setW(message.getOrientation().getW());
-							euler.eulers = message.getOrientationCovariance();
+							
+							euler.compassHeading = message.getCompassHeadingDegrees();
+							euler.roll = message.getRoll();
+							euler.pitch = message.getPitch();
+							euler.temperature = message.getTemperature();
 							euler.eulerTime = System.currentTimeMillis();
 							angs.angTime = System.currentTimeMillis();
 
@@ -991,7 +998,7 @@ public class MotionController extends AbstractNodeMain {
 		// we have absolute stickdegrees, offset the current IMU by that quantity to get new desired course
 		float offsetDegrees;
 		synchronized(euler) {
-			offsetDegrees = (float) (euler.eulers[0] - stickDegrees);
+			offsetDegrees = (float) (euler.compassHeading - stickDegrees);
 		}
 		// reduce the angle  
 		offsetDegrees =  offsetDegrees % 360;
@@ -1018,9 +1025,9 @@ public class MotionController extends AbstractNodeMain {
 			if( !holdBearing ) {
 				holdBearing = true;
 				outputNeg = false;
-				// Setpoint is desired target yaw angle from IMU,vs heading minus the joystick offset from 0
+				// Setpoint is desired target yaw angle (compass heading) from IMU,vs heading minus the joystick offset from 0
 				synchronized(euler) {
-					robot.getIMUSetpointInfo().setDesiredTarget((float) euler.eulers[0]);
+					robot.getIMUSetpointInfo().setDesiredTarget(euler.compassHeading);
 				}
 				robot.getIMUSetpointInfo().setTarget((float)0);
 				robot.getMotionPIDController().clearPID();
@@ -1035,9 +1042,9 @@ public class MotionController extends AbstractNodeMain {
 			robot.getIMUSetpointInfo().setTarget((float)0); 
 		}
 
-		// eulers[0] is Input: target yaw angle from IMU. If IMU is delivering a 0, then our delta below will just be desiredTarget.
+		// eulers.compassHeading is Input: target yaw angle from IMU. If IMU is delivering a 0, then our delta below will just be desiredTarget.
 		synchronized(euler) {
-			robot.getIMUSetpointInfo().setTarget((float) euler.eulers[0]); 
+			robot.getIMUSetpointInfo().setTarget((float) euler.compassHeading); 
 		}
 		//
 		// perform the PID processing
@@ -1091,7 +1098,7 @@ public class MotionController extends AbstractNodeMain {
 			if(DEBUG || DEBUGBEARING) {
 				System.out.printf("HOLDING BEARING %s\n",robot.getMotionPIDController().toString());
 				synchronized(euler) {
-					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.eulers[0],arcin,arcout,speedL,speedR);
+					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.compassHeading,arcin,arcout,speedL,speedR);
 				}
 			}
 			followIMUSetpoint(radius, arcin, arcout);
@@ -1114,7 +1121,7 @@ public class MotionController extends AbstractNodeMain {
 			if(DEBUG || DEBUGBEARING) {
 				System.out.printf("MANUAL BEARING %s\n",robot.getMotionPIDController().toString());
 				synchronized(euler) {
-					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.eulers[0],arcin,arcout,speedL,speedR);
+					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.compassHeading,arcin,arcout,speedL,speedR);
 				}
 			}
 		}
@@ -1391,7 +1398,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 			if(DEBUG || DEBUGBEARING)
 				synchronized(euler) {
-					System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,euler.eulers[0],speedL,speedR,holdBearing);
+					System.out.printf("<="+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,euler.compassHeading,speedL,speedR,holdBearing);
 				}
 		} else {
 			// Exceeded tolerance of triangle solution, proceed to polar geometric solution in arcs
@@ -1407,7 +1414,7 @@ public class MotionController extends AbstractNodeMain {
 					speedR *= (arcin/arcout);
 			if(DEBUG || DEBUGBEARING)
 				synchronized(euler) {
-					System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,euler.eulers[0],arcin,arcout,speedL,speedR,holdBearing);
+					System.out.printf(">"+robot.getIMUSetpointInfo().getMaximum()+" degrees Speed=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f|Hold=%b\n",radius,euler.compassHeading,arcin,arcout,speedL,speedR,holdBearing);
 				}
 		}
 	}
@@ -1574,7 +1581,7 @@ public class MotionController extends AbstractNodeMain {
 			if((System.currentTimeMillis()-euler.eulerTime) > (System.currentTimeMillis()-heading.getTime().getData())) {
 				speeds = moveRobotRelative(heading.getHeading().getData(), heading.getHeading().getData(), heading.getDist().getData());
 			} else {
-				speeds = moveRobotRelative((float) euler.eulers[0], heading.getHeading().getData(), heading.getDist().getData());
+				speeds = moveRobotRelative((float) euler.compassHeading, heading.getHeading().getData(), heading.getDist().getData());
 			}
 		}
 		speedL = speeds[0];

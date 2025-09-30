@@ -83,7 +83,10 @@ public class VideoListenerStereo extends AbstractNodeMain
     ByteBuffer cbr;
     byte[] bufferr = new byte[0];
     
-    double eulers[] = new double[]{0.0,0.0,0.0};
+    float compassHeading;
+    float roll;
+    float pitch;
+    float temperature;
    
 	String mode = "display";
 	String outDir = "/";
@@ -245,7 +248,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 			        		synchronized(mutex) {
 			        			displayPanel1.setLastFrame((java.awt.Image)imagel);
 			        			displayPanel2.setLastFrame((java.awt.Image)imager);
-			        			displayPanel1.setComputedValues(eulers[0], eulers[1], eulers[2]);
+			        			displayPanel1.setComputedValues(compassHeading, roll, pitch);
 			        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
 			        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 			        			displayPanel1.invalidate();
@@ -448,10 +451,13 @@ public class VideoListenerStereo extends AbstractNodeMain
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
 				synchronized(mutex) {
-					eulers = message.getOrientationCovariance();
+					compassHeading = message.getCompassHeadingDegrees();
+					roll = message.getRoll();
+					pitch = message.getPitch();
+					temperature = message.getTemperature();
 					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
 					if(DEBUG)
-						System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
+						System.out.println("Nav:Eulers "+compassHeading+" "+roll+" "+pitch);
 				}
 			}
 		});
