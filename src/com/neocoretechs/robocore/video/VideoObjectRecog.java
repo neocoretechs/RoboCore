@@ -125,6 +125,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 		stereo_msgs.StereoImage stereoImage;
 		detect_result_group rdrg;
 		detect_result_group ldrg;
+		boolean skipSegLeft = false;
+		boolean skipSegRight = false;
 		public TimedImage(stereo_msgs.StereoImage stereoImage, long sequence) {
 			this.stereoImage = stereoImage;
 			this.leftImage = stereoImage.getData().array();
@@ -134,22 +136,32 @@ public class VideoObjectRecog extends AbstractNodeMain
 			Instance rimage;
 			try {
 				rimage = createImage(rightImage);
-				rdrg = model.inference(rimage, MODEL);
-				imageReadyR = true;
+				if(rimage.shouldSegment()) {
+					rdrg = model.inference(rimage, MODEL);
+					imageReadyR = true;
+					if(rdrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
+						rimage.saveDetections(rdrg,"rightimage"+time);
+					skipSegRight = false;
+				} else
+					skipSegRight = true;
+				
 				Instance limage = createImage(leftImage);
-				ldrg = model.inference(limage, MODEL);
-				imageReadyL = true;
-				if(ldrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
-					limage.saveDetections(ldrg,"leftImage"+time);
-				if(rdrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
-					rimage.saveDetections(rdrg,"rightimage"+time);
+				if(limage.shouldSegment()) {
+					ldrg = model.inference(limage, MODEL);
+					imageReadyL = true;
+					if(ldrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
+						limage.saveDetections(ldrg,"leftImage"+time);
+					skipSegLeft = false;
+				} else
+					skipSegLeft = true;
+	
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
 		
 		public String toJson() throws IOException{
-			if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
+			if((skipSegLeft || ldrg.getCount() == 0) && (skipSegRight || rdrg.getCount() == 0)) {
 				return null;
 			}
 			JSONObject jo = new JSONObject();
@@ -325,7 +337,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 				if(debounceCount.get() < timedImageDebounce.length) {
 					TimedImage candidate = new TimedImage(img, sequenceNumber);
 					// both zero? toss it
-					if(candidate.ldrg.getCount() != 0 || candidate.rdrg.getCount() != 0) {
+					if((!candidate.skipSegLeft && candidate.ldrg.getCount() != 0) || 
+						(!candidate.skipSegRight && candidate.rdrg.getCount() != 0)) {
 						if(debounceCount.get() > 0) {
 							// if length of debounce array images match, send the first one on and reset
 							if(candidate.equals(timedImageDebounce[debounceCount.get()-1])) {
