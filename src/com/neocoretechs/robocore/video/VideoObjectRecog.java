@@ -103,7 +103,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	final static float f = 3.7f; // focal length mm
 	final static float B = 100.0f; // baseline mm
 	final static float IOU_THRESHOLD = .40f;
-	final static float IMAGE_DIFFERENCE_PCT = .03f;
+	final static float IMAGE_DIFFERENCE_PCT = .15f;
 	
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
@@ -237,11 +237,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 			if (!(obj instanceof TimedImage)) {
 				return false;
 			}
-			if(ldrg.getCount() == ((TimedImage)obj).ldrg.getCount() &&
-			   rdrg.getCount() == ((TimedImage)obj).rdrg.getCount() ) {
-				int leftSame = 0;
-				int rightSame = 0;
-				for(int i = 0; i < ldrg.getCount();i++) {
+			int leftSame = 0;
+			int rightSame = 0;
+			int leftCount = 0;
+			int rightCount = 0;
+			if(ldrg != null && ((TimedImage)obj).ldrg != null && ldrg.getCount() == ((TimedImage)obj).ldrg.getCount()) {
+				leftCount = ldrg.getCount();
+				for(int i = 0; i < leftCount;i++) {
 					if(ldrg.getResults() == null)
 						break;
 					for(int j = 0; j <((TimedImage)obj).ldrg.getCount(); j++ ) {
@@ -253,7 +255,10 @@ public class VideoObjectRecog extends AbstractNodeMain
 						}
 					}
 				}
-				for(int i = 0; i < rdrg.getCount();i++) {
+			}
+			if(rdrg != null && ((TimedImage)obj).rdrg != null && rdrg.getCount() == ((TimedImage)obj).rdrg.getCount()) {
+				rightCount = rdrg.getCount();
+				for(int i = 0; i < rightCount;i++) {
 					if(rdrg.getResults() == null)
 						break;
 					for(int j = 0; j <((TimedImage)obj).rdrg.getCount(); j++ ) {
@@ -265,9 +270,11 @@ public class VideoObjectRecog extends AbstractNodeMain
 						}
 					}
 				}
-				if(leftSame == ldrg.getCount() && rightSame == rdrg.getCount())
-					return true;
 			}
+			if(leftCount == 0 && rightCount == 0)
+				return false;
+			if(leftSame == leftCount && rightSame == rightCount)
+				return true;
 			return false;
 		}
 
