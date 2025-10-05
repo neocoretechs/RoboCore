@@ -1,0 +1,1 @@
+rosrun com.neocoretechs.robocore.test.ChatTester 192.168.5.239 192.168.5.10

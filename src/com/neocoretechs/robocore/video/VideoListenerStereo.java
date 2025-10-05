@@ -4,21 +4,9 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Graphics;
-import java.awt.GraphicsConfiguration;
-import java.awt.GraphicsDevice;
-import java.awt.GraphicsEnvironment;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.HeadlessException;
-import java.awt.Image;
-import java.awt.Transparency;
 import java.awt.image.BufferedImage;
-import java.awt.image.ColorModel;
-import java.awt.image.PixelGrabber;
-import java.awt.image.Raster;
-import java.awt.image.WritableRaster;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,19 +21,12 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.Arrays;
 
-import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
-import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
-import javax.swing.WindowConstants;
-import javax.swing.border.Border;
-import javax.swing.border.TitledBorder;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -76,7 +57,9 @@ public class VideoListenerStereo extends AbstractNodeMain
     private BufferedImage imager = null;
     private PlayerFrame displayPanel1;
     private PlayerFrame displayPanel2;
+    
     private Object mutex = new Object();
+    private Object mutex2 = new Object();
 
     ByteBuffer cbl;
     byte[] bufferl = new byte[0];
@@ -450,7 +433,7 @@ public class VideoListenerStereo extends AbstractNodeMain
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
-				synchronized(mutex) {
+				synchronized(mutex2) {
 					compassHeading = message.getCompassHeadingDegrees();
 					roll = message.getRoll();
 					pitch = message.getPitch();
@@ -704,10 +687,11 @@ public class VideoListenerStereo extends AbstractNodeMain
 		        das = new DecimalFormat("+####0.0\u00b0;-####0.0\u00b0");
 
 		   /*
-		    * Initialize all displayed values to 0, except the angles,
-		    * which are set to 90 degrees.
+		    * Initialize all displayed values 
 		    */
-		        setComputedValues(0.0, 0.0, 0.0);
+		        synchronized(mutex2) {
+		        	setComputedValues(compassHeading, roll, pitch);
+		        }
 		    }
 
 

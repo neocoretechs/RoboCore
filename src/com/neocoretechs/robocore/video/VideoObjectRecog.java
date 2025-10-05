@@ -46,7 +46,7 @@ import stereo_msgs.StereoImage;
  */
 public class VideoObjectRecog extends AbstractNodeMain 
 {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static boolean DEBUGDIFF = false;
 	private static boolean DEBUGJSON = true;
 	private static boolean DEBUGDISPARITY = true;
@@ -59,7 +59,10 @@ public class VideoObjectRecog extends AbstractNodeMain
     byte[] bufferl = new byte[0];
     ByteBuffer cbr;
     byte[] bufferr = new byte[0];
-    int[] prevBuffer = new int[0];
+    
+    byte[] prevBufferl = null;
+    byte[] prevBufferr = null;
+    
     static boolean imageReadyL = false;
     static boolean imageReadyR = false;
    
@@ -100,8 +103,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	final static float f = 3.7f; // focal length mm
 	final static float B = 100.0f; // baseline mm
 	final static float IOU_THRESHOLD = .40f;
-	
-
+	final static float IMAGE_DIFFERENCE_PCT = .03f;
 	
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
@@ -133,10 +135,12 @@ public class VideoObjectRecog extends AbstractNodeMain
 			this.rightImage = stereoImage.getData2().array();
 			this.time = System.currentTimeMillis();
 			this.sequence = sequence;
-			Instance rimage;
 			try {
-				rimage = createImage(rightImage);
-				if(rimage.shouldSegment()) {
+				Instance rimage = createImage(rightImage);
+				if(prevBufferr == null)
+					prevBufferr = rimage.getImageByteArray();
+				if(rimage.shouldSegment(prevBufferr, IMAGE_DIFFERENCE_PCT)) {
+					prevBufferr = rimage.getImageByteArray();
 					rdrg = model.inference(rimage, MODEL);
 					imageReadyR = true;
 					if(rdrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
@@ -146,7 +150,10 @@ public class VideoObjectRecog extends AbstractNodeMain
 					skipSegRight = true;
 				
 				Instance limage = createImage(leftImage);
-				if(limage.shouldSegment()) {
+				if(prevBufferl == null)
+					prevBufferl = limage.getImageByteArray();
+				if(limage.shouldSegment(prevBufferl, IMAGE_DIFFERENCE_PCT)) {
+					prevBufferl = limage.getImageByteArray();
 					ldrg = model.inference(limage, MODEL);
 					imageReadyL = true;
 					if(ldrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
