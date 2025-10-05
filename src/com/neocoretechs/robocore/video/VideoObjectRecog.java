@@ -5,10 +5,10 @@ import java.nio.ByteBuffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.json.JSONObject;
 import org.ros.concurrent.CancellableLoop;
@@ -28,7 +28,6 @@ import com.neocoretechs.rknn4j.image.detect_result;
 import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
 
-import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 import com.neocoretechs.rocksack.Alias;
@@ -46,7 +45,7 @@ import stereo_msgs.StereoImage;
  */
 public class VideoObjectRecog extends AbstractNodeMain 
 {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
 	private static boolean DEBUGJSON = true;
 	private static boolean DEBUGDISPARITY = true;
@@ -108,14 +107,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
 	String detectAndStore = null; // look for particular object and send to storage channel
 	String previousJSON = "";
-	
-	static String threadGroup = "VIDEOCLIENT";
-	static {
-		SynchronizedThreadManager.getInstance().init(new String[] {threadGroup});
-	}
-	
-	TimedImage[] timedImageDebounce = new TimedImage[5];
-	AtomicInteger debounceCount = new AtomicInteger(0);
+
+	CircularBlockingDeque<TimedImage> timedImageDebounce = new CircularBlockingDeque<TimedImage>(5);
 	
 	final class TimedImage implements Comparable {
 		long sequence;
@@ -143,7 +136,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 					prevBufferr = rimage.getImageByteArray();
 					rdrg = model.inference(rimage, MODEL);
 					imageReadyR = true;
-					if(rdrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
+					if(rdrg.getCount() > 0 && SAVE_DETECTIONS && debounce(this))
 						rimage.saveDetections(rdrg,"rightimage"+time);
 					skipSegRight = false;
 				} else
@@ -156,7 +149,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 					prevBufferl = limage.getImageByteArray();
 					ldrg = model.inference(limage, MODEL);
 					imageReadyL = true;
-					if(ldrg.getCount() > 0 && SAVE_DETECTIONS && debounceCount.get() == timedImageDebounce.length)
+					if(ldrg.getCount() > 0 && SAVE_DETECTIONS && debounce(this))
 						limage.saveDetections(ldrg,"leftImage"+time);
 					skipSegLeft = false;
 				} else
@@ -348,28 +341,11 @@ public class VideoObjectRecog extends AbstractNodeMain
 					System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)/SAMPLERATE+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
 					lastSequenceNumber2 = sequenceNumber2;
 				}
-				if(debounceCount.get() < timedImageDebounce.length) {
-					TimedImage candidate = new TimedImage(img, sequenceNumber);
-					// both zero? toss it
-					if((!candidate.skipSegLeft && candidate.ldrg.getCount() != 0) || 
-						(!candidate.skipSegRight && candidate.rdrg.getCount() != 0)) {
-						if(debounceCount.get() > 0) {
-							// if length of debounce array images match, send the first one on and reset
-							if(candidate.equals(timedImageDebounce[debounceCount.get()-1])) {
-								timedImageDebounce[debounceCount.get()] = candidate; // 2 sequences match, up the possibility
-								debounceCount.getAndIncrement();
-							} else
-								debounceCount.set(0); // mismatch, reset to zero
-						} else {
-							timedImageDebounce[debounceCount.get()] = candidate; // count is zero, start sequence
-							debounceCount.getAndIncrement();
-						}
-					}
-				} else { // array is full, we must have had array-length in a row
+				TimedImage candidate = new TimedImage(img, sequenceNumber);
+				if(debounce(candidate)) {
 					// sequenceNumber is the publishing number, it may repeat here if more images come in than are published
 					try {
-						queue.addLastWait(timedImageDebounce[0]);
-						debounceCount.set(0);
+						queue.addLastWait(candidate);
 					} catch (InterruptedException e) {}
 				}
 				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
@@ -464,8 +440,35 @@ public class VideoObjectRecog extends AbstractNodeMain
 			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
 		}
 	});
+	
 	}
-
+	/**
+	 * If we have a majority of matching candidates in the circular deque, certify it as a valid detect
+	 * @param candidate the image under scrutiny
+	 * @return true if 60% match, if true, queue is cleared
+	 */
+	private boolean debounce(TimedImage candidate) {
+		int total = 0;
+		// both zero? toss it
+		if((!candidate.skipSegLeft && candidate.ldrg.getCount() != 0) || 
+			(!candidate.skipSegRight && candidate.rdrg.getCount() != 0)) {
+				Iterator<TimedImage> it = timedImageDebounce.iterator();
+				while(it.hasNext()) {
+					TimedImage ti = it.next();
+					if(ti.equals(candidate))
+						++total;
+				}
+				if(((float)total/(float)timedImageDebounce.length()) >= .6f) {
+					timedImageDebounce.clear();
+					timedImageDebounce.addLast(candidate);
+					return true;
+				}
+				timedImageDebounce.addLast(candidate);
+		}
+		if(DEBUG)
+			System.out.println("Debounce total match:"+total+" from queue length:"+timedImageDebounce.size());
+		return false;
+	}
 	/**
 	 * Correlate all left boxes to right boxes, if there is overlap of better than threshold, return coords in out array
 	 * called by storeImage
