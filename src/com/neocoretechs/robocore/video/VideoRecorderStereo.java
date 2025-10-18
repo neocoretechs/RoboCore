@@ -2,12 +2,12 @@ package com.neocoretechs.robocore.video;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
@@ -18,12 +18,10 @@ import org.ros.node.topic.Subscriber;
 import com.neocoretechs.relatrix.Relation;
 import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.relatrix.key.NoIndex;
+
 import com.neocoretechs.robocore.SynchronizedThreadManager;
+import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.rocksack.TransactionId;
-
-
-//import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
-
 
 /**
  * Create a database and receive published video images on the Ros bus from /stereo_msgs/StereoImage, then
@@ -48,8 +46,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
     byte[] bufferl = new byte[0];
     ByteBuffer cbr;
     byte[] bufferr = new byte[0];
-    byte[] prevBuffer = new byte[0];
-    
+	
     float compassHeading;
     float roll;
     float pitch;
@@ -57,22 +54,22 @@ public class VideoRecorderStereo extends AbstractNodeMain
     
 	String outDir = "/";
 	int frames = 0;
-    //CircularBlockingDeque<java.awt.Image> queue = new CircularBlockingDeque<java.awt.Image>(30);
-    //CircularBlockingDeque<byte[]> bqueue = new CircularBlockingDeque<byte[]>(30);
+
 	private int sequenceNumber,lastSequenceNumber;
 	long time1;
 	protected static boolean shouldStore = true;
-	private static String STORE_SERVICE = "cmd_store";
 	private static int MAXIMUM = 50000;
 	int commitRate = 500;
+	AtomicInteger commitCnt = new AtomicInteger();
 	TransactionId xid;
-	CountDownLatch latch;
 	AsynchRelatrixClientTransaction session = null;
 
 	static {
 		SynchronizedThreadManager.getInstance().init(new String[] {"VIDEORECORDER"});
 	}
+	CircularBlockingDeque<TimedImage> queue = new CircularBlockingDeque<TimedImage>(30);
 	
+
 	@Override
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("subs_storevideo");
@@ -89,47 +86,9 @@ public class VideoRecorderStereo extends AbstractNodeMain
 
 		final Subscriber<stereo_msgs.StereoImage> imgsub =
 				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
-		final Subscriber<sensor_msgs.Imu> subsimu = 
-				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 
 		if( remaps.containsKey("__commitRate") )
 			commitRate = Integer.parseInt(remaps.get("__commitRate"));
-		/*
-		try {
-		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
-			CountDownServiceServerListener.newDefault();
-		final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(STORE_SERVICE, ControllerStatusMessage._TYPE,
-			new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
-						@Override
-						public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {	
-							switch(request.getData()) {
-								case "begin":
-									shouldStore = true;
-									response.setData("Ok");
-									break;
-								case "end":
-									shouldStore = false;
-									response.setData("Ok");
-									break;
-								default:
-									shouldStore  = true;
-									response.setData("Ok");
-									break;		
-							}
-						}
-			});	
-			serviceServer.addListener(serviceServerListener);	      
-			try {
-				serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
-			} catch (InterruptedException e1) {
-				System.out.println("STORAGE SERVICE REGISTRATION WAS INTERRUPTED");
-				e1.printStackTrace();
-			}
-		} catch(Exception e2) {
-			System.out.println("CONTROL VIA SERVICE NOT AVAILABLE");
-		}
-		 */
-		latch = new CountDownLatch(1);
 
 		SynchronizedThreadManager.getInstance().spin(new Runnable() {
 			@Override
@@ -138,34 +97,18 @@ public class VideoRecorderStereo extends AbstractNodeMain
 					System.out.println("Entering storage loop");
 				while(shouldStore) {
 					try {
-						latch.await();
-					} catch (InterruptedException e) {
-						shouldStore = false;
+						TimedImage ti = queue.takeFirst();
+						CompletableFuture<Relation> r = session.store(xid,System.currentTimeMillis(),sequenceNumber,NoIndex.create(ti));
+						r.get();
+					} catch (InterruptedException | ExecutionException e) {
+						e.printStackTrace();
 					}
-					synchronized(mutex) {
-						if(!imageDiff())
-							continue;
-						List<byte[]> sib = new ArrayList<byte[]>();
-						sib.add(bufferl);
-						sib.add(bufferr);
-						//try {
-						//Relatrix.transactionalStore(Long.valueOf(System.currentTimeMillis()), new Double(eulers[0]), sib);
-						CompletableFuture<Relation> r = session.store(xid,System.currentTimeMillis(),sequenceNumber,NoIndex.create(sib));
-						try {
-							r.get();
-						} catch (InterruptedException | ExecutionException e) {
-							e.printStackTrace();
-						}
-						//} catch (DuplicateKeyException e) {
-						// if within 1 ms, rare but occurs
-						//}
-						if(sequenceNumber%commitRate == 0) {
-							System.out.println("Committing at sequence "+sequenceNumber);
-							//Relatrix.transactionCommit();
-							session.commit(xid);
-							if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
-								System.exit(0);
-						}
+					if(commitCnt.get() >= commitRate) {
+						commitCnt.set(0);
+						System.out.println("Committing at sequence "+sequenceNumber);
+						session.commit(xid);
+						if(MAXIMUM > 0 && sequenceNumber >= MAXIMUM)
+							shouldStore = false;
 					}
 				}
 			}
@@ -180,86 +123,21 @@ public class VideoRecorderStereo extends AbstractNodeMain
 				long slew = System.currentTimeMillis() - time1;
 				if( SAMPLERATE && slew >= 1000) {
 					time1 = System.currentTimeMillis();
-					System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
+					System.out.println("Frames per second:"+(sequenceNumber-lastSequenceNumber)+" Storing:"+shouldStore+". Slew rate="+(slew-1000)+" seq:"+sequenceNumber);
 					lastSequenceNumber = sequenceNumber;
-				}		
-				synchronized(mutex) {
-					cbl = img.getData();
-					bufferl = cbl.array(); // 3 byte BGR
-					cbr = img.getData2();
-					bufferr = cbr.array(); // 3 byte BGR
 				}
-				latch.countDown();
-				latch = new CountDownLatch(1);
-				//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
-				//if( DEBUG ) {
-				//	System.out.println("New image set #"+sequenceNumber+" - "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
-				//}
-				//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
-				//image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
-				/*
-			image = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
-			WritableRaster raster = (WritableRaster) image.getRaster();
-			int ibsize = img.getHeight() * img.getWidth();
-			if( ibuf == null )
-				ibuf = new int[ibsize * 4];
-			int iup = 0;
-			int ip = 0;
-			for(int i = 0; i < ibsize; i++) {
-				int ialph = 255; //(ib.get(i) >> 24) & 0x0ff;
-				//int ired = (ib.get(i) >> 16) & 0x0ff; 
-				//int igreen = (ib.get(i) >> 8 ) & 0x0ff;
-				//int iblue = (ib.get(i) & 0x0ff);
-				int iblue = buffer[ip++];
-				int igreen = buffer[ip++];
-				int ired = buffer[ip++];
-				ibuf[iup++] = ired;
-				ibuf[iup++] = igreen;
-				ibuf[iup++] = iblue;
-				ibuf[iup++] = ialph;
-			}
-			//System.out.println(ibuf.length+" "+raster.getWidth()+" "+raster.getHeight()+" "+raster.getMinX()+" "+raster.getMinY());
-		    raster.setPixels(0, 0, img.getWidth(), img.getHeight(), ibuf);
-				 */
-
-				++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+				if(sequenceNumber < MAXIMUM) {
+					TimedImage ti = new TimedImage(img,System.nanoTime());
+					queue.addLast(ti);
+					commitCnt.getAndIncrement();
+					++sequenceNumber; // we want to inc seq regardless to see how many we drop	
+				} else {
+					System.out.println("Storage maximum reached...");
+					System.exit(0);
+				}
 			}
 		});
 
-		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
-			@Override
-			public void onNewMessage(sensor_msgs.Imu message) {
-				synchronized(mutex) {
-					compassHeading = message.getCompassHeadingDegrees();
-					roll = message.getRoll();
-					pitch = message.getPitch();
-					temperature = message.getTemperature();
-					//System.out.println("Nav:Orientation X:"+orientation.getX()+" Y:"+orientation.getY()+" Z:"+orientation.getZ()+" W:"+orientation.getW());
-					//if(DEBUG)
-					//System.out.println("Nav:Eulers "+eulers[0]+" "+eulers[1]+" "+eulers[2]);
-				}
-			}
-		});	
-
-	}
-	
-	boolean imageDiff() {
-		if(prevBuffer.length == 0) {
-			prevBuffer = bufferr;
-			return true; // store first
-		}
-		int numDiff = 0;
-		for(int i = 0; i < bufferr.length; i++) {
-			if((prevBuffer[i] ^ bufferr[i]) != 0)
-				++numDiff;
-		}
-		prevBuffer = bufferr;
-		if(DEBUGDIFF)
-			System.out.println("Image diff="+numDiff);
-		// 1% diff
-		if(numDiff > (int)(Math.ceil((double)bufferr.length * .01)))
-			return true;
-		return false;
 	}
 	
 }

@@ -1,6 +1,7 @@
-package com.neocoretechs.robocore.video;
+package com.neocoretechs.robocore.test;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
 import java.util.ArrayList;
@@ -9,17 +10,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
 import org.json.JSONObject;
-import org.ros.concurrent.CancellableLoop;
-import org.ros.message.MessageListener;
-import org.ros.message.Time;
-import org.ros.namespace.GraphName;
-import org.ros.node.AbstractNodeMain;
-import org.ros.node.ConnectedNode;
-import org.ros.node.topic.Publisher;
-import org.ros.node.topic.Subscriber;
 
+import com.neocoretechs.relatrix.Result;
 import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
 import com.neocoretechs.relatrix.key.NoIndex;
 
@@ -29,11 +24,9 @@ import com.neocoretechs.rknn4j.image.detect_result_group;
 import com.neocoretechs.rknn4j.runtime.Model;
 
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
-
+import com.neocoretechs.robocore.video.TimedImage;
 import com.neocoretechs.rocksack.Alias;
 import com.neocoretechs.rocksack.TransactionId;
-
-import stereo_msgs.StereoImage;
 
 /**
  * Perform a series of data acquisition and sensor fusion operations by acting as subscriber to the topics of
@@ -43,7 +36,7 @@ import stereo_msgs.StereoImage;
  * @author Jonathan Groff (C) NeoCoreTechs 2021,2025
  *
  */
-public class VideoObjectRecog extends AbstractNodeMain 
+public class RecogTest 
 {
 	private static boolean DEBUG = false;
 	private static boolean DEBUGDIFF = false;
@@ -67,7 +60,7 @@ public class VideoObjectRecog extends AbstractNodeMain
    
 	String outDir = "/";
 	int frames = 0;
-    CircularBlockingDeque<TimedImage> queue = new CircularBlockingDeque<TimedImage>(30);
+ 
   
 	public long sequenceNumber = 0;
 	public long sequenceNumber2 = 0;
@@ -104,13 +97,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 	final static float IOU_THRESHOLD = .40f;
 	final static float IMAGE_DIFFERENCE_PCT = .15f;
 	
-	Publisher<stereo_msgs.StereoImage> imgpubstore = null;
+	
 	String detectAndStore = null; // look for particular object and send to storage channel
 	String previousJSON = "";
 
-	CircularBlockingDeque<TimedImage> timedImageDebounce = new CircularBlockingDeque<TimedImage>(5);
+	CircularBlockingDeque<TimedImage2> timedImageDebounce = new CircularBlockingDeque<TimedImage2>(5);
 	
-	final class TimedImage implements Comparable {
+	final class TimedImage2 implements Comparable {
 		long sequence;
 		long time;
 		byte[] leftImage;
@@ -122,10 +115,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 		detect_result_group ldrg;
 		boolean skipSegLeft = false;
 		boolean skipSegRight = false;
-		public TimedImage(stereo_msgs.StereoImage stereoImage, long sequence) {
-			this.stereoImage = stereoImage;
-			this.leftImage = stereoImage.getData().array();
-			this.rightImage = stereoImage.getData2().array();
+		public TimedImage2(byte[] leftImage, byte[] rightImage, long sequence) {
+			this.leftImage = leftImage;
+			this.rightImage = rightImage;
 			this.time = System.currentTimeMillis();
 			this.sequence = sequence;
 			synchronized(model) {
@@ -166,15 +158,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 			String srbuf = new String();
 			JSONObject jo = new JSONObject();
 			synchronized(model) {
-				if((skipSegLeft || (ldrg != null && ldrg.getCount() == 0)) && (skipSegRight || (rdrg != null && rdrg.getCount() == 0))) {
+				if((skipSegLeft || ldrg.getCount() == 0) && (skipSegRight || rdrg.getCount() == 0)) {
 					return null;
 				}
-				if(ldrg != null)
-					slbuf = ldrg.toJson();
-				if(rdrg != null)
-					srbuf = rdrg.toJson();
+				slbuf = ldrg.toJson();
+				srbuf = rdrg.toJson();
 				jo.put("timestamp",time);
-				if((ldrg != null && ldrg.getCount() == 0) && (rdrg != null && rdrg.getCount() == 0)) {
+				if(ldrg.getCount() == 0 && rdrg.getCount() == 0) {
 					return jo.toString();
 				}
 			}
@@ -212,9 +202,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 		}
 		@Override
 		public int compareTo(Object o) {
-			if(time > ((TimedImage)o).time)
+			if(time > ((TimedImage2)o).time)
 				return 1;
-			if(time < ((TimedImage)o).time)
+			if(time < ((TimedImage2)o).time)
 				return -1;
 			return 0;
 		}
@@ -236,7 +226,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 			if (this == obj) {
 				return true;
 			}
-			if (!(obj instanceof TimedImage)) {
+			if (!(obj instanceof TimedImage2)) {
 				return false;
 			}
 			int leftSame = 0;
@@ -244,30 +234,30 @@ public class VideoObjectRecog extends AbstractNodeMain
 			int leftCount = 0;
 			int rightCount = 0;
 			synchronized(model) {
-				if(ldrg != null && ((TimedImage)obj).ldrg != null && ldrg.getCount() == ((TimedImage)obj).ldrg.getCount()) {
+				if(ldrg != null && ((TimedImage2)obj).ldrg != null && ldrg.getCount() == ((TimedImage2)obj).ldrg.getCount()) {
 					leftCount = ldrg.getCount();
 					for(int i = 0; i < leftCount;i++) {
 						if(ldrg.getResults() == null)
 							break;
-						for(int j = 0; j <((TimedImage)obj).ldrg.getCount(); j++ ) {
-							if(((TimedImage)obj).ldrg.getResults() == null)
+						for(int j = 0; j <((TimedImage2)obj).ldrg.getCount(); j++ ) {
+							if(((TimedImage2)obj).ldrg.getResults() == null)
 								break;
-							if(ldrg.getResults()[i].getName().equals(((TimedImage)obj).ldrg.getResults()[j].getName())) {
+							if(ldrg.getResults()[i].getName().equals(((TimedImage2)obj).ldrg.getResults()[j].getName())) {
 								leftSame++;
 								break;
 							}
 						}
 					}
 				}
-				if(rdrg != null && ((TimedImage)obj).rdrg != null && rdrg.getCount() == ((TimedImage)obj).rdrg.getCount()) {
+				if(rdrg != null && ((TimedImage2)obj).rdrg != null && rdrg.getCount() == ((TimedImage2)obj).rdrg.getCount()) {
 					rightCount = rdrg.getCount();
 					for(int i = 0; i < rightCount;i++) {
 						if(rdrg.getResults() == null)
 							break;
-						for(int j = 0; j <((TimedImage)obj).rdrg.getCount(); j++ ) {
-							if(((TimedImage)obj).rdrg.getResults() == null)
+						for(int j = 0; j <((TimedImage2)obj).rdrg.getCount(); j++ ) {
+							if(((TimedImage2)obj).rdrg.getResults() == null)
 								break;
-							if(rdrg.getResults()[i].getName().equals(((TimedImage)obj).rdrg.getResults()[j].getName())) {
+							if(rdrg.getResults()[i].getName().equals(((TimedImage2)obj).rdrg.getResults()[j].getName())) {
 								rightSame++;
 								break;
 							}
@@ -284,186 +274,71 @@ public class VideoObjectRecog extends AbstractNodeMain
 
 	}
 	
-	@Override
-	public GraphName getDefaultNodeName() {
-		return GraphName.of("subs_storevideoclient");
+	private void process(TimedImage fromDb) {
+		//long slew = System.currentTimeMillis() - time2;
+		// inference in ctor
+		TimedImage2 candidate = new TimedImage2(fromDb.leftImage, fromDb.rightImage, sequenceNumber2);
+		if(debounce(candidate)) {
+			try {
+				System.out.println(sequenceNumber2+" = "+candidate.toJson());
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
 	}
-	@Override
-	public void onStart(final ConnectedNode connectedNode) {
+
+	public static void main(String[] args) {
 		MODEL_FILE = MODELS_FILE[MODEL];
 		LABEL_FILE = LABELS_FILE[MODEL];
-		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
-		if( remaps.containsKey("__commitRate") )
-			commitRate = Integer.parseInt(remaps.get("__commitRate"));
-		if( remaps.containsKey("__modelDir") )
-			MODEL_DIR = remaps.get("__modelDir");
-		if( remaps.containsKey("__labelsFile") )
-			LABEL_FILE = remaps.get("__labelsFile");
-		if( remaps.containsKey("__modelFile") )
-			MODEL_FILE = remaps.get("__modelFile");
-		if(!MODEL_DIR.endsWith(("/")))
-				MODEL_DIR += "/";
-		if( remaps.containsKey("__storeDetect") )
-			detectAndStore = remaps.get("__storeDetect");
+		RecogTest rt = new RecogTest();
 		try {
 			if(MODEL_FILE.contains("inception")) { // InceptionSSD
-				boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
+				rt.boxPriors = Model.loadBoxPriors(MODEL_DIR+"box_priors.txt",detect_result.NUM_RESULTS);
 			}
-			labels = Model.loadLines(MODEL_DIR+LABEL_FILE);
+			rt.labels = Model.loadLines(MODEL_DIR+LABEL_FILE);
 			if(DEBUG)
-				System.out.println("Total category labels="+labels.length);
+				System.out.println("Total category labels="+rt.labels.length);
 			//initialize the NPU with the proper model file, labels, and box priors or null
-			model.initNPU(MODEL_DIR+MODEL_FILE, labels, boxPriors);
+			rt.model.initNPU(MODEL_DIR+MODEL_FILE, rt.labels, rt.boxPriors);
 		} catch (IOException e2) {
 			throw new RuntimeException(e2);
 		}
 		try {
-			session = connectedNode.getRelatrixClient();
-			//dbClient.setTablespace("D:/etc/Relatrix/db/test/ai");
-			//try {
-				xid = session.getTransactionId();
-			//} catch (IllegalAccessException | ClassNotFoundException e) {}
+			// attach to running RosCore with embedded Relatrix server
+			rt.session = new AsynchRelatrixClientTransaction(args[0], args[1], 8092);
+			rt.xid = rt.session.getTransactionId();
 			//tensorAlias = new Alias("Tensors");
 			//try {
 			//	if(dbClient.getAlias(tensorAlias).get() == null)
 			//		dbClient.setRelativeAlias(tensorAlias);
 			//} catch(ExecutionException | InterruptedException ie) {}
-			if(DEBUG)
-				System.out.println("Relatrix transaction Id:"+xid);
+			rt.session.findStream(rt.xid, '*', '*', '?').get().forEach(e->{
+				rt.process((TimedImage) ((Result)e).get());
+			});
+			System.out.println("Relatrix transaction Id:"+rt.xid);
 		} catch(IOException ioe) {
 			ioe.printStackTrace();
+		} catch (InterruptedException e) {
+			System.exit(1);
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		}
-	
-		final Subscriber<stereo_msgs.StereoImage> imgsub =
-				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
-		
-		final Publisher<stereo_msgs.StereoImage> imgpub =
-				connectedNode.newPublisher("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
-
-		/**
-		 * Image extraction from bus from StereoImage topic, then image processing, then pass to pipeline.
-		 */
-		imgsub.addMessageListener(new MessageListener<stereo_msgs.StereoImage>() {
-			@Override
-			public void onNewMessage(stereo_msgs.StereoImage img) {
-				long slew = System.currentTimeMillis() - time2;
-				if( SAMPLERATE > 0 && slew >= SAMPLERATE*1000) {
-					time2 = System.currentTimeMillis();
-					System.out.println("Input Frames per second:"+(sequenceNumber2-lastSequenceNumber2)/SAMPLERATE+" Storing:"+shouldStore+". Slew rate="+(slew-1000));
-					lastSequenceNumber2 = sequenceNumber2;
-				}
-				TimedImage candidate = new TimedImage(img, sequenceNumber);
-				if(debounce(candidate)) {
-					queue.addLast(candidate);
-				}
-				++sequenceNumber2; // we want to inc seq regardless to see how many we drop	
-			}
-		});
-
-	/**
-	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
-	 * mutex appropriate to establish critical sections. A sleep follows each publication to keep the bus arbitrated
-	 * This CancellableLoop will be canceled automatically when the node shuts down
-	 */
-	connectedNode.executeCancellableLoop(new CancellableLoop() {
-		private int sequenceNumber;
-		@Override
-		protected void setup() {
-			sequenceNumber = 0;
-		}
-
-		@Override
-		protected void loop() throws InterruptedException {
-			std_msgs.Header imghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
-			imghead.setSeq(sequenceNumber);
-			Time tst = connectedNode.getCurrentTime();
-			imghead.setStamp(tst);
-			imghead.setFrameId(tst.toString());
-			//sensor_msgs.Image imagemess = imgpub.newMessage();
-			//stereo_msgs.StereoImage imagemess = imgpub.newMessage();
-			stereo_msgs.StereoImage imagemess = connectedNode.getTopicMessageFactory().newFromType(stereo_msgs.StereoImage._TYPE);
-
-			TimedImage e = queue.takeFirst();
-			try {
-				if( SAMPLERATE > 0 && (System.currentTimeMillis() - time1) >= SAMPLERATE*1000) {
-					time1 = System.currentTimeMillis();
-					System.out.println("Output frames per second:"+(sequenceNumber-lastSequenceNumber)/SAMPLERATE/*+limage+" "+rimage*/);
-					lastSequenceNumber = sequenceNumber;
-				}
-				if( DEBUG )
-					System.out.println(sequenceNumber+":Added frame ");
-				//synchronized(mutex) {
-				//leftPayload = limage.detectionsToJPEGBytes(ldrg);
-				//rightPayload = rimage.detectionsToJPEGBytes(rdrg);
-				//storeImage(ldrg, rdrg, leftPayload, rightPayload, imagemess, sequenceNumber);
-				//if(leftPayload != null && rightPayload != null) {
-				// for image resize back to 640x480
-				//if(RESIZE_TO_ORIG) {
-				//try {
-				//	leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-				//	rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-				//} catch(Exception e) {
-				//	e.printStackTrace();
-				//}
-				//}
-				String toJSON = e.toJson();
-				// Did we detect anything in either image? And do we have something other than a basic timestamp
-				// which would create a string of length > 30. Crude but effective.
-				if(toJSON != null && toJSON.length() > 30 && !previousJSON.equals(toJSON)) {
-					if(DEBUG || DEBUGJSON)
-						System.out.println(toJSON);
-					previousJSON = toJSON;
-					imagemess.setData(ByteBuffer.wrap(toJSON.getBytes()));
-					//imagemess.setEncoding("JPG");
-					imagemess.setEncoding("UTF8_JSON");
-					imagemess.setWidth(dimsImage[0]);
-					imagemess.setHeight(dimsImage[1]);
-					imagemess.setStep(dimsImage[0]);
-					imagemess.setIsBigendian((byte)0);
-					imagemess.setHeader(imghead);
-					imgpub.publish(imagemess);
-				}	
-				//
-				imageReadyL = false;
-				imageReadyR = false;
-				//}
-				//
-				//caminfomsg.setHeader(imghead);
-				//caminfomsg.setWidth(imwidth);
-				//caminfomsg.setHeight(imheight);
-				//caminfomsg.setDistortionModel("plumb_bob");
-				//caminfomsg.setK(K);
-				//caminfomsg.setP(P);
-				//caminfopub.publish(caminfomsg);
-				//System.out.println("Pub cam:"+imagemess);
-			} catch (IOException ex) {
-				ex.printStackTrace();
-				if(DEBUG)
-					System.out.println("Image(s) not ready "+sequenceNumber);
-				try {
-					Thread.sleep(1);
-				} catch (InterruptedException e1) {}
-				++lastSequenceNumber; // if no good, up the last sequence to compensate for sequence increment
-			}
-			++sequenceNumber; // we want to inc seq regardless to see how many we drop	
-		}
-	});
-	
 	}
 	/**
 	 * If we have a majority of matching candidates in the circular deque, certify it as a valid detect
 	 * @param candidate the image under scrutiny
 	 * @return true if 60% match, if true, queue is cleared
 	 */
-	private boolean debounce(TimedImage candidate) {
+	private boolean debounce(TimedImage2 candidate) {
 		int total = 0;
 		// both zero? toss it
 		synchronized(model) {
 			if((!candidate.skipSegLeft && candidate.ldrg.getCount() != 0) || 
 					(!candidate.skipSegRight && candidate.rdrg.getCount() != 0)) {
-				Iterator<TimedImage> it = timedImageDebounce.iterator();
+				Iterator<TimedImage2> it = timedImageDebounce.iterator();
 				while(it.hasNext()) {
-					TimedImage ti = it.next();
+					TimedImage2 ti = it.next();
 					if(ti.equals(candidate))
 						++total;
 				}
@@ -539,67 +414,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 		return (u <= 0.f ? 0.f : (i / u));
 	}
 	
-	public void storeImage(detect_result_group ldrg, detect_result_group rdrg, byte[] leftPayload, byte[] rightPayload, StereoImage imagemess, Integer sequenceNumber) {
-		//
-		// see if we send this detection to storage channel as well
-		//
-		//boolean sendl = false;
-		//boolean sendr = false;
-		//float areal = 0.0f;
-		//float arear = 0.0f;
-		//float xlmin = 0.0f;
-		//float xlmax = 0.0f;
-		//float xrmin = 0.0f;
-		//float xrmax = 0.0f;
-		if(imgpubstore != null) {
-			synchronized(model) {
-				for(detect_result dr: ldrg.getResults()) {
-					if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
-						float prob = dr.getProbability();
-						//xlmin = dr.getBox().xmin;
-						//xlmax = dr.getBox().xmax;
-						//areal = (dr.getBox().ymax-dr.getBox().ymin) * (xlmax-xlmin);
-						//if(prob > .4) {
-						//sendl = true;
-						if(DEBUG)
-							System.out.println("L Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
-						//break;
-						//}
-					}
-				}
-				if(ldrg.getCount() > 0) { // artifact?
-					for(detect_result dr: rdrg.getResults()) {
-						if(dr.getName().toLowerCase().startsWith(detectAndStore)) {
-							float prob = dr.getProbability();
-							//xrmin = dr.getBox().xmin;
-							//xrmax = dr.getBox().xmax;
-							//arear = (dr.getBox().ymax-dr.getBox().ymin) * (xrmax-xrmin);
-							//if(prob > .4) {
-							//sendr = true;
-							if(DEBUG)
-								System.out.println("R Detected "+dr.getName().toLowerCase()+" using "+detectAndStore+" %="+prob);
-							//break;
-							//}
-						}
-					}
-				}
-				//if(sendl && sendr)
-				//	System.out.println("person "+areal+" "+arear+" "+Math.abs(areal-arear));
-				//if(sendl && sendr && Math.abs(areal-arear) < (.1f * areal)) {
-				if(ldrg.getCount() > 0 && rdrg.getCount() > 0) { // possible correlation
-					imgpubstore.publish(imagemess);
-					if( DEBUG )
-						System.out.println("Pub. Image:"+sequenceNumber);
-					if(detectAndStore != null) {
-						List<byte[]> sib = new ArrayList<byte[]>();
-						sib.add(leftPayload);
-						sib.add(rightPayload);
-						session.store(xid, Long.valueOf(System.currentTimeMillis()), Integer.valueOf(sequenceNumber), NoIndex.create(sib));
-					}
-				}
-			}
-		}
-	}
+
 	/**
 	 * Generate Instance from raw JPEG image buffer with RGA
 	 * @param imgBuff
