@@ -10,6 +10,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 
+import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
 import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 import com.neocoretechs.robocore.GpioNative;
 import com.neocoretechs.robocore.SynchronizedThreadManager;
@@ -19,7 +20,7 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
  * the UART pins or the GPIO pins 2 and 3 on linux. <p>
  * The mode is controlled by the presence and value of command line parameter __PORT:= <p>
  * IF PORT:= isnt specified, then Pin2 being the trigger and pin 3 being the resulting signal. <br>
- * In this case, YOU MUST RUN AS ROOT.
+ * In this case, to use the gpio library instead of a USB port YOU MUST RUN AS ROOT.
  * The trigger pulse goes high to low with a 10 microsecond wait.
  * There is a 2 second window where the result pin goes from low to high that we use as our interval
  * for sensing an object.
@@ -27,7 +28,43 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
  * From there we enter the loop to acquire the ranging checking for a 300cm maximum distance.
  * If we get something that fits these parameters we publish to the robocore/status bus. We can also shut down
  * publishing to the bus while remaining in the detection loop by sending a message to the alarm/shutdown topic.
- * Alternately, the URM37 uses a serial data protocol at 9600,8,N,1 {@link UltrasonicSerialDataPort}
+ * Alternately, the URM37 uses a serial data protocol at 9600,8,N,1 {@link UltrasonicSerialDataPort}<p>
+ * We are going to fuse with IMU yaw (compass heading) data to construct a sliding window upon which we will 
+ * do PCA to produce condensed motion vectors.<p>
+ * Starting with: <br>
+ * x = sin(yaw*0.01745329)*dist <br>
+ * y = cos(yaw*0.01745329)*dist <br>
+ * We will form a sliding {@link Point3f} window of fused points x,y,time <br>
+ * d_now = distance to closest object now<br>
+ * d_avg = distance avg across time window<br>
+ * d_min = distance min closest observed distance<br>
+ * d_max = distance max farthest observed distance<br>
+ * that add semantic content to the individual measurements. the result of PCA will be<p>
+ * variance3 = dominant motion axis - motion strength <br>
+ * variance2 = lateral jitter       <br>
+ * variance1 = noise floor          <br>
+ * <br>
+ * eigenVector3 = principal motion direction - full 3D motion direction <br>
+ * eigenVector2 = lateral jitter axis <br>
+ * eigenvector1 = noise axis <br>
+ * confidence = variance3 / (variance2 + variance1 + eps) - coherence of motion - high - coherent - low - noise<br>
+ * scalar magnitude of motion along the principal axis = Math.sqrt(variance3) <br>
+ * producing a data buffer of [d_now, d_avg, d_min, d_max, v_x, v_y, speed, jitter, noise, confidence]
+ * v_x = The x component of the principal motion vector, derived from PCA on (x, y, t) Meaning:<br>
+ * How much the object’s motion projects onto the robot’s forward axis.<br>
+ * positive - object moving outward along the robot’s forward axis<br>
+ * negative - object approaching<br>
+ * magnitude - forward/backward motion strength<br>
+ * This is not raw velocity, it’s the direction of motion in the robot’s local frame.<br>
+ * v_y = The y component of the principal motion vector, again from PCA. Meaning:<br>
+ * How much the object’s motion projects onto the robot’s lateral axis.<br>
+ * positive - drifting to the robot’s left<br>
+ * negative - drifting to the robot’s right<br>
+ * magnitude - lateral motion strength<br>
+ * This is incredibly useful for:<br>
+ * tracking moving objects<br>
+ * distinguishing straight in approach vs diagonal motion<br>
+ * predicting future positions<br>
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
@@ -46,6 +83,7 @@ public class RangeFinderPubs extends AbstractNodeMain {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
+	static final String REMAP_DEBUG = "__debug";
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	//public static VoxHumana speaker = null;
 	public ConcurrentLinkedQueue<String> pubdata = new ConcurrentLinkedQueue<String>();
@@ -69,7 +107,10 @@ public class RangeFinderPubs extends AbstractNodeMain {
 		} else {
 			readThread = new UltraPing();
 		}
-
+		if( remaps.containsKey(REMAP_DEBUG) )
+			if(remaps.get(REMAP_DEBUG).equals("true")) {
+				DEBUG = true;
+			}
 		SynchronizedThreadManager.getInstance().spin(readThread, "SYSTEM");
 		// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
 		awaitStart.countDown();

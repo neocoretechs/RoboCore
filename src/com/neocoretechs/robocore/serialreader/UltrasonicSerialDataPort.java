@@ -48,10 +48,6 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 	private static volatile UltrasonicSerialDataPort instance = null;
 	private static Object mutex = new Object();
 
-	static {
-		SynchronizedThreadManager.getInstance().init(new String[] {"URM37"+portName});
-	}
-
 	// URM37 request distance every 25 ms max
 	public static final byte[] REQUEST_DISTANCE = {(byte)0x22,(byte)0x0,(byte)0x0,(byte)0x22};
 	// return is format 0x22, high byte, low byte ,checksum
@@ -156,6 +152,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 
 		//(new Thread(new SerialReader(inStream))).start();
 		SerialReader readThread = new SerialReader(inStream);
+		SynchronizedThreadManager.getInstance().init(new String[] {"URM37"+portName});
 		SynchronizedThreadManager.getInstance().spin(readThread, "URM37"+portName);
 		while(!readThread.isRunning)
 			try {
