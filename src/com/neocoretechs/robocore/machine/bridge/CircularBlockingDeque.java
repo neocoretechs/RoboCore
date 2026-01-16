@@ -57,6 +57,7 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
   /**
    * Sets start and length to 0
    */
+  @Override
   public void clear() {
 	  start = 0;
 	  length = 0;
@@ -69,6 +70,7 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
    *          the entry to add
    * @return {@code true} if entry overwrote
    */
+  @Override
   public void addLast(T entry) {
 	//boolean overwrite = false;
     synchronized (mutex) {
@@ -133,6 +135,7 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
    *          the entry to add
    * @return {@code true} if entry overwrote
    */
+  @Override
   public void addFirst(T entry) {
 	//boolean overwrite = false;
     synchronized (mutex) {
@@ -249,7 +252,7 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
       return null;
     }
   }
-
+  @Override
   public boolean isEmpty() {
     return length == 0;
   }

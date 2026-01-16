@@ -5,7 +5,7 @@ import java.util.List;
  * Use Eigenvector decomposition to perform principal component analysis on a point3 list.
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025 
  */
-public class computeVariance {
+public class ComputeVariance {
 	private boolean DEBUG;
 	double variance1 = 0;
 	double variance2 = 0;
@@ -50,10 +50,10 @@ public class computeVariance {
 	public Vector4d getEigvec3() {
 		return eigVec3;
 	}
-	public Point3f getcentroid() {
+	public Point3f getCentroid() {
 		return centroid;
 	}
-	public double getconfidence() {
+	public double getConfidence() {
 		return confidence;
 	}
 	/**
@@ -62,7 +62,7 @@ public class computeVariance {
 	public Matrix3 getM_covariance() {
 		return m_covariance;
 	}
-	public Matrix3 computeCovariance(List<Point3f> window) {
+	private Matrix3 computeCovariance(List<Point3f> window) {
 	    int n = window.size();
 	    double nd = (double) n;
 	    Matrix3 cov = new Matrix3();
