@@ -413,6 +413,8 @@ public class RangeFinderPubs extends AbstractNodeMain {
 					if( DEBUG ) {
 						System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
 					}
+					synchronized(euler) {
+					if(euler.euler != null) {
 					double x = Math.sin(euler.euler.getCompassHeadingDegrees()*0.01745329)*distance;
 					double y = Math.cos(euler.euler.getCompassHeadingDegrees()*0.01745329)*distance;
 					Point3f winPoint = new Point3f((float)x,(float)y,(float)euler.eulerTime);
@@ -444,7 +446,11 @@ public class RangeFinderPubs extends AbstractNodeMain {
 						sb.append("\r\n");
 						pubdata.add(String.valueOf(sb.toString()));
 					}  
-					//}
+					} else {
+						if(DEBUG)
+							System.out.println("euler is null..");
+					}
+					}
 					try {
 						Thread.sleep(200);
 					} catch (InterruptedException e) {}
