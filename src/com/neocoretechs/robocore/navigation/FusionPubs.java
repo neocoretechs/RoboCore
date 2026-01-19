@@ -18,7 +18,6 @@ import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 import org.ros.internal.loader.CommandLineLoader;
-import org.ros.message.MessageListener;
 
 import com.neocoretechs.robocore.GpioNative;
 import com.neocoretechs.robocore.SynchronizedThreadManager;
@@ -96,7 +95,7 @@ import sensor_msgs.MagneticField;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2025
  */
 public class FusionPubs extends AbstractNodeMain  {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static final boolean SAMPLERATE = false; // display pubs per second
 	float volts;
 	Object statMutex = new Object(); 
@@ -667,10 +666,11 @@ public class FusionPubs extends AbstractNodeMain  {
 				double x = Math.sin(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
 				double y = Math.cos(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
 				Point3f winPoint = new Point3f((float)x,(float)y,(float)eulers.eulerTime);
-				pointWindow.add(winPoint);
+				pointWindow.addLast(winPoint);
 				if(pointWindow.size() == WINSIZE) {
 					ComputeVariance c = new ComputeVariance();
 					c.leastVariance(pointWindow);
+					pointWindow.poll();
 					StringBuilder sb = new StringBuilder();
 					sb.append("Confidence=");
 					sb.append(c.getConfidence());
