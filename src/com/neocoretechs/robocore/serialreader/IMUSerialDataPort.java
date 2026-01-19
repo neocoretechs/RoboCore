@@ -53,7 +53,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 	private static int writeBufferHead = 0;
 	private static int writeBufferTail = 0;
 
-
 	private static volatile IMUSerialDataPort instance = null;
 	private static Object mutex = new Object();
 
@@ -125,7 +124,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public static final byte BNO055_SYS_CLK_STAT_ADDR             = (byte)0x38;
 	public static final byte BNO055_SYS_STAT_ADDR                 = (byte)0x39;
 	public static final byte BNO055_SYS_ERR_ADDR                  = (byte)0x3A;
-
 
 	static String CALIBRATION_FILE = "/home/"+System.getProperty("user.name")+"/imu.config";
 
@@ -808,7 +806,6 @@ public class IMUSerialDataPort implements DataPortInterface {
 		short pitch = (short)((data[4] & 0xFF)
 				| ((data[5] << 8) & 0xFF00));
 		return new double[]{round(((double)heading)/16.0, IMU_TOL), round(((double)roll)/16.0, IMU_TOL), round(((double)pitch)/16.0, IMU_TOL)};
-
 	}
 
 	/**
