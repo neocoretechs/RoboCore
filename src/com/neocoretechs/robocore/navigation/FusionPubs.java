@@ -153,6 +153,7 @@ public class FusionPubs extends AbstractNodeMain  {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
+	private static final float MIN_MOTION_STRENGTH = 1.0f;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
 	public CircularBlockingDeque<String> pubdata = new CircularBlockingDeque<String>(WINSIZE);
@@ -163,7 +164,6 @@ public class FusionPubs extends AbstractNodeMain  {
 	private Runnable readThread, pubThread;
 	static class EulerTime {
 		sensor_msgs.Imu ImuMessage;
-		long eulerTime = 0L;
 		double[] eulers = null;
 		int[] accels = null;
 		int[] gyros = null;
@@ -367,7 +367,7 @@ public class FusionPubs extends AbstractNodeMain  {
 							magmsg = connectedNode.getTopicMessageFactory().newFromType(MagneticField._TYPE);
 							eulers.ImuMessage.setHeader(header);
 							magmsg.setHeader(header);
-
+							
 							if( eulers.accels != null ) {
 								geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
 								val.setX(eulers.accels[0]);
@@ -665,35 +665,103 @@ public class FusionPubs extends AbstractNodeMain  {
 			if(eulers.ImuMessage != null) {
 				double x = Math.sin(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
 				double y = Math.cos(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
-				Point3f winPoint = new Point3f((float)x,(float)y,(float)eulers.eulerTime);
+				Point3f winPoint = new Point3f((float)x,(float)y,(float)System.currentTimeMillis());
 				pointWindow.addLast(winPoint);
-				if(pointWindow.size() == WINSIZE) {
+				if(pointWindow.length() == WINSIZE) {
 					ComputeVariance c = new ComputeVariance();
 					c.leastVariance(pointWindow);
 					pointWindow.poll();
 					StringBuilder sb = new StringBuilder();
-					sb.append("Confidence=");
+					// --- MOST RECENT DISTANCE ---
+					sb.append("nowdistance=");
+					float latestDist = 0.0f;
+					float latestTime = Float.MIN_VALUE;
+					for (Point3f p : pointWindow) {
+					    if (p.t() > latestTime) {
+					        latestTime = p.t();
+					        latestDist = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
+					    }
+					}
+					sb.append(String.format("%3.1f", latestDist));
+					// --- MIN DISTANCE ---
+					sb.append(",mindistance=");
+					float minDist = Float.MAX_VALUE;
+					for (Point3f p : pointWindow) {
+					    float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
+					    if (d < minDist)
+					        minDist = d;
+					}
+					sb.append(String.format("%3.1f", minDist));
+					// --- MAX DISTANCE ---
+					sb.append(",maxdistance=");
+					float maxDist = Float.MIN_VALUE;
+					for (Point3f p : pointWindow) {
+					    float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
+					    if (d > maxDist)
+					        maxDist = d;
+					}
+					sb.append(String.format("%3.1f", maxDist));
+					// --- AVERAGE DISTANCE ---
+					sb.append(",avedistance=");
+					float sumDist = 0.0f;
+					for (Point3f p : pointWindow) {
+					    sumDist += Math.sqrt(p.x()*p.x() + p.y()*p.y());
+					}
+					float avgDist = sumDist / pointWindow.size();
+					sb.append(String.format("%3.1f", avgDist));
+					/*
+					sb.append(",confidence=");
 					sb.append(c.getConfidence());
-					sb.append(",");
-					sb.append("variance1=");
+					sb.append(",noise_strength=");
 					sb.append(c.getVariance1());
-					sb.append(",");
-					sb.append("variance2=");
+					sb.append(",jitter_strength=");
 					sb.append(c.getVariance2());
-					sb.append(",");
-					sb.append("variance3=");
+					sb.append(",motion_strength=");
 					sb.append(c.getVariance3());
-					sb.append(",");
-					sb.append("eigen1=");
-					sb.append(c.getEigvec1());
-					sb.append(",");
-					sb.append("eigen2=");
-					sb.append(c.getEigvec2());
-					sb.append(",");
-					sb.append("eigen3=");
-					sb.append(c.getEigvec3());
+					sb.append(",noise_axis_x=");
+					sb.append(c.getEigvec1().x);
+					sb.append(",noise_axis_y=");
+					sb.append(c.getEigvec1().y);
+					sb.append(",noise_axis_z=");
+					sb.append(c.getEigvec1().z);
+					sb.append(",jitter_axis_x=");
+					sb.append(c.getEigvec2().x);
+					sb.append(",jitter_axis_y=");
+					sb.append(c.getEigvec2().y);
+					sb.append(",jitter_axis_z=");
+					sb.append(c.getEigvec2().z);
+					*/
+					sb.append(",motion_direction_x=");
+					sb.append(c.getEigvec3().x);
+					sb.append(",motion_direction_y=");
+					sb.append(c.getEigvec3().y);
+					sb.append(",motion_direction_z=");
+					sb.append(c.getEigvec3().z);
+					// --- WORLD-FRAME MOTION COMPUTATION ---
+					double yaw = eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329;
+					double cos = Math.cos(yaw);
+					double sin = Math.sin(yaw);
+					// robot-frame PCA direction (unit vector)
+					double v_x = c.getEigvec3().x;
+					double v_y = c.getEigvec3().y;
+					// world-frame direction (unit vector)
+					double vwx =  cos * v_x - sin * v_y;
+					double vwy =  sin * v_x + cos * v_y;
+					// absolute world-frame velocity (scaled by PCA speed)
+					double speed = Math.sqrt(c.getVariance3());
+					double vwx_abs = vwx * speed;
+					double vwy_abs = vwy * speed;
+					sb.append(",world_direction_x=");
+					sb.append(String.format("%3.3f", vwx));
+					sb.append(",world_direction_y=");
+					sb.append(String.format("%3.3f", vwy));
+					sb.append(",world_velocity_x=");
+					sb.append(String.format("%3.3f", vwx_abs));
+					sb.append(",world_velocity_y=");
+					sb.append(String.format("%3.3f", vwy_abs));
 					sb.append("\r\n");
-					pubdata.addLast(sb.toString());
+					if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH)
+						pubdata.addLast(sb.toString());
 					if(DEBUG)
 						System.out.println(">>> Queuing:"+sb.toString());
 				}  

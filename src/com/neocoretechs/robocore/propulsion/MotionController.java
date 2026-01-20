@@ -570,12 +570,21 @@ public class MotionController extends AbstractNodeMain {
 				if( DEBUG )
 					System.out.println("New range msg:"+message);
 				try {
-					if( Float.parseFloat(message.getData()) != rangetop) {
-						rangetop = Float.parseFloat(message.getData());
-						isRangeUpperFront = true;
-						System.out.println(" Range Top:"+rangetop);
-					} else
-						isRangeUpperFront = false;
+					int sIndex = message.getData().indexOf("distance=");
+					if(sIndex != -1) {
+						int eIndex = message.getData().indexOf(".",sIndex);
+						if(eIndex != -1) {
+							// substring of offset of end of distance= plus decimal plus 1
+							float fDist = Float.parseFloat(message.getData().substring(sIndex+9,eIndex+1));
+							if( fDist != rangetop) {
+								rangetop = fDist;
+								isRangeUpperFront = true;
+								System.out.println(" Range Top:"+rangetop);
+							} else {
+								isRangeUpperFront = false;
+							}
+						}
+					}
 				} catch (Throwable e) {
 					isRangeUpperFront = false;
 					System.out.println("Range top subs exception:"+e.getMessage());
