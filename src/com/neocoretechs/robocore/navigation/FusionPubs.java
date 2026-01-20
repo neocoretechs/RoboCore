@@ -153,7 +153,7 @@ public class FusionPubs extends AbstractNodeMain  {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
-	private static final float MIN_MOTION_STRENGTH = 1.0f;
+	private static final float MIN_MOTION_STRENGTH = 5.0f;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
 	public CircularBlockingDeque<String> pubdata = new CircularBlockingDeque<String>(WINSIZE);
