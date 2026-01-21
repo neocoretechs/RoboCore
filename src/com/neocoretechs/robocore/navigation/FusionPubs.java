@@ -665,7 +665,7 @@ public class FusionPubs extends AbstractNodeMain  {
 			if(eulers.ImuMessage != null) {
 				double x = Math.sin(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
 				double y = Math.cos(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
-				Point3f winPoint = new Point3f((float)x,(float)y,(float)System.currentTimeMillis());
+				Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
 				pointWindow.addLast(winPoint);
 				if(pointWindow.length() == WINSIZE) {
 					ComputeVariance c = new ComputeVariance();
