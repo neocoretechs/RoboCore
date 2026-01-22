@@ -44,16 +44,16 @@ public class IMUPubs extends AbstractNodeMain  {
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	sensor_msgs.Imu imumsg = null;
 	sensor_msgs.MagneticField magmsg = null;
-	int[] accels = null;
-	int[] gyros = null;
-	int[] mags = null;
+	double[] accels = null;
+	double[] gyros = null;
+	double[] mags = null;
 	int temp = -1;
 	double[] eulers = null;
 	double[] quats = null;
 	//
-	int[] last_accels = null;
-	int[] last_gyros = null;
-	int[] last_mags = null;
+	double[] last_accels = null;
+	double[] last_gyros = null;
+	double[] last_mags = null;
 	int last_temp = 0;
 	double[] last_imu = null;
 	
@@ -430,9 +430,9 @@ private boolean hasDataChanged() {
 	imu_changed = false;
 	temp_changed = false;
 	if(last_accels == null || last_gyros == null || last_mags == null) {
-		last_accels = new int[3];
-		last_gyros = new int[3];
-		last_mags = new int[3];
+		last_accels = new double[3];
+		last_gyros = new double[3];
+		last_mags = new double[3];
 		last_imu = new double[3];
 	}
 	if(accels == null || gyros == null || mags == null)

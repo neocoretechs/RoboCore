@@ -711,7 +711,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * @return int array of x,y,z accel values
 	 * @throws IOException
 	 */
-	public int[] readAccel() throws IOException {
+	public double[] readAccel() throws IOException {
 		byte[] data = read(BNO055_ACCEL_DATA_X_LSB_ADDR, (byte)6);
 		int c = 0;
 		while( data == null ) {
@@ -728,7 +728,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 				| ((data[5] << 8) & 0xFF00));
 		// Convert the data
 		/* 1m/s^2 = 100 LSB, to get readings in mg div by 1 */
-		return new int[]{xAccl/100, yAccl/100, zAccl/100};
+		return new double[]{((double)xAccl)/100, ((double)yAccl)/100, ((double)zAccl)/100};
 	}
 
 	/**
@@ -736,7 +736,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * @return X/Y/Z magnetic field strength of axis in microteslas
 	 * @throws IOException
 	 */
-	public int[] readMag() throws IOException {
+	public double[] readMag() throws IOException {
 		// Read 6 bytes of data from address 0x0E(14)
 		// xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
 		byte[] data = read(BNO055_MAG_DATA_X_LSB_ADDR, (byte)6);
@@ -754,7 +754,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 				| ((data[3] << 8) & 0xFF00));
 		short zMag = (short)((data[4] & 0xFF)
 				| ((data[5] << 8) & 0xFF00));
-		return new int[]{xMag/16, yMag/16, zMag/16};
+		return new double[]{((double)xMag)/16, ((double)yMag)/16, ((double)zMag)/16};
 	}
 
 	/**
@@ -762,7 +762,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * @return x/y/z/ gyro reading
 	 * @throws IOException
 	 */
-	public int[] readGyro() throws IOException {
+	public double[] readGyro() throws IOException {
 		// Read 6 bytes of data from address 0x14(20)
 		// xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
 		byte[] data = read(BNO055_GYRO_DATA_X_LSB_ADDR, (byte)6);
@@ -781,7 +781,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 				| ((data[5] << 8) & 0xFF00));
 		// Convert the data, 900 is RPS, radians per second, 16 is DPS, degrees per second
 		//return new int[]{xGyro/900, yGyro/900, zGyro/900};
-		return new int[]{xGyro/16, yGyro/16, zGyro/16};
+		return new double[]{((double)xGyro)/16, ((double)yGyro)/16, ((double)zGyro)/16};
 	}
 
 	/**

@@ -165,14 +165,14 @@ public class FusionPubs extends AbstractNodeMain  {
 	static class EulerTime {
 		sensor_msgs.Imu ImuMessage;
 		double[] eulers = null;
-		int[] accels = null;
-		int[] gyros = null;
-		int[] mags = null;
+		double[] accels = null;
+		double[] gyros = null;
+		double[] mags = null;
 		int temp = -1;
 		double[] quats = null;
-		int[] last_accels = null;
-		int[] last_gyros = null;
-		int[] last_mags = null;
+		double[] last_accels = null;
+		double[] last_gyros = null;
+		double[] last_mags = null;
 		int last_temp = 0;
 		double[] last_imu = null;
 	}
@@ -524,9 +524,9 @@ public class FusionPubs extends AbstractNodeMain  {
 		temp_changed = false;
 		synchronized(eulers) {
 			if(eulers.last_accels == null || eulers.last_gyros == null || eulers.last_mags == null) {
-				eulers.last_accels = new int[3];
-				eulers.last_gyros = new int[3];
-				eulers.last_mags = new int[3];
+				eulers.last_accels = new double[3];
+				eulers.last_gyros = new double[3];
+				eulers.last_mags = new double[3];
 				eulers.last_imu = new double[3];
 			}
 			if(eulers.accels == null || eulers.gyros == null || eulers.mags == null)
@@ -745,7 +745,10 @@ public class FusionPubs extends AbstractNodeMain  {
 					double vwx_abs, vwy_abs;
 					// --- WORLD-FRAME MOTION COMPUTATION ---
 					// determine of any forward or lateral acceleration is taking place
-					if(Math.sqrt(eulers.accels[0]*eulers.accels[0] + eulers.accels[1]*eulers.accels[1]) > 0.06) {
+					double accel = Math.sqrt(eulers.accels[0]*eulers.accels[0] + eulers.accels[1]*eulers.accels[1]);
+					if(accel > 0)
+						System.out.println("Accel:"+accel+" x,y,z="+eulers.accels[0]+" "+eulers.accels[1]+" "+eulers.accels[2]);
+					if(accel > 0.06) {
 						EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(eulers.accels[0], eulers.accels[1], eulers.accels[2],
 								eulers.ImuMessage.getPitch()*0.01745329, eulers.ImuMessage.getRoll()*0.01745329, eulers.ImuMessage.getCompassHeadingDegrees());
 						EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
