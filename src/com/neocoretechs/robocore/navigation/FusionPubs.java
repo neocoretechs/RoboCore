@@ -671,6 +671,11 @@ public class FusionPubs extends AbstractNodeMain  {
 					ComputeVariance c = new ComputeVariance();
 					c.leastVariance(pointWindow);
 					pointWindow.poll();
+					// robot-frame PCA direction (unit vector)
+					double v_x = c.getEigvec3().x;
+					double v_y = c.getEigvec3().y;
+					//
+	
 					StringBuilder sb = new StringBuilder();
 					// --- MOST RECENT DISTANCE ---
 					sb.append("nowdistance=");
@@ -737,28 +742,37 @@ public class FusionPubs extends AbstractNodeMain  {
 					sb.append(c.getEigvec3().y);
 					sb.append(",motion_direction_z=");
 					sb.append(c.getEigvec3().z);
+					double vwx_abs, vwy_abs;
 					// --- WORLD-FRAME MOTION COMPUTATION ---
-					double yaw = eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329;
-					double cos = Math.cos(yaw);
-					double sin = Math.sin(yaw);
-					// robot-frame PCA direction (unit vector)
-					double v_x = c.getEigvec3().x;
-					double v_y = c.getEigvec3().y;
-					// world-frame direction (unit vector)
-					double vwx =  cos * v_x - sin * v_y;
-					double vwy =  sin * v_x + cos * v_y;
-					// absolute world-frame velocity (scaled by PCA speed)
-					double speed = Math.sqrt(c.getVariance3());
-					double vwx_abs = vwx * speed;
-					double vwy_abs = vwy * speed;
-					sb.append(",world_direction_x=");
-					sb.append(String.format("%3.3f", vwx));
-					sb.append(",world_direction_y=");
-					sb.append(String.format("%3.3f", vwy));
-					sb.append(",world_velocity_x=");
-					sb.append(String.format("%3.3f", vwx_abs));
-					sb.append(",world_velocity_y=");
-					sb.append(String.format("%3.3f", vwy_abs));
+					// determine of any forward or lateral acceleration is taking place
+					if(Math.sqrt(eulers.accels[0]*eulers.accels[0] + eulers.accels[1]*eulers.accels[1]) > 0.06) {
+						EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(eulers.accels[0], eulers.accels[1], eulers.accels[2],
+								eulers.ImuMessage.getPitch()*0.01745329, eulers.ImuMessage.getRoll()*0.01745329, eulers.ImuMessage.getCompassHeadingDegrees());
+						EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
+						EgoMotionCompensator.MotionSemantic motionSemantic = new EgoMotionCompensator().update(imuSample, pcaMotion);
+						motionSemantic.appendTo(sb);
+						vwx_abs = motionSemantic.worldVelX;
+						vwy_abs = motionSemantic.worldVelY;
+					} else {
+						double yaw = eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329;
+						double cos = Math.cos(yaw);
+						double sin = Math.sin(yaw);
+						// world-frame direction (unit vector)
+						double vwx =  cos * v_x - sin * v_y;
+						double vwy =  sin * v_x + cos * v_y;
+						// absolute world-frame velocity (scaled by PCA speed)
+						double speed = Math.sqrt(c.getVariance3());
+						vwx_abs = vwx * speed;
+						vwy_abs = vwy * speed;
+						sb.append(",world_direction_x=");
+						sb.append(String.format("%3.3f", vwx));
+						sb.append(",world_direction_y=");
+						sb.append(String.format("%3.3f", vwy));
+						sb.append(",world_velocity_x=");
+						sb.append(String.format("%3.3f", vwx_abs));
+						sb.append(",world_velocity_y=");
+						sb.append(String.format("%3.3f", vwy_abs));
+					}
 					sb.append("\r\n");
 					if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH)
 						pubdata.addLast(sb.toString());
