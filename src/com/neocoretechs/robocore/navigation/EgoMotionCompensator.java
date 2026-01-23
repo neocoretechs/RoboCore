@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.navigation;
 
+import org.json.JSONObject;
+
 /**
  * Uses the IMU accelerometer to estimate robot velocity,
  * rotate it into world-frame, subtract it from PCA world-frame motion,
@@ -102,6 +104,16 @@ public final class EgoMotionCompensator {
             sb.append(",robot_world_y=").append(String.format("%3.3f", robotWorldY));
             sb.append(",abs_obj_x=").append(String.format("%3.3f", absObjX));
             sb.append(",abs_obj_y=").append(String.format("%3.3f", absObjY));
+        }
+        public void appendTo(JSONObject sb) {
+            sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", worldDirX)));
+            sb.put("world_direction_y",Float.parseFloat(String.format("%3.3f", worldDirY)));
+            sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", worldVelX)));
+            sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", worldVelY)));
+            sb.put("robot_world_x",Float.parseFloat(String.format("%3.3f", robotWorldX)));
+            sb.put("robot_world_y",Float.parseFloat(String.format("%3.3f", robotWorldY)));
+            sb.put("abs_obj_x",Float.parseFloat(String.format("%3.3f", absObjX)));
+            sb.put("abs_obj_y",Float.parseFloat(String.format("%3.3f", absObjY)));
         }
     }
     /**

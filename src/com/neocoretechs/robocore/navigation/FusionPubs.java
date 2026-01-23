@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
+import org.json.JSONObject;
 import org.ros.concurrent.CancellableLoop;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -154,6 +155,7 @@ public class FusionPubs extends AbstractNodeMain  {
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
 	private static final float MIN_MOTION_STRENGTH = 5.0f;
+	private static final double MIN_ACCEL = 1.5;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
 	public CircularBlockingDeque<String> pubdata = new CircularBlockingDeque<String>(WINSIZE);
@@ -676,9 +678,10 @@ public class FusionPubs extends AbstractNodeMain  {
 					double v_y = c.getEigvec3().y;
 					//
 	
-					StringBuilder sb = new StringBuilder();
+					//StringBuilder sb = new StringBuilder();
+					JSONObject sb = new JSONObject();
 					// --- MOST RECENT DISTANCE ---
-					sb.append("nowdistance=");
+					//sb.append("nowdistance=");
 					float latestDist = 0.0f;
 					float latestTime = Float.MIN_VALUE;
 					for (Point3f p : pointWindow) {
@@ -687,33 +690,33 @@ public class FusionPubs extends AbstractNodeMain  {
 					        latestDist = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
 					    }
 					}
-					sb.append(String.format("%3.1f", latestDist));
+					sb.put("nowdistance",Float.parseFloat(String.format("%3.3f", latestDist)));
 					// --- MIN DISTANCE ---
-					sb.append(",mindistance=");
+					//sb.append(",mindistance=");
 					float minDist = Float.MAX_VALUE;
 					for (Point3f p : pointWindow) {
 					    float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
 					    if (d < minDist)
 					        minDist = d;
 					}
-					sb.append(String.format("%3.1f", minDist));
+					sb.put("mindistance",Float.parseFloat(String.format("%3.3f", minDist)));
 					// --- MAX DISTANCE ---
-					sb.append(",maxdistance=");
+					//sb.append(",maxdistance=");
 					float maxDist = Float.MIN_VALUE;
 					for (Point3f p : pointWindow) {
 					    float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
 					    if (d > maxDist)
 					        maxDist = d;
 					}
-					sb.append(String.format("%3.1f", maxDist));
+					sb.put("maxdistance",Float.parseFloat(String.format("%3.3f", maxDist)));
 					// --- AVERAGE DISTANCE ---
-					sb.append(",avedistance=");
+					//sb.append(",avedistance=");
 					float sumDist = 0.0f;
 					for (Point3f p : pointWindow) {
 					    sumDist += Math.sqrt(p.x()*p.x() + p.y()*p.y());
 					}
 					float avgDist = sumDist / pointWindow.size();
-					sb.append(String.format("%3.1f", avgDist));
+					sb.put("avedistance",Float.parseFloat(String.format("%3.3f", avgDist)));
 					/*
 					sb.append(",confidence=");
 					sb.append(c.getConfidence());
@@ -736,19 +739,19 @@ public class FusionPubs extends AbstractNodeMain  {
 					sb.append(",jitter_axis_z=");
 					sb.append(c.getEigvec2().z);
 					*/
-					sb.append(",motion_direction_x=");
-					sb.append(c.getEigvec3().x);
-					sb.append(",motion_direction_y=");
-					sb.append(c.getEigvec3().y);
-					sb.append(",motion_direction_z=");
-					sb.append(c.getEigvec3().z);
+					//sb.append(",motion_direction_x=");
+					sb.put("motion_direction_x",Float.parseFloat(String.format("%3.3f",c.getEigvec3().x)));
+					//sb.append(",motion_direction_y=");
+					sb.put("motion_direction_y",Float.parseFloat(String.format("%3.3f",c.getEigvec3().y)));
+					//sb.append(",motion_direction_z=");
+					sb.put("motion_direction_z",Float.parseFloat(String.format("%3.3f",c.getEigvec3().z)));
 					double vwx_abs, vwy_abs;
 					// --- WORLD-FRAME MOTION COMPUTATION ---
 					// determine of any forward or lateral acceleration is taking place
 					double accel = Math.sqrt(eulers.accels[0]*eulers.accels[0] + eulers.accels[1]*eulers.accels[1]);
-					if(accel > 0)
+					if(DEBUG && accel > 0)
 						System.out.println("Accel:"+accel+" x,y,z="+eulers.accels[0]+" "+eulers.accels[1]+" "+eulers.accels[2]);
-					if(accel > 0.06) {
+					if(accel > MIN_ACCEL) {
 						EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(eulers.accels[0], eulers.accels[1], eulers.accels[2],
 								eulers.ImuMessage.getPitch()*0.01745329, eulers.ImuMessage.getRoll()*0.01745329, eulers.ImuMessage.getCompassHeadingDegrees());
 						EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
@@ -767,16 +770,16 @@ public class FusionPubs extends AbstractNodeMain  {
 						double speed = Math.sqrt(c.getVariance3());
 						vwx_abs = vwx * speed;
 						vwy_abs = vwy * speed;
-						sb.append(",world_direction_x=");
-						sb.append(String.format("%3.3f", vwx));
-						sb.append(",world_direction_y=");
-						sb.append(String.format("%3.3f", vwy));
-						sb.append(",world_velocity_x=");
-						sb.append(String.format("%3.3f", vwx_abs));
-						sb.append(",world_velocity_y=");
-						sb.append(String.format("%3.3f", vwy_abs));
+						//sb.append(",world_direction_x=");
+						sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
+						//sb.append(",world_direction_y=");
+						sb.put(",world_direction_y",Float.parseFloat(String.format("%3.3f", vwy)));
+						//sb.append(",world_velocity_x=");
+						sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", vwx_abs)));
+						//sb.append(",world_velocity_y=");
+						sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
 					}
-					sb.append("\r\n");
+					//sb.append("\r\n");
 					if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH)
 						pubdata.addLast(sb.toString());
 					if(DEBUG)
