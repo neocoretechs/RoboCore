@@ -23,7 +23,7 @@ import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 
 /**
  * Takes readings from the IMU DataPort and packages them for publication on a circular blocking queue.
- * IMUSerialDataPort class is oriented toward the Bosch BNO055.
+ * IMUSerialDataPort class is oriented toward the Bosch BNO055 in UART mode. The URM37 can be either GPIO  or UART (see ctors).
  * Option also exists for calibration mode, wherein a calibration kata must be performed until values reach their desired
  * levels, as set by the parameters SYSTEM_CAL, ACC_CAL, GYRO_CAL, MAG_CAL, and calibration file is written to the file
  * defined in IMUSerialDataPort. MAKE SURE TO DELETE FILE BEFORE CALIBRATION, as it is otherwise locked for update. 
@@ -84,7 +84,7 @@ import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
  */
 public class FusionIMURange   {
 	private static boolean DEBUG = false;
-	private static final boolean SAMPLERATE = false; // display pubs per second
+	private static final boolean SAMPLERATE = true; // display pubs per second
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
@@ -126,7 +126,7 @@ public class FusionIMURange   {
 	static final String REMAP_MODE_CALIBRATE="calibrate"; // REMAP_MODE value for calibration
 	boolean display_revision = true;
 	String IMUPort = "/dev/ttyUSB0";
-	static String URMPort = "/dev/ttyS1"; 
+	String URMPort = "/dev/ttyS1"; 
 	//-------------------------------------
 	// ultrasonic ranging
 	static long count = 0;
@@ -142,7 +142,7 @@ public class FusionIMURange   {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
-	private static final float MIN_MOTION_STRENGTH = 5.0f;
+	private static final float MIN_MOTION_STRENGTH = 1.0f;
 	private static final double MIN_ACCEL = 1.5;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
@@ -168,7 +168,19 @@ public class FusionIMURange   {
 	}
 	EulerTime eulers = new EulerTime();
 
-	public FusionIMURange(boolean uart) {
+	public FusionIMURange(boolean uart) {	
+		init(uart);
+	}
+	public FusionIMURange(String urmPort) {
+		this.URMPort = urmPort;
+		init(false);
+	}
+	public FusionIMURange(String imuPort, String urmPort) {
+		this.IMUPort = imuPort;
+		this.URMPort = urmPort;
+		init(true);
+	}
+	private void init(boolean uart) {
 		if(uart) {
 			readThread = new UltraRead(); // ultrasonic UART port (USB or tty)
 		} else {
@@ -186,7 +198,6 @@ public class FusionIMURange   {
 			} catch (InterruptedException e) {break;}
 		awaitStart.countDown();
 	}
-	
 	/**
 	 * @return the iMUPort
 	 */
@@ -202,13 +213,13 @@ public class FusionIMURange   {
 	/**
 	 * @return the uRMPort
 	 */
-	public static String getURMPort() {
+	public String getURMPort() {
 		return URMPort;
 	}
 	/**
 	 * @param uRMPort the uRMPort to set
 	 */
-	public static void setURMPort(String uRMPort) {
+	public void setURMPort(String uRMPort) {
 		URMPort = uRMPort;
 	}
 	
@@ -566,7 +577,8 @@ public class FusionIMURange   {
 		}
 		
 		try {
-			System.out.println(fimur.pubdata.take());
+			while(true)
+				System.out.println(fimur.pubdata.take());
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -697,30 +709,30 @@ public class FusionIMURange   {
 	}
 	
 	class ultraPub implements Runnable {
-		// This CancellableLoop will be canceled automatically when the node shuts
-		// down.
-			private int sequenceNumber, lastSequenceNumber;
-			org.ros.message.Time time = null;
-			@Override
-			public void run() {
-				sequenceNumber = 0;
-				lastSequenceNumber = 0;
-				time1 = System.currentTimeMillis();
-				startTime = time1;
-				time2 = System.currentTimeMillis();
-				imuDataPort = IMUSerialDataPort.getInstance(IMUPort);
-				imuDataPort.setSYSTEM_CAL(SYSTEM_CAL);
-				imuDataPort.setACC_CAL(ACC_CAL);
-				imuDataPort.setGYRO_CAL(GYRO_CAL);
-				imuDataPort.setMAG_CAL(MAG_CAL);
-				imuDataPort.setIMU_TOL(IMU_TOL);
-			
-				try {
-					awaitStart.await();
-				} catch (InterruptedException e) {}
-				// Publish status to message bus, then, begin calibration if necessary
-				// with prompts and status to status bus
-				pubdata.clear();
+		public volatile boolean shouldRun = true;
+		private int sequenceNumber, lastSequenceNumber;
+		org.ros.message.Time time = null;
+		@Override
+		public void run() {
+			sequenceNumber = 0;
+			lastSequenceNumber = 0;
+			time1 = System.currentTimeMillis();
+			startTime = time1;
+			time2 = System.currentTimeMillis();
+			imuDataPort = IMUSerialDataPort.getInstance(IMUPort);
+			imuDataPort.setSYSTEM_CAL(SYSTEM_CAL);
+			imuDataPort.setACC_CAL(ACC_CAL);
+			imuDataPort.setGYRO_CAL(GYRO_CAL);
+			imuDataPort.setMAG_CAL(MAG_CAL);
+			imuDataPort.setIMU_TOL(IMU_TOL);
+
+			try {
+				awaitStart.await();
+			} catch (InterruptedException e) {}
+			// Publish status to message bus, then, begin calibration if necessary
+			// with prompts and status to status bus
+			pubdata.clear();
+			while(shouldRun) {
 				/*
 					statPub.add(e.getMessage());
 					StackTraceElement[] se = e.getStackTrace();
@@ -868,6 +880,7 @@ public class FusionIMURange   {
 					}
 				}
 			}
+		}
 	}
 
 }
