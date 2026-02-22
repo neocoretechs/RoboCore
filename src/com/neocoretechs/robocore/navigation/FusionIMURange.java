@@ -1,14 +1,13 @@
 package com.neocoretechs.robocore.navigation;
 
 import java.io.IOException;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.json.JSONObject;
 import org.ros.message.Time;
@@ -24,7 +23,6 @@ import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 
 import sensor_msgs.Imu;
 import std_msgs.Header;
-
 
 /**
  * Takes readings from the IMU DataPort and packages them for publication on a circular blocking queue.
@@ -102,7 +100,6 @@ public class FusionIMURange   {
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(24);
 	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 	long time1, startTime;
-	long time2;
 
 	IMUSerialDataPort imuDataPort;
 	
@@ -157,6 +154,7 @@ public class FusionIMURange   {
 	static enum MODE { HCSR04, URM37};
 	static MODE SENSOR_TYPE = MODE.URM37;
 	private Runnable readThread, pubThread;
+	private int STALE_READING_SECONDS = 5;
 	
 	static class EulerTime {
 		sensor_msgs.Imu ImuMessage;
@@ -179,7 +177,6 @@ public class FusionIMURange   {
 			ImuMessage.setHeader(header);
 		}
 	}
-
 
 	public FusionIMURange(boolean uart) {	
 		init(uart);
@@ -207,9 +204,13 @@ public class FusionIMURange   {
 		// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
 		while(!((Notifier)readThread).isStarted())
 			try {
+				if(DEBUG)
+					System.out.println("init waiting for readThread..");
 				Thread.sleep(10);
 			} catch (InterruptedException e) {break;}
 		awaitStart.countDown();
+		if(DEBUG)
+			System.out.println("init..");
 	}
 	/**
 	 * @return the iMUPort
@@ -413,8 +414,10 @@ public class FusionIMURange   {
 			}
 		}
 		// heartbeat
-		if((System.currentTimeMillis() - time2) > IMU_FREQ) {
-			time2 = System.currentTimeMillis();
+		int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
+		if(lastIMUTime > STALE_READING_SECONDS) {
+			if(DEBUG)
+				System.out.println("Data changed last IMU reading as its "+lastIMUTime+" seconds old.");
 			dataChanged = true;
 			acc_changed = true;
 			gyro_changed = true;
@@ -511,6 +514,12 @@ public class FusionIMURange   {
 		}
 		synchronized(eulers) {
 			if(eulers.ImuMessage != null) {
+				int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
+				if(lastIMUTime > STALE_READING_SECONDS) {
+					if(DEBUG)
+						System.out.println("Discarding last IMU reading as its "+lastIMUTime+" seconds old.");
+					return;
+				}
 				double x = Math.sin(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
 				double y = Math.cos(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
 				Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
@@ -789,7 +798,6 @@ public class FusionIMURange   {
 			lastSequenceNumber = 0;
 			time1 = System.currentTimeMillis();
 			startTime = time1;
-			time2 = System.currentTimeMillis();
 			imuDataPort = IMUSerialDataPort.getInstance(IMUPort);
 			imuDataPort.setSYSTEM_CAL(SYSTEM_CAL);
 			imuDataPort.setACC_CAL(ACC_CAL);
