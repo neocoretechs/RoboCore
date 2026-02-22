@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.json.JSONObject;
+import org.ros.message.Time;
 
 import com.neocoretechs.robocore.GpioNative;
 import com.neocoretechs.robocore.SynchronizedThreadManager;
@@ -19,6 +21,9 @@ import com.neocoretechs.robocore.pca.ComputeVariance;
 import com.neocoretechs.robocore.pca.Point3f;
 import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
 import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
+
+import sensor_msgs.Imu;
+import std_msgs.Header;
 
 
 /**
@@ -83,7 +88,7 @@ import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2025
  */
 public class FusionIMURange   {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 	float volts;
 	Object statMutex = new Object(); 
@@ -94,7 +99,7 @@ public class FusionIMURange   {
 
 	ArrayList<String> statPub = new ArrayList<String>();
 
-	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
+	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(24);
 	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 	long time1, startTime;
 	long time2;
@@ -146,6 +151,7 @@ public class FusionIMURange   {
 	private static final double MIN_ACCEL = 1.5;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
+	public CircularBlockingDeque<EulerTime> eulerdata = new CircularBlockingDeque<EulerTime>(2);
 	public CircularBlockingDeque<String> pubdata = new CircularBlockingDeque<String>(WINSIZE);
 	public CircularBlockingDeque<Point3f> pointWindow = new CircularBlockingDeque<Point3f>(WINSIZE);
 	static enum MODE { HCSR04, URM37};
@@ -165,8 +171,15 @@ public class FusionIMURange   {
 		double[] last_mags = null;
 		int last_temp = 0;
 		double[] last_imu = null;
+		public EulerTime(Time time, int seq) {
+			ImuMessage = new Imu();
+			Header header = new Header();
+			header.setStamp(time);
+			header.setSeq(seq);
+			ImuMessage.setHeader(header);
+		}
 	}
-	EulerTime eulers = new EulerTime();
+
 
 	public FusionIMURange(boolean uart) {	
 		init(uart);
@@ -227,7 +240,7 @@ public class FusionIMURange   {
 	 * Retrieve the data from the IMU
 	 * @throws IOException
 	 */
-	public void getIMU() throws IOException{
+	public void getIMU(EulerTime eulers) throws IOException{
 		synchronized(eulers) {
 			if( DEBUG )
 				System.out.println("reading ACCEL");
@@ -247,7 +260,7 @@ public class FusionIMURange   {
 
 			if( DEBUG )
 				System.out.println("reading EULER");
-			//eulers = new EulerTime();
+
 			eulers.eulers = imuDataPort.readEuler();
 			if( DEBUG && eulers != null)
 				System.out.println("Eulers:"+eulers.eulers[0]+" "+eulers.eulers[1]+" "+eulers.eulers[2]);
@@ -263,6 +276,66 @@ public class FusionIMURange   {
 			eulers.temp = imuDataPort.readTemperature();
 			if( DEBUG && eulers.temp != Integer.MAX_VALUE)
 				System.out.println("Temp:"+eulers.temp);
+			eulers.ImuMessage.setCompassHeadingDegrees((float) eulers.eulers[0]);
+			eulers.ImuMessage.setRoll((float)eulers.eulers[1]);
+			eulers.ImuMessage.setPitch((float)eulers.eulers[2]);
+			eulers.ImuMessage.setTemperature(eulers.temp);
+			if( hasDataChanged(eulers) ) {
+				//MotionController.updatePID((float)eulers[0],  0.0f);
+					if( eulers.accels != null ) {
+						geometry_msgs.Vector3 val = new geometry_msgs.Vector3();
+						val.setX(eulers.accels[0]);
+						val.setY(eulers.accels[1]);
+						val.setZ(eulers.accels[2]);
+						eulers.ImuMessage.setLinearAcceleration(val);
+					} else {
+						statPub.add("ACCEL ERROR");
+					}
+
+					if( eulers.gyros != null ) {
+						geometry_msgs.Vector3 vala = new geometry_msgs.Vector3();
+						vala.setZ(eulers.gyros[2]);
+						vala.setX(eulers.gyros[0]);
+						vala.setY(eulers.gyros[1]);
+						eulers.ImuMessage.setAngularVelocity(vala);
+					} else {
+						statPub.add("GYRO ERROR");
+					}
+
+					if( eulers.quats != null ) {
+						geometry_msgs.Quaternion valq = new geometry_msgs.Quaternion();
+						valq.setX(eulers.quats[0]);
+						valq.setY(eulers.quats[1]);
+						valq.setZ(eulers.quats[2]);
+						valq.setW(eulers.quats[3]);
+						eulers.ImuMessage.setOrientation(valq);
+					} else {
+						statPub.add("QUAT ERROR");
+					}
+
+					//if( accels != null && gyros != null && quats != null && eulers != null && imu_changed) {
+					//	if( DEBUG )
+					//		System.out.println("Publishing IMU:"+eulers.euler);
+					//	queueResponse(eulers.euler);
+					//	Thread.sleep(1);
+					//}
+
+					// Mag
+					if(eulers.mags != null && mag_changed) {
+						geometry_msgs.Vector3 valm = new geometry_msgs.Vector3();
+						valm.setZ(eulers.mags[2]);
+						valm.setX(eulers.mags[0]);
+						valm.setY(eulers.mags[1]);
+						magmsg.setMagneticField(valm);
+						//queueResponse(magmsg);
+						//Thread.sleep(1);
+						//if( DEBUG )
+						//	System.out.println("Publishing MAG:"+magmsg);
+					} //else {
+					//if(mags == null)
+					//	statPub.add("MAG ERROR");
+					//}
+			} // hasDataChanged
 
 			// Output data to screen
 			if( DEBUG ) {
@@ -289,7 +362,7 @@ public class FusionIMURange   {
 	 * Attempt to limit publishing of real time data by only sending on deltas
 	 * @return true if any data has changed, then individual flags discern which data has changed and is to be published
 	 */
-	private boolean hasDataChanged() {
+	private boolean hasDataChanged(EulerTime eulers) {
 		boolean dataChanged = false;
 		acc_changed = false;
 		gyro_changed = false;
@@ -431,7 +504,8 @@ public class FusionIMURange   {
 		}	 
 		return distance;
 	}
-	private void queueResponse(double distance) {
+	
+	private void queueResponse(EulerTime eulers, double distance) {
 		if( DEBUG ) {
 			System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
 		}
@@ -449,7 +523,6 @@ public class FusionIMURange   {
 					double v_x = c.getEigvec3().x;
 					double v_y = c.getEigvec3().y;
 					//
-	
 					//StringBuilder sb = new StringBuilder();
 					JSONObject sb = new JSONObject();
 					// --- MOST RECENT DISTANCE ---
@@ -574,8 +647,7 @@ public class FusionIMURange   {
 		case "gpio" -> fimur = new FusionIMURange(false);
 		case "uart" -> fimur = new FusionIMURange(true);
 		default -> System.exit(1);
-		}
-		
+		}	
 		try {
 			while(true)
 				System.out.println(fimur.pubdata.take());
@@ -583,7 +655,6 @@ public class FusionIMURange   {
 			e.printStackTrace();
 		}
 		SynchronizedThreadManager.startSupervisorThread();
-		
 	}
 	
 	static interface Notifier {
@@ -654,8 +725,8 @@ public class FusionIMURange   {
 					//if( distance < MAX_RANGE) { 
 					if( DEBUG ) {
 						System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
-					}
-					queueResponse(distance);
+					}	
+					queueResponse(eulerdata.take(), distance);
 					//}
 					try {
 						Thread.sleep(250);
@@ -694,7 +765,7 @@ public class FusionIMURange   {
 					// Get the range
 					double distance = usdp.readDistance();
 					//if( distance < MAX_RANGE) { // 500 cm for URM37
-					queueResponse(distance);
+					queueResponse(eulerdata.take(), distance);
 					try {
 						Thread.sleep(200);
 					} catch (InterruptedException e) {}
@@ -781,12 +852,17 @@ public class FusionIMURange   {
 						display_revision = false;
 						statPub.add(imuDataPort.displayRevision(imuDataPort.getRevision()));
 					}
-					getIMU();
+					time1 = System.currentTimeMillis();
+					time = org.ros.message.Time.fromMillis(time1);
+					lastSequenceNumber = sequenceNumber;
 					++sequenceNumber;
-					if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
-						time1 = System.currentTimeMillis();
-						statPub.add("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
-						lastSequenceNumber = sequenceNumber;
+					EulerTime eulers = new EulerTime(time, sequenceNumber);
+					getIMU(eulers);
+					eulerdata.put(eulers);
+					if(System.currentTimeMillis() - time1 >= 1000) {
+						if(SAMPLERATE) {
+							statPub.add("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
+						}
 						byte[] stat = imuDataPort.getCalibrationStatus();
 						// If overall system status falls below 1, attempt an on-the-fly recalibration
 						if( stat == null || stat[0] <= 1 ) {
@@ -799,76 +875,8 @@ public class FusionIMURange   {
 						}
 						statPub.add(imuDataPort.formatCalibrationStatus(stat));
 					}
-					if( hasDataChanged() ) {
-						//MotionController.updatePID((float)eulers[0],  0.0f);
-						time = org.ros.message.Time.fromMillis(System.currentTimeMillis());
-						synchronized(eulers) {
-							if( eulers.accels != null ) {
-								geometry_msgs.Vector3 val = new geometry_msgs.Vector3();
-								val.setX(eulers.accels[0]);
-								val.setY(eulers.accels[1]);
-								val.setZ(eulers.accels[2]);
-								eulers.ImuMessage.setLinearAcceleration(val);
-							} else {
-								statPub.add("ACCEL ERROR");
-							}
-
-							if( eulers.gyros != null ) {
-								geometry_msgs.Vector3 vala = new geometry_msgs.Vector3();
-								vala.setZ(eulers.gyros[2]);
-								vala.setX(eulers.gyros[0]);
-								vala.setY(eulers.gyros[1]);
-								eulers.ImuMessage.setAngularVelocity(vala);
-							} else {
-								statPub.add("GYRO ERROR");
-							}
-
-							if( eulers.quats != null ) {
-								geometry_msgs.Quaternion valq = new geometry_msgs.Quaternion();
-								valq.setX(eulers.quats[0]);
-								valq.setY(eulers.quats[1]);
-								valq.setZ(eulers.quats[2]);
-								valq.setW(eulers.quats[3]);
-								eulers.ImuMessage.setOrientation(valq);
-							} else {
-								statPub.add("QUAT ERROR");
-							}
-
-							if(eulers != null) {
-								eulers.ImuMessage.setCompassHeadingDegrees((float) eulers.eulers[0]);
-								eulers.ImuMessage.setRoll((float)eulers.eulers[1]);
-								eulers.ImuMessage.setPitch((float)eulers.eulers[2]);
-								eulers.ImuMessage.setTemperature(eulers.temp);
-							} else {
-								statPub.add("EULER ERR");
-							}
-
-							//if( accels != null && gyros != null && quats != null && eulers != null && imu_changed) {
-							//	if( DEBUG )
-							//		System.out.println("Publishing IMU:"+eulers.euler);
-							//	queueResponse(eulers.euler);
-							//	Thread.sleep(1);
-							//}
-
-							// Mag
-							if(eulers.mags != null && mag_changed) {
-								geometry_msgs.Vector3 valm = new geometry_msgs.Vector3();
-								valm.setZ(eulers.mags[2]);
-								valm.setX(eulers.mags[0]);
-								valm.setY(eulers.mags[1]);
-								magmsg.setMagneticField(valm);
-								//queueResponse(magmsg);
-								//Thread.sleep(1);
-								//if( DEBUG )
-								//	System.out.println("Publishing MAG:"+magmsg);
-							} //else {
-							//if(mags == null)
-							//	statPub.add("MAG ERROR");
-							//}
-						}
-					} // hasDataChanged
-
-				} catch (IOException e) {
+	
+				} catch (IOException | InterruptedException e) {
 					System.out.println("IMU publishing loop malfunction "+e.getMessage()+" at "+LocalDateTime.ofInstant(Instant.ofEpochMilli(System.currentTimeMillis()), ZoneId.systemDefault()));
 					statPub.add("IMU publishing loop malfunction:");
 					statPub.add(e.getMessage());
