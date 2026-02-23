@@ -138,7 +138,7 @@ public class FusionPubs extends AbstractNodeMain  {
 	boolean system_needs_calibrating = true; // if mode is calibration and its first time through
 	static final String REMAP_MODE_CALIBRATE="calibrate"; // REMAP_MODE value for calibration
 	boolean display_revision = true;
-	String IMUPort = "/dev/ttyS1";
+	String IMUPort = "/dev/ttyUSB0";
 	//-------------------------------------
 	// ultrasonic ranging
 	static long count = 0;

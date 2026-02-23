@@ -17,7 +17,7 @@ import java.math.RoundingMode;
 
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
- * The accelerometer, gyro, magnetometer, fused Euler angle data, and temperature.
+ * The accelerometer, gyro, magnetometer, fused Euler angle data, and temperature. Based on datasheet and AdaFruit examples.
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2018,2019,2020,2021
  *
  */
@@ -136,7 +136,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	private int IMU_TOL = 3;
 
 	/**
-	 * Try to determine port, if we cant through cpuinfo, use default
+	 * Try to determine port, if we cant through cpuinfo, use default.
+	 * Set the default params and invoke constructor, which calls connect(true);
 	 * @return An instance of IMUSerialDataPort, singleton for this class
 	 */
 	public static IMUSerialDataPort getInstance() {
@@ -153,6 +154,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 			return instance;
 		}
 	}
+	/**
+	 * Set the ttyPort, the params, and invoke constructor, which calls connect(true);
+	 * @param ttyPort
+	 * @return
+	 */
 	public static IMUSerialDataPort getInstance(String ttyPort) {
 		synchronized(mutex) {
 			if( instance == null ) {
@@ -188,7 +194,15 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public String getPortName() {
 		return portName;
 	}
-
+	/**
+	 * Private ctor, calls connect(true) after setting params
+	 * @param tportName
+	 * @param tbaud
+	 * @param tdatab
+	 * @param tstopb
+	 * @param tparityb
+	 * @throws IOException
+	 */
 	private IMUSerialDataPort(String tportName, int tbaud, int tdatab, int tstopb, int tparityb) throws IOException {
 		portName = tportName;
 		baud = tbaud;
@@ -213,7 +227,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 	public int getParity() { return parityb; }
 	public int getHandshake() { return (serialPort == null ? -1 : serialPort.getFlowControlSettings()); }
 	public boolean isEOT() { return EOT; }
-
+	
+	/**
+	 * Called by constructor and singleton getInstance
+	 */
 	public void connect(boolean writeable) throws IOException {
         SynchronizedThreadManager.getInstance().init(new String[] {"IMU"+portName});
 		getSerialPort();
@@ -322,18 +339,18 @@ public class IMUSerialDataPort implements DataPortInterface {
 
 
 	/**
-	 * Acknowledge Response:
-	 * Byte 1 Byte 2
-	 * Response Header Status
-	 * 0xEE 0x01: WRITE_SUCCESS
-	 * 0x03: WRITE_FAIL - check connection, protocol settings and operation mode
-	 * 0x04: REGMAP_INVALID_ADDRESS - check if the register is addressable
-	 * 0x05: REGMAP_WRITE_DISABLED - check register property, ie read only
-	 * 0x06: WRONG_START_BYTE - Check if first byte sent is 0xAA
-	 * 0x07: BUS_OVER_RUN_ERROR - resend the command
-	 * 0X08: MAX_LENGTH_ERROR - split command so single frame < 128 bytes
-	 * 0x09: MIN_LENGTH_ERROR - send a valid frame
-	 * 0x0A: RECEIVE_CHARACTER_TIMEOUT - decrease waiting time between sending of 2 bytes of 1 frame
+	 * Acknowledge Response: <br>
+	 * Byte 1 Byte 2 <br>
+	 * Response Header Status <br>
+	 * 0xEE 0x01: WRITE_SUCCESS <br>
+	 * 0x03: WRITE_FAIL - check connection, protocol settings and operation mode <br>
+	 * 0x04: REGMAP_INVALID_ADDRESS - check if the register is addressable <br>
+	 * 0x05: REGMAP_WRITE_DISABLED - check register property, ie read only <br>
+	 * 0x06: WRONG_START_BYTE - Check if first byte sent is 0xAA <br>
+	 * 0x07: BUS_OVER_RUN_ERROR - resend the command <br>
+	 * 0X08: MAX_LENGTH_ERROR - split command so single frame < 128 bytes <br>
+	 * 0x09: MIN_LENGTH_ERROR - send a valid frame <br>
+	 * 0x0A: RECEIVE_CHARACTER_TIMEOUT - decrease waiting time between sending of 2 bytes of 1 frame <br>
 	 * @param address
 	 * @param data
 	 * @param ack
@@ -450,16 +467,16 @@ public class IMUSerialDataPort implements DataPortInterface {
 			 "MAX_LENGTH_ERROR","MIN_LENGTH_ERROR", "RECEIVE_CHARACTER_TIMEOUT"};
 
 	/**
-	 * 0xEE - error, 0xBB - success
-	 * byte 2: returned from method, 0 if success
-	 * 0x02: READ_FAIL
-	 * 0x04: REGMAP_INVALID_ADDRESS
-	 * 0x05: REGMAP_WRITE_DISABLED
-	 * 0x06: WRONG_START_BYTE
-	 * 0x07: BUS_OVER_RUN_ERROR
-	 * 0X08: MAX_LENGTH_ERROR
-	 * 0x09: MIN_LENGTH_ERROR
-	 * 0x0A: RECEIVE_CHARACTER_TIMEOUT
+	 * 0xEE - error, 0xBB - success <br>
+	 * byte 2: returned from method, 0 if success <br>
+	 * 0x02: READ_FAIL <br>
+	 * 0x04: REGMAP_INVALID_ADDRESS <br>
+	 * 0x05: REGMAP_WRITE_DISABLED <br>
+	 * 0x06: WRONG_START_BYTE <br>
+	 * 0x07: BUS_OVER_RUN_ERROR <br>
+	 * 0X08: MAX_LENGTH_ERROR <br>
+	 * 0x09: MIN_LENGTH_ERROR <br>
+	 * 0x0A: RECEIVE_CHARACTER_TIMEOUT <br>
 	 */
 	private byte signalRead(byte address, byte length) throws IOException {
 		//if(DEBUG) 
@@ -498,21 +515,21 @@ public class IMUSerialDataPort implements DataPortInterface {
 	}
 
 	/**
-	 * Read Success Response:
-	 * Byte 1 Byte 2 Byte 3 Byte (n+2)
-	 * ResponseByte length Data 1 Data n
-	 * 0xBB <..>
-	 * Read Failure or Acknowledge Response:
-	 * Byte 1 Byte 2
-	 * Response Header Status
-	 * 0xEE 0x02: READ_FAIL
-	 * 0x03 : WRITE_FAIL - check connection protocol setting and operation of BNO
-	 * 0x04 : REGMAP_INVALID_ADDRESS - Check that register is addressable
-	 * 0x06 : START BYTE IS NOT 0xAA - Check that the start byte is 0xAA
-	 * 0x07 : BUS_OVER_RUN_ERROR - BNO was not able to clear buffer, re-send command
-	 * 0x08 : MAX_LENGTH_ERR - Max length of data is > 128 0x80 split frame
-	 * 0x09 : MIN_LENGTH_ERR - Min length of data is < 1, send valid frame
-	 * 0x0A : RECIEVE_CHARACTER_TIMEOUT - If next character does not arrive within 100ms, decrease wait time between bytes
+	 * Read Success Response: <br>
+	 * Byte 1 Byte 2 Byte 3 Byte (n+2) <br>
+	 * ResponseByte length Data 1 Data n <br>
+	 * 0xBB <br>
+	 * Read Failure or Acknowledge Response: <br>
+	 * Byte 1 Byte 2 <br>
+	 * Response Header Status <br>
+	 * 0xEE 0x02: READ_FAIL <br>
+	 * 0x03 : WRITE_FAIL - check connection protocol setting and operation of BNO <br>
+	 * 0x04 : REGMAP_INVALID_ADDRESS - Check that register is addressable <br>
+	 * 0x06 : START BYTE IS NOT 0xAA - Check that the start byte is 0xAA <br>
+	 * 0x07 : BUS_OVER_RUN_ERROR - BNO was not able to clear buffer, re-send command <br>
+	 * 0x08 : MAX_LENGTH_ERR - Max length of data is > 128 0x80 split frame <br>
+	 * 0x09 : MIN_LENGTH_ERR - Min length of data is < 1, send valid frame <br>
+	 * 0x0A : RECIEVE_CHARACTER_TIMEOUT - If next character does not arrive within 100ms, decrease wait time between bytes <br>
 	 */
 	public byte[] read(byte address, byte length) throws IOException {
 		//if( Props.DEBUG ) System.out.println("read");
@@ -581,15 +598,17 @@ public class IMUSerialDataPort implements DataPortInterface {
     }
 
 	/**
-	 * Set the operation mode for sensor
+	 * Set the operation mode for sensor, operation mode for BNO055 sensor.  Mode should be a value from
+	 * table 3-3 and 3-5 of the datasheet:
+	 * {@linkplain http://www.adafruit.com/datasheets/BST_BNO055_DS000_12.pdf}
 	 * @param mode
 	 * @throws IOException
 	 */
 	private void set_mode(byte mode) throws IOException {
 		if( DEBUG )
 			System.out.printf("Setting mode:%02x\r\n",mode);
-		//Set operation mode for BNO055 sensor.  Mode should be a value from
-		//table 3-3 and 3-5 of the datasheet:
+		// Set operation mode for BNO055 sensor.  Mode should be a value from
+		// table 3-3 and 3-5 of the datasheet:
 		// http://www.adafruit.com/datasheets/BST_BNO055_DS000_12.pdf
 		// 
 		while(write(BNO055_OPR_MODE_ADDR, new byte[]{mode}, true)) {
@@ -597,15 +616,17 @@ public class IMUSerialDataPort implements DataPortInterface {
 				Thread.sleep(100);
 			} catch (InterruptedException e) {}
 		}
-		// Delay for 30 milliseconds (datasheet recommends 19ms, but a little more
-		// can't hurt and the kernel is going to spend some unknown amount of time too).
+		// Delay for 19 milliseconds (datasheet recommends 19ms).
 		try {
-			Thread.sleep(30);
+			Thread.sleep(19);
 		} catch (InterruptedException e) {}
 		if(DEBUG)
 			System.out.println("Exiting set_mode");
 	}
-
+	/**
+	 * Send a rest signal and wait 650 ms as suggested in datasheet
+	 * @throws IOException
+	 */
 	private void reset() throws IOException {
 		if( DEBUG )
 			System.out.println("entering device reset");
@@ -638,7 +659,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 		// Enter normal operation mode.
 		set_mode(OPERATION_MODE_NDOF);
 	}
-
+	/**
+	 * Read and print the chip ID
+	 * @throws IOException
+	 */
 	private void readChipId() throws IOException {
 		if( DEBUG )
 			System.out.println("Read chip id..");
@@ -657,11 +681,11 @@ public class IMUSerialDataPort implements DataPortInterface {
 
 	/**
 	 * Read the calibration status of the sensors and return a 4 tuple with
-	 * calibration status as follows:
-	 * - System, 3=fully calibrated, 0=not calibrated
-	 * - Gyroscope, 3=fully calibrated, 0=not calibrated
-	 * - Accelerometer, 3=fully calibrated, 0=not calibrated
-	 * - Magnetometer, 3=fully calibrated, 0=not calibrated
+	 * calibration status as follows:<br>
+	 * - System, 3=fully calibrated, 0=not calibrated <br>
+	 * - Gyroscope, 3=fully calibrated, 0=not calibrated <br>
+	 * - Accelerometer, 3=fully calibrated, 0=not calibrated <br>
+	 * - Magnetometer, 3=fully calibrated, 0=not calibrated <br>
 	 * According to docs, one should ignore those device readings with 0 calibration status.
 	 * If the system or accel is 0, readings from fusion are considered worthless.
 	 * @return A 4 byte array representing the above calibration status
@@ -880,7 +904,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	}
 	/**
 	 * Write calibration data in JSON as the Adafruit do.
-	 * @param calb
+	 * @param calb The calibration byte array
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 */
@@ -906,6 +930,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * 22 bytes. Can be saved and then reloaded with the set_calibration function
 	 * to quickly calibrate from a previously calculated set of calibration data.
 	 * Assume we switched to configuration mode, as mentioned in section 3.10.4 of datasheet.
+	 * @return the 22 byte calibration array
 	 * @throws IOException 
 	 */
 	byte[] getCalibration() throws IOException {
@@ -922,7 +947,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * represent the sensor offsets and calibration data.  This data should be
 	 * a value that was previously retrieved with getCalibration (and then
 	 * perhaps persisted to disk or other location until needed again).
-	 * @param data
+	 * @param data the 22 byte calibration array
 	 */
 	private void setCalibration(byte[] data) throws IOException {
 		// Check that 22 bytes were passed in with calibration data.
@@ -966,7 +991,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 
 	/**
 	 * Report the current calibration status.
-	 * @return the 4 byte array for system status, gyro, accel, mag 0-3
+	 * @return A formatted String breaking out the 4 byte array for system status, gyro, accel, mag 0-3
 	 * @throws IOException
 	 */
 	public String formatCalibrationStatus(byte[] stat) throws IOException {
@@ -1013,6 +1038,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * 2.) For accel, rotate the sensor through increments of 15 degrees roll from the flat position, pausing for a few seconds between each
 	 * 3.) For mag, wave the sensor through a figure 8 rotation of 8 to 12 inches until stable. This reading is the most tedious.
 	 * Once all elements reach 3 a write is performed storing a file for next reset and the method exits.
+	 * @param stat The 4 byte calibration status report
 	 * @throws IOException
 	 */
 	public String calibrate(byte[] stat) throws IOException {
@@ -1063,21 +1089,24 @@ public class IMUSerialDataPort implements DataPortInterface {
 	}
 
 	/**
-	 * Return a tuple with the axis remap register values.  This will return
-	 * 6 values with the following meaning:
-	 * - X axis remap (a value of AXIS_REMAP_X, AXIS_REMAP_Y, or AXIS_REMAP_Z.
-	 *                   which indicates that the physical X axis of the chip
-	 *                   is remapped to a different axis)
-	 *    - Y axis remap (see above)
-	 *    - Z axis remap (see above)
-	 *    - X axis sign (a value of AXIS_REMAP_POSITIVE or AXIS_REMAP_NEGATIVE
-	 *                   which indicates if the X axis values should be positive/
-	 *                   normal or negative/inverted.  The default is positive.)
-	 *    - Y axis sign (see above)
-	 *    - Z axis sign (see above)
-	 *  Note that by default the axis orientation of the BNO chip looks like
-	 *  the following (taken from section 3.4, page 24 of the datasheet).  Notice
-	 *  the dot in the corner that corresponds to the dot on the BNO chip:
+	 * Return a tuple with the axis remap register values.  This will return <br>
+	 * 6 values with the following meaning: <br>
+	 * - X axis remap (a value of AXIS_REMAP_X, AXIS_REMAP_Y, or AXIS_REMAP_Z. <br>
+	 *                   which indicates that the physical X axis of the chip <br>
+	 *                   is remapped to a different axis) <br>
+	 *    - Y axis remap (see above) <br>
+	 *    - Z axis remap (see above) <br>
+	 *    - X axis sign (a value of AXIS_REMAP_POSITIVE or AXIS_REMAP_NEGATIVE <br>
+	 *                   which indicates if the X axis values should be positive/ <br>
+	 *                   normal or negative/inverted.  The default is positive.) <br>
+	 *    - Y axis sign (see above) <br>
+	 *    - Z axis sign (see above) <br>
+	 *  Note that by default the axis orientation of the BNO chip looks like <br>
+	 *  the following (taken from section 3.4, page 24 of the datasheet).  Notice <br>
+	 *  the dot in the corner that corresponds to the dot on the BNO chip: <br>
+	 * Coordinate axes:
+	 *
+	 * <pre>
 	 *                     | Z axis
 	 *                     |
 	 *                     |   / X axis
@@ -1086,9 +1115,10 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 *    _________ /______|/    //
 	 *             /___________ //
 	 *            |____________|/
+	 * </pre>
 	 * @throws IOException 
 	 */
-	private byte[] getAxisRemap() throws IOException {
+	public byte[] getAxisRemap() throws IOException {
 		// Get the axis remap register value.
 		byte[] mapConfig = read(BNO055_AXIS_MAP_CONFIG_ADDR, (byte)1);
 		byte z = (byte) ((mapConfig[0] >> 4) & (byte)0x03);
@@ -1146,17 +1176,19 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 *  change the BNO's axis to represent another axis.  Note that two axis
 	 *  cannot be mapped to the same axis, so the x, y, z params should be a
 	 *  unique combination of AXIS_REMAP_X, AXIS_REMAP_Y, AXIS_REMAP_Z values.
+	 *  last 3 defaults are: AXIS_REMAP_POSITIVE, AXIS_REMAP_POSITIVE, AXIS_REMAP_POSITIVE
 	 *  In this overload, the axis default to all positive.
 	 * @param x
 	 * @param y
 	 * @param z
 	 * @throws IOException
 	 */
-	private void setAxisRemap(byte x, byte y, byte z) throws IOException {
+	public void setAxisRemap(byte x, byte y, byte z) throws IOException {
 		setAxisRemap(x, y, z, AXIS_REMAP_POSITIVE, AXIS_REMAP_POSITIVE, AXIS_REMAP_POSITIVE);
 	}
 
 	/**
+	 * <pre>
 	 *     Return a tuple with status information.  Three values will be returned:
 	 *     - System status register value with the following meaning:
 	 *         0 = Idle
@@ -1189,6 +1221,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 *   None will be returned for the self test result.  Note that running a
 	 *   self test requires going into config mode which will stop the fusion
 	 *   engine from running.
+	 *   </pre>
 	 * @return The three byte tuple of status, self test, error where self-test is 0 for fail or not run 
 	 * @param run_self_test true to execute self test
 	 * @throws IOException 
@@ -1316,7 +1349,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 		return sb.toString();
 	}
 
-	/**
+	/**<pre>
 	 *  Return a tuple with revision information about the BNO055 chip.  Will
 	 *   return 5 values:
 	 *   - Software revision
@@ -1324,7 +1357,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 *   - Accelerometer ID
 	 *   - Magnetometer ID
 	 *   - Gyro ID
-	 * @return
+	 *   </pre>
+	 * @return 5 byte array 
 	 * @throws IOException 
 	 */
 	public byte[] getRevision() throws IOException {  

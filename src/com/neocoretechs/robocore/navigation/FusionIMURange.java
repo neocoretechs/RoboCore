@@ -92,8 +92,8 @@ public class FusionIMURange   {
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	private String mode="";
-	public static CountDownLatch awaitStart = new CountDownLatch(1);
-	sensor_msgs.MagneticField magmsg = null;
+
+	sensor_msgs.MagneticField magmsg = new sensor_msgs.MagneticField();
 
 	ArrayList<String> statPub = new ArrayList<String>();
 
@@ -124,7 +124,7 @@ public class FusionIMURange   {
 	boolean mag_changed = false;
 	boolean temp_changed = false;
 	boolean imu_changed = false;
-	boolean system_needs_calibrating = true; // if mode is calibration and its first time through
+	public static boolean system_needs_calibrating = true; // if mode is calibration and its first time through
 	static final String REMAP_MODE_CALIBRATE="calibrate"; // REMAP_MODE value for calibration
 	boolean display_revision = true;
 	String IMUPort = "/dev/ttyUSB0";
@@ -157,20 +157,19 @@ public class FusionIMURange   {
 	private int STALE_READING_SECONDS = 5;
 	
 	static class EulerTime {
-		sensor_msgs.Imu ImuMessage;
-		double[] eulers = null;
-		double[] accels = null;
-		double[] gyros = null;
-		double[] mags = null;
+		sensor_msgs.Imu ImuMessage = new Imu();
+		double[] eulers = new double[3];
+		double[] accels = new double[3];
+		double[] gyros = new double[3];
+		double[] mags = new double[3];
 		int temp = -1;
-		double[] quats = null;
-		double[] last_accels = null;
-		double[] last_gyros = null;
-		double[] last_mags = null;
+		double[] quats = new double[4];
+		double[] last_accels = new double[3];
+		double[] last_gyros = new double[3];
+		double[] last_mags = new double[3];
 		int last_temp = 0;
-		double[] last_imu = null;
+		double[] last_imu = new double[3];
 		public EulerTime(Time time, int seq) {
-			ImuMessage = new Imu();
 			Header header = new Header();
 			header.setStamp(time);
 			header.setSeq(seq);
@@ -198,17 +197,24 @@ public class FusionIMURange   {
 		}
 		pubThread = new ultraPub();
 		
-		SynchronizedThreadManager.getInstance().init(new String[]{"SYSTEM"});
-		SynchronizedThreadManager.getInstance().spin(readThread, "SYSTEM");
-		SynchronizedThreadManager.getInstance().spin(pubThread, "SYSTEM");
+		SynchronizedThreadManager.getInstance().init(new String[]{"IMU","URS"});
+		SynchronizedThreadManager.getInstance().spin(readThread, "URS");
+		SynchronizedThreadManager.getInstance().spin(pubThread, "IMU");
 		// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
+		while(!((Notifier)pubThread).isStarted())
+			try {
+				if(DEBUG)
+					System.out.println("init waiting for IMU readThread..");
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {break;}
+		
 		while(!((Notifier)readThread).isStarted())
 			try {
 				if(DEBUG)
-					System.out.println("init waiting for readThread..");
-				Thread.sleep(10);
+					System.out.println("init waiting for Ultrasonic readThread..");
+				Thread.sleep(1000);
 			} catch (InterruptedException e) {break;}
-		awaitStart.countDown();
+		
 		if(DEBUG)
 			System.out.println("init..");
 	}
@@ -231,7 +237,7 @@ public class FusionIMURange   {
 		return URMPort;
 	}
 	/**
-	 * @param uRMPort the uRMPort to set
+	 * @param URMPort the URMPort to set
 	 */
 	public void setURMPort(String uRMPort) {
 		URMPort = uRMPort;
@@ -242,122 +248,128 @@ public class FusionIMURange   {
 	 * @throws IOException
 	 */
 	public void getIMU(EulerTime eulers) throws IOException{
-		synchronized(eulers) {
-			if( DEBUG )
-				System.out.println("reading ACCEL");
+		if( DEBUG )
+			System.out.println("reading ACCEL");
+		synchronized(eulers.accels) {
 			eulers.accels = imuDataPort.readAccel();
-			if( DEBUG && eulers.accels != null )
+			if( DEBUG)
 				System.out.println("Accel:"+eulers.accels[0]+" "+eulers.accels[1]+" "+eulers.accels[2]);
-			if( DEBUG )
-				System.out.println("reading GYRO");
+		}
+		if( DEBUG )
+			System.out.println("reading GYRO");
+		synchronized(eulers.gyros) {
 			eulers.gyros = imuDataPort.readGyro();
-			if( DEBUG && eulers.gyros != null)
+			if( DEBUG)
 				System.out.println("Gyros:"+eulers.gyros[0]+" "+eulers.gyros[1]+" "+eulers.gyros[2]);
-			if( DEBUG )
-				System.out.println("reading MAG");
+		}
+		if( DEBUG )
+			System.out.println("reading MAG");
+		synchronized(eulers.mags) {
 			eulers.mags = imuDataPort.readMag();
-			if( DEBUG && eulers.mags!= null )
+			if(DEBUG)
 				System.out.println("Mag:"+eulers.mags[0]+" "+eulers.mags[1]+" "+eulers.mags[2]);
+		}
 
-			if( DEBUG )
-				System.out.println("reading EULER");
-
+		if( DEBUG )
+			System.out.println("reading EULER");
+		synchronized(eulers.eulers) {
 			eulers.eulers = imuDataPort.readEuler();
-			if( DEBUG && eulers != null)
+			if(DEBUG)
 				System.out.println("Eulers:"+eulers.eulers[0]+" "+eulers.eulers[1]+" "+eulers.eulers[2]);
-
-			if( DEBUG )
-				System.out.println("reading QUATERNION");
+		}
+		if( DEBUG )
+			System.out.println("reading QUATERNION");
+		synchronized(eulers.quats) {
 			eulers.quats = imuDataPort.readQuaternion();
-			if( DEBUG && eulers.quats != null)
+			if(DEBUG)
 				System.out.println("Quats:"+eulers.quats[0]+" "+eulers.quats[1]+" "+eulers.quats[2]+" "+eulers.quats[3]);
+		}
+		if(DEBUG)
+			System.out.println("reading TEMPERATURE");
 
-			if( DEBUG )
-				System.out.println("reading TEMPERATURE");
-			eulers.temp = imuDataPort.readTemperature();
-			if( DEBUG && eulers.temp != Integer.MAX_VALUE)
-				System.out.println("Temp:"+eulers.temp);
+		eulers.temp = imuDataPort.readTemperature();
+		if(DEBUG && eulers.temp != Integer.MAX_VALUE)
+			System.out.println("Temp:"+eulers.temp);
+		synchronized(eulers.ImuMessage) {
 			eulers.ImuMessage.setCompassHeadingDegrees((float) eulers.eulers[0]);
 			eulers.ImuMessage.setRoll((float)eulers.eulers[1]);
 			eulers.ImuMessage.setPitch((float)eulers.eulers[2]);
 			eulers.ImuMessage.setTemperature(eulers.temp);
-			if( hasDataChanged(eulers) ) {
-				//MotionController.updatePID((float)eulers[0],  0.0f);
-					if( eulers.accels != null ) {
-						geometry_msgs.Vector3 val = new geometry_msgs.Vector3();
-						val.setX(eulers.accels[0]);
-						val.setY(eulers.accels[1]);
-						val.setZ(eulers.accels[2]);
-						eulers.ImuMessage.setLinearAcceleration(val);
-					} else {
-						statPub.add("ACCEL ERROR");
-					}
-
-					if( eulers.gyros != null ) {
-						geometry_msgs.Vector3 vala = new geometry_msgs.Vector3();
-						vala.setZ(eulers.gyros[2]);
-						vala.setX(eulers.gyros[0]);
-						vala.setY(eulers.gyros[1]);
-						eulers.ImuMessage.setAngularVelocity(vala);
-					} else {
-						statPub.add("GYRO ERROR");
-					}
-
-					if( eulers.quats != null ) {
-						geometry_msgs.Quaternion valq = new geometry_msgs.Quaternion();
-						valq.setX(eulers.quats[0]);
-						valq.setY(eulers.quats[1]);
-						valq.setZ(eulers.quats[2]);
-						valq.setW(eulers.quats[3]);
-						eulers.ImuMessage.setOrientation(valq);
-					} else {
-						statPub.add("QUAT ERROR");
-					}
-
-					//if( accels != null && gyros != null && quats != null && eulers != null && imu_changed) {
-					//	if( DEBUG )
-					//		System.out.println("Publishing IMU:"+eulers.euler);
-					//	queueResponse(eulers.euler);
-					//	Thread.sleep(1);
-					//}
-
-					// Mag
-					if(eulers.mags != null && mag_changed) {
-						geometry_msgs.Vector3 valm = new geometry_msgs.Vector3();
-						valm.setZ(eulers.mags[2]);
-						valm.setX(eulers.mags[0]);
-						valm.setY(eulers.mags[1]);
-						magmsg.setMagneticField(valm);
-						//queueResponse(magmsg);
-						//Thread.sleep(1);
-						//if( DEBUG )
-						//	System.out.println("Publishing MAG:"+magmsg);
-					} //else {
-					//if(mags == null)
-					//	statPub.add("MAG ERROR");
-					//}
-			} // hasDataChanged
-
-			// Output data to screen
-			if( DEBUG ) {
-				if( eulers.mags != null )
-					System.out.printf("X,Y,Z axis Magnetic field : %d %d %d \r\n", eulers.mags[0], eulers.mags[1], eulers.mags[2]);
-				else
-					System.out.println("MAG ERROR");
-				if( eulers != null )
-					System.out.printf("yaw, roll, pitch degrees: %f %f %f \r\n", eulers.eulers[0], eulers.eulers[1], eulers.eulers[2]);
-				else
-					System.out.println("FUSION ERROR");
-				if( eulers.quats != null )
-					System.out.printf("X, Y, Z, W degrees: %f %f %f %f\r\n", eulers.quats[0], eulers.quats[1], eulers.quats[2], eulers.quats[3]);
-				else
-					System.out.println("FUSION ERROR");
-				if( eulers.temp != Integer.MAX_VALUE)
-					System.out.printf("Temperature: %d \r\n", eulers.temp);
-				else
-					System.out.println("TEMPERATURE ERROR");
-			}
 		}
+		if(hasDataChanged(eulers) ) {
+			//MotionController.updatePID((float)eulers[0],  0.0f);
+			synchronized(eulers.accels) {
+					geometry_msgs.Vector3 val = new geometry_msgs.Vector3();
+					val.setX(eulers.accels[0]);
+					val.setY(eulers.accels[1]);
+					val.setZ(eulers.accels[2]);
+					synchronized(eulers.ImuMessage) {
+						eulers.ImuMessage.setLinearAcceleration(val);
+					}
+			}
+			synchronized(eulers.gyros) {
+					geometry_msgs.Vector3 vala = new geometry_msgs.Vector3();
+					vala.setZ(eulers.gyros[2]);
+					vala.setX(eulers.gyros[0]);
+					vala.setY(eulers.gyros[1]);
+					synchronized(eulers.ImuMessage) {
+						eulers.ImuMessage.setAngularVelocity(vala);
+					}
+			}
+			synchronized(eulers.quats) {
+					geometry_msgs.Quaternion valq = new geometry_msgs.Quaternion();
+					valq.setX(eulers.quats[0]);
+					valq.setY(eulers.quats[1]);
+					valq.setZ(eulers.quats[2]);
+					valq.setW(eulers.quats[3]);
+					synchronized(eulers.ImuMessage) {
+						eulers.ImuMessage.setOrientation(valq);
+					}
+			}
+			//if( accels != null && gyros != null && quats != null && eulers != null && imu_changed) {
+			//	if( DEBUG )
+			//		System.out.println("Publishing IMU:"+eulers.euler);
+			//	queueResponse(eulers.euler);
+			//	Thread.sleep(1);
+			//}
+
+			// Mag
+			synchronized(eulers.mags) {
+				if(mag_changed) {
+					geometry_msgs.Vector3 valm = new geometry_msgs.Vector3();
+					valm.setZ(eulers.mags[2]);
+					valm.setX(eulers.mags[0]);
+					valm.setY(eulers.mags[1]);
+					magmsg.setMagneticField(valm);
+					statPub.add(magmsg.toString());
+					//queueResponse(magmsg);
+					//Thread.sleep(1);
+					//if( DEBUG )
+					//	System.out.println("Publishing MAG:"+magmsg);
+				} //else {
+				//if(mags == null)
+				//	statPub.add("MAG ERROR");
+				//}
+			}
+		} // hasDataChanged
+
+		// Output data to screen
+		if( DEBUG ) {
+			synchronized(eulers.mags) {
+				System.out.printf("X,Y,Z axis Magnetic field : %f %f %f %n", eulers.mags[0], eulers.mags[1], eulers.mags[2]);
+			}
+			synchronized(eulers.eulers) {
+				System.out.printf("yaw, roll, pitch degrees: %f %f %f %n", eulers.eulers[0], eulers.eulers[1], eulers.eulers[2]);
+			}
+			synchronized(eulers.quats) {
+				System.out.printf("X, Y, Z, W degrees: %f %f %f %f %n", eulers.quats[0], eulers.quats[1], eulers.quats[2], eulers.quats[3]);
+			}
+			if(eulers.temp != Integer.MAX_VALUE)
+				System.out.printf("Temperature: %d %n", eulers.temp);
+			else
+				System.out.println("TEMPERATURE ERROR");
+		}
+
 	}
 	/**
 	 * Attempt to limit publishing of real time data by only sending on deltas
@@ -370,15 +382,8 @@ public class FusionIMURange   {
 		mag_changed = false;
 		imu_changed = false;
 		temp_changed = false;
-		synchronized(eulers) {
-			if(eulers.last_accels == null || eulers.last_gyros == null || eulers.last_mags == null) {
-				eulers.last_accels = new double[3];
-				eulers.last_gyros = new double[3];
-				eulers.last_mags = new double[3];
-				eulers.last_imu = new double[3];
-			}
-			if(eulers.accels == null || eulers.gyros == null || eulers.mags == null)
-				return true;
+
+		synchronized(eulers.accels) {
 			if(eulers.accels[0] != eulers.last_accels[0] || eulers.accels[1] != eulers.last_accels[1] || eulers.accels[2] != eulers.last_accels[2] ) {
 				eulers.last_accels[0] = eulers.accels[0];
 				eulers.last_accels[1] = eulers.accels[1];
@@ -386,6 +391,8 @@ public class FusionIMURange   {
 				dataChanged = true;
 				acc_changed = true;
 			}
+		}
+		synchronized(eulers.gyros) {
 			if( eulers.gyros[0] != eulers.last_gyros[0] || eulers.gyros[1] != eulers.last_gyros[1] || eulers.gyros[2] != eulers.last_gyros[2]) {
 				eulers.last_gyros[0] = eulers.gyros[0];
 				eulers.last_gyros[1] = eulers.gyros[1];
@@ -393,6 +400,8 @@ public class FusionIMURange   {
 				dataChanged = true;
 				gyro_changed = true;
 			}
+		}
+		synchronized(eulers.mags) {
 			if( eulers.mags[0] != eulers.last_mags[0] || eulers.mags[1] != eulers.last_mags[1] || eulers.mags[2] != eulers.last_mags[2]) {
 				eulers.last_mags[0] = eulers.mags[0];
 				eulers.last_mags[1] = eulers.mags[1];
@@ -400,6 +409,8 @@ public class FusionIMURange   {
 				dataChanged = true;
 				mag_changed = true;
 			}
+		}
+		synchronized(eulers.eulers) {
 			if( eulers.eulers[0] != eulers.last_imu[0] || eulers.eulers[1] != eulers.last_imu[1] || eulers.eulers[2] != eulers.last_imu[2]) {
 				eulers.last_imu[0] = eulers.eulers[0];
 				eulers.last_imu[1] = eulers.eulers[1];
@@ -407,14 +418,17 @@ public class FusionIMURange   {
 				dataChanged = true;
 				imu_changed = true;
 			}
-			if( eulers.temp != eulers.last_temp ) {
-				eulers.last_temp = eulers.temp;
-				dataChanged = true;
-				temp_changed = true;
-			}
+		}
+		if( eulers.temp != eulers.last_temp ) {
+			eulers.last_temp = eulers.temp;
+			dataChanged = true;
+			temp_changed = true;
 		}
 		// heartbeat
-		int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
+		int lastIMUTime;
+		synchronized(eulers.ImuMessage) {
+			lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
+		}
 		if(lastIMUTime > STALE_READING_SECONDS) {
 			if(DEBUG)
 				System.out.println("Data changed last IMU reading as its "+lastIMUTime+" seconds old.");
@@ -507,71 +521,76 @@ public class FusionIMURange   {
 		}	 
 		return distance;
 	}
-	
+	/**
+	 * Combine the euler latest and recent distance into the sliding window. When we recah threshold
+	 * push the result onto the pubdata queue as string
+	 * @param eulers
+	 * @param distance
+	 */
 	private void queueResponse(EulerTime eulers, double distance) {
 		if( DEBUG ) {
 			System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
 		}
-		synchronized(eulers) {
-			if(eulers.ImuMessage != null) {
-				int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
-				if(lastIMUTime > STALE_READING_SECONDS) {
-					if(DEBUG)
-						System.out.println("Discarding last IMU reading as its "+lastIMUTime+" seconds old.");
-					return;
+		synchronized(eulers.ImuMessage) {
+			int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
+			if(lastIMUTime > STALE_READING_SECONDS) {
+				if(DEBUG)
+					System.out.println("Discarding last IMU reading as its "+lastIMUTime+" seconds old.");
+				return;
+			}
+			double x = Math.sin(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
+			double y = Math.cos(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
+			Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
+			pointWindow.addLast(winPoint);
+		}
+		if(pointWindow.length() == WINSIZE) {
+			ComputeVariance c = new ComputeVariance();
+			c.leastVariance(pointWindow);
+			pointWindow.poll();
+			// robot-frame PCA direction (unit vector)
+			double v_x = c.getEigvec3().x;
+			double v_y = c.getEigvec3().y;
+			//
+			//StringBuilder sb = new StringBuilder();
+			JSONObject sb = new JSONObject();
+			// --- MOST RECENT DISTANCE ---
+			//sb.append("nowdistance=");
+			float latestDist = 0.0f;
+			float latestTime = Float.MIN_VALUE;
+			for (Point3f p : pointWindow) {
+				if (p.t() > latestTime) {
+					latestTime = p.t();
+					latestDist = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
 				}
-				double x = Math.sin(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
-				double y = Math.cos(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
-				Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
-				pointWindow.addLast(winPoint);
-				if(pointWindow.length() == WINSIZE) {
-					ComputeVariance c = new ComputeVariance();
-					c.leastVariance(pointWindow);
-					pointWindow.poll();
-					// robot-frame PCA direction (unit vector)
-					double v_x = c.getEigvec3().x;
-					double v_y = c.getEigvec3().y;
-					//
-					//StringBuilder sb = new StringBuilder();
-					JSONObject sb = new JSONObject();
-					// --- MOST RECENT DISTANCE ---
-					//sb.append("nowdistance=");
-					float latestDist = 0.0f;
-					float latestTime = Float.MIN_VALUE;
-					for (Point3f p : pointWindow) {
-					    if (p.t() > latestTime) {
-					        latestTime = p.t();
-					        latestDist = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
-					    }
-					}
-					sb.put("nowdistance",Float.parseFloat(String.format("%3.3f", latestDist)));
-					// --- MIN DISTANCE ---
-					//sb.append(",mindistance=");
-					float minDist = Float.MAX_VALUE;
-					for (Point3f p : pointWindow) {
-					    float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
-					    if (d < minDist)
-					        minDist = d;
-					}
-					sb.put("mindistance",Float.parseFloat(String.format("%3.3f", minDist)));
-					// --- MAX DISTANCE ---
-					//sb.append(",maxdistance=");
-					float maxDist = Float.MIN_VALUE;
-					for (Point3f p : pointWindow) {
-					    float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
-					    if (d > maxDist)
-					        maxDist = d;
-					}
-					sb.put("maxdistance",Float.parseFloat(String.format("%3.3f", maxDist)));
-					// --- AVERAGE DISTANCE ---
-					//sb.append(",avedistance=");
-					float sumDist = 0.0f;
-					for (Point3f p : pointWindow) {
-					    sumDist += Math.sqrt(p.x()*p.x() + p.y()*p.y());
-					}
-					float avgDist = sumDist / pointWindow.size();
-					sb.put("avedistance",Float.parseFloat(String.format("%3.3f", avgDist)));
-					/*
+			}
+			sb.put("nowdistance",Float.parseFloat(String.format("%3.3f", latestDist)));
+			// --- MIN DISTANCE ---
+			//sb.append(",mindistance=");
+			float minDist = Float.MAX_VALUE;
+			for (Point3f p : pointWindow) {
+				float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
+				if (d < minDist)
+					minDist = d;
+			}
+			sb.put("mindistance",Float.parseFloat(String.format("%3.3f", minDist)));
+			// --- MAX DISTANCE ---
+			//sb.append(",maxdistance=");
+			float maxDist = Float.MIN_VALUE;
+			for (Point3f p : pointWindow) {
+				float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
+				if (d > maxDist)
+					maxDist = d;
+			}
+			sb.put("maxdistance",Float.parseFloat(String.format("%3.3f", maxDist)));
+			// --- AVERAGE DISTANCE ---
+			//sb.append(",avedistance=");
+			float sumDist = 0.0f;
+			for (Point3f p : pointWindow) {
+				sumDist += Math.sqrt(p.x()*p.x() + p.y()*p.y());
+			}
+			float avgDist = sumDist / pointWindow.size();
+			sb.put("avedistance",Float.parseFloat(String.format("%3.3f", avgDist)));
+			/*
 					sb.append(",confidence=");
 					sb.append(c.getConfidence());
 					sb.append(",noise_strength=");
@@ -592,60 +611,58 @@ public class FusionIMURange   {
 					sb.append(c.getEigvec2().y);
 					sb.append(",jitter_axis_z=");
 					sb.append(c.getEigvec2().z);
-					*/
-					//sb.append(",motion_direction_x=");
-					sb.put("motion_direction_x",Float.parseFloat(String.format("%3.3f",c.getEigvec3().x)));
-					//sb.append(",motion_direction_y=");
-					sb.put("motion_direction_y",Float.parseFloat(String.format("%3.3f",c.getEigvec3().y)));
-					//sb.append(",motion_direction_z=");
-					sb.put("motion_direction_z",Float.parseFloat(String.format("%3.3f",c.getEigvec3().z)));
-					double vwx_abs, vwy_abs;
-					// --- WORLD-FRAME MOTION COMPUTATION ---
-					// determine of any forward or lateral acceleration is taking place
-					double accel = Math.sqrt(eulers.accels[0]*eulers.accels[0] + eulers.accels[1]*eulers.accels[1]);
-					if(DEBUG && accel > 0)
-						System.out.println("Accel:"+accel+" x,y,z="+eulers.accels[0]+" "+eulers.accels[1]+" "+eulers.accels[2]);
-					if(accel > MIN_ACCEL) {
-						EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(eulers.accels[0], eulers.accels[1], eulers.accels[2],
-								eulers.ImuMessage.getPitch()*0.01745329, eulers.ImuMessage.getRoll()*0.01745329, eulers.ImuMessage.getCompassHeadingDegrees());
-						EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
-						EgoMotionCompensator.MotionSemantic motionSemantic = new EgoMotionCompensator().update(imuSample, pcaMotion);
-						motionSemantic.appendTo(sb);
-						vwx_abs = motionSemantic.worldVelX;
-						vwy_abs = motionSemantic.worldVelY;
-					} else {
-						double yaw = eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329;
-						double cos = Math.cos(yaw);
-						double sin = Math.sin(yaw);
-						// world-frame direction (unit vector)
-						double vwx =  cos * v_x - sin * v_y;
-						double vwy =  sin * v_x + cos * v_y;
-						// absolute world-frame velocity (scaled by PCA speed)
-						double speed = Math.sqrt(c.getVariance3());
-						vwx_abs = vwx * speed;
-						vwy_abs = vwy * speed;
-						//sb.append(",world_direction_x=");
-						sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
-						//sb.append(",world_direction_y=");
-						sb.put(",world_direction_y",Float.parseFloat(String.format("%3.3f", vwy)));
-						//sb.append(",world_velocity_x=");
-						sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", vwx_abs)));
-						//sb.append(",world_velocity_y=");
-						sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
-					}
-					//sb.append("\r\n");
-					if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH)
-						pubdata.addLast(sb.toString());
-					if(DEBUG)
-						System.out.println(">>> Queuing:"+sb.toString());
-				}  
-			} else {
+			 */
+			//sb.append(",motion_direction_x=");
+			sb.put("motion_direction_x",Float.parseFloat(String.format("%3.3f",c.getEigvec3().x)));
+			//sb.append(",motion_direction_y=");
+			sb.put("motion_direction_y",Float.parseFloat(String.format("%3.3f",c.getEigvec3().y)));
+			//sb.append(",motion_direction_z=");
+			sb.put("motion_direction_z",Float.parseFloat(String.format("%3.3f",c.getEigvec3().z)));
+			double vwx_abs, vwy_abs;
+			// --- WORLD-FRAME MOTION COMPUTATION ---
+			// determine of any forward or lateral acceleration is taking place
+			double accel = Math.sqrt(eulers.accels[0]*eulers.accels[0] + eulers.accels[1]*eulers.accels[1]);
+			if(DEBUG && accel > 0)
+				System.out.println("Accel:"+accel+" x,y,z="+eulers.accels[0]+" "+eulers.accels[1]+" "+eulers.accels[2]);
+			synchronized(eulers.ImuMessage) {
+				if(accel > MIN_ACCEL) {
+					EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(eulers.accels[0], eulers.accels[1], eulers.accels[2],
+							eulers.ImuMessage.getPitch()*0.01745329, eulers.ImuMessage.getRoll()*0.01745329, eulers.ImuMessage.getCompassHeadingDegrees());
+					EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
+					EgoMotionCompensator.MotionSemantic motionSemantic = new EgoMotionCompensator().update(imuSample, pcaMotion);
+					motionSemantic.appendTo(sb);
+					vwx_abs = motionSemantic.worldVelX;
+					vwy_abs = motionSemantic.worldVelY;
+				} else {
+					double yaw = eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329;
+					double cos = Math.cos(yaw);
+					double sin = Math.sin(yaw);
+					// world-frame direction (unit vector)
+					double vwx =  cos * v_x - sin * v_y;
+					double vwy =  sin * v_x + cos * v_y;
+					// absolute world-frame velocity (scaled by PCA speed)
+					double speed = Math.sqrt(c.getVariance3());
+					vwx_abs = vwx * speed;
+					vwy_abs = vwy * speed;
+					//sb.append(",world_direction_x=");
+					sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
+					//sb.append(",world_direction_y=");
+					sb.put(",world_direction_y",Float.parseFloat(String.format("%3.3f", vwy)));
+					//sb.append(",world_velocity_x=");
+					sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", vwx_abs)));
+					//sb.append(",world_velocity_y=");
+					sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
+				}
+			}
+			//sb.append("\r\n");
+			if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH) {
+				pubdata.addLast(sb.toString());
 				if(DEBUG)
-					System.out.println("<<< euler is null..>>>");
+					System.out.println(">>> Queuing:"+sb.toString());
 			}
 		}
 	}
-	
+
 	public static void main(String[] args) {
 		if(args.length < 1) {;
 			System.out.println("Usage: java FusionIMURange [gpio | uart]");
@@ -748,7 +765,7 @@ public class FusionIMURange   {
 	}
 	/**
 	 * This class is used with the URM37 in UART mode. It calls the {@link UltrasonicSerialDataPort} readDistance
-	 * method and then queues the result queueResponse.
+	 * method and then queues the result queueResponse after taking the latest IMU and combining the result.
 	 */
 	class UltraRead implements Runnable, Notifier {
 		public volatile boolean shouldRun = true;
@@ -772,6 +789,8 @@ public class FusionIMURange   {
 			while(shouldRun) {
 				try {
 					// Get the range
+					if(DEBUG)
+						System.out.println("Waiting for distance read..");
 					double distance = usdp.readDistance();
 					//if( distance < MAX_RANGE) { // 500 cm for URM37
 					queueResponse(eulerdata.take(), distance);
@@ -787,11 +806,18 @@ public class FusionIMURange   {
 			}
 		}
 	}
-	
-	class ultraPub implements Runnable {
+	/**
+	 * Read the IMU and queue the results onto the eulerdata mini-queue
+	 */
+	class ultraPub implements Runnable, Notifier {
 		public volatile boolean shouldRun = true;
+		boolean isRunning = false;
 		private int sequenceNumber, lastSequenceNumber;
 		org.ros.message.Time time = null;
+		@Override
+		public boolean isStarted() {
+			return isRunning;
+		}
 		@Override
 		public void run() {
 			sequenceNumber = 0;
@@ -799,15 +825,27 @@ public class FusionIMURange   {
 			time1 = System.currentTimeMillis();
 			startTime = time1;
 			imuDataPort = IMUSerialDataPort.getInstance(IMUPort);
-			imuDataPort.setSYSTEM_CAL(SYSTEM_CAL);
-			imuDataPort.setACC_CAL(ACC_CAL);
-			imuDataPort.setGYRO_CAL(GYRO_CAL);
-			imuDataPort.setMAG_CAL(MAG_CAL);
-			imuDataPort.setIMU_TOL(IMU_TOL);
-
+			// check initial calibration
 			try {
-				awaitStart.await();
-			} catch (InterruptedException e) {}
+				imuDataPort.setSYSTEM_CAL(SYSTEM_CAL);
+				imuDataPort.setACC_CAL(ACC_CAL);
+				imuDataPort.setGYRO_CAL(GYRO_CAL);
+				imuDataPort.setMAG_CAL(MAG_CAL);
+				imuDataPort.setIMU_TOL(IMU_TOL);
+				byte[] stat = imuDataPort.getCalibrationStatus();
+				// If overall system status falls below 1, attempt an on-the-fly recalibration
+				if(stat == null || stat[1] == 0 || stat[2] == 0 || stat[3] == 0) {
+					if(DEBUG)
+						System.out.println("Calibration status="+stat[1]+" "+stat[2]+" "+stat[3]);
+					imuDataPort.resetCalibration();
+					calibrate();
+				}
+			} catch(IOException ioe) {
+				ioe.printStackTrace();
+			}
+			isRunning = imuDataPort.isConnected();
+			if(DEBUG)
+				System.out.println(this.getClass().getName()+" running="+isRunning);
 			// Publish status to message bus, then, begin calibration if necessary
 			// with prompts and status to status bus
 			pubdata.clear();
@@ -827,32 +865,6 @@ public class FusionIMURange   {
 					}
 					Thread.sleep(1000);
 				 */
-				if( mode.equals(REMAP_MODE_CALIBRATE) && system_needs_calibrating) {
-					try {
-						system_needs_calibrating = false; // assume optimistic success
-						String calibString = "<<BEGIN IMU CALIBRATION KATAS!>>";
-						do {
-							statPub.add(calibString);
-							statPub.clear();
-						} while( !(calibString = imuDataPort.calibrate(imuDataPort.getCalibrationStatus())).contains("CALIBRATION ACHIEVED"));
-						statPub.add(calibString);
-						try {
-							Thread.sleep(1);
-						} catch (InterruptedException e) {}
-						// publish final result to status message bus
-						statPub.add(imuDataPort.displaySystemStatus(imuDataPort.getSystemStatus()));
-					} catch (IOException e) {
-						if(DEBUG)
-							System.out.println("Cannot achieve proper calibration of IMU due to "+e);
-						statPub.clear();
-						statPub.add("Cannot achieve proper calibration of IMU due to:");
-						statPub.add(e.getMessage());
-						statPub.clear();
-						e.printStackTrace();
-					}
-				} // calibration
-
-				//
 				// Begin IMU message processing
 				//
 				try {
@@ -871,30 +883,60 @@ public class FusionIMURange   {
 						if(SAMPLERATE) {
 							statPub.add("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
 						}
-						byte[] stat = imuDataPort.getCalibrationStatus();
 						// If overall system status falls below 1, attempt an on-the-fly recalibration
-						if( stat == null || stat[0] <= 1 ) {
-							if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
-								startTime = time1; // start time is when we recalibrated last
-								imuDataPort.resetCalibration();
-								statPub.add("** SYSTEM RESET AND RECALIBRATED");
-								stat = imuDataPort.getCalibrationStatus();
+						try {
+							byte[] stat = imuDataPort.getCalibrationStatus();
+							// If any individual element falls below total usability, attempt an on-the-fly recalibration
+							if( stat == null || stat[1] == 0 || stat[2] == 0 || stat[3] == 0) {
+								if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
+									startTime = time1; // start time is when we recalibrated last
+									imuDataPort.resetCalibration();
+									statPub.add("** SYSTEM RESET AND RECALIBRATED");
+									stat = imuDataPort.getCalibrationStatus();
+								}
 							}
+							statPub.add(imuDataPort.formatCalibrationStatus(stat));
+						} catch(IOException ioe) {
+							ioe.printStackTrace();
 						}
-						statPub.add(imuDataPort.formatCalibrationStatus(stat));
 					}
-	
+
 				} catch (IOException | InterruptedException e) {
 					System.out.println("IMU publishing loop malfunction "+e.getMessage()+" at "+LocalDateTime.ofInstant(Instant.ofEpochMilli(System.currentTimeMillis()), ZoneId.systemDefault()));
 					statPub.add("IMU publishing loop malfunction:");
 					statPub.add(e.getMessage());
 					e.printStackTrace();
-					try {
-						imuDataPort.resetCalibration();
-					} catch (IOException e1) {
-						e1.printStackTrace();
-					}
 				}
+			}
+		}
+
+		private void calibrate() {
+			if(DEBUG)
+				System.out.println(this.getClass().getName()+" calbration...");
+			try {
+				String calibString = "<<BEGIN IMU CALIBRATION KATAS!>>";
+				do {
+					statPub.add(calibString);
+					statPub.clear();
+					byte[] cStat = imuDataPort.getCalibrationStatus();
+					calibString = imuDataPort.calibrate(cStat);
+				} while(!calibString.contains("CALIBRATION ACHIEVED"));
+				statPub.add(calibString);
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {}
+				// publish final result to status message bus
+				byte[] status = imuDataPort.getCalibrationStatus();
+				statPub.add(imuDataPort.displaySystemStatus(imuDataPort.getSystemStatus()));
+				FusionIMURange.system_needs_calibrating = status[1] == 0 || status[2] == 0 || status[3] == 0;
+			} catch (IOException e) {
+				if(DEBUG)
+					System.out.println("Cannot achieve proper calibration of IMU due to "+e);
+				statPub.clear();
+				statPub.add("Cannot achieve proper calibration of IMU due to:");
+				statPub.add(e.getMessage());
+				statPub.clear();
+				e.printStackTrace();
 			}
 		}
 	}
