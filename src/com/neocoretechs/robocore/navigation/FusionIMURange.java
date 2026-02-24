@@ -95,10 +95,6 @@ public class FusionIMURange   {
 
 	sensor_msgs.MagneticField magmsg = new sensor_msgs.MagneticField();
 
-	ArrayList<String> statPub = new ArrayList<String>();
-
-	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(24);
-	//public CircularBlockingDeque<int[]> pubdata = new CircularBlockingDeque<int[]>(16);
 	long time1, startTime;
 
 	IMUSerialDataPort imuDataPort;
@@ -148,9 +144,10 @@ public class FusionIMURange   {
 	private static final double MIN_ACCEL = 1.5;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
-	public CircularBlockingDeque<EulerTime> eulerdata = new CircularBlockingDeque<EulerTime>(2);
-	public CircularBlockingDeque<String> pubdata = new CircularBlockingDeque<String>(WINSIZE);
-	public CircularBlockingDeque<Point3f> pointWindow = new CircularBlockingDeque<Point3f>(WINSIZE);
+	private CircularBlockingDeque<EulerTime> eulerdata = new CircularBlockingDeque<EulerTime>(2);
+	public CircularBlockingDeque<String> dataQueue = new CircularBlockingDeque<String>(WINSIZE);
+	public CircularBlockingDeque<String> statusQueue = new CircularBlockingDeque<String>(WINSIZE);
+	private CircularBlockingDeque<Point3f> pointWindow = new CircularBlockingDeque<Point3f>(WINSIZE);
 	static enum MODE { HCSR04, URM37};
 	static MODE SENSOR_TYPE = MODE.URM37;
 	private Runnable readThread, pubThread;
@@ -341,7 +338,7 @@ public class FusionIMURange   {
 					valm.setX(eulers.mags[0]);
 					valm.setY(eulers.mags[1]);
 					magmsg.setMagneticField(valm);
-					statPub.add(magmsg.toString());
+					statusQueue.add(magmsg.toString());
 					//queueResponse(magmsg);
 					//Thread.sleep(1);
 					//if( DEBUG )
@@ -656,7 +653,7 @@ public class FusionIMURange   {
 			}
 			//sb.append("\r\n");
 			if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH) {
-				pubdata.addLast(sb.toString());
+				dataQueue.addLast(sb.toString());
 				if(DEBUG)
 					System.out.println(">>> Queuing:"+sb.toString());
 			}
@@ -676,7 +673,7 @@ public class FusionIMURange   {
 		}	
 		try {
 			while(true)
-				System.out.println(fimur.pubdata.take());
+				System.out.println(fimur.dataQueue.take());
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -848,7 +845,7 @@ public class FusionIMURange   {
 				System.out.println(this.getClass().getName()+" running="+isRunning);
 			// Publish status to message bus, then, begin calibration if necessary
 			// with prompts and status to status bus
-			pubdata.clear();
+			dataQueue.clear();
 			while(shouldRun) {
 				/*
 					statPub.add(e.getMessage());
@@ -870,7 +867,7 @@ public class FusionIMURange   {
 				try {
 					if(display_revision) {
 						display_revision = false;
-						statPub.add(imuDataPort.displayRevision(imuDataPort.getRevision()));
+						statusQueue.add(imuDataPort.displayRevision(imuDataPort.getRevision()));
 					}
 					time1 = System.currentTimeMillis();
 					time = org.ros.message.Time.fromMillis(time1);
@@ -881,7 +878,7 @@ public class FusionIMURange   {
 					eulerdata.put(eulers);
 					if(System.currentTimeMillis() - time1 >= 1000) {
 						if(SAMPLERATE) {
-							statPub.add("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
+							statusQueue.add("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
 						}
 						// If overall system status falls below 1, attempt an on-the-fly recalibration
 						try {
@@ -891,11 +888,11 @@ public class FusionIMURange   {
 								if( (time1-startTime) > 60000 ) { // give it 60 seconds to come up from last recalib
 									startTime = time1; // start time is when we recalibrated last
 									imuDataPort.resetCalibration();
-									statPub.add("** SYSTEM RESET AND RECALIBRATED");
+									statusQueue.add("** SYSTEM RESET AND RECALIBRATED");
 									stat = imuDataPort.getCalibrationStatus();
 								}
 							}
-							statPub.add(imuDataPort.formatCalibrationStatus(stat));
+							statusQueue.add(imuDataPort.formatCalibrationStatus(stat));
 						} catch(IOException ioe) {
 							ioe.printStackTrace();
 						}
@@ -903,8 +900,8 @@ public class FusionIMURange   {
 
 				} catch (IOException | InterruptedException e) {
 					System.out.println("IMU publishing loop malfunction "+e.getMessage()+" at "+LocalDateTime.ofInstant(Instant.ofEpochMilli(System.currentTimeMillis()), ZoneId.systemDefault()));
-					statPub.add("IMU publishing loop malfunction:");
-					statPub.add(e.getMessage());
+					statusQueue.add("IMU publishing loop malfunction:");
+					statusQueue.add(e.getMessage());
 					e.printStackTrace();
 				}
 			}
@@ -916,26 +913,26 @@ public class FusionIMURange   {
 			try {
 				String calibString = "<<BEGIN IMU CALIBRATION KATAS!>>";
 				do {
-					statPub.add(calibString);
-					statPub.clear();
+					statusQueue.add(calibString);
+					statusQueue.clear();
 					byte[] cStat = imuDataPort.getCalibrationStatus();
 					calibString = imuDataPort.calibrate(cStat);
 				} while(!calibString.contains("CALIBRATION ACHIEVED"));
-				statPub.add(calibString);
+				statusQueue.add(calibString);
 				try {
 					Thread.sleep(1);
 				} catch (InterruptedException e) {}
 				// publish final result to status message bus
 				byte[] status = imuDataPort.getCalibrationStatus();
-				statPub.add(imuDataPort.displaySystemStatus(imuDataPort.getSystemStatus()));
+				statusQueue.add(imuDataPort.displaySystemStatus(imuDataPort.getSystemStatus()));
 				FusionIMURange.system_needs_calibrating = status[1] == 0 || status[2] == 0 || status[3] == 0;
 			} catch (IOException e) {
 				if(DEBUG)
 					System.out.println("Cannot achieve proper calibration of IMU due to "+e);
-				statPub.clear();
-				statPub.add("Cannot achieve proper calibration of IMU due to:");
-				statPub.add(e.getMessage());
-				statPub.clear();
+				statusQueue.clear();
+				statusQueue.add("Cannot achieve proper calibration of IMU due to:");
+				statusQueue.add(e.getMessage());
+				statusQueue.clear();
 				e.printStackTrace();
 			}
 		}
