@@ -1,15 +1,10 @@
 package com.neocoretechs.robocore.navigation;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
-import org.json.JSONObject;
 import org.ros.concurrent.CancellableLoop;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -17,19 +12,15 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
-import org.ros.node.topic.Subscriber;
 import org.ros.internal.loader.CommandLineLoader;
 
-import com.neocoretechs.robocore.GpioNative;
-import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
-import com.neocoretechs.robocore.pca.ComputeVariance;
 import com.neocoretechs.robocore.pca.Point3f;
 import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
 import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 
-import sensor_msgs.MagneticField;
+//import sensor_msgs.MagneticField;
 
 /**
  * Takes readings from the IMU DataPort, specified by the __IMUPORT:= command line param, and packages them for publication on the ROS bus.
@@ -137,7 +128,7 @@ public class FusionPubs extends AbstractNodeMain  {
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 
 	static String URMPort = "/dev/ttyS1"; //auto select, otherwise set to this from command line __URMPORT:=/dev/ttyxxx
-	static String IMUPort = "/dev/ttyUSB0";
+	static String IMUPort = "/dev/ttyUSB1";
 	//private Runnable readThread, pubThread;
 
 	public FusionPubs(String[] args) {

@@ -28,9 +28,15 @@ public class IMUSerialDataPort implements DataPortInterface {
 	private SerialPort serialPort;
 	private boolean openedSuccessfully = false;
 	private boolean connected = false;
+	private static int READ_DELAY = 2; // ms delay between character
+	private static int WRITE_DELAY = 2; // ms delay
 	
     private OutputStream outStream;
     private InputStream inStream;
+    
+	private double yawDeg = 0.0;
+	private long lastTimeNs = System.nanoTime();
+
 	// serial settings
 	// PortSettings=115200,n,8,1
 	// On RasPi its /dev/ttyS0, on OdroidC2, ttyS0 is hardwired console so we use ttyS1 on header
@@ -246,6 +252,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 			System.out.println("Error code was " + serialPort.getLastErrorCode() + " at Line " + serialPort.getLastErrorLocation());
 			return;
 		}
+		//
 		serialPort.setBaudRate(baud);
 		serialPort.setNumDataBits(datab);
 		serialPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
@@ -659,6 +666,15 @@ public class IMUSerialDataPort implements DataPortInterface {
 		// Enter normal operation mode.
 		set_mode(OPERATION_MODE_NDOF);
 	}
+	
+	/**
+	 * Switch the BNO055 from NDOF (fusion) to IMU mode (gyro+accel only).
+	 * This disables the magnetometer so yaw stops snapping 20–40 degrees.
+	 */
+	public void setIMUMode() throws IOException {
+		set_mode(OPERATION_MODE_IMUPLUS);
+	}
+	
 	/**
 	 * Read and print the chip ID
 	 * @throws IOException
@@ -831,7 +847,16 @@ public class IMUSerialDataPort implements DataPortInterface {
 				| ((data[5] << 8) & 0xFF00));
 		return new double[]{round(((double)heading)/16.0, IMU_TOL), round(((double)roll)/16.0, IMU_TOL), round(((double)pitch)/16.0, IMU_TOL)};
 	}
-
+	
+	public double updateYaw(double yawRateDegPerSec) {
+	    long now = System.nanoTime();
+	    double dt = (now - lastTimeNs) / 1_000_000_000.0;  // seconds
+	    lastTimeNs = now;
+	    yawDeg += yawRateDegPerSec * dt;
+	    // keep it in 0–360 range
+	    yawDeg = (yawDeg % 360 + 360) % 360;
+	    return yawDeg;
+	}
 	/**
 	 * Read temperature from sensor
 	 * @return The +/- temperature in current setting/mode, or Integer.MAX_VALUE if error
@@ -1482,7 +1507,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 					readMx.notify();
 				}
 				try {
-					Thread.sleep(2);
+					Thread.sleep(READ_DELAY);
 				} catch (InterruptedException e) {}
 			}
             isRunning = false;
@@ -1519,7 +1544,7 @@ public class IMUSerialDataPort implements DataPortInterface {
             			this.out.write(writeBuffer[writeBufferHead++]);
             			writeMx.notify();
             		}
-            		Thread.sleep(2);
+            		Thread.sleep(WRITE_DELAY);
             	}
             	catch ( IOException ioe ) {
 					System.out.println("Write exception on serial write:"+ioe);
