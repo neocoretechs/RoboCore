@@ -87,6 +87,7 @@ import std_msgs.Header;
  */
 public class FusionIMURange   {
 	private static boolean DEBUG = false;
+	private static boolean SHOWQUEUE = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 	private String mode="";
 
@@ -137,7 +138,7 @@ public class FusionIMURange   {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
-	private static final float MIN_MOTION_STRENGTH = 1.0f;
+	private static final float MIN_MOTION_STRENGTH = 10.0f;
 	private static final double MIN_ACCEL = 1.5;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
@@ -551,15 +552,22 @@ public class FusionIMURange   {
 		if( DEBUG ) {
 			System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
 		}
+		double pitch, roll, compassHeadingDegrees, accelX, accelY, accelZ;
 		synchronized(eulers.ImuMessage) {
-			int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
-			if(lastIMUTime > STALE_READING_SECONDS) {
-				if(DEBUG)
-					System.out.println("Discarding last IMU reading as its "+lastIMUTime+" seconds old.");
-				return;
-			}
-			double x = Math.sin(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
-			double y = Math.cos(eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329)*distance;
+			//int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
+			//if(lastIMUTime > STALE_READING_SECONDS) {
+			//	if(DEBUG)
+			//		System.out.println("Discarding last IMU reading as its "+lastIMUTime+" seconds old.");
+			//	return;
+			//}
+			compassHeadingDegrees = eulers.ImuMessage.getCompassHeadingDegrees();
+			pitch = eulers.ImuMessage.getPitch();
+			roll = eulers.ImuMessage.getRoll();
+			accelX = eulers.ImuMessage.getLinearAcceleration().getX();
+			accelY = eulers.ImuMessage.getLinearAcceleration().getY();
+			accelZ = eulers.ImuMessage.getLinearAcceleration().getZ();
+			double x = Math.sin(compassHeadingDegrees*0.01745329)*distance;
+			double y = Math.cos(compassHeadingDegrees*0.01745329)*distance;
 			Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
 			pointWindow.addLast(winPoint);
 		}
@@ -640,45 +648,43 @@ public class FusionIMURange   {
 			sb.put("motion_direction_z",Float.parseFloat(String.format("%3.3f",c.getEigvec3().z)));
 			double vwx_abs, vwy_abs;
 			// --- WORLD-FRAME MOTION COMPUTATION ---
-			// determine of any forward or lateral acceleration is taking place
-			double accel = Math.sqrt(eulers.accels[0]*eulers.accels[0] + eulers.accels[1]*eulers.accels[1]);
+			// determine if any forward or lateral acceleration is taking place
+			double accel = Math.sqrt(accelX*accelX + accelY*accelY);
 			if(DEBUG && accel > 0)
-				System.out.println("Accel:"+accel+" x,y,z="+eulers.accels[0]+" "+eulers.accels[1]+" "+eulers.accels[2]);
-			synchronized(eulers.ImuMessage) {
-				if(accel > MIN_ACCEL) {
-					EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(eulers.accels[0], eulers.accels[1], eulers.accels[2],
-							eulers.ImuMessage.getPitch()*0.01745329, eulers.ImuMessage.getRoll()*0.01745329, eulers.ImuMessage.getCompassHeadingDegrees());
-					EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
-					EgoMotionCompensator.MotionSemantic motionSemantic = new EgoMotionCompensator().update(imuSample, pcaMotion);
-					motionSemantic.appendTo(sb);
-					vwx_abs = motionSemantic.worldVelX;
-					vwy_abs = motionSemantic.worldVelY;
-				} else {
-					double yaw = eulers.ImuMessage.getCompassHeadingDegrees()*0.01745329;
-					double cos = Math.cos(yaw);
-					double sin = Math.sin(yaw);
-					// world-frame direction (unit vector)
-					double vwx =  cos * v_x - sin * v_y;
-					double vwy =  sin * v_x + cos * v_y;
-					// absolute world-frame velocity (scaled by PCA speed)
-					double speed = Math.sqrt(c.getVariance3());
-					vwx_abs = vwx * speed;
-					vwy_abs = vwy * speed;
-					//sb.append(",world_direction_x=");
-					sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
-					//sb.append(",world_direction_y=");
-					sb.put(",world_direction_y",Float.parseFloat(String.format("%3.3f", vwy)));
-					//sb.append(",world_velocity_x=");
-					sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", vwx_abs)));
-					//sb.append(",world_velocity_y=");
-					sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
-				}
-			}
+				System.out.println("Accel:"+accel+" x,y,z="+accelX+" "+accelY+" "+accelZ);
+			if(accel > MIN_ACCEL) {
+				EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(accelX, accelY, accelZ,
+						pitch*0.01745329, roll*0.01745329, compassHeadingDegrees);
+				EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
+				EgoMotionCompensator.MotionSemantic motionSemantic = new EgoMotionCompensator().update(imuSample, pcaMotion);
+				motionSemantic.appendTo(sb);
+				vwx_abs = motionSemantic.worldVelX;
+				vwy_abs = motionSemantic.worldVelY;
+			} else {
+				double yaw = compassHeadingDegrees*0.01745329;
+				double cos = Math.cos(yaw);
+				double sin = Math.sin(yaw);
+				// world-frame direction (unit vector)
+				double vwx =  cos * v_x - sin * v_y;
+				double vwy =  sin * v_x + cos * v_y;
+				// absolute world-frame velocity (scaled by PCA speed)
+				double speed = Math.sqrt(c.getVariance3());
+				vwx_abs = vwx * speed;
+				vwy_abs = vwy * speed;
+				//sb.append(",world_direction_x=");
+				sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
+				//sb.append(",world_direction_y=");
+				sb.put(",world_direction_y",Float.parseFloat(String.format("%3.3f", vwy)));
+				//sb.append(",world_velocity_x=");
+				sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", vwx_abs)));
+				//sb.append(",world_velocity_y=");
+				sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
+			}	
 			//sb.append("\r\n");
 			if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH) {
 				dataQueue.addLast(sb.toString());
-				if(DEBUG)
-					System.out.println(">>> Queuing:"+sb.toString());
+				if(DEBUG || SHOWQUEUE)
+					System.out.println(">>> Queueing:"+sb.toString());
 			}
 		}
 	}
@@ -772,10 +778,13 @@ public class FusionIMURange   {
 					if( DEBUG ) {
 						System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
 					}	
-					queueResponse(eulerdata.take(), distance);
+					EulerTime et = eulerdata.peekLast();
+					if(et != null) {
+						queueResponse(et, distance);
+					}
 					//}
 					try {
-						Thread.sleep(250);
+						Thread.sleep(150);
 					} catch (InterruptedException e) {}
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -790,6 +799,7 @@ public class FusionIMURange   {
 	class UltraRead implements Runnable, Notifier {
 		public volatile boolean shouldRun = true;
 		boolean isRunning = false;
+		double lastDistance = 0;
 		@Override
 		public boolean isStarted() {
 			return isRunning;
@@ -812,10 +822,12 @@ public class FusionIMURange   {
 					if(DEBUG)
 						System.out.println("Waiting for distance read..");
 					double distance = usdp.readDistance();
-					//if( distance < MAX_RANGE) { // 500 cm for URM37
-					queueResponse(eulerdata.take(), distance);
+					EulerTime et = eulerdata.peekLast();
+					if(et != null) {
+						queueResponse(et, distance);
+					}
 					try {
-						Thread.sleep(200);
+						Thread.sleep(100);
 					} catch (InterruptedException e) {}
 				} catch (Exception e) {
 					e.printStackTrace();
