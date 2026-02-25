@@ -139,7 +139,7 @@ public class FusionIMURange   {
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
 	private static final float MIN_MOTION_STRENGTH = 10.0f;
-	private static final double MIN_ACCEL = 1.5;
+	private static final double MIN_ACCEL = 2;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
 	private CircularBlockingDeque<EulerTime> eulerdata = new CircularBlockingDeque<EulerTime>(2);
@@ -566,11 +566,11 @@ public class FusionIMURange   {
 			accelX = eulers.ImuMessage.getLinearAcceleration().getX();
 			accelY = eulers.ImuMessage.getLinearAcceleration().getY();
 			accelZ = eulers.ImuMessage.getLinearAcceleration().getZ();
-			double x = Math.sin(compassHeadingDegrees*0.01745329)*distance;
-			double y = Math.cos(compassHeadingDegrees*0.01745329)*distance;
-			Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
-			pointWindow.addLast(winPoint);
 		}
+		double x = Math.sin(compassHeadingDegrees*0.01745329)*distance;
+		double y = Math.cos(compassHeadingDegrees*0.01745329)*distance;
+		Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
+		pointWindow.addLast(winPoint);
 		if(pointWindow.length() == WINSIZE) {
 			ComputeVariance c = new ComputeVariance();
 			c.leastVariance(pointWindow);
