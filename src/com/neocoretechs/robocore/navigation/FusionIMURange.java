@@ -118,6 +118,11 @@ public class FusionIMURange   {
 	boolean mag_changed = false;
 	boolean temp_changed = false;
 	boolean imu_changed = false;
+	double[] last_accels = new double[3];
+	double[] last_gyros = new double[3];
+	double[] last_mags = new double[3];
+	double[] last_imu = new double[3];
+	int last_temp = 0;
 	public static boolean system_needs_calibrating = true; // if mode is calibration and its first time through
 	static final String REMAP_MODE_CALIBRATE="calibrate"; // REMAP_MODE value for calibration
 	boolean display_revision = true;
@@ -138,8 +143,8 @@ public class FusionIMURange   {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
-	private static final float MIN_MOTION_STRENGTH = 10.0f;
-	private static final double MIN_ACCEL = 2;
+	private static final double MIN_MOTION_STRENGTH = .1;
+	private static final double MIN_ACCEL = .9;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
 	private CircularBlockingDeque<EulerTime> eulerdata = new CircularBlockingDeque<EulerTime>(2);
@@ -150,15 +155,15 @@ public class FusionIMURange   {
 	static MODE SENSOR_TYPE = MODE.URM37;
 	private Runnable readThread, pubThread;
 	private int STALE_READING_SECONDS = 60;
-	public static double EULERS_EPS0 = 30.0;
-	public static double EULERS_EPS1 = 5.8;
-	public static double EULERS_EPS2 = 3.6;
+	public static double EULERS_EPS0 = 5.0;
+	public static double EULERS_EPS1 = 2.5;
+	public static double EULERS_EPS2 = 2.5;
 	public static double GYROS_EPS0 = .3;
 	public static double GYROS_EPS1 = .4;
 	public static double GYROS_EPS2 = .2;
-	public static double ACCELS_EPS0 = 1.0;
-	public static double ACCELS_EPS1 = .6;
-	public static double ACCELS_EPS2 = 9.3;
+	public static double ACCELS_EPS0 = .5;
+	public static double ACCELS_EPS1 = .5;
+	public static double ACCELS_EPS2 = .3;
 	
 	static class EulerTime {
 		sensor_msgs.Imu ImuMessage = new Imu();
@@ -166,13 +171,8 @@ public class FusionIMURange   {
 		double[] accels = new double[3];
 		double[] gyros = new double[3];
 		double[] mags = new double[3];
-		int temp = -1;
 		double[] quats = new double[4];
-		double[] last_accels = new double[3];
-		double[] last_gyros = new double[3];
-		double[] last_mags = new double[3];
-		int last_temp = 0;
-		double[] last_imu = new double[3];
+		int temp = -1;
 		public EulerTime(Time time, int seq) {
 			Header header = new Header();
 			header.setStamp(time);
@@ -258,7 +258,7 @@ public class FusionIMURange   {
 			System.out.println("reading ACCEL");
 		synchronized(eulers.accels) {
 			eulers.accels = imuDataPort.readAccel();
-			if( DEBUG)
+			if(DEBUG)
 				System.out.println("Accel:"+eulers.accels[0]+" "+eulers.accels[1]+" "+eulers.accels[2]);
 		}
 		if( DEBUG )
@@ -295,15 +295,18 @@ public class FusionIMURange   {
 		if(DEBUG && eulers.temp != Integer.MAX_VALUE)
 			System.out.println("Temp:"+eulers.temp);
 		
-		synchronized(eulers.ImuMessage) {
-			eulers.ImuMessage.setCompassHeadingDegrees((float) eulers.eulers[0]);
-			eulers.ImuMessage.setRoll((float)eulers.eulers[1]);
-			eulers.ImuMessage.setPitch((float)eulers.eulers[2]);
-			eulers.ImuMessage.setTemperature(eulers.temp);
-		}
 		boolean dataChanged = hasDataChanged(eulers);
+		
 		if(dataChanged) {
-			//MotionController.updatePID((float)eulers[0],  0.0f);
+			
+			synchronized(eulers.eulers) {
+				synchronized(eulers.ImuMessage) {
+					eulers.ImuMessage.setCompassHeadingDegrees((float)eulers.eulers[0]);
+					eulers.ImuMessage.setRoll((float)eulers.eulers[1]);
+					eulers.ImuMessage.setPitch((float)eulers.eulers[2]);
+					eulers.ImuMessage.setTemperature(eulers.temp);
+				}
+			}
 			synchronized(eulers.accels) {
 					geometry_msgs.Vector3 val = new geometry_msgs.Vector3();
 					val.setX(eulers.accels[0]);
@@ -384,60 +387,63 @@ public class FusionIMURange   {
 		boolean timed_out = false;
 
 		synchronized(eulers.accels) {
-			if(Math.abs(eulers.accels[0] - eulers.last_accels[0]) > ACCELS_EPS0 ||
-					Math.abs(eulers.accels[1] - eulers.last_accels[1]) > ACCELS_EPS1 || 
-					Math.abs(eulers.accels[2] - eulers.last_accels[2]) > ACCELS_EPS2 ) {
-				System.out.println("Accels:"+Math.abs(eulers.accels[0] - eulers.last_accels[0])+" "+
-						Math.abs(eulers.accels[1] - eulers.last_accels[1])+" "+
-						Math.abs(eulers.accels[2] - eulers.last_accels[2]));
-				eulers.last_accels[0] = eulers.accels[0];
-				eulers.last_accels[1] = eulers.accels[1];
-				eulers.last_accels[2] = eulers.accels[2];
+			if(Math.abs(eulers.accels[0] - last_accels[0]) > ACCELS_EPS0 ||
+					Math.abs(eulers.accels[1] - last_accels[1]) > ACCELS_EPS1 || 
+					Math.abs(eulers.accels[2] - last_accels[2]) > ACCELS_EPS2 ) {
+				if(DEBUG)
+					System.out.println("Accels delta:"+Math.abs(eulers.accels[0] - last_accels[0])+" "+
+						Math.abs(eulers.accels[1] - last_accels[1])+" "+
+						Math.abs(eulers.accels[2] - last_accels[2]));
+				last_accels[0] = eulers.accels[0];
+				last_accels[1] = eulers.accels[1];
+				last_accels[2] = eulers.accels[2];
 				dataChanged = true;
 				acc_changed = true;
 			}
 		}
 		synchronized(eulers.gyros) {
-			if( Math.abs(eulers.gyros[0] - eulers.last_gyros[0]) > GYROS_EPS0 || 
-					Math.abs(eulers.gyros[1] - eulers.last_gyros[1])  > GYROS_EPS1 || 
-					Math.abs(eulers.gyros[2] - eulers.last_gyros[2]) > GYROS_EPS2) {
-				System.out.println("Gyros:"+Math.abs(eulers.gyros[0] - eulers.last_gyros[0]) +" "+
-						Math.abs(eulers.gyros[1] - eulers.last_gyros[1]) +" "+
-						Math.abs(eulers.gyros[2] - eulers.last_gyros[2]));
-				eulers.last_gyros[0] = eulers.gyros[0];
-				eulers.last_gyros[1] = eulers.gyros[1];
-				eulers.last_gyros[2] = eulers.gyros[2];
+			if( Math.abs(eulers.gyros[0] - last_gyros[0]) > GYROS_EPS0 || 
+					Math.abs(eulers.gyros[1] - last_gyros[1])  > GYROS_EPS1 || 
+					Math.abs(eulers.gyros[2] - last_gyros[2]) > GYROS_EPS2) {
+				if(DEBUG)
+					System.out.println("Gyros delta:"+Math.abs(eulers.gyros[0] - last_gyros[0]) +" "+
+						Math.abs(eulers.gyros[1] - last_gyros[1]) +" "+
+						Math.abs(eulers.gyros[2] - last_gyros[2]));
+				last_gyros[0] = eulers.gyros[0];
+				last_gyros[1] = eulers.gyros[1];
+				last_gyros[2] = eulers.gyros[2];
 				dataChanged = true;
 				gyro_changed = true;
 			}
 		}
 		synchronized(eulers.mags) {
-			if( Math.abs(eulers.mags[0] - eulers.last_mags[0]) > EULERS_EPS0 || 
-					Math.abs(eulers.mags[1] - eulers.last_mags[1]) > EULERS_EPS1 || 
-					Math.abs(eulers.mags[2] - eulers.last_mags[2]) > EULERS_EPS2) {
-				eulers.last_mags[0] = eulers.mags[0];
-				eulers.last_mags[1] = eulers.mags[1];
-				eulers.last_mags[2] = eulers.mags[2];
+			if( Math.abs(eulers.mags[0] - last_mags[0]) > EULERS_EPS0 || 
+					Math.abs(eulers.mags[1] - last_mags[1]) > EULERS_EPS1 || 
+					Math.abs(eulers.mags[2] - last_mags[2]) > EULERS_EPS2) {
+				last_mags[0] = eulers.mags[0];
+				last_mags[1] = eulers.mags[1];
+				last_mags[2] = eulers.mags[2];
 				//dataChanged = true;
 				mag_changed = true;
 			}
 		}
 		synchronized(eulers.eulers) {
-			if( Math.abs(eulers.eulers[0] - eulers.last_imu[0]) > EULERS_EPS0 || 
-					Math.abs(eulers.eulers[1] - eulers.last_imu[1]) > EULERS_EPS1 || 
-					Math.abs(eulers.eulers[2] - eulers.last_imu[2]) > EULERS_EPS2) {
-				System.out.println("Eulers:"+ Math.abs(eulers.eulers[0] - eulers.last_imu[0])+" "+
-						Math.abs(eulers.eulers[1] - eulers.last_imu[1]) +" "+ 
-						Math.abs(eulers.eulers[2] - eulers.last_imu[2]));
-				eulers.last_imu[0] = eulers.eulers[0];
-				eulers.last_imu[1] = eulers.eulers[1];
-				eulers.last_imu[2] = eulers.eulers[2];
+			if( Math.abs(eulers.eulers[0] - last_imu[0]) > EULERS_EPS0 || 
+					Math.abs(eulers.eulers[1] - last_imu[1]) > EULERS_EPS1 || 
+					Math.abs(eulers.eulers[2] - last_imu[2]) > EULERS_EPS2) {
+				if(DEBUG)
+					System.out.println("Eulers delta:"+ Math.abs(eulers.eulers[0] - last_imu[0])+" "+
+						Math.abs(eulers.eulers[1] - last_imu[1]) +" "+ 
+						Math.abs(eulers.eulers[2] - last_imu[2]));
+				last_imu[0] = eulers.eulers[0];
+				last_imu[1] = eulers.eulers[1];
+				last_imu[2] = eulers.eulers[2];
 				dataChanged = true;
 				imu_changed = true;
 			}
 		}
-		if( eulers.temp != eulers.last_temp ) {
-			eulers.last_temp = eulers.temp;
+		if( eulers.temp != last_temp ) {
+			last_temp = eulers.temp;
 			//dataChanged = true;
 			temp_changed = true;
 		}
@@ -457,9 +463,9 @@ public class FusionIMURange   {
 			imu_changed = true;
 			temp_changed = true;
 		}
-		if(dataChanged)
-			System.out.printf("%s timeout=%b acc=%b gyro=%b mag=%b imu=%b temp=%b%n",
-					this.getClass().getName(),timed_out,acc_changed,gyro_changed,mag_changed,imu_changed,temp_changed);
+		//if(dataChanged)
+		//	System.out.printf("%s timeout=%b acc=%b gyro=%b mag=%b imu=%b temp=%b%n",
+		//			this.getClass().getName(),timed_out,acc_changed,gyro_changed,mag_changed,imu_changed,temp_changed);
 		return dataChanged;
 	}
 
@@ -650,16 +656,14 @@ public class FusionIMURange   {
 			// --- WORLD-FRAME MOTION COMPUTATION ---
 			// determine if any forward or lateral acceleration is taking place
 			double accel = Math.sqrt(accelX*accelX + accelY*accelY);
-			if(DEBUG && accel > 0)
-				System.out.println("Accel:"+accel+" x,y,z="+accelX+" "+accelY+" "+accelZ);
 			if(accel > MIN_ACCEL) {
 				EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(accelX, accelY, accelZ,
 						pitch*0.01745329, roll*0.01745329, compassHeadingDegrees);
 				EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
 				EgoMotionCompensator.MotionSemantic motionSemantic = new EgoMotionCompensator().update(imuSample, pcaMotion);
 				motionSemantic.appendTo(sb);
-				vwx_abs = motionSemantic.worldVelX;
-				vwy_abs = motionSemantic.worldVelY;
+				vwx_abs = Math.abs(motionSemantic.worldVelX);
+				vwy_abs = Math.abs(motionSemantic.worldVelY);
 			} else {
 				double yaw = compassHeadingDegrees*0.01745329;
 				double cos = Math.cos(yaw);
@@ -669,8 +673,8 @@ public class FusionIMURange   {
 				double vwy =  sin * v_x + cos * v_y;
 				// absolute world-frame velocity (scaled by PCA speed)
 				double speed = Math.sqrt(c.getVariance3());
-				vwx_abs = vwx * speed;
-				vwy_abs = vwy * speed;
+				vwx_abs = Math.abs(vwx * speed);
+				vwy_abs = Math.abs(vwy * speed);
 				//sb.append(",world_direction_x=");
 				sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
 				//sb.append(",world_direction_y=");
@@ -681,7 +685,9 @@ public class FusionIMURange   {
 				sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
 			}	
 			//sb.append("\r\n");
-			if(vwx_abs >= MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH) {
+			if(DEBUG)
+				System.out.println("Window full - Accel:"+accel+" vwx_abs="+vwx_abs+" vwy_abs="+vwy_abs+" yaw="+imuDataPort.getYawRateDegPerSec()+sb.toString());
+			if(vwx_abs > 1e-8 && vwy_abs > MIN_MOTION_STRENGTH) {//MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH) {
 				dataQueue.addLast(sb.toString());
 				if(DEBUG || SHOWQUEUE)
 					System.out.println(">>> Queueing:"+sb.toString());
@@ -910,7 +916,7 @@ public class FusionIMURange   {
 					++sequenceNumber;
 					EulerTime eulers = new EulerTime(time, sequenceNumber);
 					if(getIMU(eulers)) {
-						eulerdata.put(eulers);
+						eulerdata.addLast(eulers);
 						if(System.currentTimeMillis() - time1 >= 1000) {
 							if(SAMPLERATE) {
 								statusQueue.addLast("IMU Samples per second:"+(sequenceNumber-lastSequenceNumber));
@@ -934,7 +940,7 @@ public class FusionIMURange   {
 						}
 					} // data changed - true return from getIMU
 
-				} catch (IOException | InterruptedException e) {
+				} catch (IOException e) {
 					System.out.println("IMU publishing loop malfunction "+e.getMessage()+" at "+LocalDateTime.ofInstant(Instant.ofEpochMilli(System.currentTimeMillis()), ZoneId.systemDefault()));
 					statusQueue.addLast("IMU publishing loop malfunction:");
 					statusQueue.addLast(e.getMessage());

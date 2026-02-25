@@ -18,6 +18,7 @@ import java.math.RoundingMode;
 /**
  * Uses the serial UART mode of the BNO055 Bosch 9 axis sensor fusion package and presents a series of methods to read
  * The accelerometer, gyro, magnetometer, fused Euler angle data, and temperature. Based on datasheet and AdaFruit examples.
+ * {@linkplain http://www.adafruit.com/datasheets/BST_BNO055_DS000_12.pdf}
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2018,2019,2020,2021
  *
  */
@@ -821,6 +822,8 @@ public class IMUSerialDataPort implements DataPortInterface {
 				| ((data[5] << 8) & 0xFF00));
 		// Convert the data, 900 is RPS, radians per second, 16 is DPS, degrees per second
 		//return new int[]{xGyro/900, yGyro/900, zGyro/900};
+		lastTimeNs = System.nanoTime(); // set for yaw rate calc updateYaw
+		updateYaw(((double)zGyro)/16);
 		return new double[]{((double)xGyro)/16, ((double)yGyro)/16, ((double)zGyro)/16};
 	}
 
@@ -847,15 +850,26 @@ public class IMUSerialDataPort implements DataPortInterface {
 				| ((data[5] << 8) & 0xFF00));
 		return new double[]{round(((double)heading)/16.0, IMU_TOL), round(((double)roll)/16.0, IMU_TOL), round(((double)pitch)/16.0, IMU_TOL)};
 	}
-	
-	public double updateYaw(double yawRateDegPerSec) {
+	/**
+	 * The gyro outputs degrees/sec (or rad/sec depending on config) The Z axis is yaw rate.
+	 * Set the global lastTimeNs to time of reading
+	 * @param yawRateDegPerSec degrees per second Z axis yaw rate
+	 * @return updated yaw
+	 */
+	private void updateYaw(double yawRateDegPerSec) {
 	    long now = System.nanoTime();
 	    double dt = (now - lastTimeNs) / 1_000_000_000.0;  // seconds
 	    lastTimeNs = now;
 	    yawDeg += yawRateDegPerSec * dt;
 	    // keep it in 0–360 range
 	    yawDeg = (yawDeg % 360 + 360) % 360;
-	    return yawDeg;
+	}
+	/**
+	 * Return the constantly integrated yaw rate degrees per second
+	 * @return
+	 */
+	public double getYawRateDegPerSec() {
+		return yawDeg;
 	}
 	/**
 	 * Read temperature from sensor

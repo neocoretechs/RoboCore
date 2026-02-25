@@ -92,8 +92,8 @@ public final class EgoMotionCompensator {
             this.worldVelY = worldVelY;
             this.robotWorldX = robotWorldX;
             this.robotWorldY = robotWorldY;
-            this.absObjX = absObjX;
-            this.absObjY = absObjY;
+            this.absObjX = Math.abs(absObjX);
+            this.absObjY = Math.abs(absObjY);
         }
         public void appendTo(StringBuilder sb) {
             sb.append(",world_direction_x=").append(String.format("%3.3f", worldDirX));
