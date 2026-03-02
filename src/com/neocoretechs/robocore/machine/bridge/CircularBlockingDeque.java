@@ -388,6 +388,9 @@ public boolean retainAll(Collection c) {
 
 @Override
 public Object set(int index, Object element) {
+	if (index < 0 || index >= length)
+        throw new IndexOutOfBoundsException(
+            "index=" + index + " length=" + length);
 	Object o = deque[(start + index) % limit];
 	deque[(start + index) % limit] = (T) element;
 	return o;
@@ -395,6 +398,8 @@ public Object set(int index, Object element) {
 
 @Override
 public void add(int index, Object element) {
+	if (index < 0 || index > length)
+	    throw new IndexOutOfBoundsException("index=" + index + " length=" + length);
 	  synchronized (mutex) {
 		  int l = ((start + length) % limit); 
 		  int i = ((start + index) % limit);

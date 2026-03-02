@@ -97,7 +97,7 @@ import std_msgs.Header;
  */
 public class FusionIMURange   {
 	private static boolean DEBUG = false;
-	private static boolean SHOWQUEUE = false;
+	private static boolean SHOWQUEUE = true;
 	private static final boolean SAMPLERATE = true; // display pubs per second
 	private static final double G = 9.80665;
 	private static final double DEG2RAD = 0.017453292519943295;
@@ -159,7 +159,7 @@ public class FusionIMURange   {
 	private static final int REJECTION_START = 1000;
 	private static final double MIN_MOTION_STRENGTH = .2;
 	private static final double MIN_ACCEL = .9;
-	//public static VoxHumana speaker = null;
+	double last_distance = 0;
 	private int WINSIZE = 20;
 	private CircularBlockingDeque<EulerTime> eulerdata = new CircularBlockingDeque<EulerTime>(2);
 	public CircularBlockingDeque<String> dataQueue = new CircularBlockingDeque<String>(WINSIZE);
@@ -610,9 +610,9 @@ public class FusionIMURange   {
 	 * @param distance The most recent distance measure
 	 */
 	private void queueResponse(EulerTime eulers, double distance) {
-		double last_distance = 0;
-		if(last_distance == 0 || Math.abs(distance - last_distance) <= MIN_DIST_DELTA) {
+		if(last_distance == 0)
 			last_distance = distance;
+		if(Math.abs(distance - last_distance) <= MIN_DIST_DELTA) {
 			if( DEBUG ) {
 				System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-lastDistance)) +" cm");
 			}
@@ -651,23 +651,9 @@ public class FusionIMURange   {
 		Point3f winPoint = new Point3f((float)x,(float)y,(float)delta);
 		pointWindow.addLast(winPoint);
 		if(pointWindow.length() == WINSIZE) {
-			ComputeVariance c = new ComputeVariance();
-			c.leastVariance(pointWindow);
-			pointWindow.poll();
-			// robot-frame PCA direction (unit vector)
-			double v_x = c.getEigvec3().x;
-			double v_y = c.getEigvec3().y;
 			//
 			float latestDist = 0.0f;
 			float latestTime = Float.MIN_VALUE;
-			for (Point3f p : pointWindow) {
-				if (p.t() > latestTime) {
-					latestTime = p.t();
-					latestDist = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
-				}
-			}
-			sb.put("nowtime",String.format("%s",lastTime.plusNanos((long) latestTime)));
-			sb.put("nowdistance",Float.parseFloat(String.format("%3.3f", latestDist)));
 			// --- MIN DISTANCE ---
 			//sb.append(",mindistance=");
 			float minDist = Float.MAX_VALUE;
@@ -678,6 +664,10 @@ public class FusionIMURange   {
 			double sumTime = 0.0f;
 			for (Point3f p : pointWindow) {
 				float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
+				if (p.t() > latestTime) {
+					latestTime = p.t();
+					latestDist = d;
+				}
 				if (d < minDist)
 					minDist = d;
 				if (d > maxDist)
@@ -689,6 +679,8 @@ public class FusionIMURange   {
 				sumDist += Math.sqrt(p.x()*p.x() + p.y()*p.y());
 				sumTime += p.t();
 			}
+			sb.put("nowtime",String.format("%s",lastTime.plusNanos((long) latestTime)));
+			sb.put("nowdistance",Float.parseFloat(String.format("%3.3f", latestDist)));
 			sb.put("mindistance",Float.parseFloat(String.format("%3.3f", minDist)));
 			sb.put("maxdistance",Float.parseFloat(String.format("%3.3f", maxDist)));
 			sb.put("mintime",String.format("%s",lastTime.plusNanos((long) minTime)));
@@ -699,6 +691,19 @@ public class FusionIMURange   {
 			double avgTime = sumTime / pointWindow.size();
 			sb.put("avedistance",Float.parseFloat(String.format("%3.3f", avgDist)));
 			sb.put("avetime",String.format("%s", avgTime));
+			CircularBlockingDeque<Point3f> newWindow = new CircularBlockingDeque<Point3f>(pointWindow.size());
+			for(int i = 0; i < pointWindow.size(); i++) {
+				Point3f px = pointWindow.get(i);
+				double td = px.t() - minTime;
+				Point3f nx = new Point3f(px.x(), px.y(), (float)td);
+				newWindow.add(i, nx);
+			}
+			ComputeVariance c = new ComputeVariance();
+			c.leastVariance(newWindow);
+			pointWindow.poll();
+			// robot-frame PCA direction (unit vector)
+			double v_x = c.getEigvec3().x;
+			double v_y = c.getEigvec3().y;
 			/*
 			sb.append(",confidence=");
 			sb.append(c.getConfidence());
