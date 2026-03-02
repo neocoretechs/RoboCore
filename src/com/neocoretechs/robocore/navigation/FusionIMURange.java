@@ -1,26 +1,36 @@
 package com.neocoretechs.robocore.navigation;
 
 import java.io.IOException;
-
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 import java.util.ArrayList;
-import java.util.concurrent.CountDownLatch;
+import java.util.Arrays;
+import java.util.Map;
 
 import org.json.JSONObject;
+import org.ros.concurrent.CancellableLoop;
+import org.ros.internal.loader.CommandLineLoader;
 import org.ros.message.Time;
+import org.ros.namespace.GraphName;
+import org.ros.node.AbstractNodeMain;
+import org.ros.node.ConnectedNode;
+import org.ros.node.DefaultNodeMainExecutor;
+import org.ros.node.NodeMainExecutor;
+import org.ros.node.topic.Publisher;
 
 import com.neocoretechs.robocore.GpioNative;
 import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
-
+import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.pca.ComputeVariance;
 import com.neocoretechs.robocore.pca.Point3f;
 import com.neocoretechs.robocore.serialreader.IMUSerialDataPort;
 import com.neocoretechs.robocore.serialreader.UltrasonicSerialDataPort;
 
+import diagnostic_msgs.DiagnosticStatus;
 import sensor_msgs.Imu;
 import std_msgs.Header;
 
@@ -87,13 +97,17 @@ import std_msgs.Header;
  */
 public class FusionIMURange   {
 	private static boolean DEBUG = false;
-	private static boolean SHOWQUEUE = true;
+	private static boolean SHOWQUEUE = false;
 	private static final boolean SAMPLERATE = true; // display pubs per second
+	private static final double G = 9.80665;
+	private static final double DEG2RAD = 0.017453292519943295;
 	private String mode="";
 
 	sensor_msgs.MagneticField magmsg = new sensor_msgs.MagneticField();
 
 	long time1, startTime;
+	long epoch = System.currentTimeMillis();
+	Instant lastTime = Instant.now();
 
 	IMUSerialDataPort imuDataPort;
 	
@@ -126,7 +140,7 @@ public class FusionIMURange   {
 	public static boolean system_needs_calibrating = true; // if mode is calibration and its first time through
 	static final String REMAP_MODE_CALIBRATE="calibrate"; // REMAP_MODE value for calibration
 	boolean display_revision = true;
-	String IMUPort = "/dev/ttyUSB1";
+	String IMUPort = "/dev/ttyUSB0";
 	String URMPort = "/dev/ttyS1"; 
 	//-------------------------------------
 	// ultrasonic ranging
@@ -143,7 +157,7 @@ public class FusionIMURange   {
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
 	private static final double MAX_RANGE = 4000; // 400 cm max range
 	private static final int REJECTION_START = 1000;
-	private static final double MIN_MOTION_STRENGTH = .1;
+	private static final double MIN_MOTION_STRENGTH = .2;
 	private static final double MIN_ACCEL = .9;
 	//public static VoxHumana speaker = null;
 	private int WINSIZE = 20;
@@ -153,7 +167,7 @@ public class FusionIMURange   {
 	private CircularBlockingDeque<Point3f> pointWindow = new CircularBlockingDeque<Point3f>(WINSIZE);
 	static enum MODE { HCSR04, URM37};
 	static MODE SENSOR_TYPE = MODE.URM37;
-	private Runnable readThread, pubThread;
+	private Runnable readThread, pubThread, timerThread;
 	private int STALE_READING_SECONDS = 60;
 	public static double EULERS_EPS0 = 5.0;
 	public static double EULERS_EPS1 = 2.5;
@@ -200,10 +214,12 @@ public class FusionIMURange   {
 			readThread = new UltraPing(); // GPIO (GPIO library maps to pins on GPIO header)
 		}
 		pubThread = new ultraPub();
+		timerThread = new TimeRefresh();
 		
-		SynchronizedThreadManager.getInstance().init(new String[]{"IMU","URS"});
+		SynchronizedThreadManager.getInstance().init(new String[]{"IMU","URS","TIMER"});
 		SynchronizedThreadManager.getInstance().spin(readThread, "URS");
 		SynchronizedThreadManager.getInstance().spin(pubThread, "IMU");
+		SynchronizedThreadManager.getInstance().spin(timerThread, "TIMER");
 		// tell the waiting constructors that we have registered publishers if we are intercepting the command line build process
 		while(!((Notifier)pubThread).isStarted())
 			try {
@@ -216,6 +232,13 @@ public class FusionIMURange   {
 			try {
 				if(DEBUG)
 					System.out.println("init waiting for Ultrasonic readThread..");
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {break;}
+		
+		while(!((Notifier)timerThread).isStarted())
+			try {
+				if(DEBUG)
+					System.out.println("init waiting for timeThread..");
 				Thread.sleep(1000);
 			} catch (InterruptedException e) {break;}
 		
@@ -549,8 +572,40 @@ public class FusionIMURange   {
 		return distance;
 	}
 	/**
-	 * Combine the euler latest and recent distance into the sliding window. When we recah threshold
-	 * push the result onto the pubdata queue as string
+	 * Combine the euler latest and recent distance into the sliding window. When we reach threshold
+	 * push the result onto the pubdata queue as string.
+	 * Uses the IMU accelerometer to estimate robot velocity,
+	 * rotate it into world-frame, subtract it from PCA world-frame motion,
+	 * and emit a canonical semantic vector.
+	 *
+	 * <p>Pipeline stages:</p>
+	 * <ol>
+	 *   <li>Gravity compensation</li>
+	 *   <li>Velocity integration</li>
+	 *   <li>World-frame rotation</li>
+	 *   <li>Ego-motion subtraction + semantic vector output</li>
+	 * </ol>
+	 *
+	 * <p>The semantic vector contains:</p>
+	 * <ul>
+	 *   <li>Robot-frame PCA direction</li>
+	 *   <li>World-frame PCA direction</li>
+	 *   <li>World-frame relative velocity</li>
+	 *   <li>Robot world-frame velocity</li>
+	 *   <li>Absolute object world-frame velocity</li>
+	 *   <li>Distance metrics</li>
+	 *   <li>Jitter / noise / confidence</li>
+	 * </ul>
+	 *
+	 * <p>The primary purpose is to compensate for robot motion in the range-finding pipeline. As a result:</p>
+	 * <ul>
+	 *   <li>motion_strength stops spiking when the robot moves</li>
+	 *   <li>world_vel_x / world_vel_y become physically correct</li>
+	 *   <li>Stationary objects appear stationary</li>
+	 *   <li>Moving objects track correctly even while the robot turns</li>
+	 *   <li>An LLM can now reason about true world-frame motion</li>
+	 * </ul>
+	 *
 	 * @param eulers
 	 * @param distance
 	 */
@@ -573,9 +628,17 @@ public class FusionIMURange   {
 			accelY = eulers.ImuMessage.getLinearAcceleration().getY();
 			accelZ = eulers.ImuMessage.getLinearAcceleration().getZ();
 		}
-		double x = Math.sin(compassHeadingDegrees*0.01745329)*distance;
-		double y = Math.cos(compassHeadingDegrees*0.01745329)*distance;
-		Point3f winPoint = new Point3f((float)x,(float)y,(float)System.nanoTime());
+		double accel = 0;
+		double axCorrected = 0;
+		double ayCorrected = 0;
+		double vwx_abs = 0, vwy_abs = 0;
+		double x = Math.sin(compassHeadingDegrees*DEG2RAD)*distance;
+		double y = Math.cos(compassHeadingDegrees*DEG2RAD)*distance;
+		double delta = Duration.between(lastTime, Instant.now()).toNanos() / 1_000_000_000.0;
+		JSONObject sb = new JSONObject();
+		//StringBuilder sb = new StringBuilder();
+		//
+		Point3f winPoint = new Point3f((float)x,(float)y,(float)delta);
 		pointWindow.addLast(winPoint);
 		if(pointWindow.length() == WINSIZE) {
 			ComputeVariance c = new ComputeVariance();
@@ -585,10 +648,6 @@ public class FusionIMURange   {
 			double v_x = c.getEigvec3().x;
 			double v_y = c.getEigvec3().y;
 			//
-			//StringBuilder sb = new StringBuilder();
-			JSONObject sb = new JSONObject();
-			// --- MOST RECENT DISTANCE ---
-			//sb.append("nowdistance=");
 			float latestDist = 0.0f;
 			float latestTime = Float.MIN_VALUE;
 			for (Point3f p : pointWindow) {
@@ -597,54 +656,60 @@ public class FusionIMURange   {
 					latestDist = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
 				}
 			}
+			sb.put("nowtime",String.format("%s",lastTime.plusNanos((long) latestTime)));
 			sb.put("nowdistance",Float.parseFloat(String.format("%3.3f", latestDist)));
 			// --- MIN DISTANCE ---
 			//sb.append(",mindistance=");
 			float minDist = Float.MAX_VALUE;
+			float maxDist = Float.MIN_VALUE;
+			float sumDist = 0.0f;
+			double minTime = Double.MAX_VALUE;
+			double maxTime = Double.MIN_VALUE;
+			double sumTime = 0.0f;
 			for (Point3f p : pointWindow) {
 				float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
 				if (d < minDist)
 					minDist = d;
-			}
-			sb.put("mindistance",Float.parseFloat(String.format("%3.3f", minDist)));
-			// --- MAX DISTANCE ---
-			//sb.append(",maxdistance=");
-			float maxDist = Float.MIN_VALUE;
-			for (Point3f p : pointWindow) {
-				float d = (float)Math.sqrt(p.x()*p.x() + p.y()*p.y());
 				if (d > maxDist)
 					maxDist = d;
+				if(p.t() < minTime)
+					minTime = p.t();
+				if(p.t() > maxTime)
+					maxTime = p.t();
+				sumDist += Math.sqrt(p.x()*p.x() + p.y()*p.y());
+				sumTime += p.t();
 			}
+			sb.put("mindistance",Float.parseFloat(String.format("%3.3f", minDist)));
 			sb.put("maxdistance",Float.parseFloat(String.format("%3.3f", maxDist)));
+			sb.put("mintime",String.format("%s",lastTime.plusNanos((long) minTime)));
+			sb.put("maxtime",String.format("%s",lastTime.plusNanos((long) maxTime)));
 			// --- AVERAGE DISTANCE ---
 			//sb.append(",avedistance=");
-			float sumDist = 0.0f;
-			for (Point3f p : pointWindow) {
-				sumDist += Math.sqrt(p.x()*p.x() + p.y()*p.y());
-			}
 			float avgDist = sumDist / pointWindow.size();
+			double avgTime = sumTime / pointWindow.size();
 			sb.put("avedistance",Float.parseFloat(String.format("%3.3f", avgDist)));
+			sb.put("avetime",String.format("%s", avgTime));
 			/*
-					sb.append(",confidence=");
-					sb.append(c.getConfidence());
-					sb.append(",noise_strength=");
-					sb.append(c.getVariance1());
-					sb.append(",jitter_strength=");
-					sb.append(c.getVariance2());
-					sb.append(",motion_strength=");
-					sb.append(c.getVariance3());
-					sb.append(",noise_axis_x=");
-					sb.append(c.getEigvec1().x);
-					sb.append(",noise_axis_y=");
-					sb.append(c.getEigvec1().y);
-					sb.append(",noise_axis_z=");
-					sb.append(c.getEigvec1().z);
-					sb.append(",jitter_axis_x=");
-					sb.append(c.getEigvec2().x);
-					sb.append(",jitter_axis_y=");
-					sb.append(c.getEigvec2().y);
-					sb.append(",jitter_axis_z=");
-					sb.append(c.getEigvec2().z);
+			sb.append(",confidence=");
+			sb.append(c.getConfidence());
+			sb.append(",noise_strength=");
+			sb.append(c.getVariance1());
+			sb.append(",jitter_strength=");
+			sb.append(c.getVariance2());
+			sb.append(",motion_strength=");
+			sb.append(c.getVariance3());
+			sb.append(",noise_axis_x=");
+			sb.append(c.getEigvec1().x);
+			sb.append(",noise_axis_y=");
+			sb.append(c.getEigvec1().y);
+			sb.append(",noise_axis_z=");
+			sb.append(c.getEigvec1().z);
+			sb.append(",jitter_axis_x=");
+			sb.append(c.getEigvec2().x);
+			sb.append(",jitter_axis_y=");
+			sb.append(c.getEigvec2().y);
+			sb.append(",jitter_axis_z=");
+			sb.append(c.getEigvec2().z);
 			 */
 			//sb.append(",motion_direction_x=");
 			sb.put("motion_direction_x",Float.parseFloat(String.format("%3.3f",c.getEigvec3().x)));
@@ -652,46 +717,50 @@ public class FusionIMURange   {
 			sb.put("motion_direction_y",Float.parseFloat(String.format("%3.3f",c.getEigvec3().y)));
 			//sb.append(",motion_direction_z=");
 			sb.put("motion_direction_z",Float.parseFloat(String.format("%3.3f",c.getEigvec3().z)));
-			double vwx_abs, vwy_abs;
+			//
 			// --- WORLD-FRAME MOTION COMPUTATION ---
 			// determine if any forward or lateral acceleration is taking place
-			double accel = Math.sqrt(accelX*accelX + accelY*accelY);
+			accel = Math.sqrt(accelX*accelX + accelY*accelY);
 			if(accel > MIN_ACCEL) {
-				EgoMotionCompensator.ImuSample imuSample = new EgoMotionCompensator.ImuSample(accelX, accelY, accelZ,
-						pitch*0.01745329, roll*0.01745329, compassHeadingDegrees);
-				EgoMotionCompensator.PcaMotion pcaMotion = new EgoMotionCompensator.PcaMotion(v_x, v_y, c.getVariance3()); //variance3 = motion_strength
-				EgoMotionCompensator.MotionSemantic motionSemantic = new EgoMotionCompensator().update(imuSample, pcaMotion);
-				motionSemantic.appendTo(sb);
-				vwx_abs = Math.abs(motionSemantic.worldVelX);
-				vwy_abs = Math.abs(motionSemantic.worldVelY);
-			} else {
-				double yaw = compassHeadingDegrees*0.01745329;
-				double cos = Math.cos(yaw);
-				double sin = Math.sin(yaw);
-				// world-frame direction (unit vector)
-				double vwx =  cos * v_x - sin * v_y;
-				double vwy =  sin * v_x + cos * v_y;
-				// absolute world-frame velocity (scaled by PCA speed)
-				double speed = Math.sqrt(c.getVariance3());
-				vwx_abs = Math.abs(vwx * speed);
-				vwy_abs = Math.abs(vwy * speed);
-				//sb.append(",world_direction_x=");
-				sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
-				//sb.append(",world_direction_y=");
-				sb.put(",world_direction_y",Float.parseFloat(String.format("%3.3f", vwy)));
-				//sb.append(",world_velocity_x=");
-				sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", vwx_abs)));
-				//sb.append(",world_velocity_y=");
-				sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
-			}	
-			//sb.append("\r\n");
-			if(DEBUG)
-				System.out.println("Window full - Accel:"+accel+" vwx_abs="+vwx_abs+" vwy_abs="+vwy_abs+" yaw="+imuDataPort.getYawRateDegPerSec()+sb.toString());
-			if(vwx_abs > 1e-8 && vwy_abs > MIN_MOTION_STRENGTH) {//MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH) {
-				dataQueue.addLast(sb.toString());
-				if(DEBUG || SHOWQUEUE)
-					System.out.println(">>> Queueing:"+sb.toString());
+				// 1) Gravity compensation (horizontal plane)
+				axCorrected = accelX - G * Math.sin(pitch*DEG2RAD);
+				ayCorrected = accelY + G * Math.sin(roll*DEG2RAD);
+				// 2) Integrate accel -> robot-frame velocity
+				v_x += axCorrected * (maxTime-minTime);
+				v_y += ayCorrected * (maxTime-minTime);
+				// Simple drift damping
+				v_x *= 0.98;
+				v_y *= 0.98;
 			}
+			sb.put("robot_acceleration_x",Float.parseFloat(String.format("%3.3f", axCorrected)));
+			//sb.append(",world_direction_y=");
+			sb.put("robot_acceleration_y",Float.parseFloat(String.format("%3.3f", ayCorrected)));
+			double yaw = compassHeadingDegrees*DEG2RAD;
+			double cos = Math.cos(yaw);
+			double sin = Math.sin(yaw);
+			// world-frame direction (unit vector)
+			double vwx =  cos * v_x - sin * v_y;
+			double vwy =  sin * v_x + cos * v_y;
+			// absolute world-frame velocity (scaled by PCA speed)
+			double speed = Math.sqrt(c.getVariance3());
+			vwx_abs = Math.abs(vwx * speed);
+			vwy_abs = Math.abs(vwy * speed);
+			//sb.append(",world_direction_x=");
+			sb.put("world_direction_x",Float.parseFloat(String.format("%3.3f", vwx)));
+			//sb.append(",world_direction_y=");
+			sb.put("world_direction_y",Float.parseFloat(String.format("%3.3f", vwy)));
+			//sb.append(",world_velocity_x=");
+			sb.put("world_velocity_x",Float.parseFloat(String.format("%3.3f", vwx_abs)));
+			//sb.append(",world_velocity_y=");
+			sb.put("world_velocity_y",Float.parseFloat(String.format("%3.3f", vwy_abs)));
+		}	
+		//sb.append("\r\n");
+		if(DEBUG)
+			System.out.println("Window full - Accel:"+accel+" vwx_abs="+vwx_abs+" vwy_abs="+vwy_abs+" yaw="+imuDataPort.getYawRateDegPerSec()+sb.toString());
+		if(vwx_abs > 1e-8 && vwy_abs > MIN_MOTION_STRENGTH) {//MIN_MOTION_STRENGTH || vwy_abs >= MIN_MOTION_STRENGTH) {
+			dataQueue.addLast(sb.toString());
+			if(DEBUG || SHOWQUEUE)
+				System.out.println(LocalDateTime.ofInstant(Instant.ofEpochMilli(System.currentTimeMillis()), ZoneId.systemDefault()).toString()+">>> Queueing:"+sb.toString());
 		}
 	}
 
@@ -974,6 +1043,246 @@ public class FusionIMURange   {
 				statusQueue.addLast(e.getMessage());
 				e.printStackTrace();
 			}
+		}
+	}
+	
+	class TimeRefresh implements Runnable, Notifier {
+		public volatile boolean shouldRun = true;
+		boolean isRunning = false;
+		@Override
+		public boolean isStarted() {
+			return isRunning;
+		}
+		@Override
+		public void run() {
+			isRunning = true;
+			while(shouldRun) {
+				try {
+					Thread.sleep(86400000);
+					lastTime = Instant.now();
+				} catch (Exception e) {
+					e.printStackTrace();
+					try {
+						Thread.sleep(200);
+					} catch (InterruptedException e2) {}
+				}
+			}
+		}
+	}
+	/**
+	 * Takes readings from the IMU DataPort, specified by the __IMUPORT:= command line param, and packages them for publication on the ROS bus.
+	 * Three messages will be published: sensor_msgs/range with the sensor_msgs.Imu class, sensor_msgs.Temperature
+	 * and sensor_msgs.MagneticField messages.
+	 * IMUSerialDataPort class is oriented toward the Bosch BNO055.
+	 * Option also exists for calibration mode, wherein a calibration kata must be performed until values reach their desired
+	 * levels, as set by the parameters SYSTEM_CAL, ACC_CAL, GYRO_CAL, MAG_CAL, and calibration file is written to the file
+	 * defined in IMUSerialDataPort. MAKE SURE TO DELETE FILE BEFORE CALIBRATION, as it is otherwise locked for update. 
+	 * Deleting file will reset CALIBRATION VALUES TO ZERO.. After successful calibration, IMU enters normal data publishing loop mode.
+	 * <p>
+	 * Ultrasonic range finder:
+	 * <p>
+	 * Use the jSerialComm or libgpio GPIO libraries to drive an ultrasonic range finder attached to 
+	 * the UART pins or the GPIO pins 2 and 3 on linux. <p>
+	 * The mode is controlled by the presence and value of command line parameter __URMPORT:= <p>
+	 * IF __URMPORT:= isnt specified, then Pin2 being the trigger and pin 3 being the resulting signal. <br>
+	 * In this case, to use the gpio library instead of a USB port YOU MUST RUN AS ROOT.
+	 * The trigger pulse goes high to low with a 10 microsecond wait.
+	 * There is a 2 second window where the result pin goes from low to high that we use as our interval
+	 * for sensing an object.
+	 * We use a 250 millisecond delay between trigger and result pin provisioning with trigger set to low and result pulled up.
+	 * From there we enter the loop to acquire the ranging checking for a 300cm maximum distance.
+	 * If we get something that fits these parameters we publish to the robocore/status bus. We can also shut down
+	 * publishing to the bus while remaining in the detection loop by sending a message to the alarm/shutdown topic.
+	 * Alternately, the URM37 uses a serial data protocol at 9600,8,N,1 {@link UltrasonicSerialDataPort}<p>
+	 * We are going to fuse with IMU yaw (compass heading) data to construct a sliding window upon which we will 
+	 * do PCA to produce condensed motion vectors.<p>
+	 * Starting with: <br>
+	 * x = sin(yaw*0.01745329)*dist <br>
+	 * y = cos(yaw*0.01745329)*dist <br>
+	 * We will form a sliding {@link Point3f} window of fused points x,y,time <br>
+	 * d_now = distance to closest object now<br>
+	 * d_avg = distance avg across time window<br>
+	 * d_min = distance min closest observed distance<br>
+	 * d_max = distance max farthest observed distance<br>
+	 * that add semantic content to the individual measurements. the result of PCA will be<p>
+	 * variance3 = dominant motion axis - motion strength <br>
+	 * variance2 = lateral jitter       <br>
+	 * variance1 = noise floor          <br>
+	 * <br>
+	 * eigenVector3 = principal motion direction - full 3D motion direction <br>
+	 * eigenVector2 = lateral jitter axis <br>
+	 * eigenvector1 = noise axis <br>
+	 * confidence = variance3 / (variance2 + variance1 + eps) - coherence of motion - high - coherent - low - noise<br>
+	 * scalar magnitude of motion along the principal axis = Math.sqrt(variance3) <br>
+	 * producing a data buffer of [d_now, d_avg, d_min, d_max, v_x, v_y, speed, jitter, noise, confidence]
+	 * v_x = The x component of the principal motion vector, derived from PCA on (x, y, t) Meaning:<br>
+	 * How much the object’s motion projects onto the robot’s forward axis.<br>
+	 * positive - object moving outward along the robot’s forward axis<br>
+	 * negative - object approaching<br>
+	 * magnitude - forward/backward motion strength<br>
+	 * This is not raw velocity, it’s the direction of motion in the robot’s local frame.<br>
+	 * v_y = The y component of the principal motion vector, again from PCA. Meaning:<br>
+	 * How much the object’s motion projects onto the robot’s lateral axis.<br>
+	 * positive - drifting to the robot’s left<br>
+	 * negative - drifting to the robot’s right<br>
+	 * magnitude - lateral motion strength<br>
+	 * This is incredibly useful for:<br>
+	 * tracking moving objects<br>
+	 * distinguishing straight in approach vs diagonal motion<br>
+	 * predicting future positions<br>
+	 * 
+	 * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2025
+	 */
+	public static class FusionPubs extends AbstractNodeMain {
+		private static boolean DEBUG = false;
+		private static final boolean SAMPLERATE = false; // display pubs per second
+		private String mode="";
+		public static FusionIMURange fusionIMU;
+
+		sensor_msgs.MagneticField magmsg = null;
+
+		long time1, startTime;
+		long time2;
+
+		static final String REMAP_URM_PORT = "__urmport";
+		static final String REMAP_IMU_PORT = "__imuport";
+		static final String REMAP_DEBUG = "__debug";
+		static final String REMAP_MODE = "__mode";
+		static final String REMAP_SYSTEM_CAL = "__system_cal";
+		static final String REMAP_ACC_CAL = "__acc_cal";
+		static final String REMAP_GYRO_CAL = "__gyro_cal";
+		static final String REMAP_MAG_CAL = "__mag_cal";
+		static final String REMAP_IMU_TOL = "__imu_tol";
+		static final String REMAP_IMU_FREQ = "__imu_freq";
+		int SYSTEM_CAL = 3; // system calibration
+		int ACC_CAL = 3; // accel calibration
+		int GYRO_CAL = 3; // gyro calibration
+		int MAG_CAL = 3; // magnetometer calibration
+		int IMU_TOL = 3; // number of decimal places of position readout
+		int IMU_FREQ = 1000; // Update frequency, to publish regardless if data is unchanged
+
+		boolean system_needs_calibrating = true; // if mode is calibration and its first time through
+		static final String REMAP_MODE_CALIBRATE="calibrate"; // REMAP_MODE value for calibration
+		boolean display_revision = true;
+		//-------------------------------------
+		protected CircularBlockingDeque<DiagnosticStatus> statusQueue = new CircularBlockingDeque<DiagnosticStatus>(2);
+
+		static String URMPort = "/dev/ttyS1"; //auto select, otherwise set to this from command line __URMPORT:=/dev/ttyxxx
+		static String IMUPort = "/dev/ttyUSB1";
+		//private Runnable readThread, pubThread;
+
+		public FusionPubs(String[] args) {
+			CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
+			NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
+			nodeMainExecutor.execute(this, cl.build());
+		}
+
+		public FusionPubs() {}
+
+		public GraphName getDefaultNodeName() {
+			return GraphName.of("pubs_fusion");
+		}
+
+		@Override
+		public void onStart(final ConnectedNode connectedNode) {
+			//final RosoutLogger log = (Log) connectedNode.getLog();
+			final Publisher<std_msgs.String> rangepub  = connectedNode.newPublisher("/sensor_msgs/range", std_msgs.String._TYPE);
+			final Publisher<diagnostic_msgs.DiagnosticStatus> statuspub =
+					connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+
+			connectedNode.executeCancellableLoop(new CancellableLoop() {
+				@Override
+				protected void setup() {
+					// check command line remappings for __mode:=calibrate
+					Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+					if( remaps.containsKey(REMAP_DEBUG) )
+						if(remaps.get(REMAP_DEBUG).equals("true")) {
+							DEBUG = true;
+							IMUSerialDataPort.DEBUG = true;
+						}
+					if( remaps.containsKey(REMAP_IMU_PORT) )
+						IMUPort = remaps.get(REMAP_IMU_PORT);// IMU UART port (USB or tty)
+					if( remaps.containsKey(REMAP_URM_PORT) ) {
+						URMPort = remaps.get(REMAP_URM_PORT);
+					}
+
+					fusionIMU = new FusionIMURange(IMUPort, URMPort);
+
+					if( remaps.containsKey(REMAP_MODE) )
+						mode = remaps.get(REMAP_MODE); // calibrate if this equals REMAP_MODE_CALIBRATE
+					if( remaps.containsKey(REMAP_SYSTEM_CAL) )
+						fusionIMU.SYSTEM_CAL = Integer.parseInt(remaps.get(REMAP_SYSTEM_CAL));// system calibration
+					if( remaps.containsKey(REMAP_ACC_CAL) )
+						fusionIMU.ACC_CAL = Integer.parseInt(remaps.get(REMAP_ACC_CAL)); // accel calibration
+					if( remaps.containsKey(REMAP_GYRO_CAL) )
+						fusionIMU.GYRO_CAL = Integer.parseInt(remaps.get(REMAP_GYRO_CAL)); // gyro calibration
+					if( remaps.containsKey(REMAP_MAG_CAL) )
+						fusionIMU.MAG_CAL = Integer.parseInt(remaps.get(REMAP_MAG_CAL));// magnetometer calibration
+					if( remaps.containsKey(REMAP_IMU_TOL) )
+						fusionIMU.IMU_TOL = Integer.parseInt(remaps.get(REMAP_IMU_TOL));// number of decimal places of position readout
+					if( remaps.containsKey(REMAP_IMU_FREQ) )
+						fusionIMU.IMU_FREQ = Integer.parseInt(remaps.get(REMAP_IMU_FREQ));// number of milliseconds between maximum publication times (should data remain constant)
+					//SynchronizedThreadManager.getInstance().init(new String[]{"SYSTEM"});
+					//pubThread = () -> {
+					//	while(true) {
+					//		std_msgs.String ps = rangepub.newMessage();
+					//		try {
+					//			ps.setData(pubdata.take());
+					//		} catch (InterruptedException e) {
+					//			return;
+					//		}
+					//		rangepub.publish(ps);
+					//	}
+					//};
+					//SynchronizedThreadManager.getInstance().spin(pubThread, "SYSTEM");
+				}
+
+				@Override
+				protected void loop() throws InterruptedException {
+					if(DEBUG)
+						System.out.println("<<< Enter publishing loop >>>");
+					// Publish status to message bus, then, begin calibration if necessary
+					// with prompts and status to status bus
+					ArrayList<String> stats = new ArrayList<String>();
+					/*String stat = fusionIMU.statusQueue.poll();
+					if(stat != null) {
+						do {
+							stats.add(stat);
+							stat = fusionIMU.statusQueue.poll();
+							if(DEBUG)
+								System.out.println("adding status:"+stat);
+						} while(stat != null);
+					}
+					if(!stats.isEmpty()) {
+						if(DEBUG)
+							System.out.println("Publishing response queue:"+stats.size()+" "+statusQueue.size());
+						new PublishDiagnosticResponse(connectedNode, statuspub, statusQueue , "robocore/status", 
+								diagnostic_msgs.DiagnosticStatus.OK, stats);
+						if(DEBUG)
+							System.out.println("Published response queue:"+stats.size()+" "+statusQueue.size());
+					}*/
+					//
+					// Begin IMU message processing
+					//
+					String data = fusionIMU.dataQueue.poll();
+					if(data != null) {
+						if(DEBUG)
+							System.out.println("Publishing data queue:"+fusionIMU.dataQueue.length());
+						std_msgs.String sPub = new std_msgs.String();
+						sPub.setData(data);
+						rangepub.publish(sPub);
+						if(DEBUG)
+							System.out.println("Published data queue:"+fusionIMU.dataQueue.length());
+					} else {
+						Thread.sleep(20);
+					}
+					if(DEBUG)
+						if(fusionIMU.dataQueue.isEmpty())
+							System.out.println("empty");
+						else
+							System.out.println("queue size="+fusionIMU.dataQueue.length());
+				}
+			});
 		}
 	}
 

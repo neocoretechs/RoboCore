@@ -145,7 +145,7 @@ public class ComputeVariance {
 		variance1 = eigenvalues_vector[min_index];
 		variance2 = eigenvalues_vector[middle_index];
 		variance3 = eigenvalues_vector[max_index];
-		if( DEBUG) {
+		if(DEBUG) {
 			System.out.println(this.getClass().getName()+" least_variance_direction...variance1="+variance1+" variance2="+variance2+" variance3="+variance3);
 		}
 		Matrix3 eigenvectors_matrix = eigenvalue_decomp.getV();

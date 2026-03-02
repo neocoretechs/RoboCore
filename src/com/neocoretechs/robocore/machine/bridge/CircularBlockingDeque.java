@@ -38,7 +38,7 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
   private int start;
 
   /**
-   * The number of entries in the queue.
+   * The number of entries currently in the queue.
    */
   private int length;
 
@@ -256,7 +256,10 @@ public class CircularBlockingDeque<T> implements BlockingQueue<T>, Iterable<T>, 
   public boolean isEmpty() {
     return length == 0;
   }
-
+  /**
+   * The number of elements currently in the queue.
+   * @return Number of elements currently in the queue
+   */
   public int length() {
 	    return length;
   }
