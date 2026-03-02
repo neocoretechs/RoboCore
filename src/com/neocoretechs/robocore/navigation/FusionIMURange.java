@@ -155,7 +155,7 @@ public class FusionIMURange   {
 	private static final int PULSE_DELAY = 2000;        // #2 us pulse = 2,000 ns
 	private static final int PULSE = 10000;        // #10 us pulse = 10,000 ns
 	private static final int SPEEDOFSOUND = 34029; // Speed of sound = 34029 cm/s
-	private static final double MAX_RANGE = 4000; // 400 cm max range
+	private static final double MIN_DIST_DELTA = 5; // cm min distance between point readings
 	private static final int REJECTION_START = 1000;
 	private static final double MIN_MOTION_STRENGTH = .2;
 	private static final double MIN_ACCEL = .9;
@@ -606,13 +606,23 @@ public class FusionIMURange   {
 	 *   <li>An LLM can now reason about true world-frame motion</li>
 	 * </ul>
 	 *
-	 * @param eulers
-	 * @param distance
+	 * @param eulers The most recent IMU packet
+	 * @param distance The most recent distance measure
 	 */
 	private void queueResponse(EulerTime eulers, double distance) {
-		if( DEBUG ) {
-			System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-previousDistance)) +" cm");
+		double last_distance = 0;
+		if(last_distance == 0 || Math.abs(distance - last_distance) <= MIN_DIST_DELTA) {
+			last_distance = distance;
+			if( DEBUG ) {
+				System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-lastDistance)) +" cm");
+			}
+			return;
 		}
+		last_distance = distance;
+		if( DEBUG ) {
+			System.out.println("RangeFinder result ="+distance);//(Math.abs(distance-lastDistance)) +" cm");
+		}
+		
 		double pitch, roll, compassHeadingDegrees, accelX, accelY, accelZ;
 		synchronized(eulers.ImuMessage) {
 			//int lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
@@ -874,7 +884,6 @@ public class FusionIMURange   {
 	class UltraRead implements Runnable, Notifier {
 		public volatile boolean shouldRun = true;
 		boolean isRunning = false;
-		double lastDistance = 0;
 		@Override
 		public boolean isStarted() {
 			return isRunning;
