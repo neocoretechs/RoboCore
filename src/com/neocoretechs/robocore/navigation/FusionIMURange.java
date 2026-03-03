@@ -8,6 +8,8 @@ import java.time.ZoneId;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 import org.json.JSONObject;
@@ -18,6 +20,7 @@ import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
+import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
 
@@ -1201,8 +1204,8 @@ public class FusionIMURange   {
 		public void onStart(final ConnectedNode connectedNode) {
 			//final RosoutLogger log = (Log) connectedNode.getLog();
 			final Publisher<std_msgs.String> rangepub  = connectedNode.newPublisher("/sensor_msgs/range", std_msgs.String._TYPE);
-			final Publisher<diagnostic_msgs.DiagnosticStatus> statuspub =
-					connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+			//final Publisher<diagnostic_msgs.DiagnosticStatus> statuspub =
+			//		connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 
 			connectedNode.executeCancellableLoop(new CancellableLoop() {
 				@Override
@@ -1219,8 +1222,11 @@ public class FusionIMURange   {
 					if( remaps.containsKey(REMAP_URM_PORT) ) {
 						URMPort = remaps.get(REMAP_URM_PORT);
 					}
-
+					
+					// start the primary data generator
 					fusionIMU = new FusionIMURange(IMUPort, URMPort);
+					// start the status publisher
+					new IMUStatusPubs(connectedNode, fusionIMU);
 
 					if( remaps.containsKey(REMAP_MODE) )
 						mode = remaps.get(REMAP_MODE); // calibrate if this equals REMAP_MODE_CALIBRATE
@@ -1255,26 +1261,6 @@ public class FusionIMURange   {
 				protected void loop() throws InterruptedException {
 					if(DEBUG)
 						System.out.println("<<< Enter publishing loop >>>");
-					// Publish status to message bus, then, begin calibration if necessary
-					// with prompts and status to status bus
-					ArrayList<String> stats = new ArrayList<String>();
-					/*String stat = fusionIMU.statusQueue.poll();
-					if(stat != null) {
-						do {
-							stats.add(stat);
-							stat = fusionIMU.statusQueue.poll();
-							if(DEBUG)
-								System.out.println("adding status:"+stat);
-						} while(stat != null);
-					}
-					if(!stats.isEmpty()) {
-						if(DEBUG)
-							System.out.println("Publishing response queue:"+stats.size()+" "+statusQueue.size());
-						new PublishDiagnosticResponse(connectedNode, statuspub, statusQueue , "robocore/status", 
-								diagnostic_msgs.DiagnosticStatus.OK, stats);
-						if(DEBUG)
-							System.out.println("Published response queue:"+stats.size()+" "+statusQueue.size());
-					}*/
 					//
 					// Begin IMU message processing
 					//
@@ -1295,6 +1281,80 @@ public class FusionIMURange   {
 							System.out.println("empty");
 						else
 							System.out.println("queue size="+fusionIMU.dataQueue.length());
+				}
+			});
+		}
+	}
+	/**
+	 * Publish status using the command line from the connected FusionPubs node after its constructed.
+	 * Spin up a new ComandLineLoader and NodeMainExecutor
+	 */
+	public static class IMUStatusPubs extends AbstractNodeMain {
+		private static boolean DEBUG = false;
+		private static final boolean SAMPLERATE = false; // display pubs per second
+		public static FusionIMURange fusionIMU;
+		Map<String, String> remaps;
+		CircularBlockingDeque<DiagnosticStatus> diags = new CircularBlockingDeque<DiagnosticStatus>(20);
+		//-------------------------------------
+		public IMUStatusPubs(ConnectedNode connectedNode, FusionIMURange fusionIMURange) {
+			fusionIMU = fusionIMURange;
+			NodeConfiguration nc = connectedNode.getNodeConfiguration();
+			CommandLineLoader cl0 = nc.getCommandLineLoader();
+			this.remaps = cl0.getSpecialRemappings();
+			List<String> mainNodeArgs = cl0.getNodeArguments();
+			CommandLineLoader cl = new CommandLineLoader(mainNodeArgs);
+			NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
+			nodeMainExecutor.execute(this, cl.build());
+		}
+
+		public IMUStatusPubs() {}
+
+		public GraphName getDefaultNodeName() {
+			return GraphName.of("pubs_imustatus");
+		}
+
+		@Override
+		public void onStart(final ConnectedNode connectedNode) {
+			//final RosoutLogger log = (Log) connectedNode.getLog();
+			final Publisher<diagnostic_msgs.DiagnosticStatus> statuspub =
+					connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
+
+			connectedNode.executeCancellableLoop(new CancellableLoop() {
+				@Override
+				protected void setup() {
+					// check command line remappings for __mode:=calibrate				
+					if( remaps.containsKey(REMAP_DEBUG) )
+						if(remaps.get(REMAP_DEBUG).equals("true")) {
+							DEBUG = true;
+						}
+				}
+
+				@Override
+				protected void loop() throws InterruptedException {
+					if(DEBUG)
+						System.out.println("<<< Enter publishing loop >>>");
+					// Publish status to message bus, then, begin calibration if necessary
+					// with prompts and status to status bus
+					ArrayList<String> stats = new ArrayList<String>();
+					String stat = fusionIMU.statusQueue.poll();
+					if(stat != null) {
+						do {
+							stats.add(stat);
+							stat = fusionIMU.statusQueue.poll();
+							if(DEBUG)
+								System.out.println("adding status:"+stat);
+						} while(stat != null);
+					}
+					if(!stats.isEmpty()) {
+						if(DEBUG)
+							System.out.println("Publishing response queue:"+stats.size()+" residual:"+fusionIMU.statusQueue.size());
+						new PublishDiagnosticResponse(connectedNode, statuspub, diags, "robocore/status", 
+								diagnostic_msgs.DiagnosticStatus.OK, (Collection<String>)stats);
+						if(DEBUG)
+							System.out.println("Published response queue:"+stats.size());
+					} else {
+						Thread.sleep(200);
+					}
 				}
 			});
 		}
