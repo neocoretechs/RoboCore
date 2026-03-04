@@ -252,6 +252,7 @@ public class MotionController extends AbstractNodeMain {
 	Collection<DeviceEntry> deviceEntries;
 	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
 	boolean[] isActive;
+	private boolean SOFTSTOP = false;
 
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -315,6 +316,9 @@ public class MotionController extends AbstractNodeMain {
 			SPEEDSCALE = 1000.0f;
 		if( remaps.containsKey("__speedscale") )
 			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
+		// see if we are implementing software dead-man protocol True or False
+		if( remaps.containsKey("__softstop") )
+			SOFTSTOP  = Boolean.parseBoolean(remaps.get("__softstop"));
 
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -484,7 +488,7 @@ public class MotionController extends AbstractNodeMain {
 					@Override
 					public void onNewMessage(trajectory_msgs.ComeToHeadingStamped message) {
 						try {
-							publishRobotMoveRelative(connectedNode, pubschannel, message);
+							publishRobotMoveRelative(connectedNode, pubschannel, twistpub, twistmsg, message);
 						} catch (IOException e) {
 							ArrayList<String> st = new ArrayList<String>();
 							st.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
@@ -932,24 +936,12 @@ public class MotionController extends AbstractNodeMain {
 		}
 		float[] axes = message.getAxes();
 		int[] buttons = message.getButtons();
-		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
-		//final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);
 		// check for emergency stop, on X or A or green or lower button
 		if( buttons[6] != 0 ) {
-			if(DEBUG)
-				System.out.println("**EMERGENCY STOP **");
-			angular.setX(-1);
-			angular.setY(-1);
-			angular.setZ(-1);
-			linear.setX(-1);
-			linear.setY(-1);
-			linear.setZ(-1);
-			twistmsg.setAngular(angular);
-			twistmsg.setLinear(linear);
-			twistpub.publish(twistmsg);
+			softStop(connectedNode, twistpub, twistmsg);
 			return;
 		}
+		//final geometry_msgs.Quaternion orientation =  connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Quaternion._TYPE);	
 		// Process the affectors and peripherals before the motion controls, this is mainly due to some of the logic
 		// In motion control returning from this method rather than try to implement more complex decision making.
 		// See if the triggers were activated. Axes[4] and axes[5] are the left and right triggers.
@@ -969,7 +961,7 @@ public class MotionController extends AbstractNodeMain {
 			speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 			speedL = -speedR;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 			// set it up to send
-			publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
+			publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
 			if(DEBUG)
 				System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 			return;
@@ -978,7 +970,7 @@ public class MotionController extends AbstractNodeMain {
 				speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 				speedR = -speedL;
 				// set it up to send
-				publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
+				publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
 				if(DEBUG)
 					System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 				return;
@@ -1129,10 +1121,31 @@ public class MotionController extends AbstractNodeMain {
 			}
 		}
 
-		publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
+		publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
 
 		publishPeripheral(connectedNode, pubschannel, axes);
 
+	}
+	/**
+	 * Perform software stop by sending message on twist topic with null values for linear and angular
+	 * @param connectedNode
+	 * @param twistpub
+	 * @param twistmsg
+	 */
+	public void softStop(ConnectedNode connectedNode, Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg) {
+		final geometry_msgs.Vector3 angular = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		final geometry_msgs.Vector3 linear = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+		if(DEBUG)
+			System.out.println("**EMERGENCY STOP **");
+		angular.setX(-1);
+		angular.setY(-1);
+		angular.setZ(-1);
+		linear.setX(-1);
+		linear.setY(-1);
+		linear.setZ(-1);
+		twistmsg.setAngular(angular);
+		twistmsg.setLinear(linear);
+		twistpub.publish(twistmsg);
 	}
 	/**
 	 * If slope is negative and coordinate is neg acceleration in reverse
@@ -1321,11 +1334,17 @@ public class MotionController extends AbstractNodeMain {
 	}
 
 	/**
-	 * Send the motor speed values down the wheel channels
-	 * @param connectedNode
-	 * @param pubschannel
+	 * Send the motor speed values down the wheel channels. If our <b>SOFTSTOP</b> field is true
+	 * the issue a soft stop message immediately after the propulsion for dead-man safety.
+	 * @param connectedNode The connectedNode
+	 * @param pubschannel the channel hash map from which the wheel channels are extracted via configuration params. e.g. "LeftWheel", "RightWheel"
+	 * @param twistpub the Twist publication channel to send potential emergency stop or soft stop
+	 * @param twistmsg a pre-built twist message to populate with stop params
+	 * @param leftSpeed the integral speed value -1000 to 1000
+	 * @param rightSpeed the right wheel speed value -1000 to 1000
 	 */
-	private void publishPropulsion(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, int leftSpeed, int rightSpeed) {
+	private void publishPropulsion(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, 
+			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) {
 		ArrayList<Integer> speedVals = new ArrayList<Integer>();
 		speedVals.add(leftSpeed);
 		pubschannel.get("LeftWheel").publish(setupPub(connectedNode, speedVals));
@@ -1338,6 +1357,9 @@ public class MotionController extends AbstractNodeMain {
 		try {
 			Thread.sleep(1);
 		} catch (InterruptedException e) {}
+		if(SOFTSTOP) {
+			softStop(connectedNode, twistpub, twistmsg);
+		}
 	}
 	/**
 	 * Send the motor speed values down the wheel channels
@@ -1578,7 +1600,8 @@ public class MotionController extends AbstractNodeMain {
 				(int) robot.getRightSpeedSetpointInfo().getTarget()};
 	}
 
-	private void publishRobotMoveRelative(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, ComeToHeadingStamped heading) throws IOException {
+	private void publishRobotMoveRelative(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, 
+			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, ComeToHeadingStamped heading) throws IOException {
 		int[] speeds = null;
 		synchronized(euler) {
 			if((System.currentTimeMillis()-euler.eulerTime) > (System.currentTimeMillis()-heading.getTime().getData())) {
@@ -1589,7 +1612,7 @@ public class MotionController extends AbstractNodeMain {
 		}
 		speedL = speeds[0];
 		speedR = speeds[1];
-		publishPropulsion(connectedNode, pubschannel, (int)speedL, (int)speedR);
+		publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
 	}
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 

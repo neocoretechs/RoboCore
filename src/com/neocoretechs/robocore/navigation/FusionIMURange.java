@@ -23,6 +23,7 @@ import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.topic.Publisher;
+import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.robocore.GpioNative;
 import com.neocoretechs.robocore.SynchronizedThreadManager;
@@ -474,13 +475,14 @@ public class FusionIMURange   {
 			temp_changed = true;
 		}
 		// heartbeat
-		int lastIMUTime;
-		synchronized(eulers.ImuMessage) {
-			lastIMUTime = Time.fromMillis(System.currentTimeMillis()).subtract(eulers.ImuMessage.getHeader().getStamp()).secs;
+		double lastIMUTimeSec;
+		synchronized (eulers.ImuMessage) {
+		    Instant imuStamp = toInstant(eulers.ImuMessage.getHeader().getStamp());
+		    lastIMUTimeSec = Duration.between(imuStamp, Instant.now()).toNanos() / 1_000_000_000.0;
 		}
-		if(lastIMUTime > STALE_READING_SECONDS) {
+		if(lastIMUTimeSec > STALE_READING_SECONDS) {
 			if(DEBUG)
-				System.out.println("Data changed last IMU reading as its "+lastIMUTime+" seconds old.");
+				System.out.println("Data changed last IMU reading as its "+lastIMUTimeSec+" seconds old.");
 			timed_out = true;
 			dataChanged = true;
 			acc_changed = true;
@@ -489,12 +491,17 @@ public class FusionIMURange   {
 			imu_changed = true;
 			temp_changed = true;
 		}
-		//if(dataChanged)
-		//	System.out.printf("%s timeout=%b acc=%b gyro=%b mag=%b imu=%b temp=%b%n",
-		//			this.getClass().getName(),timed_out,acc_changed,gyro_changed,mag_changed,imu_changed,temp_changed);
+		if(dataChanged) {
+			if(DEBUG)
+				System.out.printf("%s timeout=%b acc=%b gyro=%b mag=%b imu=%b temp=%b%n",
+					this.getClass().getName(),timed_out,acc_changed,gyro_changed,mag_changed,imu_changed,temp_changed);
+		}
 		return dataChanged;
 	}
-
+	
+	public static Instant toInstant(org.ros.message.Time t) {
+	    return Instant.ofEpochSecond(t.secs, t.nsecs);
+	}
 	/**
 	 * 
 	 * Trigger the Range Finder and return the result
@@ -1155,7 +1162,7 @@ public class FusionIMURange   {
 		private static final boolean SAMPLERATE = false; // display pubs per second
 		private String mode="";
 		public static FusionIMURange fusionIMU;
-
+		public static RawIMUPubs rawIMUPubs;
 		sensor_msgs.MagneticField magmsg = null;
 
 		long time1, startTime;
@@ -1186,7 +1193,6 @@ public class FusionIMURange   {
 
 		static String URMPort = "/dev/ttyS1"; //auto select, otherwise set to this from command line __URMPORT:=/dev/ttyxxx
 		static String IMUPort = "/dev/ttyUSB1";
-		//private Runnable readThread, pubThread;
 
 		public FusionPubs(String[] args) {
 			CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -1204,8 +1210,6 @@ public class FusionIMURange   {
 		public void onStart(final ConnectedNode connectedNode) {
 			//final RosoutLogger log = (Log) connectedNode.getLog();
 			final Publisher<std_msgs.String> rangepub  = connectedNode.newPublisher("/sensor_msgs/range", std_msgs.String._TYPE);
-			//final Publisher<diagnostic_msgs.DiagnosticStatus> statuspub =
-			//		connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 
 			connectedNode.executeCancellableLoop(new CancellableLoop() {
 				@Override
@@ -1227,6 +1231,7 @@ public class FusionIMURange   {
 					fusionIMU = new FusionIMURange(IMUPort, URMPort);
 					// start the status publisher
 					new IMUStatusPubs(connectedNode, fusionIMU);
+					rawIMUPubs = new RawIMUPubs(connectedNode, fusionIMU);
 
 					if( remaps.containsKey(REMAP_MODE) )
 						mode = remaps.get(REMAP_MODE); // calibrate if this equals REMAP_MODE_CALIBRATE
@@ -1264,6 +1269,15 @@ public class FusionIMURange   {
 					//
 					// Begin IMU message processing
 					//
+					EulerTime et = fusionIMU.eulerdata.peekLast();
+					if(et != null) {
+						synchronized(et.ImuMessage) {
+							rawIMUPubs.imus.addLast(et.ImuMessage);
+						}
+					}
+					try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {}
 					String data = fusionIMU.dataQueue.poll();
 					if(data != null) {
 						if(DEBUG)
@@ -1335,15 +1349,7 @@ public class FusionIMURange   {
 					// Publish status to message bus, then, begin calibration if necessary
 					// with prompts and status to status bus
 					ArrayList<String> stats = new ArrayList<String>();
-					String stat = fusionIMU.statusQueue.poll();
-					if(stat != null) {
-						do {
-							stats.add(stat);
-							stat = fusionIMU.statusQueue.poll();
-							if(DEBUG)
-								System.out.println("adding status:"+stat);
-						} while(stat != null);
-					}
+					fusionIMU.statusQueue.drainTo(stats);
 					if(!stats.isEmpty()) {
 						if(DEBUG)
 							System.out.println("Publishing response queue:"+stats.size()+" residual:"+fusionIMU.statusQueue.size());
@@ -1358,5 +1364,58 @@ public class FusionIMURange   {
 			});
 		}
 	}
+	/**
+	 * Publish the raw IMU data to the MotionController or whomever else needs it
+	 */
+	public static class RawIMUPubs extends AbstractNodeMain {
+		private static boolean DEBUG = false;
+		private static final boolean SAMPLERATE = false; // display pubs per second
+		public static FusionIMURange fusionIMU;
+		Map<String, String> remaps;
+		public CircularBlockingDeque<sensor_msgs.Imu> imus = new CircularBlockingDeque<sensor_msgs.Imu>(20);
+		//-------------------------------------
+		public RawIMUPubs(ConnectedNode connectedNode, FusionIMURange fusionIMURange) {
+			fusionIMU = fusionIMURange;
+			NodeConfiguration nc = connectedNode.getNodeConfiguration();
+			CommandLineLoader cl0 = nc.getCommandLineLoader();
+			remaps = cl0.getSpecialRemappings();
+			CommandLineLoader cl = new CommandLineLoader(cl0, this.getClass().getName());
+			NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
+			nodeMainExecutor.execute(this, cl.build());
+		}
 
+		public RawIMUPubs() {}
+
+		public GraphName getDefaultNodeName() {
+			return GraphName.of("pubs_imuraw");
+		}
+
+		@Override
+		public void onStart(final ConnectedNode connectedNode) {
+			//final RosoutLogger log = (Log) connectedNode.getLog();
+			final Publisher<sensor_msgs.Imu> pubsimu = connectedNode.newPublisher("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
+
+			connectedNode.executeCancellableLoop(new CancellableLoop() {
+				@Override
+				protected void setup() {
+					// check special command line remappings 				
+					if( remaps.containsKey(REMAP_DEBUG) )
+						if(remaps.get(REMAP_DEBUG).equals("true")) {
+							DEBUG = true;
+						}
+				}
+
+				@Override
+				protected void loop() throws InterruptedException {
+					if(DEBUG)
+						System.out.println("<<< Enter publishing loop >>>");
+					// Publish IMU to message bus
+					sensor_msgs.Imu imuMessage = imus.take();
+					if(DEBUG)
+						System.out.println("Publishing queue:"+imus.size());
+					pubsimu.publish(imuMessage);
+				}
+			});
+		}
+	}
 }
