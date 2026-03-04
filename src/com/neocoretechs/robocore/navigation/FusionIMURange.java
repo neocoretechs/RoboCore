@@ -1300,9 +1300,8 @@ public class FusionIMURange   {
 			fusionIMU = fusionIMURange;
 			NodeConfiguration nc = connectedNode.getNodeConfiguration();
 			CommandLineLoader cl0 = nc.getCommandLineLoader();
-			this.remaps = cl0.getSpecialRemappings();
-			List<String> mainNodeArgs = cl0.getNodeArguments();
-			CommandLineLoader cl = new CommandLineLoader(mainNodeArgs);
+			remaps = cl0.getSpecialRemappings();
+			CommandLineLoader cl = new CommandLineLoader(cl0, this.getClass().getName());
 			NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
 			nodeMainExecutor.execute(this, cl.build());
 		}
@@ -1322,7 +1321,7 @@ public class FusionIMURange   {
 			connectedNode.executeCancellableLoop(new CancellableLoop() {
 				@Override
 				protected void setup() {
-					// check command line remappings for __mode:=calibrate				
+					// check special command line remappings 				
 					if( remaps.containsKey(REMAP_DEBUG) )
 						if(remaps.get(REMAP_DEBUG).equals("true")) {
 							DEBUG = true;
