@@ -980,7 +980,7 @@ public class MotionController extends AbstractNodeMain {
 		float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[robot.getDiffDrive().getControllerAxisX()]);
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 
-		// horizontal axis is 0 to -180/180 degrees, we want 0 at the top
+		// horizontal axis is 0 to -180/180 degrees, we want 0 at the top 
 		//         -90
 		//          |
 		//-180/180 --- 0

@@ -30,11 +30,12 @@ import javax.swing.Action;
 import org.apache.commons.logging.Log;
 import org.ros.Topics;
 import org.ros.concurrent.CancellableLoop;
-import org.ros.internal.node.server.SynchronizedThreadManager;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
+import org.ros.node.Node;
+import org.ros.node.NodeListener;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
@@ -45,78 +46,62 @@ import std_msgs.Time;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  *
  */
-public class ChatTexter extends AbstractNodeMain  {
-	private boolean DEBUG = true;
-	public static final String SYSTEM_PROMPT = "/system_prompt";
-	public static final String USER_PROMPT = "/user_prompt";
-	public static final String ASSIST_PROMPT = "/assist_prompt";
-	public static final String LLM = "/model";
-	CountDownLatch latch = new CountDownLatch(1);
-    String inputArea = null;
- 
-    Object mutex = new Object();
-    boolean pasting = false;
-	Scanner in = null;
-    
-	@Override
-	public GraphName getDefaultNodeName() {
-		return GraphName.of("chattest");
-	}
+public class ChatTexter extends AbstractNodeMain {
 
-	/**
-	 *
-	 */
-	@Override
-	public void onStart(final ConnectedNode connectedNode) {
+    private static final String USER_PROMPT = "/user_prompt";
+    private static final String LLM = "/model";
 
-		//final Log log = connectedNode.getLog();
-		final Publisher<std_msgs.String> chatpub =
-				connectedNode.newPublisher(USER_PROMPT, std_msgs.String._TYPE);
-		Subscriber<std_msgs.String> subschat = connectedNode.newSubscriber(LLM, std_msgs.String._TYPE);
-		in = new Scanner(System.in);
-		SynchronizedThreadManager.getInstance().spin(new Runnable() {
-		    public void run() {
-		    	while(true) {
-		    	System.out.println();
-				System.out.print(">");
-				inputArea = in.nextLine();  // Read user input
-		        if (!inputArea.isEmpty()) {
-		                latch.countDown();
-		        }
-		    	}
-		    }
-		});
+    private volatile boolean running = true;
 
-		subschat.addMessageListener(new MessageListener<std_msgs.String>() {
-			@Override
-			public void onNewMessage(std_msgs.String message) {
-				System.out.println( message.getData());
+    @Override
+    public GraphName getDefaultNodeName() {
+        return GraphName.of("chattest");
+    }
+
+    @Override
+    public void onStart(final ConnectedNode connectedNode) {
+
+        final Publisher<std_msgs.String> chatpub =
+                connectedNode.newPublisher(USER_PROMPT, std_msgs.String._TYPE);
+
+        connectedNode.newSubscriber(LLM, std_msgs.String._TYPE)
+                .addMessageListener(msg -> {
+                    System.out.println();
+                    System.out.println(((std_msgs.String) msg).getData());
+                });
+
+        Thread inputThread = new Thread(() -> {
+            try (Scanner in = new Scanner(System.in)) {
+				while (running && in.hasNextLine()) {
+				    System.out.print(">");
+				    String line = in.nextLine().trim();
+				    if (!line.isEmpty()) {
+				        std_msgs.String sm = chatpub.newMessage();
+				        sm.setData(line);
+				        chatpub.publish(sm);
+				    }
+				}
 			}
-		});
-		
-	/**
-	 * Main publishing loop. Essentially we are publishing the data in whatever state its in, using the
-	 * mutex appropriate to establish critical sections. A sleep follows each publication to keep the bus arbitrated
-	 * This CancellableLoop will be canceled automatically when the node shuts down
-	 */
-	connectedNode.executeCancellableLoop(new CancellableLoop() {
-		private int sequenceNumber;
-		
-		@Override
-		protected void setup() {
-			sequenceNumber = 0;
-		}
+        });
 
-		@Override
-		protected void loop() throws InterruptedException {
-			++sequenceNumber;
-			latch.await();
-			std_msgs.String sm = chatpub.newMessage();
-			sm.setData(inputArea.trim());
-			chatpub.publish(sm);
-			latch = new CountDownLatch(1);
-		}
-	});
-	}
-	
+        inputThread.setDaemon(true);
+        inputThread.start();
+
+        connectedNode.addListener(new NodeListener() {
+			@Override
+			public void onError(Node arg0, Throwable arg1) {	
+				running = false;
+			}
+			@Override
+			public void onShutdown(Node arg0) {
+				running = false;	
+			}
+			@Override
+			public void onShutdownComplete(Node arg0) {		
+			}
+			@Override
+			public void onStart(ConnectedNode arg0) {
+			}
+        });
+    }
 }
