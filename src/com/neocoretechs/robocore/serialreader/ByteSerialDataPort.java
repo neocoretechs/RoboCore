@@ -9,11 +9,13 @@ import java.util.ArrayList;
 import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 /**
- * Class that interfaces with the serial data port on the SBC. It uses GNU io RXTX
- * to effect transmission and reception. Two asynchronous threads run; one for transmit, one for receive.<p/>
+ * Class that interfaces with the serial data port on the SBC. It uses linux userspace drivers such as jSerialComm
+ * to effect transmission and reception. Two asynchronous threads run; one for transmit, one for receive.<p>
  * After creating the port with proper parameters such as baud rate, parity, data and stop bits, call
- * the connect method to begin communication.<p/>
- * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
+ * the connect method to begin communication.<p>
+ * @see com.fazecast.jSerialComm.SerialPort
+ * @see DataPortCommandInterface
+ * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2026
  */
 public class ByteSerialDataPort implements DataPortCommandInterface {
 	private static boolean DEBUG = false;
@@ -25,8 +27,8 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	// serial settings
 	//Port=/dev/ttyACM0
 	//PortSettings=115200,n,8,1
-	//private String portName = "/dev/ttyACM0";
-	private static String portName = "/dev/ttyS1";
+	private String portName = "/dev/ttyACM0";
+	//private static String portName = "/dev/ttyS1";
 	private int baud = 115200;
 	private int datab = 8;
 	private int stopb = 1;

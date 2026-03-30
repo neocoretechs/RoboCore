@@ -6,17 +6,17 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 
 /**
 * SwitchHBridgeDriver:
-* A motor driver that uses straight GPIO switching rather than PWM, for an on/off drive motor setup.<p/>
+* A motor driver that uses straight GPIO switching rather than PWM, for an on/off drive motor setup.<p>
 * The SwitchHBridgeDriver extends and differs from the SwitchBridgeDriver in that it uses one direction pin and one signal
-* pin vs the 2 half bridge orientation of {@link SwitchBridgeDriver} that takes an enable pin and 2 signal pins 9one for each half bridge)<p/>
-* Structure:<p/>
-* 1) Top level, a master list of pins in the digitals array. Slots to which physical pins are assigned.<p/>
+* pin vs the 2 half bridge orientation of {@link SwitchBridgeDriver} that takes an enable pin and 2 signal pins one for each half bridge)<p>
+* Structure:<pre>
+* 1) Top level, a master list of pins in the digitals array. Slots to which physical pins are assigned.<p>
 * 2) In each class and subclass, a sublist of pins. Multidimensional array which holds the index to the top level pins.
-* these are indexed by channel.<p/>
-* 3) A GPIO pin list indexed by channel. The level value is either a high or low for on or off.<p/>
+* these are indexed by channel.<p>
+* 3) A GPIO pin list indexed by channel. The level value is either a high or low for on or off.<p>
 * 4) Optionally, a duration. The duration represents a maximum interval before the GPIO pin
 * is automatically shut down. In this case, the hall effect interrupts that are serviced by an interrupt handler that detect wheel rotation.
-* the top level abstract class AbstractMotorControl contains these values.<p/>
+* the top level abstract class AbstractMotorControl contains these values.</pre>
 * Created: 10/20/2020 1:39:44 PM
 * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
 *

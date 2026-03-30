@@ -6,10 +6,12 @@ import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
  * List of unique devices from RoboCore.properties. Assembled into collection in {@link MarlinspikeManager}<p>
  * Contains the LUN, the name entry in properties configuration file, such as "LeftWheel", the NodeName which is 
  * the node attached to the host computer name of the Ros node, such as "CONTROL1", the Controller which is
- * the physical device port the microcontroller for this entry is attached to, such as /dev/ttyACM0, or a class that
+ * the physical device port the microcontroller for this entry is attached to, such as /dev/ttyACM0 using {@link com.neocoretechs.robocore.serialreader.ByteSerialDataPort}, or a class that
  * handles the same sort of input using a line reader such as {@link com.neocoretechs.robocore.serialreader.MarlinspikeDataPort},
  * and finally the {@link NodeDeviceDemuxer}, which ties together the various parts of a LUN logical configuration unit and
  * carries some of the same information collected here for convenience.
+ * @see com.neocoretechs.robocore.serialreader.MarlinspikeDataPort
+ * @see com.neocoretechs.robocore.serialreader.ByteSerialDataPort
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  *
  */

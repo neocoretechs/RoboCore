@@ -96,32 +96,32 @@ import com.neocoretechs.robocore.serialreader.DataPortCommandInterface;
 import com.neocoretechs.robocore.serialreader.DataPortInterface;
 
 /**
- * This class is the primary interface between real time data and the other subsystems.<p/>
+ * This class is the primary interface between real time data and the other subsystems.<p>
  * Its primary function is to demultiplex the input stream coming from {@code DataPortInterface} 
- * data sources such as the attached Marlinspike enabled microcontroller, I.e. Mega2560 etc, that implement the interface and 
- * utilize a protocol with '<header>',line number, data value.
+ * data sources such as the attached Marlinspike enabled microcontroller; i.e. Pico, Mega2560 etc, that implement the interface and 
+ * utilize a protocol with '&lt;header&gt;',line number, data value.
  * Each 'topic' described by the demultiplexed header as it flows in with its associated data is expected to have:
- * OPTIONAL:<br/>
- * 1) A thread that services the final processing listener class and deque for the given topic '<header>' <br/>
- * 2) A listener class that is serviced by the above thread that takes raw MachineReadings and transforms them if necessary <br/>
- * MANDATORY:<br/>
- * 3) An instance of {@code DataPortInterface} to connect to. <br/>
- * 4) A 'TopicList' class in the hash table with its associated 'header' <br/>
- * 5) An instance of 'MachineBridge' that operates on the raw data for a given topic 'header' <br/>
+ * OPTIONAL:<br>
+ * 1) A thread that services the final processing listener class and deque for the given topic '&lt;header&gt;' <br>
+ * 2) A listener class that is serviced by the above thread that takes raw MachineReadings and transforms them if necessary <br>
+ * MANDATORY:<br>
+ * 3) An instance of {@code DataPortInterface} to connect to. <br>
+ * 4) A 'TopicList' class in the hash table with its associated 'header' <br>
+ * 5) An instance of 'MachineBridge' that operates on the raw data for a given topic 'header' <br>
  * The optional items are necessary for data streamed at high rates.
  * As the various topics are demuxxed by the thread servicing this class, the 'retrieveData' for each 'TopicList' 
  * is invoked to place the 'MachineReading' element in the deque associated with the MachineBridge for that topic.
  * The listener waits for a take from that particular MachineBridge and massages the data to be placed in its own deque
  * in the format and with the proper additions and exclusions from the raw MachineReading.
  * When an element in the listener is present and ready for a 'take' from that deque the item is considered ready for use
- * in the system.<p/>
+ * in the system.<p>
  * The size of each listener circular deque is determined during invocation of the 'init' method of the MachineBridge for that topic.
  * This demuxxer runs in its own thread as well such that it may operate unimpeded while the listeners can take their time
- * processing the data. In this way a near realtime response is preserved.<p/>
- * The pipeline to start this service is as follows:<br/>
- * <code>connect(DataPortInterface)</code><br/>
- * <code>init()</code><br/>
- * <code>config(List<String> of String Marlinspike commands)</code><br/>
+ * processing the data. In this way a near realtime response is preserved.<p>
+ * The pipeline to start this service is as follows:<br>
+ * <code>connect(DataPortInterface)</code><br>
+ * <code>init()</code><br>
+ * <code>config(List<String> of String Marlinspike commands)</code><br>
  * This class is designed for horizontal scaling: multiple Marlinspike boards can be attached to different ports, and
  * an instance of this class can be created for each {@link MarlinspikeControl}.
  * @author Jonathan Groff (C) NeoCoreTechs 2019,2020,2021
@@ -453,7 +453,7 @@ public class AsynchDemuxer implements Runnable {
 			//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.M47.val());
 			topics.put(topicNames.M47.val(), new M47(this).getTopicList());
 			//
-			// M80
+			// M80 - ENTER BOOTSEL MODE ON PICO, SHUTS DOWN PROCESSING
 			//
 			//if(DEBUG)
 			//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.M80.val());

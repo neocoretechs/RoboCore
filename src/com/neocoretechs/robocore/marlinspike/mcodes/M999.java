@@ -5,7 +5,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M999 reset. 15ms delay after command, then suicide.
+ * M999 
  *
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *
