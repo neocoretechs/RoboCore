@@ -5,7 +5,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M41 - Create persistent digital pin, Write digital pin HIGH P<pin> (this gives you a 5v source on pin)
+ * M41 - Create persistent digital pin, Write digital pin HIGH P&lt;pin&gt; (this gives you a 5v source on pin)
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M302 P<pin> - remove ultrasonic pin
+ * M302 P&lt;pin&gt; - remove ultrasonic pin
  *
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *

@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M13 [Z<slot>] [P<power>] [X<power>]- Set maximum motor power or optionally with X, a PWM control maximum level. If X, slot is PWM
+ * M13 [Z&lt;slot&gt;] [P&lt;power&gt;] [X&lt;power&gt;]- Set maximum motor power or optionally with X, a PWM control maximum level. If X, slot is PWM
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

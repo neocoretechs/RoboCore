@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M2 [Z<slot>] [C<channel> W<encoder pin> E<default dir>] <p/> 
+ * M2 [Z&lt;slot&gt;] [C&lt;channel&gt; W&lt;encoder pin&gt; E&lt;default dir&gt;] &lt;p/&gt; 
  * Set smart controller (default) with optional encoder pin per channel, can be issued multiple times.
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *

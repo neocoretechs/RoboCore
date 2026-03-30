@@ -5,7 +5,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M502 Revert to default settings read from EEPROM
+ * M502 
  *
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *

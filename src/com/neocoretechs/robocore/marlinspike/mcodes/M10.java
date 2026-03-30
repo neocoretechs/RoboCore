@@ -9,7 +9,7 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
  * The M10 code merely creates the instance of the proper controller and assigns the slot. Other M codes
  * refer to the slot and provide further configuration. when creating new type of controllers, this is the code
  * that can be expanded to instantiate those controllers
- * M10 Z<controller slot> T<controller type>
+ * M10 Z&lt;controller slot&gt; T&lt;controller type&gt;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

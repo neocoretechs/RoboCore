@@ -6,7 +6,7 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M42 - Create persistent digital pin, Write digital pin LOW P<pin> (This gives you a grounded pin)
+ * M42 - Create persistent digital pin, Write digital pin LOW P&lt;pin&gt; (This gives you a grounded pin)
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

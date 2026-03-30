@@ -5,7 +5,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M799 [Z<controller>][X] Reset controller, if no argument, reset all. If X, slot is PWM
+ * M799 
  *
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *

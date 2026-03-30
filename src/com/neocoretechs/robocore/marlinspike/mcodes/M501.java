@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M501 Read settings from EEPROM
+ * M501
  *
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *

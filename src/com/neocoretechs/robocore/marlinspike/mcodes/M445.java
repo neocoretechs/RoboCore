@@ -5,7 +5,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M445 P<pin> - Turn off pulsed write pin - disable PWM
+ * M445 P&lt;pin&gt; - Turn off pulsed write pin - disable PWM
  *
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *

@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M15 [Z<slot>] C<channel> P<pin> S<pin state 0 low, 1 high> N<number of counts before interrupt generated>
+ * M15 [Z&lt;slot&gt;] C&lt;channel&gt; P&lt;pin&gt; S&lt;pin state 0 low, 1 high&gt; N&lt;number of counts before interrupt generated&gt;
  * Create digital encoder for controller at slot and channel.
  * Activate interrupt at S pin state.
  * Detect range N times before interrupt

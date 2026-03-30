@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M38  P<pin> - Remove PWM pin, MOTOR AND PWM DISABLED, perhaps not cleanly
+ * M38  P&lt;pin&gt; - Remove PWM pin, MOTOR AND PWM DISABLED, perhaps not cleanly
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

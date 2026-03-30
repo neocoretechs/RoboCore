@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M7 [Z<slot>] [X]- Set motor override to stop motor operation, or optionally PWM operation, if X, slot is PWM
+ * M7 [Z&lt;slot&gt;] [X]- Set motor override to stop motor operation, or optionally PWM operation, if X, slot is PWM
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

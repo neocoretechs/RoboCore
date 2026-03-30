@@ -171,6 +171,7 @@ public class AsynchDemuxer implements Runnable {
 		CHECKMISMATCH("checksum mismatch, Last Line: "),
 		LINESEQ("Line Number is not Last Line Number+1, Last Line: "),
 		EEPROM("eeprom"),
+		ERROR("Command or formatting error"),
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),M13("M13"),
 		M14("M14"),M15("M15"),M16("M16"),M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),

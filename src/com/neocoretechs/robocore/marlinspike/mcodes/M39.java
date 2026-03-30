@@ -5,7 +5,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M39 P<pin> - Remove Persistent Analog pin 
+ * M39 P&lt;pin&gt;- Remove Persistent Analog pin 
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

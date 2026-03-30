@@ -4,10 +4,9 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * PWM value between 0 and 255, default timer mode is 2; clear on match, default resolution is 8 bits, default prescale is 1
- * Prescale: 1,2,4,6,7,8,9 = none, 8, 64, 256, 1024, external falling, external rising
- * Use M445 to disable pin permanently or use timer more 0 to stop pulse without removing pin assignment
- * M45 - set up PWM P<pin> S<power val 0-255> [T<timer mode 0-3>] [R<resolution 8,9,10 bits>] [X<prescale 0-7>]
+ *
+ * Use M445 to disable and remove pin
+ * M45 - set up PWM P&lt;pin&gt; S&lt;power val 0-1000&gt; 
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */

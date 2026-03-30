@@ -4,7 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M500 Store settings in EEPROM
+ * M500 
  *
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *

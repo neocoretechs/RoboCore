@@ -4,8 +4,7 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * M6 [Z<slot>] [S<scale>] [X<scale>] 
- * Set motor or PWM scaling, divisor for final power to limit speed or level, set to 0 to cancel. If X, slot is PWM
+ * M6 
  * @author Jonathan Groff (c) NeoCoreTechs 2020,2021
  *
  */

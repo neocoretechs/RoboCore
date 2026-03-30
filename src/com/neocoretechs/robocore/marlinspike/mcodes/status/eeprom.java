@@ -24,9 +24,6 @@ public class eeprom extends AbstractBasicDataLoader {
 	private boolean DEBUG;
 	public eeprom(AsynchDemuxer asynchDemuxer) {
 		super(asynchDemuxer, topicNames.EEPROM.val(), 16);
-		//
-		// M46
-		//
 	}
 
 	@Override
