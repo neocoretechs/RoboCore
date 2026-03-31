@@ -6,17 +6,17 @@ import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
- * General firmware report.
- * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
+ * General error report.
+ * @author Jonathan Groff (C) NeoCoreTechs 2026
  *
  */
-public class M115 extends AbstractBasicDataLoader {
+public class errorsetting extends AbstractBasicDataLoader {
 	private boolean DEBUG = false;
 
-	public M115(AsynchDemuxer asynchDemuxer) {
-		super(asynchDemuxer,  topicNames.M115.val(), 16);
+	public errorsetting(AsynchDemuxer asynchDemuxer) {
+		super(asynchDemuxer, topicNames.ERROR.val(), 16);
 		//
-		// M115
+		// Any type of code, message ends in ERROR
 		//
 	}
 

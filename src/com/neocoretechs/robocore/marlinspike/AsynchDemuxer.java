@@ -66,6 +66,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.PWMcontrolsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpinsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.eeprom;
+import com.neocoretechs.robocore.marlinspike.mcodes.status.errorsetting;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.lineseq;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.malformedG;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.malformedM;
@@ -171,7 +172,7 @@ public class AsynchDemuxer implements Runnable {
 		CHECKMISMATCH("checksum mismatch, Last Line: "),
 		LINESEQ("Line Number is not Last Line Number+1, Last Line: "),
 		EEPROM("eeprom"),
-		ERROR("Command or formatting error"),
+		ERROR("ERROR"),
 		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),M13("M13"),
 		M14("M14"),M15("M15"),M16("M16"),M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),
@@ -706,6 +707,10 @@ public class AsynchDemuxer implements Runnable {
 			//if(DEBUG)
 			//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.PWMPINSETTING.val());
 			topics.put(topicNames.PWMPINSETTING.val(), new pwmpinsetting(this).getTopicList());
+			//
+			// General error return from command, missing param or formatting
+			topics.put(topicNames.ERROR.val(), new errorsetting(this).getTopicList());
+			//
 		// spin the main loop to read lines from the Marlinspike and muxx them
 		SynchronizedThreadManager.getInstance().spin(this, dataPort.getPortName());
 
@@ -841,6 +846,8 @@ public class AsynchDemuxer implements Runnable {
 						if(fop != null) {
 							if(DEBUG)
 								System.out.println("AsynchDemux "+this+" Parsed directive:"+fop);
+							if(fop.endsWith("ERROR"))
+								fop = topicNames.ERROR.val();
 							TopicListInterface tl = topics.get(fop);
 							if( tl != null ) {
 								if(DEBUG)
@@ -897,7 +904,6 @@ public class AsynchDemuxer implements Runnable {
 		}
 	}
 
-	
 	/**
 	 * Parse out the delimiters and headers of a Marlinspike message, returning the message directive portion
 	 * @param line message in the form <message/> or <message x y z/>
@@ -975,6 +981,11 @@ public class AsynchDemuxer implements Runnable {
 			return null;	
 		}
 		return null;
+	}
+	
+	public static int[] parseSingleLineIntegerResults(String line) {
+		String[] sp = line.split(" ");
+		return Arrays.stream(sp).mapToInt(Integer::parseInt).toArray();
 	}
 	
 	public static void main(String[] args) throws Exception {

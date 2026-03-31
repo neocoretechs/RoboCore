@@ -8,17 +8,17 @@ import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 /**
  * M44 P<pin> [U] - -Read digital pin with optional pullup
- * 		SERIAL_PGM(MSG_BEGIN);
- *			SERIAL_PGM(digitalPinHdr);
- *			SERIAL_PGMLN(MSG_DELIMIT);
- *			SERIAL_PGM("0 ");
- *			SERIAL_PORT.println(pin_number);
- *			SERIAL_PGM("1 ");
- *			SERIAL_PORT.println(res);
- *			SERIAL_PGM(MSG_BEGIN);
- *			SERIAL_PGM(digitalPinHdr);
- *			SERIAL_PGMLN(MSG_TERMINATE);
- *			SERIAL_PORT.flush();
+ * <pre>
+ * 		SERIAL(MSG_BEGIN);
+ *		SERIAL(digitalPinHdr);
+ *		SERIAL(MSG_DELIMIT);
+ *		SERIAL(pin_number);
+ *		SERIAL(" ");
+ *		SERIAL(res);
+ *		SERIAL(MSG_BEGIN);
+ *		SERIAL(digitalPinHdr);
+ *		SERIAL(MSG_TERMINATE);
+ *</pre>
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021
  *
  */
@@ -43,9 +43,10 @@ public class digitalpin extends AbstractBasicDataLoader implements ActivationInt
 	
 	@Override
 	public MachineReading formatMachineReading(String sdata) {
-		int reading = asynchDemuxer.getReadingNumber(sdata);
-		int data =  asynchDemuxer.getReadingValueInt(sdata);
-		return new MachineReading(1, reading, reading, data);
+		//int reading = asynchDemuxer.getReadingNumber(sdata);
+		//int data =  asynchDemuxer.getReadingValueInt(sdata);
+		int[] data = AsynchDemuxer.parseSingleLineIntegerResults(sdata);
+		return new MachineReading(1, 1, data[0], data[1]);
 	}
 
 	@Override
