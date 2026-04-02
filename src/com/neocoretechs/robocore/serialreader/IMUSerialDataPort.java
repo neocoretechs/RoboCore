@@ -239,7 +239,7 @@ public class IMUSerialDataPort implements DataPortInterface {
 	 * Called by constructor and singleton getInstance
 	 */
 	public void connect(boolean writeable) throws IOException {
-        SynchronizedThreadManager.getInstance().init(new String[] {"IMU"+portName});
+        SynchronizedThreadManager.getInstance().init(new String[] {"IMU"});
 		getSerialPort();
 		SerialPort.allowPortOpenForEnumeration();
 		SerialPort.autoCleanupAtShutdown();
@@ -285,7 +285,7 @@ public class IMUSerialDataPort implements DataPortInterface {
         }
         
         SerialReader readThread = new SerialReader(inStream);
-        SynchronizedThreadManager.getInstance().spin(readThread, "IMU"+portName);
+        SynchronizedThreadManager.getInstance().spin(readThread, "IMU");
         while(!readThread.isRunning)
 			try {
 				Thread.sleep(1);
@@ -298,7 +298,7 @@ public class IMUSerialDataPort implements DataPortInterface {
             }
             //(new Thread(new SerialWriter(outStream))).start();
             SerialWriter writeThread = new SerialWriter(outStream);
-            SynchronizedThreadManager.getInstance().spin(writeThread, "IMU"+portName);
+            SynchronizedThreadManager.getInstance().spin(writeThread, "IMU");
             while(!writeThread.isRunning)
 				try {
 					Thread.sleep(1);

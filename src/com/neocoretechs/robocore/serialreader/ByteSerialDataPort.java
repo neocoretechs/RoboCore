@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.serialreader;
 
 import com.fazecast.jSerialComm.SerialPort;
+import com.fazecast.jSerialComm.SerialPortTimeoutException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,7 +19,7 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2026
  */
 public class ByteSerialDataPort implements DataPortCommandInterface {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static boolean PORTDEBUG = false;
 	private SerialPort serialPort;
 	private OutputStream outStream;
@@ -69,8 +70,22 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	}
 	@Override	    
 	public void connect(boolean writeable) throws IOException {
-		SynchronizedThreadManager.getInstance().init(new String[] {"IMU"+portName});
+		SynchronizedThreadManager.getInstance().init(new String[] {"SYSTEM"});
+		System.out.println("\nUsing Library Version v" + SerialPort.getVersion());
+		SerialPort.allowPortOpenForEnumeration();
+		SerialPort.autoCleanupAtShutdown();
+		SerialPort.addShutdownHook(new Thread() { public void run() { System.out.println("\nRunning shutdown hook"); } });
 		serialPort = SerialPort.getCommPort(portName);
+		serialPort.allowElevatedPermissionsRequest();
+		System.out.println("\nPre-setting RTS: " + (serialPort.setRTS() ? "Success" : "Failure"));
+		boolean openedSuccessfully = serialPort.openPort(0);
+		System.out.println("\nOpening " + serialPort.getSystemPortName() + ": " + serialPort.getDescriptivePortName() + " - " + serialPort.getPortDescription() + ": " + openedSuccessfully);
+		if (!openedSuccessfully)
+		{
+			System.out.println("Error code was " + serialPort.getLastErrorCode() + " at Line " + serialPort.getLastErrorLocation());
+			return;
+		}
+		serialPort.clearDTR();
 		serialPort.setBaudRate(baud);
 		serialPort.setNumDataBits(datab);
 		switch(stopb) {
@@ -91,7 +106,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		}   
 		//(new Thread(new SerialReader(inStream))).start();
 		SerialReader readThread = new SerialReader(inStream);
-		SynchronizedThreadManager.getInstance().spin(readThread, "SYSTEM"+portName);
+		SynchronizedThreadManager.getInstance().spin(readThread, "SYSTEM");
 		while(!readThread.isRunning)
 			try {
 				Thread.sleep(1);
@@ -104,7 +119,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 			}
 			//(new Thread(new SerialWriter(outStream))).start();
 			SerialWriter writeThread = new SerialWriter(outStream);
-			SynchronizedThreadManager.getInstance().spin(writeThread, "SYSTEM"+portName);
+			SynchronizedThreadManager.getInstance().spin(writeThread, "SYSTEM");
 			while(!writeThread.isRunning)
 				try {
 					Thread.sleep(1);
@@ -327,40 +342,6 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	public boolean isEOT() { return EOT; }
 
 	/**
-	 * Sets the serial port parameters
-	 * @param parityb 
-	 * @param stopb 
-	 * @param datab 
-	 * @param baud 
-	 * @throws UnsupportedCommOperationException 
-	 */
-	private void setSerialPortParameters(int baud, int datab, int stopb, int parityb) throws IOException {
-		//if( Props.DEBUG ) System.out.println("Setting serial port "+baud+" "+datab+" "+stopb+" "+parityb);
-		// Set serial port
-		// serialPort.setSerialPortParams(57600,SerialPort.DATABITS_8,SerialPort.STOPBITS_1,SerialPort.PARITY_NONE);
-		serialPort.setBaudRate(baud);
-		serialPort.setNumDataBits(datab);
-		switch(stopb) {
-		case 1 -> serialPort.setNumStopBits(SerialPort.ONE_STOP_BIT);
-		case 2 -> serialPort.setNumStopBits(SerialPort.TWO_STOP_BITS);
-		}
-		switch(parityb) {
-		case 0 -> serialPort.setParity(SerialPort.NO_PARITY);
-		case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
-		case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
-		}
-		serialPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
-
-		//SerialPort.RtsEnable = true;
-		//SerialPort.ReadBufferSize = 4096;
-		//SerialPort.WriteBufferSize = 512;
-		//SerialPort.ReceivedBytesThreshold = 1;
-		//SerialPort.ReadTimeout = 5500;
-		//SerialPort.WriteTimeout = 5500;
-	}
-
-
-	/**
 	 * Data about machine and port settings
 	 */
 	public String stringSettings() {
@@ -397,7 +378,6 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 					inChar = this.in.read();
 					if(PORTDEBUG)
 						System.out.print((char)inChar);
-					// rxtx returns -1 on timeout of port
 					if( inChar == 255 ) {
 						EOT = true;
 						inChar = -1;
@@ -407,6 +387,9 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 						EOT = false;
 					}
 				} catch(IOException ioe) {
+					if(ioe instanceof SerialPortTimeoutException)
+						continue;
+					ioe.printStackTrace();
 					System.out.println(ioe);
 					continue;
 				}

@@ -123,7 +123,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 	int pin_number, pin_numberB;
 	int dir_pin, dir_default, enable_pin;
 	int encode_pin = 0;
-	int interrupt_pin = 0;
+	int interrupt_pin = 0;                               
 	int dir_face;
 	int dist;
 	

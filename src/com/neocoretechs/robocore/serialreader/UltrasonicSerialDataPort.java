@@ -152,8 +152,8 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 
 		//(new Thread(new SerialReader(inStream))).start();
 		SerialReader readThread = new SerialReader(inStream);
-		SynchronizedThreadManager.getInstance().init(new String[] {"URM37"+portName});
-		SynchronizedThreadManager.getInstance().spin(readThread, "URM37"+portName);
+		SynchronizedThreadManager.getInstance().init(new String[] {"URM37"});
+		SynchronizedThreadManager.getInstance().spin(readThread, "URM37");
 		while(!readThread.isRunning)
 			try {
 				Thread.sleep(1);
@@ -167,7 +167,7 @@ public class UltrasonicSerialDataPort implements DataPortInterface {
 			}
 			//(new Thread(new SerialWriter(outStream))).start();
 			SerialWriter writeThread = new SerialWriter(outStream);
-			SynchronizedThreadManager.getInstance().spin(writeThread, "URM37"+portName);
+			SynchronizedThreadManager.getInstance().spin(writeThread, "URM37");
 			while(!writeThread.isRunning)
 				try {
 					Thread.sleep(1);
