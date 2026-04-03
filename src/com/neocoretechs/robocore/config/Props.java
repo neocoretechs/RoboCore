@@ -40,9 +40,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Load and retrieve from properties file for configuration purposes.
  * We assume the the properties file is in RoboCore.Properties which we try
  * to locate through system.getProperty("RoboCore.properties") and barring that,
- * attempt to load from the system resource stream.
- * Copyright NeoCoreTechs (C) 2020
- * @author Jonathan Groff
+ * attempt to load from the system resource stream. If found, place into parameter tree
+ * for other nodes to utilize. If not, access parameter tree and retrieve settings
+ * @author Jonathan Groff Copyright NeoCoreTechs (C) 2020,2026
  */
 public class Props {
 	public static boolean DEBUG = false;
@@ -200,11 +200,12 @@ public class Props {
 		}
 	}
 	/**
-	 * Build collection of array parameters in the properties file.<p/>
+	 * Build collection of array parameters in the properties file.<p>
 	 * Three maps are used to build the eventual final structure.
-	 * mainMap = ConcurrentHashMap<String, Map<Integer, Map<String, Object>>>
-	 * subMap = ConcurrentHashMap<Integer, Map<String,Object>>
-	 * propMap = ConcurrentHashMap<String,Object>
+	 * <pre>
+	 * mainMap = ConcurrentHashMap&lt;String, Map&lt;Integer, Map&lt;String, Object&gt;&gt;&gt;
+	 * subMap = ConcurrentHashMap&lt;Integer, Map&lt;String,Object&gt;&gt;
+	 * propMap = ConcurrentHashMap&lt;String,Object&gt;
 	 * formed from the properties:
 	 * LUN[0].Channel:1
 	 * LUN[1].Slot:0
@@ -213,13 +214,14 @@ public class Props {
 	 * LUN[1].Channel:1
 	 * LUN[1].Controller:/dev/ttyACM1
 	 * So mainMap has:
-	 * <LUN, <0, <Channel, 1>>>
-	 * <LUN, <1, <Channel, 1>>>
-	 * <LUN, <0, <Slot, 0>>>
-	 * <LUN, <1, <Slot, 0>>>
-	 * <LUN, <0, <Controller, /dev/ttyACM0>>>
-	 * <LUN, <1, <Controller, /dev/ttyACM1>>>
-	 * @return
+	 * &lt;LUN, &lt;0, &lt;Channel, 1&gt;&gt;&gt;
+	 * &lt;LUN, &lt;1, &lt;Channel, 1&gt;&gt;&gt;
+	 * &lt;LUN, &lt;0, &lt;Slot, 0&gt;&gt;&gt;
+	 * &lt;LUN, &lt;1, &lt;Slot, 0&gt;&gt;&gt;
+	 * &lt;LUN, &lt;0, &lt;Controller, /dev/ttyACM0&gt;&gt;&gt;
+	 * &lt;LUN, &lt;1, &lt;Controller, /dev/ttyACM1&gt;&gt;&gt;
+	 * </pre>
+	 * @return The Map of Map of Maps by LUN and param
 	 * @throws IllegalAccessException
 	 */
 	public static Map<String, Map<Integer, Map<String, Object>>> collectivizeProps() throws IllegalAccessException {
@@ -306,9 +308,7 @@ public class Props {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		Robot r = new Robot();
-		System.out.println(r.getName());
-		System.out.println(r.toString());
+
 	}
 
 }

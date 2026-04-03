@@ -23,6 +23,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
+import org.ros.node.parameter.ParameterTree;
 import org.ros.node.service.CountDownServiceServerListener;
 import org.ros.node.service.ServiceResponseBuilder;
 import org.ros.node.service.ServiceServer;
@@ -187,14 +188,9 @@ public class PeripheralController extends AbstractNodeMain {
 	Object navMutex = new Object();
 	Object magMutex = new Object();
 	
+	static String robotName;
 	static RobotInterface robot;
-	static {
-		try {
-			robot = new Robot();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
+
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	MarlinspikeManager marlinspikeManager;
@@ -214,14 +210,9 @@ public class PeripheralController extends AbstractNodeMain {
 	 * @throws IOException 
 	 */
 	public PeripheralController() throws IOException {
-		marlinspikeManager = new MarlinspikeManager(robot);
-		marlinspikeManager.configureMarlinspike(true, false);
-		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-		isActive = new boolean[listNodeDeviceDemuxer.size()];
+
 	}
-		
-	
-	
+
 	@Override
 	public GraphName getDefaultNodeName() {
 		return GraphName.of("pubsubs_periph");
@@ -229,11 +220,19 @@ public class PeripheralController extends AbstractNodeMain {
 	
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
-		//robot = new Robot();
-		//System.out.println("onStart build robot...");
-		//System.out.println("onStart robot"+robot);
-		//final Log log = connectedNode.getLog();
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		if(remaps.containsKey("__robot") ) {
+			robotName = remaps.get("__robot");
+		} else {
+			throw new RuntimeException("Must specify __robot:=<name> to configure parameters.");
+		}
+		if(DEBUG)
+			System.out.printf("Robot reports host name as %s%n",robotName);
+		ParameterTree pTree = connectedNode.getParameterTree();
+		robot = (RobotInterface) pTree.get(robotName, null);
+		if(robot == null)
+			throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
+		//final Log log = connectedNode.getLog();
 		if(remaps.containsKey("__debug"))
 			DEBUG = true;
 		if( remaps.containsKey("__serveNode") ) {
@@ -247,7 +246,14 @@ public class PeripheralController extends AbstractNodeMain {
 			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
 		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 		// statpub has status alerts that may come from sensors.
-	
+		marlinspikeManager = new MarlinspikeManager(robot);
+		try {
+			marlinspikeManager.configureMarlinspike(true, false);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
+		isActive = new boolean[listNodeDeviceDemuxer.size()];
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);

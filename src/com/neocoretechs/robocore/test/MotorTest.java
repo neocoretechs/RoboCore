@@ -1,16 +1,59 @@
 package com.neocoretechs.robocore.test;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Map;
+import org.ros.internal.loader.CommandLineLoader;
+import org.ros.namespace.GraphName;
+import org.ros.node.AbstractNodeMain;
+import org.ros.node.ConnectedNode;
+import org.ros.node.DefaultNodeMainExecutor;
+import org.ros.node.NodeMainExecutor;
+import org.ros.node.parameter.ParameterTree;
+
 import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 
-public class MotorTest {
-	public static void main(String[] args) throws Exception {
-		Robot robot = new Robot();
+public class MotorTest extends AbstractNodeMain {
+	private static boolean DEBUG = true;
+	private RobotInterface robot;
+	private String robotName;
+
+	public MotorTest(String[] args) {
+		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
+	    NodeMainExecutor nodeMainExecutor = DefaultNodeMainExecutor.newDefault();
+	    nodeMainExecutor.execute(this, cl.build());
+	}
+
+	@Override
+	public void onStart(final ConnectedNode connectedNode) {
+		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		//String mode="";
+		//if( remaps.containsKey("__mode") )
+		//	mode = remaps.get("__mode");
+		//if( mode.equals("startup")) {
+
+		if(remaps.containsKey("__robot") ) {
+			robotName = remaps.get("__robot");
+		} else {
+			throw new RuntimeException("Must specify __robot:=<name> to configure parameters.");
+		}
+		if(DEBUG)
+			System.out.printf("Robot reports host name as %s%n",robotName);
+		ParameterTree pTree = connectedNode.getParameterTree();
+		robot = (RobotInterface) pTree.get(robotName, null);
+		if(robot == null)
+			throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
 		MarlinspikeManager mm = new MarlinspikeManager(robot);
 		AsynchDemuxer ad = new AsynchDemuxer(mm);
-		ad.connect(new ByteSerialDataPort());
+		try {
+			ad.connect(new ByteSerialDataPort());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		String motorCommand = "M0"; // turn off realtime output
 		AsynchDemuxer.addWrite(ad,motorCommand);
 		// config smart controller channel 1 default direction
@@ -47,5 +90,10 @@ public class MotorTest {
 			AsynchDemuxer.addWrite(ad,motorCommand);
 			System.out.println("stop2 "+i);
 		}
+	}
+
+	@Override
+	public GraphName getDefaultNodeName() {
+		return GraphName.of("motortest");
 	}
 }

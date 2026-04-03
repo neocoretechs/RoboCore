@@ -276,7 +276,7 @@ public class MotionApp implements ChangeListener, DrawInterface
     *     Body Settings
     *         Body Width
     */
-    robot = new Robot();
+    //robot = new Robot();
     controlsRobot = new PlayerFrame();
    // Basic set up for the tab:
         controlsRobot.setLayout(new BoxLayout(controlsRobot,

@@ -20,6 +20,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeMainExecutor;
+import org.ros.node.parameter.ParameterTree;
 import org.ros.node.service.CountDownServiceServerListener;
 import org.ros.node.service.ServiceResponseBuilder;
 import org.ros.node.service.ServiceServer;
@@ -117,10 +118,11 @@ import diagnostic_msgs.DiagnosticStatus;
  */
 public class MegaPubs extends AbstractNodeMain  {
 	private static boolean DEBUG = true;
+	private static String robotName;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
-	private String host;
-	private InetSocketAddress master;
+	//private String host;
+	//private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	//private MarlinspikeControlInterface motorControlHost;
 	NavListenerMotorControlInterface navListener = null;
@@ -200,13 +202,7 @@ public class MegaPubs extends AbstractNodeMain  {
 	// Generate base {@link Robot} that bootstraps configs from RoboCore.properties via VM command line directive
 	//
 	static RobotInterface robot;
-	static {
-		try {
-			robot = new Robot();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
+	
 	//final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
 	MarlinspikeManager marlinspikeManager = null;
 	// Collection of subscriber to node device name
@@ -224,17 +220,10 @@ public class MegaPubs extends AbstractNodeMain  {
 	    nodeMainExecutor.execute(this, cl.build());
 	}
 	
-	/**
-	 * @throws IOException 
-	 */
-	public MegaPubs() {
-
-	}
+	public MegaPubs() {}
 	
 	public GraphName getDefaultNodeName() {
-		if(DEBUG)
-			System.out.printf("Robot reports host name as %s%n",robot.getHostName());
-		return GraphName.of(robot.getHostName());
+		return GraphName.of("megapubs");
 	}
 	/**
 	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
@@ -267,6 +256,13 @@ public class MegaPubs extends AbstractNodeMain  {
 public void onStart(final ConnectedNode connectedNode) {
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
 	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	if(remaps.containsKey("__robot") ) {
+		robotName = remaps.get("__robot");
+	} else {
+		throw new RuntimeException("Must specify __robot:=<name> to configure parameters.");
+	}
+	if(DEBUG)
+		System.out.printf("Robot reports host name as %s%n",robotName);
 	// determine debugging directives __debug:=publisher,demuxer,marlinspike
 	if( remaps.containsKey("__debug") ) {
 		String debug = remaps.get("__debug");
@@ -283,7 +279,12 @@ public void onStart(final ConnectedNode connectedNode) {
 	// in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	if( remaps.containsKey("__pwm") )
 		PWM_MODE = remaps.get("__pwm");
-
+	
+	ParameterTree pTree = connectedNode.getParameterTree();
+	robot = (RobotInterface) pTree.get(robotName, null);
+	if(robot == null)
+		throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
+	
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub = connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 	
 	configureMarlinspikeManager(connectedNode, statpub);
@@ -445,7 +446,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				String deviceName = subscriberDevice.get(subs);
 				int[] valch = message.getData();
 				if(DEBUG)
-					System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%d Thread:%d%n", this.getClass().getName(), subs, deviceName, message.toString(), valch.length, Thread.currentThread().getId());
+					System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%d Thread:%s%n", this.getClass().getName(), subs, deviceName, message.toString(), valch.length, Thread.currentThread().getName());
 				try {
 						MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(deviceName);
 						if(DEBUG)
@@ -479,7 +480,7 @@ public void onStart(final ConnectedNode connectedNode) {
 								}
 							}
 							if(DEBUG)
-								System.out.printf("NewMessage, thread %d received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getName(),deviceName,affectorSpeed);
+								System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getName(),deviceName,affectorSpeed);
 						}
 					} catch (IOException e) {
 						System.out.println("There was a problem communicating with the controller:"+e);
@@ -749,7 +750,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	 * If there is a problem we will try to publish exception to diagnostic channel if possible and throw a RuntimeException.<p/>
 	 * Here, we configure the critical listNodeDeviceDemuxer that is used in the onStart method above.
 	 * @param connectedNode The Ros node we are currently initializing
-	 * @param statpub the diagnostic status publisher channel
+	 * @param tstatpub the diagnostic status publisher channel
 	 */
 	private void configureMarlinspikeManager(ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
 		// TODO get this from parameter server or singleton with map of robot names

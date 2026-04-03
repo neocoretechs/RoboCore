@@ -20,6 +20,7 @@ import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeMainExecutor;
+import org.ros.node.parameter.ParameterTree;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.PublisherListener;
 import org.ros.node.topic.Subscriber;
@@ -29,6 +30,7 @@ import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.DeviceEntry;
+import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.TypedWrapper;
@@ -44,8 +46,10 @@ import std_msgs.Int32MultiArray;
 import trajectory_msgs.ComeToHeadingStamped;
 
 /**
+ * MotionController is the primary process we need to configure the other nodes via parameter tree.<p>
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to send down to the Marlinspike controllers.
  * Subscribing to:
+ * <pre>
  * sensor_msgs/Joy (joystick information boxed as an array of buttons and axis values common to standard controllers):
  * NYCO CORE CONTROLLER: <br>
  * Identifies as : USB Joystick<br>
@@ -102,30 +106,32 @@ import trajectory_msgs.ComeToHeadingStamped;
  *Button Right Thumb 3 - right stick press<br>
  *Button Select - Select<br>
  *Button Mode - Mode<br><br>
- *
+ *</pre>
+ *<pre>
  * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)<br>
  * sensor_msgs/Temperature (most likely from IMU)<br>
  * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)<br>
- *
+ *</pre>
+ *<pre>
  * Publishing to:<br>
  * All topics enumerated in MegaPubs typeNames which correspond to types that may appear in configuration by LUN.k<br>
  * robocore/status (status update channel to receive information on alerts, etc, derived from IMU and other sensors)<br>
- * 
+ * </pre>
  * Published are the values from 0-1000 that represent actual power to each differential drive wheel.<p>
  * Subscribers include the process that manages serial data to the motor controller, possibly on a separate computer.<p>
  * Publishers on robocore/status provide status updates relating to IMU extremes that are picked up by the VoxHumana voice synth or others,
  * again most probably on a completely separate single board computer within the robot.
- *
+ *<pre>
  * To reduce incoming data, Two sets of flags and a threshold value are used to determine if:<br>
  * a) The values have changed from last message<br>
  * b) The value exceed a threshold deemed noteworthy<br><p>
- * 
+ * </pre>
  * We take steps to align the joystick reference frame to the following:<br>
  * <code>
- *      / 0 \<br>
+ *      &nbsp;/ 0 \<br>
  *   90   |  -90<br>
- *    \   |   /<br>
- *     180,-180<br>
+ *    &nbsp;\   |   /<br>
+ *    &nbsp;180,-180<br>
  * </code>
  * The ratio of arc lengths of radius speed and speed+WHEELBASE, and turn angle theta from course difference 
  * becomes the ratio of speeds at each wheel.<br>
@@ -140,8 +146,16 @@ import trajectory_msgs.ComeToHeadingStamped;
  * This methodology is analogous to a human driver, who upon leaving the road and entering median, must compute a wide arc to re-enter
  * the roadway, then perform adjustments that bring them to a tangent of the center of the lane, and from there perform a series
  * of small corrections to stay on course. Regardless of the amount the machine is knocked off course it can find its way back to the
- * proper heading through a circuitous route gradually refined to require only small correction.
+ * proper heading through a circuitous route gradually refined to require only small correction.<p>
  * 
+ * MarlinspikeManager will load but not activate the nodes listed in configuration when {@link MarlinspikeManager#configureMarlinspike(boolean, boolean)}
+ * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
+ * want to get configuration for all available control nodes, but not activate them from this module since this module
+ * issues directives to the attached controllers rather than control them directly.<p>
+ * We then create collection of {@link NodeDeviceDemuxer} by calling {@link MarlinspikeManager#getNodeDeviceDemuxerByType}.<p>
+ * Finally we create the isActive boolean array to hold/control status of devices.
+ *
+ * @see MarlinspikeManager
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2018,2019,2020
  *
  */
@@ -149,7 +163,13 @@ public class MotionController extends AbstractNodeMain {
 	private static boolean DEBUG = false;
 	private static boolean IMUDEBUG = false;
 	private static boolean DEBUGBEARING = true;
-	//private String host;
+	//
+	static RobotInterface robot;
+	static String robotName;
+	public String RPT_SERVICE = "robo_status";
+	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
+	MarlinspikeManager marlinspikeManager;
+	Collection<DeviceEntry> deviceEntries;
 	//private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
@@ -163,7 +183,7 @@ public class MotionController extends AbstractNodeMain {
 		float temperature;
 		long eulerTime = 0L;
 		public String toString() {
-			return String.format("comapss heading:%d roll:%d pitch:%d temperature:%d", compassHeading, roll, pitch, temperature);
+			return String.format("compass heading:%d roll:%d pitch:%d temperature:%d", compassHeading, roll, pitch, temperature);
 		}
 	}
 	EulerTime euler = new EulerTime();
@@ -245,11 +265,6 @@ public class MotionController extends AbstractNodeMain {
 	private CircularBlockingDeque<Float> speedQueueR = new CircularBlockingDeque<Float>(5);
 	private float maxSpeedSlope = 100;
 
-	static RobotInterface robot;
-	public String RPT_SERVICE = "robo_status";
-	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
-	MarlinspikeManager marlinspikeManager;
-	Collection<DeviceEntry> deviceEntries;
 	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
 	boolean[] isActive;
 	private boolean SOFTSTOP = false;
@@ -262,22 +277,8 @@ public class MotionController extends AbstractNodeMain {
 			System.out.println("Bringing up MotionControl with args:"+args[0]+" "+args[1]+" "+args[2]);
 		}
 	}
-	/**
-	 * The constructor will load but not activate the nodes listed in configuration when {@link MarlinspikeManager#configureMarlinspike(boolean, boolean)}
-	 * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
-	 * want to get configuration for all available control nodes, but not activate them from this module since this module
-	 * issues directives to the attached controllers rather than control them directly.<p>
-	 * We then create collection of {@link NodeDeviceDemuxer} by calling {@link MarlinspikeManager#getNodeDeviceDemuxerByType}.<p>
-	 * Finally we create the isActive boolean array to hold/control status of devices.
-	 * @throws IOException 
-	 */
-	public MotionController() throws IOException {
-		robot = new Robot();
-		marlinspikeManager = new MarlinspikeManager(robot);
-		marlinspikeManager.configureMarlinspike(true, false);
-		deviceEntries = marlinspikeManager.getDevices();
-		isActive = new boolean[deviceEntries.size()];
-	}
+
+	public MotionController() {}
 
 	@Override
 	public GraphName getDefaultNodeName() {
@@ -286,18 +287,30 @@ public class MotionController extends AbstractNodeMain {
 
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
+		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+		if(remaps.containsKey("__robot") ) {
+			robotName = remaps.get("__robot");
+		} else {
+			throw new RuntimeException("Must specify __robot:=<name> to configure parameters.");
+		}
+		try {
+			robot = new Robot(robotName);
+			ParameterTree pTree = connectedNode.getParameterTree();
+			pTree.set(robotName, robot);
+			marlinspikeManager = new MarlinspikeManager(robot);
+			marlinspikeManager.configureMarlinspike(true, false);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		deviceEntries = marlinspikeManager.getDevices();
+		isActive = new boolean[deviceEntries.size()];
 		//robot = new Robot();
 		//System.out.println("onStart build robot...");
 		//System.out.println("onStart robot"+robot);
 		//final Log log = connectedNode.getLog();
-		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+
 		if(remaps.containsKey("__debug"))
 			DEBUG = true;
-		//if( remaps.containsKey("__serveNode") ) {
-		//	serveNode = remaps.get("__serveNode");
-		//} else {
-		//	throw new RuntimeException("Must specify __serveNode:=<node> to configure topics to publish to node specificed in configuration.");
-		//}
 		if( remaps.containsKey("__speedlimit") ) {
 			robot.getLeftSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
 			robot.getRightSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
@@ -688,10 +701,12 @@ public class MotionController extends AbstractNodeMain {
 	* controller or SBC such as Pico talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
 	* @param connectedNode the Ros node we are using
 	* @param pubschannel the collection of publishing channels for the device populated from DeviceEntry collection
-	* @param tstatpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
+	* @param statpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
 	*/
 	private void configurePublisherListener(ConnectedNode connectedNode, HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel, Publisher<diagnostic_msgs.DiagnosticStatus> statpub) {
 		for(DeviceEntry ndd : deviceEntries) {
+			if(DEBUG)
+				System.out.printf("configurePublisherListener for DeviceEntry %s%n", ndd);
 			//if(ndd.getNodeName().equals(serveNode)) {
 			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
 			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {

@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import org.ros.concurrent.CancellableLoop;
@@ -18,6 +19,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
+import org.ros.node.parameter.ParameterTree;
 import org.ros.node.topic.Publisher;
 import org.ros.internal.loader.CommandLineLoader;
 
@@ -40,11 +42,13 @@ import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
  */
 public class TwistPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = false;
+	private String robotName;
+	private RobotInterface robot;
 	float volts;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
-	private String host;
-	private InetSocketAddress master;
+	//private String host;
+	//private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 	geometry_msgs.Twist twistmsg = null;
 	// analog inputs on pins 55,56 of Mega2560 as defined in startup.gcode for AsynchDemuxer
@@ -84,13 +88,23 @@ public void onStart(final ConnectedNode connectedNode) {
 	// Start reading from serial port
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
 	// ONLY DO IT ONCE ON INIT!
-	//Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
+	Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 	//String mode="";
 	//if( remaps.containsKey("__mode") )
 	//	mode = remaps.get("__mode");
 	//if( mode.equals("startup")) {
 		try {
-			RobotInterface robot = new Robot();
+			if(remaps.containsKey("__robot") ) {
+				robotName = remaps.get("__robot");
+			} else {
+				throw new RuntimeException("Must specify __robot:=<name> to configure parameters.");
+			}
+			if(DEBUG)
+				System.out.printf("Robot reports host name as %s%n",robotName);
+			ParameterTree pTree = connectedNode.getParameterTree();
+			robot = (RobotInterface) pTree.get(robotName, null);
+			if(robot == null)
+				throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
 			MarlinspikeManager mm = new MarlinspikeManager(robot); 
 			asynchDemuxer = new AsynchDemuxer(mm);
 			asynchDemuxer.connect(new ByteSerialDataPort());

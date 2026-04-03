@@ -107,10 +107,10 @@ public class MarlinspikeManager {
 			if(override || hostName.equals(lun[i].get("NodeName"))) {
 				String name = (String)lun[i].get("Name");
 				if(name == null)
-					throw new IOException("Must specify Name paramater in configuration file for host "+hostName);
+					throw new IOException("Must specify Name parameter in configuration file for host "+hostName);
 				String controller = (String)lun[i].get("Controller");
 				if(controller == null)
-					throw new IOException("Must specify Controller paramater in configuration file for host "+hostName+" Name:"+name);
+					throw new IOException("Must specify Controller parameter in configuration file for host "+hostName+" Name:"+name);
 				DeviceEntry deviceEntry = new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controller);
 				devices.add(deviceEntry);
 				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node

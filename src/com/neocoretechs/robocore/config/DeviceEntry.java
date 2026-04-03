@@ -3,7 +3,7 @@ package com.neocoretechs.robocore.config;
 import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 
 /**
- * List of unique devices from RoboCore.properties. Assembled into collection in {@link MarlinspikeManager}<p>
+ * List of unique devices from RoboCore.properties loaded into parameter tree. Assembled into collection in {@link MarlinspikeManager}<p>
  * Contains the LUN, the name entry in properties configuration file, such as "LeftWheel", the NodeName which is 
  * the node attached to the host computer name of the Ros node, such as "CONTROL1", the Controller which is
  * the physical device port the microcontroller for this entry is attached to, such as /dev/ttyACM0 using 
@@ -25,7 +25,7 @@ public class DeviceEntry {
 	/**
 	 * 
 	 * @param Name name entry in properties configuration file, such as "LeftWheel"
-	 * @param NodeName the node attached to, the host computer name of the Ros node, such as "CONTROL1"
+	 * @param NodeName the node attached to, typically the SSID name of the Ros node, such as "ROSCOE1"
 	 * @param LUN integer LUN position, points to LUN array in Robot, such as 1
 	 * @param Controller the physical device port microcontroller for this entry is attached to, such as /dev/ttyACM0
 	 */

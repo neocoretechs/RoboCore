@@ -988,38 +988,5 @@ public class AsynchDemuxer implements Runnable {
 		return Arrays.stream(sp).mapToInt(Integer::parseInt).toArray();
 	}
 	
-	public static void main(String[] args) throws Exception {
-		// start demux
-		Robot r = new Robot();
-		MarlinspikeManager mm = new MarlinspikeManager(r);
-		AsynchDemuxer demuxer = new AsynchDemuxer(mm);
-		/*
-		demuxer.connect(ByteSerialDataPort.getInstance());
-		// the L H and T values represent those to EXCLUDE
-		// So we are looking for state 0 on digital pin and value not between L and H analog
-		AsynchDemuxer.addWrite(demuxer,"M303 P54 L470 H510");
-		AsynchDemuxer.addWrite(demuxer,"M303 P55 L470 H510");
-		AsynchDemuxer.addWrite(demuxer,"M305 P30 T1");
-		AsynchDemuxer.addWrite(demuxer,"M305 P46 T1");
-		AsynchDemuxer.addWrite(demuxer,"M305 P47 T1");
-		AsynchDemuxer.addWrite(demuxer,"M305 P49 T1");
-		*/
-		System.out.println(demuxer.parseDirective("<M0>\r\n"));
-		System.out.println(demuxer.parseDirective("<M1>\r\n\r\n"));
-		System.out.println(demuxer.parseDirective("<M11>\r"));
-		System.out.println(demuxer.parseDirective("<M111>\r\r"));
-		System.out.println(demuxer.parseDirective("<M9>\r\n"));
-		System.out.println(demuxer.parseDirective("<M99>\r\n"));
-		System.out.println(demuxer.parseDirective("<M999>\r\n"));
-		System.out.println(demuxer.parseDirective("<M100>"));
-		System.out.println(demuxer.parseDirective("<M0/>\r\n"));
-		System.out.println(demuxer.parseDirective("<M1/>\r\n\r\n"));
-		System.out.println(demuxer.parseDirective("<M11/>\r"));
-		System.out.println(demuxer.parseDirective("<M111/>\r\r"));
-		System.out.println(demuxer.parseDirective("<M9/>\r\n"));
-		System.out.println(demuxer.parseDirective("<M99/>\r\n"));
-		System.out.println(demuxer.parseDirective("<M999/>\r\n"));
-		System.out.println(demuxer.parseDirective("<M100/>"));
-	}
 
 }

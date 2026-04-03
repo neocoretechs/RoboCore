@@ -19,34 +19,36 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 /**
  * This class represents a centralized configuration management instrument.
- * Read the paramaterized properties from the properties class. Config as follows by LUN, logical unit number:<p/>
- * LUN[0].Name:LeftWheel <br/>
- * LUN[0].NodeName:Control1 <br/>
- * LUN[0].Controller:/dev/ttyACM0 <br/>
- * LUN[0].Type:H-Bridge <br/>
- * LUN[0].Slot:0 <br/>
- * LUN[0].SignalPin0:8 <br/>
- * LUN[0].Channel:1 <br/>
- * LUN[0].EnablePin:24 <br/>
- * LUN[0].Direction:0 <br/>
- * LUN[0].EncoderPin:68 <br/>
- * LUN[0].MinValue:-1000 <br/>
- * LUN[0].MaxValue:1000 <br/>
- * PID[0].MotorPIDRate:1 <br/>
- * PID[0].MotorKp:1.0 <br/>
- * PID[0].MotorKd:1.0 <br/>
- * PID[0].MotorKi:1.0 <br/>
- * PID[0].MotorKo:1.0 <br/>
- * AXIS[0].AxisType:Stick <br/>
- * AXIS[0].AxisX:0 <br/>
- * AXIS[0].AxisY:2 <br/>
- * Also, BUTTON, WHEEL, etc as needed.<p/>
+ * <pre>
+ * Read the paramaterized properties from the properties class. Config as follows by LUN, logical unit number:<p>
+ * LUN[0].Name:LeftWheel 
+ * LUN[0].NodeName:Control1
+ * LUN[0].Controller:/dev/ttyACM0 
+ * LUN[0].Type:H-Bridge 
+ * LUN[0].Slot:0 
+ * LUN[0].SignalPin0:8 
+ * LUN[0].Channel:1 
+ * LUN[0].EnablePin:24 
+ * LUN[0].Direction:0 
+ * LUN[0].EncoderPin:68 
+ * LUN[0].MinValue:-1000 
+ * LUN[0].MaxValue:1000 
+ * PID[0].MotorPIDRate:1 
+ * PID[0].MotorKp:1.0 
+ * PID[0].MotorKd:1.0 
+ * PID[0].MotorKi:1.0 
+ * PID[0].MotorKo:1.0 
+ * AXIS[0].AxisType:Stick 
+ * AXIS[0].AxisX:0 
+ * AXIS[0].AxisY:2
+ * </pre>
+ * Also, BUTTON, WHEEL, etc as needed.<p>
  * It may seem odd that values are redundant. For instance, wheel track would seem absolute, as would wheel diameter.
  * However, its possible that in a 4 wheel vehicle, diameter can vary slightly as in, say, the drive wheels of a tracked vehicle
- * and if the tracks are driven by 4 motors with 2 sets of cogs differing in size front to back the rotation rates wil
- * have to by synchronized despite the differing 'wheel' sizes. So to may the track vary slightly, and other instances I cant yet forsee.<p/>
+ * and if the tracks are driven by 4 motors with 2 sets of cogs differing in size front to back the rotation rates will
+ * have to by synchronized despite the differing 'wheel' sizes. So to may the track vary slightly, and other instances I cant yet forsee.<p>
  * With that in mind the parameters that would seem to warrant global status have been repeated so as to appear from the
- * perspective of each individual component, and if necessary, appear in aggregate as global.<p/>
+ * perspective of each individual component, and if necessary, appear in aggregate as global.<p>
  * If we initialize a diff drive, we expect PID control settings, and IMU settings even if one never appears.
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
@@ -55,6 +57,7 @@ public class Robot implements RobotInterface, Serializable {
 	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
+	private String robotName;
 	private int temperatureThreshold;
 	private MotionPIDController motionPIDController;
 	private RobotDiffDriveInterface robotDrive;
@@ -66,14 +69,9 @@ public class Robot implements RobotInterface, Serializable {
 	private TypedWrapper[] AXIS;
 	private TypedWrapper[] BUTTON;
 	private Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
-	private String hostName;
-	public Robot() throws IOException {
+	public Robot(String robotName) throws IOException {
+		this.robotName = robotName;
 		try {
-			try {
-				hostName = InetAddress.getLocalHost().getHostName();
-			} catch (UnknownHostException e) {
-				throw new IOException(e);
-			}
 			globalConfigs = Props.collectivizeProps();
 		} catch (IllegalAccessException e) {
 			throw new RuntimeException(e);
@@ -394,8 +392,13 @@ public class Robot implements RobotInterface, Serializable {
 		return BUTTON;
 	}
 
+	public Map<String, Map<Integer, Map<String, Object>>> getGlobalConfigs() {
+		return globalConfigs;
+	}
+
+	@Override
 	public String getHostName() {
-		return hostName;
+		return robotName;
 	}
 
 }
