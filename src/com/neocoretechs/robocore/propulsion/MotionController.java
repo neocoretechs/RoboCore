@@ -325,62 +325,9 @@ public class MotionController extends AbstractNodeMain {
 
 		final HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel = new HashMap<String, Publisher<std_msgs.Int32MultiArray>>();
 
-		for(DeviceEntry ndd : deviceEntries) {
-			//if(ndd.getNodeName().equals(serveNode)) {
-			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
-			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
-				@Override
-				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
-					ArrayList<String> st = new ArrayList<String>();
-					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
-							diagnostic_msgs.DiagnosticStatus.ERROR, st);
-					//throw new RuntimeException("Failed to register with master "+pub);					
-				}
-				@Override
-				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Successful Master Registration for %s%n", pub);
-					}
-					pubschannel.put(ndd.getName(), pub);
-					if(DEBUG)
-						System.out.println("Bringing up publisher "+ndd.getName());
-				}
-				@Override
-				public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
-					}
-					ArrayList<String> st = new ArrayList<String>();
-					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
-							diagnostic_msgs.DiagnosticStatus.ERROR, st);
-				}
-				@Override
-				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Successful Master Unregistration for %s%n", pub);
-					}
-					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
-				}
-				@Override
-				public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
-					if(DEBUG) {
-						System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
-					}				
-				}
-				@Override
-				public void onShutdown(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Shutdown initiated for %s%n", pub);
-					}
-					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
-				}	
-			});
-			publishedLUNRestValue.put(ndd.getLUN(),false);
-		}
-		//}	
-
+		// process the DeviceEntries into publishing channels
+		configurePublisherListener(connectedNode, pubschannel, statpub);
+		
 		final Publisher<geometry_msgs.Twist> twistpub = 
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 
@@ -725,7 +672,82 @@ public class MotionController extends AbstractNodeMain {
 		}); // cancellable loop
 
 	} // onStart
+	/**
+	* {@link com.neocoretechs.robocore.MegaPubs#configureSubscriberListener}<br>
+	* Configure a publisher to talk to a MarlinSpikeControlInterface which receives 
+	* a message of type: LUN#, value of control for that LUN#. <br>
+	* Create publishing channels to send commands to remote destination to supply 32 bit int values 
+	* and apply those to the device channels LUNs. <br>
+	* The ordinals represent a logical unit LUN in the configuration which is
+	* a collection of node, device, slot, channel of a controller attached to a ROS node, which has
+	* a number of tty ports (devices) which have marlinspike boards attached (Mega2560 or Pico via USB running the firmware)
+	* which have a number of logical software controllers configured by slot and channels.<p>
+	* Set up a trigger value for the remote destination, most likely originating from a controller such as PS/3 or the AI model.<p>
+	* Take the 2 trigger values as int32 and send them on to the microcontroller 
+	* related subsystem at the int valued LUNs. The marlinspike subsystem is composed of a software 
+	* controller or SBC such as Pico talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
+	* @param connectedNode the Ros node we are using
+	* @param pubschannel the collection of publishing channels for the device populated from DeviceEntry collection
+	* @param tstatpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
+	*/
+	private void configurePublisherListener(ConnectedNode connectedNode, HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel, Publisher<diagnostic_msgs.DiagnosticStatus> statpub) {
+		for(DeviceEntry ndd : deviceEntries) {
+			//if(ndd.getNodeName().equals(serveNode)) {
+			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
+			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
+				@Override
+				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);
+					//throw new RuntimeException("Failed to register with master "+pub);					
+				}
+				@Override
+				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Successful Master Registration for %s%n", pub);
+					}
+					pubschannel.put(ndd.getName(), pub);
+					if(DEBUG)
+						System.out.println("Bringing up publisher "+ndd.getName());
+				}
+				@Override
+				public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
+					}
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);
+				}
+				@Override
+				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Successful Master Unregistration for %s%n", pub);
+					}
+					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
+				}
+				@Override
+				public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
+					if(DEBUG) {
+						System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
+					}				
+				}
+				@Override
+				public void onShutdown(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Shutdown initiated for %s%n", pub);
+					}
+					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
+				}	
+			});
+			publishedLUNRestValue.put(ndd.getLUN(),false);
+		}
+		//}	
 
+	}
 	/**
 	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
 	 * We will be sending [<number> <> <>]
@@ -1346,6 +1368,8 @@ public class MotionController extends AbstractNodeMain {
 	private void publishPropulsion(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, 
 			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) {
 		ArrayList<Integer> speedVals = new ArrayList<Integer>();
+		if(DEBUG)
+			System.out.printf("%s Publish propulsion sending LeftWheel %d RightyWheel%d%n" , this.getClass().getName(), leftSpeed, rightSpeed);
 		speedVals.add(leftSpeed);
 		pubschannel.get("LeftWheel").publish(setupPub(connectedNode, speedVals));
 		try {

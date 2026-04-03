@@ -64,7 +64,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * Respond to messages from bus as subscriber to device name in configuration and process via realtime subsystem.
  * <p>
  * Messages can relate to Motor control, controller status, ultrasonic sensor, voltage reading, etc, acquired from the attached UART/USB of an aux 
- * board such as Mega2560 via RS-232 or from the SBC running the Ros node using the GPIO header and libgpiod, or from the USB
+ * board such as Mega2560 via RS-232, Pico via USB, or from the SBC running the Ros node using the GPIO header and libgpiod, or from the USB
  * port of the SBC talking to a smart controller.
  * <p> 
  * Serial communications are centralized in the {@link com.neocoretechs.robocore.serialreader.DataPortInterface} and {@link com.neocoretechs.robocore.serialreader.DataPortCommandInterface} interface class implementors.<p>
@@ -90,12 +90,12 @@ import diagnostic_msgs.DiagnosticStatus;
  * The demuxer processes formatted responses from the realtime subsystem in response to various directives.<p>
  * The messages are organized by topics identified by a header delimited by chevrons and containing the message topic identifier.<p>
  * Each line after the header has a parameter number and value. For instance, for an analog pin input or an ultrasonic reading
- * we have '1 pin', '2 reading' with pin and reading being the numeric values for the distance or pin reading value.
- * The end of the message is delimited with '</topic>' with topic being the matching header element.<p>
+ * we have numeric values for the distance or pin reading value bracketed by the proper headers.
+ * The end of the message is delimited with '&lt;/topic&gt;' with topic being the matching header element.<p>
  * 
  * The realtime subsystem is activated by being issued a series of M and G codes similar to 3D printer and CNC standard codes.<br/>
  * Examples:<br>
- * <code> G5 Z[slot] C[channel] P[power] </code>- Issue move command to controller in slot Z<slot> on channel C (1 or 2 for left/right wheel) with P<-1000 to 1000>
+ * <code> G5 Z[slot] C[channel] P[power] </code>- Issue move command to controller in slot Z&lt;slot&gt; on channel C (1 or 2 for left/right wheel) with P&lt;-1000 to 1000&gt;
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
  * H Bridge Driver:
@@ -109,7 +109,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * __pwm:=controller<br>
  * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
  * initialized with a previous M-code<p>
- * __pwm:=direct<br/>
+ * __pwm:=direct<br>
  * Indicates that PWM directives sent as a service are to be directly applied as a set of values working
  * on a PWM pin<p>
  * GPIO service invocation always works directly on a pin.<p>  
@@ -236,7 +236,33 @@ public class MegaPubs extends AbstractNodeMain  {
 			System.out.printf("Robot reports host name as %s%n",robot.getHostName());
 		return GraphName.of(robot.getHostName());
 	}
-
+	/**
+	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
+	 * angular Z (yaw) and send them to motor control. This results in motion planning computing a turn which
+	 * involves rotation about a point in space located at a distance related to speed and angular velocity. The distance
+	 * is used to compute the radius of the arc segment traversed by the wheel track to make the turn. If not moving we can
+	 * make the distance 0 and rotate about a point in space, otherwise we must inscribe an appropriate arc. The distance
+	 * in that case is the linear travel, otherwise the distance is the diameter of the arc segment.
+	 * If we get commands on the cmd_vel topic we assume we are moving, if we do not get the corresponding IMU readings, we have a problem
+	 * If we get a 0,0 on the X,yaw move we stop. If we dont see stable IMU again we have a problem, Houston.
+	 * 'targetDist' is x. if x = 0 we are going to turn in place.
+	 *  If we are turning in place and th &lt; 0, turn left. if th &gt;= 0 turn right
+	 *  If x != 0 and th = 0 its a forward or backward motion
+	 *  If x != 0 and th != 0 its a rotation around a point in space with forward motion, describing an arc.
+	 *  theta is th and gets calculated as difference of last imu and wheel theta.
+	 *  Rotation about a point in space
+	 *  <code>
+	 *  <pre>
+	 *		if( th &lt; 0 ) { // left
+	 *			spd_left = (float) (x - th * wheelTrack / 2.0);
+	 *			spd_right = (float) (x + th * wheelTrack / 2.0);
+	 *		} else {
+	 *			spd_right = (float) (x - th * wheelTrack / 2.0);
+	 *			spd_left = (float) (x + th * wheelTrack / 2.0);
+	 *		}
+	 *</pre>
+	 *</code>
+	 */
 @Override
 public void onStart(final ConnectedNode connectedNode) {
 	// check command line remappings for __mode:=startup to issue the startup code to the attached processor
@@ -263,8 +289,6 @@ public void onStart(final ConnectedNode connectedNode) {
 	configureMarlinspikeManager(connectedNode, statpub);
 	
 	//final RosoutLogger log = (Log) connectedNode.getLog();
-
-	final Publisher<sensor_msgs.Range> rangepub = connectedNode.newPublisher("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
 	// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
 	final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
@@ -304,29 +328,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 	//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 
-	/**
-	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
-	 * angular Z (yaw) and send them to motor control. This results in motion planning computing a turn which
-	 * involves rotation about a point in space located at a distance related to speed and angular velocity. The distance
-	 * is used to compute the radius of the arc segment traversed by the wheel track to make the turn. If not moving we can
-	 * make the distance 0 and rotate about a point in space, otherwise we must inscribe an appropriate arc. The distance
-	 * in that case is the linear travel, otherwise the distance is the diameter of the arc segment.
-	 * If we get commands on the cmd_vel topic we assume we are moving, if we do not get the corresponding IMU readings, we have a problem
-	 * If we get a 0,0 on the X,yaw move we stop. If we dont see stable IMU again we have a problem, Houston.
-	 * 'targetDist' is x. if x = 0 we are going to turn in place.
-	 *  If we are turning in place and th < 0, turn left. if th >= 0 turn right
-	 *  If x != 0 and th = 0 its a forward or backward motion
-	 *  If x != 0 and th != 0 its a rotation around a point in space with forward motion, describing an arc.
-	 *  theta is th and gets calculated as difference of last imu and wheel theta.
-	 * // Rotation about a point in space
-	 *		if( th < 0 ) { // left
-	 *			spd_left = (float) (x - th * wheelTrack / 2.0);
-	 *			spd_right = (float) (x + th * wheelTrack / 2.0);
-	 *		} else {
-	 *			spd_right = (float) (x - th * wheelTrack / 2.0);
-	 *			spd_left = (float) (x + th * wheelTrack / 2.0);
-	 *		}
-	 */
+
 	substwist.addMessageListener(new MessageListener<geometry_msgs.Twist>() {
 		@Override
 		public void onNewMessage(geometry_msgs.Twist message) {
@@ -477,7 +479,7 @@ public void onStart(final ConnectedNode connectedNode) {
 								}
 							}
 							if(DEBUG)
-								System.out.printf("NewMessage, thread %d received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getId(),deviceName,affectorSpeed);
+								System.out.printf("NewMessage, thread %d received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getName(),deviceName,affectorSpeed);
 						}
 					} catch (IOException e) {
 						System.out.println("There was a problem communicating with the controller:"+e);
@@ -512,7 +514,6 @@ public void onStart(final ConnectedNode connectedNode) {
 			} catch (InterruptedException e) {}
 
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
-			sensor_msgs.Range rangemsg = null;	
 			
 			// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike
 		
@@ -529,19 +530,6 @@ public void onStart(final ConnectedNode connectedNode) {
 					System.out.println("Published "+statmsg.getMessage());
 				Thread.sleep(1);
 			}
-			//
-			// Poll the outgoing message array for ranges enqueued by the above processing
-			// Ultrasonic messages SHOULD trigger the range message
-			//
-			while(!outgoingRanges.isEmpty()) {
-				rangemsg = outgoingRanges.takeFirst();
-				rangepub.publish(rangemsg);
-				if(DEBUG)
-					System.out.println("Published "+rangemsg.getRange());
-				Thread.sleep(1);
-			}
-					
-			Thread.sleep(1);
 		}
 	});  
 
@@ -705,13 +693,13 @@ public void onStart(final ConnectedNode connectedNode) {
 
 	/**
 	* Configure a subscriber to talk to a MarlinSpikeControlInterface which receives 
-	* a message of type: LUN#, value of control for that LUN#. <br/>
+	* a message of type: LUN#, value of control for that LUN#. <br>
 	* Process the commands from remote source to extract 32 bit int values and apply those to the
 	* device channels LUNs. The ordinals represent a logical unit LUN in the configuration which is
 	* a collection of node, device, slot, channel of a controller attached to a ROS node, which has
-	* a number of tty ports (devices) which have marlinspike boards attached (Mega2560 via USB running the firmware)
-	* which have a number of logical software controllers configured by slot and channels.<p/>
-	* Process a trigger value from the remote source, most likely a controller such as PS/3.<p/>
+	* a number of tty ports (devices) which have marlinspike boards attached (Mega2560 or Pico via USB running the firmware)
+	* which have a number of logical software controllers configured by slot and channels.<p>
+	* Process a trigger value from the remote source, most likely a controller such as PS/3.<p>
 	* Take the 2 trigger values as int32 and send them on to the microcontroller 
 	* related subsystem at the int valued LUNs. The marlinspike subsystem is composed of a software 
 	* controller instance talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
