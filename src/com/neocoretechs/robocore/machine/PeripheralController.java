@@ -229,8 +229,8 @@ public class PeripheralController extends AbstractNodeMain {
 		if(DEBUG)
 			System.out.printf("Robot reports host name as %s%n",robotName);
 		ParameterTree pTree = connectedNode.getParameterTree();
-		robot = (RobotInterface) pTree.get(robotName, null);
-		if(robot == null)
+		robot = (RobotInterface) pTree.get(robotName, new Robot());
+		if(robot.getHostName().equals("UNDEFINED"))
 			throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
 		//final Log log = connectedNode.getLog();
 		if(remaps.containsKey("__debug"))

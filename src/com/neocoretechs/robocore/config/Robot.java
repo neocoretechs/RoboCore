@@ -56,8 +56,8 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 public class Robot implements RobotInterface, Serializable {
 	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
-	private boolean indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
-	private String robotName;
+	private boolean indoor;
+	private String robotName = "UNDEFINED";
 	private int temperatureThreshold;
 	private MotionPIDController motionPIDController;
 	private RobotDiffDriveInterface robotDrive;
@@ -83,6 +83,7 @@ public class Robot implements RobotInterface, Serializable {
 		extractPID();
 		extractAXIS();
 		extractBUTTON();
+		indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
 		if(WHEEL.length > 0) {
 			robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
 			//kp, ki, kd, ko, pidRate (hz)
@@ -98,6 +99,8 @@ public class Robot implements RobotInterface, Serializable {
 		}
 	}
 	
+	public Robot() {}
+
 	private void extractBUTTON() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> button = globalConfigs.get("BUTTON");

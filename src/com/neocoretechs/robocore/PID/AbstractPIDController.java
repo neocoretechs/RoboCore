@@ -1,10 +1,14 @@
 package com.neocoretechs.robocore.PID;
+
+import java.io.Serializable;
+
 /**
  * Abstraction of a PID controller.
  * @author Jonathan Groff (C0 NeoCoreTechs 2020,2021
  *
  */
-public abstract class AbstractPIDController implements PIDParameterInterface {
+public abstract class AbstractPIDController implements PIDParameterInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	float PTerm;
 	float output;
 	float ITerm;
@@ -63,7 +67,8 @@ public abstract class AbstractPIDController implements PIDParameterInterface {
 	public int getPIDRate() {return PID_RATE;}
 	@Override
 	public void setPIDRate(int pID_RATE) {PID_RATE = pID_RATE;}
-
+	
+	public AbstractPIDController() {}
 	/**
 	 * 
 	 * @param kp

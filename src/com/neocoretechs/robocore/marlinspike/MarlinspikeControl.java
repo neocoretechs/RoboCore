@@ -203,21 +203,6 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	}
 
 	
-	public static void main(String[] args) throws Exception {
-		if( args.length < 1 ) {
-			System.out.println("Usage: java -cp <classpath> com.neocoretechs.robocore.MegaControl deviceName deviceLevel");
-		}
-		Robot robot = new Robot();
-		MarlinspikeManager mm = new MarlinspikeManager(robot);
-		AsynchDemuxer asynchDemuxer = new AsynchDemuxer(mm);
-		asynchDemuxer.connect(new ByteSerialDataPort());
-		MarlinspikeControl mc = new MarlinspikeControl(asynchDemuxer);
-		// set the absolute speed of the diff drive controller in slot 0 to 100 on channel 1 and 
-		// 1 on channel 2
-		mc.setDeviceLevel(args[0],Integer.parseInt(args[1]));
-
-	}
-
 
 }
 

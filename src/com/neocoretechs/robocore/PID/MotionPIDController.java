@@ -1,10 +1,16 @@
 package com.neocoretechs.robocore.PID;
+
+import java.io.Serializable;
+
 /**
  * PId controller maintaining a specified course using an established setpoint
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
-public class MotionPIDController extends AbstractPIDController {
+public class MotionPIDController extends AbstractPIDController implements Serializable {
+	private static final long serialVersionUID = 1L;
+	
+	public MotionPIDController() {}
 	/**
 	 * Construct with PID constants, integration rate, and maximum windup
 	 * @param kp

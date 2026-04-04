@@ -453,6 +453,7 @@ public class MarlinspikeManager {
 	}
 	
 	public static void main(String[] args) throws IOException {
+		/*
 		System.out.println(Arrays.toString((typeNames.values())));
 		RobotInterface robot = new Robot();
 		MarlinspikeManager mm = new MarlinspikeManager(robot);
@@ -492,6 +493,7 @@ public class MarlinspikeManager {
 		mm.lun[i].get("Type")+","+mm.lun[i].get("Slot")+","+mm.lun[i].get("SignalPin0")+","+mm.lun[i].get("Channel")+","+
 					mm.lun[i].get("EnablePin")+","+mm.lun[i].get("Direction")+","+mm.lun[i].get("EncoderPin"));
 		}
+		*/
 	}
 
 

@@ -281,9 +281,10 @@ public void onStart(final ConnectedNode connectedNode) {
 		PWM_MODE = remaps.get("__pwm");
 	
 	ParameterTree pTree = connectedNode.getParameterTree();
-	robot = (RobotInterface) pTree.get(robotName, null);
-	if(robot == null)
+	robot = (RobotInterface) pTree.get(robotName, new Robot());
+	if(robot.getHostName().equals("UNDEFINED")) {
 		throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
+	}
 	
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub = connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 	
