@@ -148,7 +148,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  * of small corrections to stay on course. Regardless of the amount the machine is knocked off course it can find its way back to the
  * proper heading through a circuitous route gradually refined to require only small correction.<p>
  * 
- * MarlinspikeManager will load but not activate the nodes listed in configuration when {@link MarlinspikeManager#configureMarlinspike(boolean, boolean)}
+ * MarlinspikeManager will load but not activate the nodes listed in configuration when {@link MarlinspikeManager#createControllers(boolean, boolean)}
  * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
  * want to get configuration for all available control nodes, but not activate them from this module since this module
  * issues directives to the attached controllers rather than control them directly.<p>
@@ -168,8 +168,7 @@ public class MotionController extends AbstractNodeMain {
 	static String robotName;
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
-	MarlinspikeManager marlinspikeManager;
-	Collection<DeviceEntry> deviceEntries;
+
 	//private InetSocketAddress master;
 	private CountDownLatch awaitStart = new CountDownLatch(1);
 
@@ -266,7 +265,7 @@ public class MotionController extends AbstractNodeMain {
 	private float maxSpeedSlope = 100;
 
 	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
-	boolean[] isActive;
+	
 	private boolean SOFTSTOP = false;
 
 	public MotionController(String[] args) {
@@ -294,19 +293,15 @@ public class MotionController extends AbstractNodeMain {
 			throw new RuntimeException("Must specify __robot:=<name> to configure parameters.");
 		}
 		try {
-			robot = new Robot(robotName);
 			ParameterTree pTree = connectedNode.getParameterTree();
-			pTree.set(robotName, robot);
-			marlinspikeManager = new MarlinspikeManager(robot);
-			marlinspikeManager.configureMarlinspike(true, false);
+			robot = (RobotInterface) pTree.get(robotName, new Robot());
+			if(robot.getHostName().equals("UNDEFINED")) {
+				robot = new Robot(robotName);
+				pTree.set(robotName, robot);
+			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
-		deviceEntries = marlinspikeManager.getDevices();
-		isActive = new boolean[deviceEntries.size()];
-		//robot = new Robot();
-		//System.out.println("onStart build robot...");
-		//System.out.println("onStart robot"+robot);
 		//final Log log = connectedNode.getLog();
 
 		if(remaps.containsKey("__debug"))
@@ -704,7 +699,7 @@ public class MotionController extends AbstractNodeMain {
 	* @param statpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
 	*/
 	private void configurePublisherListener(ConnectedNode connectedNode, HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel, Publisher<diagnostic_msgs.DiagnosticStatus> statpub) {
-		for(DeviceEntry ndd : deviceEntries) {
+		for(DeviceEntry ndd : robot.getManager().getDevices()) {
 			if(DEBUG)
 				System.out.printf("configurePublisherListener for DeviceEntry %s%n", ndd);
 			//if(ndd.getNodeName().equals(serveNode)) {
@@ -1281,7 +1276,7 @@ public class MotionController extends AbstractNodeMain {
 	 * @param axes the values of the stick axes
 	 */
 	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes) {
-		deviceEntries.forEach( lun -> {
+		robot.getManager().getDevices().forEach( lun -> {
 			if(!(lun.getName().endsWith("Wheel"))) {
 				int luni = lun.getLUN();
 				String axisType = (String) robot.getAXIS()[luni].get("AxisType");
@@ -1666,9 +1661,8 @@ public class MotionController extends AbstractNodeMain {
 	float yawDeg   = 57.2958 * yaw;
 	 */
 	public static void main(String[] args) throws IOException {
-		MotionController mc = new MotionController();
 		ArrayList<String> pubs = new ArrayList<String>();
-		for(DeviceEntry ndd : mc.deviceEntries) {
+		for(DeviceEntry ndd : MotionController.robot.getManager().getDevices()) {
 			System.out.println(ndd.getName());
 			if(DEBUG)
 				System.out.println("Bringing up publisher "+ndd.getName());

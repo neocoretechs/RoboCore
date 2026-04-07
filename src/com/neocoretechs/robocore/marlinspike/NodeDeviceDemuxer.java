@@ -8,11 +8,11 @@ import java.util.List;
 /**
  * Provides the scaffolding for a LUN, or Logical Unit in the configuration file.<p>
  * Encapsulates the nodeName, deviceName, device, {@link AsynchDemuxer} and {@link MarlinspikeControlInterface}
- * deviceName is a descriptor for the device, such as "LeftWheel" etc. Name from properties file.<p/>
- * The device itself is a process or tty port that the Marlinspike board is attached to. Controller from properties file.<p/> 
- * These demuxers are unique to each device and as such the hash and equals methods are keyed to device field.<p/>
+ * deviceName is a descriptor for the device, such as "LeftWheel" etc. Name from properties file.<p>
+ * The device itself is a process or tty port that the Marlinspike board is attached to. Controller from properties file.<p> 
+ * These demuxers are unique to each device and as such the hash and equals methods are keyed to device field.<p>
  * If the physical device is running this code as well, such as an SBC with its header generating PWM to the motor controllers,
- * the device is a process called MarlinspikeDataPort, otherwise its a tty port talking to a remote microcontroller.<p/>
+ * the device is a process called MarlinspikeDataPort, otherwise its a tty port talking to a remote microcontroller.<p>
  * Either way, directives are delivered as the platform agnostic M and G codes.<p/>
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
@@ -23,7 +23,6 @@ public class NodeDeviceDemuxer implements Serializable {
 	private String nodeName;
 	private String deviceName;
 	private String device;
-	private ArrayList<String> startup = new ArrayList<String>();
 	transient AsynchDemuxer asynchDemuxer = null;
 	private transient MarlinspikeControlInterface controlHost;
 	
@@ -76,22 +75,6 @@ public class NodeDeviceDemuxer implements Serializable {
 	 */
 	public String getDevice() {
 		return device;
-	}
-	/**
-	 * Add the parameter to the startup collection, if the entry already exists, reject it such that
-	 * all entries are unique. There is currently no known use case where a duplicate startup directive needs issued.
-	 * @param m10Gen
-	 */
-	public void addInit(List<String> m10Gen) {
-		for(String mElem : m10Gen) {
-			if(!startup.contains(mElem))
-				startup.add(mElem);
-		}
-	}
-	
-	public void init() throws IOException {
-		if(startup.size() > 0)
-			AsynchDemuxer.config(asynchDemuxer,startup);
 	}
 	
 	@Override

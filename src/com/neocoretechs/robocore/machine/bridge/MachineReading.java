@@ -13,17 +13,17 @@ import java.io.Serializable;
  * This class supports generating a series of requests to query the Marlinspike realtime subsystem and retrieve status
  * reports via various M codes issued to the realtime processing loop.<p>
  * We issue the commands directly through the serial USB or other port and wait for status messages to be
- * returned from the Marlinspike.<p/>
+ * returned from the Marlinspike.<p>
  * These reports are delineated by XML type headers and have various levels of structure, so a handler
- * is used in a separate thread for each 'topic' that corresponds to a header from the status payload from the Marlinspike.<p/>
+ * is used in a separate thread for each 'topic' that corresponds to a header from the status payload from the Marlinspike.<p>
  * These processing threads get the asynchronously returned data by demultiplexing them from a circular blocking queue
- * populated by the main run method of (@code AsynchDemuxer} which reads from the Marlinspike using the third party
- * open source RxTx library and its own read and write threads.<p/>
+ * populated by the main run method of {@link AsynchDemuxer} which reads from the Marlinspike using the third party
+ * serial library and its own read and write threads.<p>
  * Once each handler has demuxxed the data from the queue, it creates a series of {@code MachineReading} instances which
- * serve to order and give further structure to the retrieved data.<p/>
+ * serve to order and give further structure to the retrieved data.<p>
  * Each topic handler has it own queue of MachineReading instances and so in this way the realtime data which may come back
- * in all sorts of order and at various times is categorized and ordered.<p/>
- * The other purpose of the MachineReading and the {@code MachineBridge} arbiter that mitigates the intermediate MachineReading
+ * in all sorts of order and at various times is categorized and ordered.<p>
+ * The other purpose of the MachineReading and the {@link MachineBridge} arbiter that mitigates the intermediate MachineReading
  * processing is XML formatting using JAXB and suppling a JQuery ready set of XML compliant structures for web facing
  * applications.
  * @author Jonathan Neville Groff (C) NeoCoreTechs 2020

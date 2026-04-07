@@ -195,7 +195,6 @@ public class PeripheralController extends AbstractNodeMain {
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	MarlinspikeManager marlinspikeManager;
 	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
-	boolean[] isActive;
 
 	
 	public PeripheralController(String[] args) {
@@ -248,12 +247,11 @@ public class PeripheralController extends AbstractNodeMain {
 		// statpub has status alerts that may come from sensors.
 		marlinspikeManager = new MarlinspikeManager(robot);
 		try {
-			marlinspikeManager.configureMarlinspike(true, false);
+			marlinspikeManager.createControllers(true, false);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
-		isActive = new boolean[listNodeDeviceDemuxer.size()];
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -576,9 +574,9 @@ public class PeripheralController extends AbstractNodeMain {
 		if(DEBUG)
 			System.out.printf("%s message:%s vals:%f %f %f %n",this.getClass().getName(), message.toString(), axes[axisLED],axes[axisBoom],axes[axisLift]);
 		if(axes[axisLED] != -1 || 
-				isActive[robot.getLUN("LEDDriver")]) {
+				robot.active()[robot.getLUN("LEDDriver")]) {
 			if(axes[axisLED] == -1) {
-				if( isActive[robot.getLUN("LEDDriver")]) {
+				if( robot.active()[robot.getLUN("LEDDriver")]) {
 					ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
 					triggerVals.add(robot.getLUN("LEDDriver"));
 					triggerVals.add(0);
@@ -589,9 +587,9 @@ public class PeripheralController extends AbstractNodeMain {
 						Thread.sleep(5);
 					} catch (InterruptedException e) {}
 				}
-				isActive[robot.getLUN("LEDDriver")] = false;
+				robot.active()[robot.getLUN("LEDDriver")] = false;
 			} else {
-				isActive[robot.getLUN("LEDDriver")] = true;
+				robot.active()[robot.getLUN("LEDDriver")] = true;
 				ArrayList<Integer> triggerVals = new ArrayList<Integer>(2);
 				triggerVals.add(robot.getLUN("LEDDriver"));
 				triggerVals.add(Integer.valueOf((int)axes[axisLED])*1000);
@@ -609,10 +607,10 @@ public class PeripheralController extends AbstractNodeMain {
 		// set it up to send down the publishing pipeline
 		//
 		if(axes[axisBoom] != 0 ||
-			isActive[robot.getLUN("BoomActuator")]) {
+			robot.active()[robot.getLUN("BoomActuator")]) {
 			// was active, no longer
 			if(axes[axisBoom] == 0) {
-				isActive[robot.getLUN("BoomActuator")] = false;
+				robot.active()[robot.getLUN("BoomActuator")] = false;
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 				speedVals.add(robot.getLUN("BoomActuator")); //controller slot
 				speedVals.add(0);
@@ -622,7 +620,7 @@ public class PeripheralController extends AbstractNodeMain {
 				} catch (InterruptedException e) {}
 			} else {
 				// may not have been active, now is
-				isActive[robot.getLUN("BoomActuator")] = true;
+				robot.active()[robot.getLUN("BoomActuator")] = true;
 				ArrayList<Integer> speedVals = new ArrayList<Integer>(2);
 				speedVals.add(robot.getLUN("BoomActuator")); //controller slot
 				speedVals.add((int)(axes[axisBoom])*1000);
@@ -644,7 +642,7 @@ public class PeripheralController extends AbstractNodeMain {
 			povVals.add(robot.getLUN("LiftActuator"));
 			povVals.add(1000);
 			getPublisher(pubschannel, "LiftActuator").publish(setupPub(connectedNode, povVals));
-			isActive[robot.getLUN("LiftActuator")] = true;
+			robot.active()[robot.getLUN("LiftActuator")] = true;
 			try {
 				Thread.sleep(5);
 			} catch (InterruptedException e) {}
@@ -657,13 +655,13 @@ public class PeripheralController extends AbstractNodeMain {
 				povVals.add(robot.getLUN("LiftActuator")); //controller slot
 				povVals.add(-1000);
 				getPublisher(pubschannel, "LiftActuator").publish(setupPub(connectedNode, povVals));
-				isActive[robot.getLUN("LiftActuator")] = true;
+				robot.active()[robot.getLUN("LiftActuator")] = true;
 				try {
 					Thread.sleep(5);
 				} catch (InterruptedException e) {}
 			} else {
-				if( isActive[robot.getLUN("LiftActuator")]) {
-					isActive[robot.getLUN("LiftActuator")]= false;
+				if( robot.active()[robot.getLUN("LiftActuator")]) {
+					robot.active()[robot.getLUN("LiftActuator")]= false;
 					ArrayList<Integer> povVals = new ArrayList<Integer>(2);
 					povVals.add(robot.getLUN("LiftActuator")); //controller slot
 					povVals.add(0);

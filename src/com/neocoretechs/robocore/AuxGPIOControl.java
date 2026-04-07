@@ -21,10 +21,10 @@ public class AuxGPIOControl {
 	public void activateAux(AsynchDemuxer ad, int[] pinaction) throws IOException {
 		switch(pinaction[1]) {
 			case 0:
-				AsynchDemuxer.addWrite(ad, "M41 P"+String.valueOf(pinaction[0]));
+				ad.addWrite("M41 P"+String.valueOf(pinaction[0]));
 				break;
 			case 1:
-				AsynchDemuxer.addWrite(ad, "M42 P"+String.valueOf(pinaction[0]));
+				ad.addWrite("M42 P"+String.valueOf(pinaction[0]));
 				break;
 		}
 	}

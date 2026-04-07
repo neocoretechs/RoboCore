@@ -129,7 +129,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static boolean PORTDEBUG = false;
 	private volatile boolean shouldRun = true;
 	private DataPortCommandInterface dataPort;
@@ -210,10 +210,12 @@ public class AsynchDemuxer implements Runnable {
 	 * @param ad The AsynchDemuxer to queue to.
 	 * @param req The request to be enqueued.
 	 */
-	public static void addWrite(AsynchDemuxer ad, String req) {
-		ad.requestQueue.addLast(req);
+	public void addWrite(String req) {
+		if(!req.endsWith("\r") && !req.endsWith("\n"))
+			req += "\r";
+		requestQueue.addLast(req);
 		if(DEBUG)
-			System.out.println("Adding request to demuxer:"+ad+" "+req+" len:"+ad.requestQueue.length());
+			System.out.println("Adding request to demuxer:"+this+" "+req+" len:"+requestQueue.length());
 	}
 	/**
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
@@ -223,11 +225,9 @@ public class AsynchDemuxer implements Runnable {
 	 * @param ad The AsynchDemuxer to queue to.
 	 * @param req The request to be enqueued.
 	 */
-	public static void addWrite(AsynchDemuxer ad, List<String> req) {
-		ad.requestQueue.addLast(req);
-		if(DEBUG)
-			for(String reqs: req)
-				System.out.println("Adding request from list to demuxer:"+ad+" "+reqs+" len:"+ad.requestQueue.length());
+	public void addWrite(List<String> req) {
+		for(String reqs: req)
+			addWrite(reqs);
 	}
 	
 	public MachineBridge getMachineBridge(String group) {
@@ -249,7 +249,7 @@ public class AsynchDemuxer implements Runnable {
 	 */
 	private synchronized void init() {
 		// initialize the fixed thread pool manager
-		SynchronizedThreadManager.getInstance().init(new String[]{dataPort.getPortName()});
+		SynchronizedThreadManager.getInstance().init(new String[]{"ASYNCHDEMUXER"});
 			//
 			// G4
 			//
@@ -712,7 +712,8 @@ public class AsynchDemuxer implements Runnable {
 			topics.put(topicNames.ERROR.val(), new errorsetting(this).getTopicList());
 			//
 		// spin the main loop to read lines from the Marlinspike and muxx them
-		SynchronizedThreadManager.getInstance().spin(this, dataPort.getPortName());
+		SynchronizedThreadManager.startSupervisorThread();
+		SynchronizedThreadManager.getInstance().spin(this, "ASYNCHDEMUXER");
 
 		if(DEBUG)
 			System.out.println("AsynchDemuxer.Init END OF INITIALIZATION of Marlinspike topic listeners");
@@ -793,11 +794,11 @@ public class AsynchDemuxer implements Runnable {
 	 * the parsed properties from the main configuration.
 	 * @throws IOException
 	 */
-	public static void config(AsynchDemuxer ad) throws IOException {
+	public void config() throws IOException {
 		// now read the startup G-code directives to initiate
 		//String[] starts = FileIOUtilities.readAllLines("", "startup.gcode", ";");
 		List<String> starts = FileIOUtilities.getConfig();
-		config(ad, starts);
+		config(starts);
 	}
 	/**
 	 * General method to take any collection of codes and pass them in bulk to the input
@@ -805,18 +806,10 @@ public class AsynchDemuxer implements Runnable {
 	 * @param starts
 	 * @throws IOException
 	 */
-	public static void config(AsynchDemuxer ad, List<String> starts) throws IOException {
+	public void config(List<String> starts) throws IOException {
 		if(DEBUG)
-			System.out.printf("%s Thread:%s Port:%s Startup GCode list:%n",ad.getClass().getName(),Thread.currentThread().getName(),ad.dataPort.getPortName());
-		addWrite(ad,starts);
-		if(DEBUG)
-			addWrite(ad,"M705\r"); // comprehensive motor driver and pin assignment M-code
-		//while(!toWrite.isEmpty() || mutexWrite.getNumberWaiting() > 0)
-		//	try {
-		//		Thread.sleep(0,10);
-		//	} catch (InterruptedException e) {
-		//		throw new IOException(e);
-		//	}
+			System.out.printf("%s Thread:%s Port:%s Startup GCode list:%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName());
+		addWrite(starts);
 	}
 	
 	/**
@@ -834,7 +827,8 @@ public class AsynchDemuxer implements Runnable {
 		ArrayList<String> payload;
 		while(shouldRun) {
 				try {
-					synchronized(mutex) {
+					if(DEBUG)
+						System.out.println("AsynchDemux "+this+" queue="+requestQueue.size());
 						payload = dataPort.sendCommand(requestQueue.takeFirst());
 						if(DEBUG)
 							System.out.println("AsynchDemux "+this+" response:"+payload+" from dataport:"+dataPort);
@@ -863,7 +857,6 @@ public class AsynchDemuxer implements Runnable {
 										" RESPONSE FROM PORT "+dataPort.getPortName()+" NO TOPIC FOR:"+fop+", CANNOT DEMUX DIRECTIVE:"+Arrays.toString(payload.toArray()));
 							}
 						}
-					}
 				} catch(Exception e) {
 					e.printStackTrace();
 					//shouldRun = false;

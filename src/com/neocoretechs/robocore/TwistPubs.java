@@ -108,7 +108,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			MarlinspikeManager mm = new MarlinspikeManager(robot); 
 			asynchDemuxer = new AsynchDemuxer(mm);
 			asynchDemuxer.connect(new ByteSerialDataPort());
-			AsynchDemuxer.config(asynchDemuxer);
+			asynchDemuxer.config();
 		} catch (IOException e) {
 		System.out.println("Could not start process to read attached serial port.."+e);
 			e.printStackTrace();

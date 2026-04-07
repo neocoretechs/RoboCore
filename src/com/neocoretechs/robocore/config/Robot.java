@@ -5,6 +5,8 @@ import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -15,15 +17,17 @@ import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 /**
  * This class represents a centralized configuration management instrument.
  * <pre>
  * Read the paramaterized properties from the properties class. Config as follows by LUN, logical unit number:<p>
+ * DataPort:/dev/ttyACM0
  * LUN[0].Name:LeftWheel 
  * LUN[0].NodeName:Control1
- * LUN[0].Controller:/dev/ttyACM0 
  * LUN[0].Type:H-Bridge 
  * LUN[0].Slot:0 
  * LUN[0].SignalPin0:8 
@@ -50,11 +54,11 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * With that in mind the parameters that would seem to warrant global status have been repeated so as to appear from the
  * perspective of each individual component, and if necessary, appear in aggregate as global.<p>
  * If we initialize a diff drive, we expect PID control settings, and IMU settings even if one never appears.
- * @author Jonathan Groff (C) NeoCoreTechs 2021
+ * @author Jonathan Groff (C) NeoCoreTechs 2021,2026
  *
  */
 public class Robot implements RobotInterface, Serializable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
 	private boolean indoor;
 	private String robotName = "UNDEFINED";
@@ -62,6 +66,7 @@ public class Robot implements RobotInterface, Serializable {
 	private MotionPIDController motionPIDController;
 	private RobotDiffDriveInterface robotDrive;
 	private IMUSetpointInfo IMUSetpoint;
+	private String dataPort = "/dev/ttyACM0";
 	// These arrays are by 'channel'
 	private TypedWrapper[] LUN;
 	private TypedWrapper[] WHEEL;
@@ -69,6 +74,12 @@ public class Robot implements RobotInterface, Serializable {
 	private TypedWrapper[] AXIS;
 	private TypedWrapper[] BUTTON;
 	private Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
+	AsynchDemuxer asynchDemuxer;
+	MarlinspikeManager marlinspikeManager = null;
+	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
+	boolean[] isActive;
+	Collection<DeviceEntry> deviceEntries;
+	
 	public Robot(String robotName) throws IOException {
 		this.robotName = robotName;
 		try {
@@ -84,21 +95,33 @@ public class Robot implements RobotInterface, Serializable {
 		extractAXIS();
 		extractBUTTON();
 		indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
+		dataPort = Props.toString("DataPort");
 		if(WHEEL.length > 0) {
 			robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
 			//kp, ki, kd, ko, pidRate (hz)
 			motionPIDController = new MotionPIDController(Props.toFloat("CrosstrackKp"), 
-														Props.toFloat("CrosstrackKd"), 
-														Props.toFloat("CrosstrackKi"), 
-														Props.toFloat("CrosstrackKo"), 
-														Props.toInt("CrosstrackPIDRate"));
-			IMUSetpoint = new IMUSetpointInfo();
-			IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
-			IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
-			temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
+					Props.toFloat("CrosstrackKd"), 
+					Props.toFloat("CrosstrackKi"), 
+					Props.toFloat("CrosstrackKo"), 
+					Props.toInt("CrosstrackPIDRate"));
+		}
+		IMUSetpoint = new IMUSetpointInfo();
+		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
+		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
+		temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
+		marlinspikeManager = new MarlinspikeManager(this);
+		marlinspikeManager.createControllers(false, true);
+		isActive = new boolean[deviceEntries.size()];
+		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
+		// if it matched the name of this host the entry is included in the collection. 
+		// In this way only entries that apply to Marlinspikes attached to this host are utilized.
+		for(DeviceEntry ndd: marlinspikeManager.getDevices()) {
+			if(DEBUG)
+				System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), ndd.getName());	
+			isOperating.put(ndd.getName(), false);
 		}
 	}
-	
+
 	public Robot() {}
 
 	private void extractBUTTON() {
@@ -126,6 +149,21 @@ public class Robot implements RobotInterface, Serializable {
 		 }	
 	}
 	
+	public String getDataPort() {
+		return dataPort;
+	}
+	
+	public MarlinspikeManager getManager() {
+		return marlinspikeManager;
+	}
+	
+	public HashMap<String, Boolean> getOperating() {
+		return isOperating;
+	}
+	
+	public boolean[] active() {
+		return isActive;
+	}
 	private void extractAXIS() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> axis = globalConfigs.get("AXIS");
@@ -295,6 +333,12 @@ public class Robot implements RobotInterface, Serializable {
 	@Override
 	public float getTemperatureThreshold() {
 		return temperatureThreshold;
+	}
+	/**
+	 * @return the controller
+	 */
+	public String getDataport() {
+		return dataPort;
 	}
 	
 

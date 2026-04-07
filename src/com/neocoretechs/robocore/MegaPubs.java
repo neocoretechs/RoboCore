@@ -201,13 +201,10 @@ public class MegaPubs extends AbstractNodeMain  {
 	// Initialize various types of responses that will be published to the various outgoing message busses.
 	// Generate base {@link Robot} that bootstraps configs from RoboCore.properties via VM command line directive
 	//
-	static RobotInterface robot;
-	
-	//final AsynchDemuxer asynchDemuxer = new AsynchDemuxer();
-	MarlinspikeManager marlinspikeManager = null;
+	RobotInterface robot;
+
 	// Collection of subscriber to node device name
 	HashMap<Subscriber<Int32MultiArray>, String> subscriberDevice = new HashMap<Subscriber<Int32MultiArray>, String>();
-	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
 	
 	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses;
 	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic;
@@ -288,7 +285,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub = connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 	
-	configureMarlinspikeManager(connectedNode, statpub);
+	responses = new PublishDiagnosticResponse[stopics.length];
 	
 	//final RosoutLogger log = (Log) connectedNode.getLog();
 
@@ -298,13 +295,13 @@ public void onStart(final ConnectedNode connectedNode) {
 	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager method below.
 	// for each NodeDeviceDemuxer, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
 	//
-	for(DeviceEntry ndd : marlinspikeManager.getDevices()) {
+	for(DeviceEntry ndd : robot.getManager().getDevices()) {
 		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
 		subscriberDevice.put(subscr, ndd.getName());
 		configureSubscriberListener(subscr, connectedNode, statpub);
 	}
 	
-	NodeDeviceDemuxer demux = (NodeDeviceDemuxer) marlinspikeManager.getNodeDeviceDemuxers().toArray()[0];
+	NodeDeviceDemuxer demux = (NodeDeviceDemuxer) robot.getManager().getNodeDeviceDemuxers().toArray()[0];
 	// Initialize the collection of DiagnosticStatus response handlers
 	for(int i = 0; i < stopics.length; i++) {
 		responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
@@ -343,12 +340,12 @@ public void onStart(final ConnectedNode connectedNode) {
 			if( targetPitch == -1 && targetDist == -1 && targetYaw == -1) {
 				shouldMove = false;
 				try {
-					for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
+					for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
 						ndd.getMarlinspikeControl().commandStop();
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
-				isOperating.replaceAll((key, value) -> false);
+				robot.getOperating().replaceAll((key, value) -> false);
 			}
 				
 		}
@@ -449,7 +446,7 @@ public void onStart(final ConnectedNode connectedNode) {
 				if(DEBUG)
 					System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%d Thread:%s%n", this.getClass().getName(), subs, deviceName, message.toString(), valch.length, Thread.currentThread().getName());
 				try {
-						MarlinspikeControlInterface control = marlinspikeManager.getMarlinspikeControl(deviceName);
+						MarlinspikeControlInterface control = robot.getManager().getMarlinspikeControl(deviceName);
 						if(DEBUG)
 							System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
 						if(control == null) {
@@ -465,18 +462,18 @@ public void onStart(final ConnectedNode connectedNode) {
 							int affectorSpeed = valch[iarg];
 							if(DEBUG)
 								System.out.printf("%s Message:%s DeviceName=%s arg=%d speed:%d operating:%b%n", this.getClass().getName(), message.toString(), 
-										deviceName, iarg, affectorSpeed, isOperating.get(deviceName));
+										deviceName, iarg, affectorSpeed, robot.getOperating().get(deviceName));
 							// keep Marlinspike from getting bombed with zeroes
-							if(isOperating.get(deviceName)) {
+							if(robot.getOperating().get(deviceName)) {
 								if(affectorSpeed == 0) {
 									control.setDeviceLevel(deviceName, 0);
-									isOperating.replace(deviceName, true, false);
+									robot.getOperating().replace(deviceName, true, false);
 								} else {
 									control.setDeviceLevel(deviceName, affectorSpeed);
 								}
 							} else {
 								if(affectorSpeed != 0) {
-									isOperating.replace(deviceName, false, true);
+									robot.getOperating().replace(deviceName, false, true);
 									control.setDeviceLevel(deviceName, affectorSpeed);
 								}
 							}
@@ -552,7 +549,7 @@ public void onStart(final ConnectedNode connectedNode) {
 							System.out.println("GPIO direct");
 							if( auxGPIO == null )
 								auxGPIO = new AuxGPIOControl();
-							auxGPIO.activateAux(marlinspikeManager.getMarlinspikeControl("GPIO"), request.getData().getData());
+							auxGPIO.activateAux(robot.getManager().getMarlinspikeControl("GPIO"), request.getData().getData());
 							response.setData("success");
 						/*} catch (NoSuchElementException e) {
 							System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
@@ -605,7 +602,7 @@ public void onStart(final ConnectedNode connectedNode) {
 									System.out.println("PWM direct");
 									if( auxPWM == null )
 										auxPWM = new AuxPWMControl();
-									auxPWM.activateAux(marlinspikeManager.getMarlinspikeControl("PWM"), request.getData().getData());	
+									auxPWM.activateAux(robot.getManager().getMarlinspikeControl("PWM"), request.getData().getData());	
 									break;
 							}
 							response.setData("success");
@@ -651,18 +648,18 @@ public void onStart(final ConnectedNode connectedNode) {
 					try {
 						switch(request.getData()) {
 							case "id":
-								for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
+								for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
 									sb.append(ndd.getMarlinspikeControl().reportSystemId());
 								response.setData(sb.toString());
 								break;
 							case "reset":
-								for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
+								for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
 									sb.append(ndd.getMarlinspikeControl().commandReset());
 								response.setData(sb.toString());
 								break;
 							case "status":
 							default:
-								for(NodeDeviceDemuxer ndd : marlinspikeManager.getNodeDeviceDemuxers())
+								for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
 									sb.append(ndd.getMarlinspikeControl().reportAllControllerStatus());
 								response.setData(sb.toString());
 								break;		
@@ -745,47 +742,6 @@ public void onStart(final ConnectedNode connectedNode) {
 				}
 		});
 	}
-
-	/**
-	 * Create the MarlinspikeManager and the list of diagnostic responses to publish based on the stopics collection.
-	 * If there is a problem we will try to publish exception to diagnostic channel if possible and throw a RuntimeException.<p/>
-	 * Here, we configure the critical listNodeDeviceDemuxer that is used in the onStart method above.
-	 * @param connectedNode The Ros node we are currently initializing
-	 * @param tstatpub the diagnostic status publisher channel
-	 */
-	private void configureMarlinspikeManager(ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
-		// TODO get this from parameter server or singleton with map of robot names
-		try {
-			marlinspikeManager = new MarlinspikeManager(robot);
-			marlinspikeManager.configureMarlinspike(false, true);
-			// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
-			// if it matched the name of this host the entry is included in the collection. 
-			// In this way only entries that apply to Marlinspikes attached to this host are utilized.
-			for(DeviceEntry ndd: marlinspikeManager.getDevices()) {
-				if(DEBUG)
-					System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), ndd.getName());	
-				isOperating.put(ndd.getName(), false);
-				ndd.getNodeDeviceDemuxer().getMarlinspikeControl().reportAllControllerStatus();
-			}
-			responses = new PublishDiagnosticResponse[stopics.length];
-		} catch (IOException e) {
-			System.out.println("Could not connect to Marlinspike.."+e);
-			e.printStackTrace();
-			synchronized(statPub) {
-				statPub.add("Could not connect to Marlinspike.."+e);
-				new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, "MARLINSPIKE CONNECTION", 
-					diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-				while(!outgoingDiagnostics.isEmpty()) {
-					try {
-						tstatpub.publish(outgoingDiagnostics.takeFirst());
-						Thread.sleep(1);
-					} catch (InterruptedException e1) {}
-				}
-			}
-			throw new RuntimeException(e);
-		}
-	}
-	
 	
 	public static void main(String[] args) {
 		

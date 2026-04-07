@@ -64,10 +64,13 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
  */
 public class TypeSlotChannelEnable implements Serializable {
 	private static final long serialVersionUID = 1L;
+	private boolean DEBUG = true;
 	typeNames cntrltype;
 	int pin;
 	private int slot;
+	private boolean isSlot = false;
 	int channel;
+	private boolean isChannel = false;
 	int enable;
 	int dirdefault = 0;
 	int M10CtrlType = -1; // ordinal of typeNames for this instance
@@ -81,8 +84,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	int digitalEncoderState = 0; // low
 	int maxValue = 1000;
 	int minValue = -1000;
-	int freq = 50000;
-	int duty = 25000;
+
 	boolean pinToggle = false;
 	/**
 	 * M10 controller types
@@ -167,16 +169,6 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.activator = cntrltype.activatorFactory(this);
 	}
 	
-	public TypeSlotChannelEnable(typeNames cntrltype, int slot, int channel, int enable, int dirdefault, int freq, int duty) {
-		this.cntrltype = cntrltype;
-		this.slot = slot;
-		this.channel = channel;
-		this.enable = enable;
-		this.dirdefault = dirdefault;
-		this.freq = freq;
-		this.duty = duty;
-		this.activator = cntrltype.activatorFactory(this);
-	}
 	
 	public void setEncoderPin(int ienc) {
 		this.encoder = ienc;	
@@ -200,20 +192,35 @@ public class TypeSlotChannelEnable implements Serializable {
 	
 	public int getMaxValue() { return maxValue; }
 	
-	public int getFreq() { return freq; }
-	
-	public int getDuty() { return duty; }
-	
-	public void setDuty(int duty) {
-		this.duty = duty;
+	/**
+	 * Parse the result of M798 status call
+	 * @param readingValString
+	 */
+	public void parseStatus(String stat) {
+		int iSlot = stat.indexOf(" Motor Slot:");
+		int nSlot = -1;
+		if(iSlot != -1) {
+			nSlot = Integer.parseInt(stat.substring(iSlot+12,iSlot+13));
+			if(DEBUG)
+				System.out.printf("%s parseStatus slot=%d%n", this.getClass().getName(),nSlot);
+		}
+		if(nSlot != -1 && nSlot == slot)
+			isSlot = true;
+		int iChan = stat.indexOf(" Motor Channel:");
+		int nChan = -1;
+		while(iChan != -1) {
+			nChan = Integer.parseInt(stat.substring(iChan+15,iChan+16));
+			if(nChan == channel) {
+				isChannel = true;
+				break;
+			}
+			iChan = stat.indexOf(" Motor Channel:",iChan+15);
+		}
 	}
-	
-	public void setFreq(int freq) {
-		this.freq = freq;
-	}
-	
 	/**
 	 * CALL THIS FIRST to establish instance of controller for further operations and to refer to it numerically by type.
+	 * This is done AFTER the call to M798 to determine whether the slot and channel has already been configured.
+	 * TODO PWM types
 	 * M10 initializes a type of controller in a specific 'slot' that becomes an ordinal number we use to refer to the controller
 	 * in subsequent M codes. Different controller types occupy different 'slots' depending on the object type hierarchy
 	 * Types 0-3 occupy the 'motor control' slots while type 4 occupies the 'PWM' slot. Each has its own sequence.
@@ -233,21 +240,25 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @return The M10 directive list of strings, possibly multiple c/r delimited directives relating to configuring the type in the M10 preamble
 	 */
 	public List<String> genM10(int ipin0, int ipin1) {
-		M10CtrlType = cntrltype.ordinal();
-		StringBuilder sb = new StringBuilder();
 		ArrayList<String> ab =  new ArrayList<String>();
-		if(cntrltype.val().endsWith("Pin")) {
-			ab.add(sb.append("M").append(configCodes[M10CtrlType]).append(" P").append(pin).append("\r\n").toString());
-		} else {
-			// Generate the M10 followed by the the M codes to create the type, the encoder, the interrupt linkage, etc.
-			ab.add(sb.append("M10 ").append("Z").append(getSlot()).append(" T").append(M10CtrlType).append("\r\n").toString());
-			// build a line to add to list
-			sb = new StringBuilder();
-			sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder());
-			// add the channel/dir/default encoder line, then add the lines for channel encoders, if present
-			ab.add(sb.toString());
-			ab.add(genChannelEncoder());
-		}
+			M10CtrlType = cntrltype.ordinal();
+			StringBuilder sb = new StringBuilder();
+			if(cntrltype.val().endsWith("Pin")) {
+				ab.add(sb.append("M").append(configCodes[M10CtrlType]).append(" P").append(pin).toString());
+			} else {
+				if(!isSlot) {
+					// Generate the M10 followed by the the M codes to create the type, the encoder, the interrupt linkage, etc.
+					ab.add(sb.append("M10 ").append("Z").append(getSlot()).append(" T").append(M10CtrlType).toString());
+				}
+				if(!isChannel) {
+					// build a line to add to list
+					sb = new StringBuilder();
+					sb.append(genTypeAndSlot()).append(genDrivePins(ipin0, ipin1)).append(genChannelDirDefaultEncoder());
+					// add the channel/dir/default encoder line, then add the lines for channel encoders, if present
+					ab.add(sb.toString());
+					ab.add(genChannelEncoder());
+				}
+			}
 		return ab;
 	}
 	/**
@@ -333,9 +344,9 @@ public class TypeSlotChannelEnable implements Serializable {
 			case 0:// smart controller, may or may not have encoder defined with its firmware, not ours
 				if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder)
 					sb.append(" W").append(encoder);
-				return sb.append(" E").append(dirdefault).append("\r\n").toString();
+				return sb.append(" E").append(dirdefault).toString();
 			case 5:// straight PWM driver, no motor, hence, no encoder
-				return sb.append(" D").append(dirdefault).append("\r\n").toString();
+				return sb.append(" D").append(dirdefault).toString();
 			default:
 				break;
 		}
@@ -346,7 +357,7 @@ public class TypeSlotChannelEnable implements Serializable {
 			if(encInterrupt != 0)
 				sb.append(" I").append(encInterrupt);
 		}
-		return sb.append("\r\n").toString();
+		return sb.toString();
 	}
 	
 	private String genChannelEncoder() {
@@ -355,13 +366,11 @@ public class TypeSlotChannelEnable implements Serializable {
 			sb.append("M14 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" L").append(loAnalogEncoderRange).append(" H").append(hiAnalogEncoderRange).append(" N").append(encoderCount);
 			if(encInterrupt != 0)
 				sb.append(" I").append(encInterrupt);
-			sb.append("\r\n");
 		} else { 
 			if(isDigitalEncoder) {
 				sb.append("M15 Z").append(getSlot()).append(" C").append(channel).append(" P").append(encoder).append(" S").append(digitalEncoderState).append(" N").append(encoderCount);
 				if(encInterrupt != 0)
 					sb.append(" I").append(encInterrupt);
-				sb.append("\r\n");
 			}
 		}
 		return sb.toString();
@@ -388,8 +397,8 @@ public class TypeSlotChannelEnable implements Serializable {
 		if(cntrltype.val().endsWith("Pin")) {
 			ret = String.format("Control type: %s pin:%d%n",cntrltype, pin);
 		} else {
-			ret = String.format("Control type: %s slot:%d channel:%d enable:%d default dir:%d freq:%d duty%d M10 type:%d%n",  
-				cntrltype, getSlot(), channel, enable, dirdefault, freq, duty, M10CtrlType);
+			ret = String.format("Control type: %s slot:%d isSlot:%b channel:%d isChannel:%b enable:%d default dir:%d  M10 type:%d%n",  
+				cntrltype, getSlot(), isSlot, channel, isChannel, enable, dirdefault, M10CtrlType);
 			if(encoder != 0 && !isAnalogEncoder && !isDigitalEncoder) {
 				ret += String.format(" Default encoder at pin:%d",encoder);
 				if(encInterrupt != 0)
@@ -465,6 +474,7 @@ public class TypeSlotChannelEnable implements Serializable {
 		System.out.print(sb);
 		System.out.println("-----");
 	}
+
 
 
 }

@@ -78,18 +78,6 @@ public class DeviceEntry {
 	public void setLUN(int lUN) {
 		LUN = lUN;
 	}
-	/**
-	 * @return the controller
-	 */
-	public String getController() {
-		return Controller;
-	}
-	/**
-	 * @param controller the controller to set
-	 */
-	public void setController(String controller) {
-		this.Controller = controller;
-	}
 	
 	/**
 	 * @return the ndd
