@@ -85,8 +85,8 @@ public class TypeSlotChannelEnable implements Serializable {
 	int digitalEncoderState = 0; // low
 	int maxValue = 1000;
 	int minValue = -1000;
-	Optional<Object> pin1;
-	Optional<Object> pin0;
+	int pin1;
+	int pin0;
 
 	boolean pinToggle = false;
 	/**
@@ -195,23 +195,21 @@ public class TypeSlotChannelEnable implements Serializable {
 	public int getMaxValue() { return maxValue; }
 	
 	public void setPin0(Optional<Object> pin) {
-		pin0 = pin;
+		if(pin.isPresent())
+			pin0 = Integer.parseInt((String) pin.get());
 	}
 	
 	public int getPin0() {
-		if(pin0.isPresent())
-			return Integer.parseInt((String) pin0.get());
-		return -1;
+		return pin0;
 	}
 	
 	public void setPin1(Optional<Object> pin) {
-		pin1 = pin;
+		if(pin.isPresent())
+			pin1 = Integer.parseInt((String) pin.get());
 	}
 	
 	public int getPin1() {
-		if(pin1.isPresent())
-			return Integer.parseInt((String) pin1.get());
-		return -1;
+		return pin1;
 	}
 	/**
 	 * Parse the result of M798 status call

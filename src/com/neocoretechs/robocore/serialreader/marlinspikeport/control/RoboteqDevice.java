@@ -2,13 +2,14 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 
 import java.io.IOException;
 
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 /**
  * Driver for Roboteq smart motor controllers. Interface serial protocol is via RS232 over UART and level converter or CAN etc.
  * Relies on {@link ByteSerialDataPort}
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  */
-public class RoboteqDevice extends AbstractSmartMotorControl {
+public class RoboteqDevice extends AbstractSmartMotorControl implements MarlinspikeControlInterface {
 	private static boolean DEBUG = false;
 	static final int ROBOTEQ_DEFAULT_TIMEOUT  =   1000;
 	static final int ROBOTEQ_BUFFER_SIZE      =   64;
@@ -781,6 +782,31 @@ public class RoboteqDevice extends AbstractSmartMotorControl {
 		}
 		*/
 		System.out.println(rd.getDriverInfo(1));
+	}
+	
+	@Override
+	public String reportAllControllerStatus() throws IOException {
+		StringBuffer sb = new StringBuffer(getDriverInfo(1));
+		sb.append("\r\n");
+		sb.append(getDriverInfo(2));
+		return sb.toString();
+	}
+	
+	@Override
+	public String reportSystemId() throws IOException {
+		return String.valueOf(queryStatusFlag());
+	}
+	@Override
+	public void commandStop() throws IOException {
+		commandEmergencyStop(0);
+	}
+	@Override
+	public void setDeviceLevel(String deviceName, int deviceLevel) throws IOException {
+		commandMotorPower(Integer.parseInt(deviceName), deviceLevel);	
+	}
+	@Override
+	public void commandPWM(String string) {
+		throw new RuntimeException("unsupported");
 	}
 
 }

@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.config;
 
+import java.io.Serializable;
 import java.util.Map;
 /**
  * The TypedWrapper has the property name as string and property value as value for each property
@@ -46,7 +47,7 @@ import java.util.Map;
  * @author Jonathan Groff (C) NeoCoreTechs 2021
  *
  */
-public class TypedWrapper extends java.util.concurrent.ConcurrentHashMap<String, Object> {
+public class TypedWrapper extends java.util.concurrent.ConcurrentHashMap<String, Object> implements Serializable{
 	private static final long serialVersionUID = 1L;
 	public TypedWrapper(Object object) {
 		this.putAll((Map<? extends String, ? extends Object>) object);

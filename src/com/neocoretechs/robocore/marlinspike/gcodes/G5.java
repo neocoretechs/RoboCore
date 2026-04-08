@@ -1,6 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.gcodes;
 
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.ActivationInterface;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
@@ -11,7 +13,8 @@ import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
-public class G5 extends AbstractBasicResponse implements ActivationInterface {
+public class G5 extends AbstractBasicResponse implements ActivationInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	private boolean DEBUG = false;
 	private TypeSlotChannelEnable tsce; 
 	public G5(AsynchDemuxer asynchDemuxer) {

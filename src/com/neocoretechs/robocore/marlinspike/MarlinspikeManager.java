@@ -1,6 +1,8 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -26,6 +28,7 @@ import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
+import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
 
 /**
  * Each individual robot uses this class to manage its collection of attributes initially parsed from config file, including
@@ -35,14 +38,15 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
-public class MarlinspikeManager {
+public class MarlinspikeManager implements Serializable {
+	private static final long serialVersionUID = 1L;
 	private static boolean DEBUG = true;
 	RobotInterface robot;
 	String hostName;
 	TypedWrapper[] lun;
 	TypedWrapper[] wheel;
 	TypedWrapper[] pid;
-	AsynchDemuxer asynchDemuxer;
+	transient AsynchDemuxer asynchDemuxer;
 	/**
 	 * deviceToType  [Name of device, i.e. "LeftWheel", TypeSlotChannelEnable]
 	 */
@@ -83,12 +87,23 @@ public class MarlinspikeManager {
 	public synchronized void createControllers(boolean override, boolean activate) throws IOException {
 		for(int i = 0; i < lun.length; i++) {
 			if(override || hostName.equals(lun[i].get("NodeName"))) {
+				// general min and max values
+				Optional<Object> ominValue = Optional.ofNullable(lun[i].get("Min"));
+				Optional<Object> omaxValue = Optional.ofNullable(lun[i].get("Max"));
 				String name = (String)lun[i].get("Name");
 				if(name == null)
 					throw new IOException("Must specify Name parameter in configuration file for host "+hostName);
-				String controller = (String)lun[i].get("Controller");
-				if(controller == null)
-					throw new IOException("Must specify Controller parameter in configuration file for host "+hostName+" Name:"+name);
+				String controllerInst = (String)lun[i].get("Controller");
+				MarlinspikeControlInterface controller = null;
+				if(controllerInst != null) {
+					try {
+						Class<AbstractMotorControl> amc =  (Class<AbstractMotorControl>) Class.forName(controllerInst);
+						controller = (MarlinspikeControlInterface) amc.getConstructor(Integer.class).newInstance(omaxValue.get());
+					} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+							| InvocationTargetException | NoSuchMethodException | ClassNotFoundException e) {
+						throw new RuntimeException(e);
+					}
+				}
 				DeviceEntry deviceEntry = new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controller);
 				devices.add(deviceEntry);
 				// map within a map, nameToTypeMap, 
@@ -148,9 +163,6 @@ public class MarlinspikeManager {
 					if(oToggle.isPresent() && Boolean.parseBoolean((String)lun[i].get("Toggle")))
 							tsce.setPinToggle();
 				}
-				// general min and max values
-				Optional<Object> ominValue = Optional.ofNullable(lun[i].get("Min"));
-				Optional<Object> omaxValue = Optional.ofNullable(lun[i].get("Max"));
 				if(ominValue.isPresent())
 					tsce.setMinValue(Integer.parseInt((String)lun[i].get("Min")));
 				if(omaxValue.isPresent())

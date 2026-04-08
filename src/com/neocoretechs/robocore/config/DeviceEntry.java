@@ -21,20 +21,19 @@ public class DeviceEntry implements Serializable{
 	private String Name; // name entry in properties configuration file, such as "LeftWheel"
 	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
 	private int LUN; // integer LUN position, points to LUN array in Robot, such as 1
-	private String Controller; // the physical device port microcontroller for this entry is attached to, such as /dev/ttyACM0
 	private transient MarlinspikeControlInterface controlHost;
 	/**
 	 * 
 	 * @param Name name entry in properties configuration file, such as "LeftWheel"
 	 * @param NodeName the node attached to, typically the SSID name of the Ros node, such as "ROSCOE1"
 	 * @param LUN integer LUN position, points to LUN array in Robot, such as 1
-	 * @param Controller the physical device port microcontroller for this entry is attached to, such as /dev/ttyACM0
+	 * @param controller alternate controller implementing MarlinspikeControlInterface
 	 */
-	public DeviceEntry(String Name, String NodeName, int LUN, String Controller) {
+	public DeviceEntry(String Name, String NodeName, int LUN, MarlinspikeControlInterface controller) {
 		this.Name = Name;
 		this.NodeName = NodeName;
 		this.LUN = LUN;
-		this.Controller = Controller;
+		this.controlHost = controller;
 	}
 	/**
 	 * Form a template for locating in collection via name
@@ -98,6 +97,6 @@ public class DeviceEntry implements Serializable{
 	}
 	@Override
 	public String toString() {
-		return String.format("%s %s %s %d %s%n", this.getClass().getName(), Name, NodeName, LUN, Controller);
+		return String.format("%s %s %s %d %s%n", this.getClass().getName(), Name, NodeName, LUN, controlHost);
 	}
 }

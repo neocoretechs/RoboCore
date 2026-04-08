@@ -18,7 +18,7 @@ public interface MarlinspikeControlInterface {
 	public String reportAllControllerStatus() throws IOException;
 	public String reportSystemId() throws IOException;
 	public void commandStop() throws IOException;
-	public String commandReset() throws IOException;
+	public int commandReset() throws IOException;
 	public void setDeviceLevel(String deviceName, int deviceLevel) throws IOException;
 	public void commandPWM(String string);
 }
