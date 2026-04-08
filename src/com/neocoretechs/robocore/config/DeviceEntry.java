@@ -1,6 +1,8 @@
 package com.neocoretechs.robocore.config;
 
-import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
+import java.io.Serializable;
+
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 
 /**
  * List of unique devices from RoboCore.properties loaded into parameter tree. Assembled into collection in {@link MarlinspikeManager}<p>
@@ -8,20 +10,19 @@ import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
  * the node attached to the host computer name of the Ros node, such as "CONTROL1", the Controller which is
  * the physical device port the microcontroller for this entry is attached to, such as /dev/ttyACM0 using 
  * {@link com.neocoretechs.robocore.serialreader.ByteSerialDataPort}, or a class that
- * handles the same sort of input using a line reader such as {@link com.neocoretechs.robocore.serialreader.MarlinspikeDataPort},
- * and finally the {@link NodeDeviceDemuxer}, which ties together the various parts of a LUN logical configuration unit and
- * carries some of the same information collected here for convenience.
+ * handles the same sort of input using a line reader such as {@link com.neocoretechs.robocore.serialreader.MarlinspikeDataPort}.
  * @see com.neocoretechs.robocore.serialreader.MarlinspikeDataPort
  * @see com.neocoretechs.robocore.serialreader.ByteSerialDataPort
- * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022,2026
  *
  */
-public class DeviceEntry {
+public class DeviceEntry implements Serializable{
+	private static final long serialVersionUID = 1L;
 	private String Name; // name entry in properties configuration file, such as "LeftWheel"
 	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
 	private int LUN; // integer LUN position, points to LUN array in Robot, such as 1
 	private String Controller; // the physical device port microcontroller for this entry is attached to, such as /dev/ttyACM0
-	private NodeDeviceDemuxer ndd; // Demuxer for above properties, carries some redundant info, will appear many in this collection, added after constructor
+	private transient MarlinspikeControlInterface controlHost;
 	/**
 	 * 
 	 * @param Name name entry in properties configuration file, such as "LeftWheel"
@@ -79,20 +80,14 @@ public class DeviceEntry {
 		LUN = lUN;
 	}
 	
-	/**
-	 * @return the ndd
-	 */
-	public NodeDeviceDemuxer getNodeDeviceDemuxer() {
-		return ndd;
+	public void setMarlinspikeControl(MarlinspikeControlInterface controlHost) {
+		this.controlHost = controlHost;
 	}
 	
-	/**
-	 * @param ndd the ndd to set
-	 */
-	public void setNodeDeviceDemuxer(NodeDeviceDemuxer ndd) {
-		this.ndd = ndd;
+	public MarlinspikeControlInterface getMarlinspikeControl() {
+		return controlHost;
 	}
-	
+
 	@Override
 	public boolean equals(Object o) {
 		return Name.equals(((DeviceEntry)o).getName());

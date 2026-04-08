@@ -36,11 +36,11 @@ import com.neocoretechs.robocore.MegaPubs;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
+import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
-import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.propulsion.TwistInfo;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
@@ -194,7 +194,6 @@ public class PeripheralController extends AbstractNodeMain {
 	public String RPT_SERVICE = "robo_status";
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 	MarlinspikeManager marlinspikeManager;
-	Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer;
 
 	
 	public PeripheralController(String[] args) {
@@ -251,15 +250,14 @@ public class PeripheralController extends AbstractNodeMain {
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
-		listNodeDeviceDemuxer = marlinspikeManager.getNodeDeviceDemuxerByType(marlinspikeManager.getTypeSlotChannelEnable());
 		
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 		
 		final Collection<Publisher<std_msgs.Int32MultiArray>> pubschannel = new ArrayList<Publisher<std_msgs.Int32MultiArray>>();
-		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer) {
+		for(DeviceEntry ndd : marlinspikeManager.getDevices()) {
 			if(ndd.getNodeName().equals(serveNode)) {
-				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getDeviceName(), std_msgs.Int32MultiArray._TYPE));
+				Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
 				pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
 					@Override
 					public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
@@ -272,7 +270,7 @@ public class PeripheralController extends AbstractNodeMain {
 						}
 						pubschannel.add(pub);
 						if(DEBUG)
-							System.out.println("Bringing up publisher "+ndd.getDeviceName());
+							System.out.println("Bringing up publisher "+ndd.getName());
 					}
 					@Override
 					public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
@@ -726,11 +724,11 @@ public class PeripheralController extends AbstractNodeMain {
 	public static void main(String[] args) throws IOException {
 		PeripheralController mc = new PeripheralController();
 		ArrayList<String> pubs = new ArrayList<String>();
-		for(NodeDeviceDemuxer ndd : mc.listNodeDeviceDemuxer) {
-			System.out.println("/"+ndd.getDeviceName());
+		for(DeviceEntry ndd :  robot.getManager().getDevices()) {
+			System.out.println("/"+ndd.getName());
 			if(DEBUG)
-				System.out.println("Bringing up publisher /"+ndd.getDeviceName());
-			pubs.add("/"+ndd.getDeviceName());
+				System.out.println("Bringing up publisher /"+ndd.getName());
+			pubs.add("/"+ndd.getName());
 		}
 		System.out.println("----");
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))

@@ -27,16 +27,13 @@ import org.ros.node.topic.Subscriber;
 import org.ros.node.topic.SubscriberListener;
 
 import com.neocoretechs.robocore.RosArrayUtilities;
-import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.DeviceEntry;
-import com.neocoretechs.robocore.config.Props;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
-import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
+
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
-import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 
 import org.json.JSONObject;
@@ -152,7 +149,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
  * want to get configuration for all available control nodes, but not activate them from this module since this module
  * issues directives to the attached controllers rather than control them directly.<p>
- * We then create collection of {@link NodeDeviceDemuxer} by calling {@link MarlinspikeManager#getNodeDeviceDemuxerByType}.<p>
+ * We then create collection of {@link NodeDevice} by calling {@link MarlinspikeManager#getNodeDeviceDemuxerByType}.<p>
  * Finally we create the isActive boolean array to hold/control status of devices.
  *
  * @see MarlinspikeManager
@@ -297,6 +294,7 @@ public class MotionController extends AbstractNodeMain {
 			robot = (RobotInterface) pTree.get(robotName, new Robot());
 			if(robot.getHostName().equals("UNDEFINED")) {
 				robot = new Robot(robotName);
+				robot.configureMarlinspike();
 				pTree.set(robotName, robot);
 			}
 		} catch (IOException e) {
@@ -956,7 +954,7 @@ public class MotionController extends AbstractNodeMain {
 	 * [12] - mode								<br>
 	 * [13] - side								<br><br>
 	 * @param connectedNode The Ros node we are using here
-	 * @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDeviceDemuxer}
+	 * @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDevice}
 	 * @param message The joystick message with all buttons and axes
 	 * @param twistpub The twist publisher channel for broadcast messages to all devices for emergency stop, etc.
 	 * @param twistmsg The twist message template to populate with data from this method

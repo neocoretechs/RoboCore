@@ -38,7 +38,6 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControl;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
-import com.neocoretechs.robocore.marlinspike.NodeDeviceDemuxer;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
 
@@ -73,12 +72,10 @@ import diagnostic_msgs.DiagnosticStatus;
  * As input from realtime subsystem is received, the {@link AsynchDemuxer} decodes the header and prepares the data for publication
  * to the Ros bus. It may also publish various warnings over the 'robocore/status' topic. It will also send motor controller and other configuration information
  * over the robocore/status topic.<p>
- * <h3>NodeDeviceDemuxer</h3>
- * The {@link NodeDeviceDemuxer} class encapsulates the device as enumerated in the configuration, the demuxer for the device and node information.<p>
- * Iterate the list of device demuxxers we put together in configureMarlinspikeManager method below. The MarlinSpikeManager is
+ * The MarlinSpikeManager is
  * constructed with the static instance of (@link Robot}, then the configureMarlinSpike method is called.
  * We can then iterate the {@link DeviceEntry} from MarlinSpikeManager.getDevices().
- * for each NodeDeviceDemuxer in DeviceEntry, create a subscriber on the channel [demuxer device name] of type Int32MultiArray.
+ * for each DeviceEntry, create a subscriber on the channel [demuxer device name] of type Int32MultiArray.
  * The topic name is formed from the name entry in the properties file, which should be unique across the bus.
  * Add a message listener for each subscriber device key. When a new message comes in
  * extract the device name from the map based on the subscriber instance associated with the incoming message.
@@ -283,6 +280,13 @@ public void onStart(final ConnectedNode connectedNode) {
 		throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
 	}
 	
+	try {
+		robot.getManager().configureDemuxer();
+	} catch (IOException e) {
+		e.printStackTrace();
+		throw new RuntimeException("Marlinspike configuration error "+e);
+	}
+	
 	final Publisher<diagnostic_msgs.DiagnosticStatus> statpub = connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 	
 	responses = new PublishDiagnosticResponse[stopics.length];
@@ -301,11 +305,10 @@ public void onStart(final ConnectedNode connectedNode) {
 		configureSubscriberListener(subscr, connectedNode, statpub);
 	}
 	
-	NodeDeviceDemuxer demux = (NodeDeviceDemuxer) robot.getManager().getNodeDeviceDemuxers().toArray()[0];
 	// Initialize the collection of DiagnosticStatus response handlers
 	for(int i = 0; i < stopics.length; i++) {
 		responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
-		responses[i].takeBridgeAndQueueMessage(stopics[i], demux.getAsynchDemuxer().getTopic(stopics[i]), publishStatus[i]);
+		responses[i].takeBridgeAndQueueMessage(stopics[i], robot.getManager().getDemuxer().getTopic(stopics[i]), publishStatus[i]);
 	}
 	//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
 	//		connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
@@ -340,7 +343,7 @@ public void onStart(final ConnectedNode connectedNode) {
 			if( targetPitch == -1 && targetDist == -1 && targetYaw == -1) {
 				shouldMove = false;
 				try {
-					for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
+					for(DeviceEntry ndd : robot.getManager().getDevices())
 						ndd.getMarlinspikeControl().commandStop();
 				} catch (IOException e) {
 					e.printStackTrace();
@@ -648,18 +651,18 @@ public void onStart(final ConnectedNode connectedNode) {
 					try {
 						switch(request.getData()) {
 							case "id":
-								for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
+								for(DeviceEntry ndd : robot.getManager().getDevices())
 									sb.append(ndd.getMarlinspikeControl().reportSystemId());
 								response.setData(sb.toString());
 								break;
 							case "reset":
-								for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
+								for(DeviceEntry ndd : robot.getManager().getDevices())
 									sb.append(ndd.getMarlinspikeControl().commandReset());
 								response.setData(sb.toString());
 								break;
 							case "status":
 							default:
-								for(NodeDeviceDemuxer ndd : robot.getManager().getNodeDeviceDemuxers())
+								for(DeviceEntry ndd : robot.getManager().getDevices())
 									sb.append(ndd.getMarlinspikeControl().reportAllControllerStatus());
 								response.setData(sb.toString());
 								break;		

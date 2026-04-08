@@ -78,7 +78,7 @@ public class Robot implements RobotInterface, Serializable {
 	MarlinspikeManager marlinspikeManager = null;
 	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
 	boolean[] isActive;
-	Collection<DeviceEntry> deviceEntries;
+
 	
 	public Robot(String robotName) throws IOException {
 		this.robotName = robotName;
@@ -109,9 +109,14 @@ public class Robot implements RobotInterface, Serializable {
 		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
 		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
 		temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
+	}
+
+	public Robot() {}
+
+	public void configureMarlinspike() throws IOException {
 		marlinspikeManager = new MarlinspikeManager(this);
 		marlinspikeManager.createControllers(false, true);
-		isActive = new boolean[deviceEntries.size()];
+		isActive = new boolean[marlinspikeManager.getDevices().size()];
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
 		// if it matched the name of this host the entry is included in the collection. 
 		// In this way only entries that apply to Marlinspikes attached to this host are utilized.
@@ -121,9 +126,7 @@ public class Robot implements RobotInterface, Serializable {
 			isOperating.put(ndd.getName(), false);
 		}
 	}
-
-	public Robot() {}
-
+	
 	private void extractBUTTON() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> button = globalConfigs.get("BUTTON");

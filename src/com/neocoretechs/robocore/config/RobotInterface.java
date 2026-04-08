@@ -1,5 +1,6 @@
 package com.neocoretechs.robocore.config;
 
+import java.io.IOException;
 import java.util.HashMap;
 
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
@@ -26,6 +27,7 @@ public interface RobotInterface {
 	public String getHostName(); // the individual processor in the robot internal network.
 	public String getDataPort();
 	public MarlinspikeManager getManager();
+	public void configureMarlinspike() throws IOException;
 	public HashMap<String, Boolean> getOperating();
 	public RobotDiffDriveInterface getDiffDrive(); // embodies different differential drive characteristics
 	public PIDParameterInterface getMotionPIDController(); // PID control parameters for trave by the different diff drives

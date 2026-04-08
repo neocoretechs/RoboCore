@@ -8,6 +8,7 @@ import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,7 +31,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
  * Each individual robot uses this class to manage its collection of attributes initially parsed from config file, including
  * LUN, WHEEL, PID. Further configuration is performed to deliver needed services.<p/>
  * Parse configs and allocate the necessary number of control elements for one or more Marlinspike boards.<p/>
- * We create the collection of devices and {@link NodeDeviceDemuxer} with their {@link AsynchDemuxer} to talk to the attached Marlinspikes.
+ * We create the collection of devices and {@link NodeDevice} with their {@link AsynchDemuxer} to talk to the attached Marlinspikes.
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
@@ -43,9 +44,9 @@ public class MarlinspikeManager {
 	TypedWrapper[] pid;
 	AsynchDemuxer asynchDemuxer;
 	/**
-	 * deviceToType - [NodeDeviceDemuxer by Controller i.e. /dev/tty2] -> <Name of device, i.e. "LeftWheel"-> TypeSlotChannelEnable>
+	 * deviceToType  [Name of device, i.e. "LeftWheel", TypeSlotChannelEnable]
 	 */
-	ConcurrentHashMap<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType = new ConcurrentHashMap<NodeDeviceDemuxer, Map<String,TypeSlotChannelEnable>>();
+	ConcurrentHashMap<DeviceEntry, TypeSlotChannelEnable> deviceToType = new ConcurrentHashMap<DeviceEntry,TypeSlotChannelEnable>();
 	/**
 	 * devices - canonical list of devices by properties file device name, such as "LeftWheel". Will also carry NodeDeviceDemuxer ref
 	 */
@@ -65,15 +66,6 @@ public class MarlinspikeManager {
 		this.wheel = robot.getWHEEL();
 		this.pid = robot.getPID();
 		this.hostName = robot.getHostName();
-		asynchDemuxer = new AsynchDemuxer(this);
-		try {
-		if(robot.getDataPort().equals("MarlinspikeDataPort"))
-			asynchDemuxer.connect(new MarlinspikeDataPort());
-		else
-			asynchDemuxer.connect(new ByteSerialDataPort(robot.getDataPort()));
-		} catch(IOException ioe) {
-			throw new RuntimeException(ioe);
-		}
 	}
 	
 	public AsynchDemuxer getDemuxer() {
@@ -89,7 +81,6 @@ public class MarlinspikeManager {
 	 * @throws IOException
 	 */
 	public synchronized void createControllers(boolean override, boolean activate) throws IOException {
-		NodeDeviceDemuxer ndd = null;
 		for(int i = 0; i < lun.length; i++) {
 			if(override || hostName.equals(lun[i].get("NodeName"))) {
 				String name = (String)lun[i].get("Name");
@@ -100,34 +91,6 @@ public class MarlinspikeManager {
 					throw new IOException("Must specify Controller parameter in configuration file for host "+hostName+" Name:"+name);
 				DeviceEntry deviceEntry = new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controller);
 				devices.add(deviceEntry);
-				// NodeDeviceDemuxer identity is Controller, or tty, and our NodeName check makes them unique to this node
-				// assuming the config is properly done
-				NodeDeviceDemuxer nddx = new NodeDeviceDemuxer((String) lun[i].get("NodeName"), name, controller);
-				Map<String, TypeSlotChannelEnable> nameToTypeMap = null; // map value
-				Iterator<Map.Entry<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>>> iterator = deviceToType.entrySet().iterator();  
-		        boolean isKeyPresent = false; 
-		        // Iterate over the HashMap
-		        while (iterator.hasNext()) {
-		        	Map.Entry<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> entry = iterator.next();
-		            if(nddx.equals(entry.getKey())) {
-		                isKeyPresent = true;
-		                ndd = entry.getKey();
-		                nameToTypeMap = entry.getValue();
-		                break;
-		            }
-		        }
-		        if(!isKeyPresent) { // use new values
-		        	//nameToTypeMap = deviceToType.get(ndd);
-		        	// Have we created a demuxer for this device controller already?
-		        	//if(nameToTypeMap == null) {
-					nameToTypeMap = new ConcurrentHashMap<String, TypeSlotChannelEnable>();
-					ndd = nddx; // our template with key, now permanent
-					deviceToType.put(ndd, nameToTypeMap);
-					// activate the new demuxer, but only once
-					if(activate)
-						activateMarlinspike(ndd);
-				}
-		        deviceEntry.setNodeDeviceDemuxer(ndd);
 				// map within a map, nameToTypeMap, 
 				// has deviceName, demuxer, indexed by name of device so "LeftWheel" can retrieve 
 				// pins. etc. 
@@ -192,10 +155,10 @@ public class MarlinspikeManager {
 					tsce.setMinValue(Integer.parseInt((String)lun[i].get("Min")));
 				if(omaxValue.isPresent())
 					tsce.setMaxValue(Integer.parseInt((String)lun[i].get("Max")));
-				nameToTypeMap.put(name, tsce);
+				deviceToType.put(deviceEntry, tsce);
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				if(activate)
-					configureMarlinspike(ndd, lun[i], tsce);
+					configureMarlinspike(deviceEntry, lun[i], tsce);
 			}
 		}
 		if(deviceToType.isEmpty())
@@ -207,14 +170,12 @@ public class MarlinspikeManager {
 	 * activated. We must ensure that 1 demuxer/device is activated for a particular physical port
 	 * and that subsequent attempts at activation are met with an assignment 
 	 * to an existing instance of asynchDemuxer.
-	 * @param marlinspikeManager 
-	 * @param deviceToType The mapping of all NodeDeviceDemuxer to all the TypeSlotChannels
+	 * @param deviceEntry The mapping of configs
 	 * @throws IOException If we attempt to re-use a port, we box up the runtime exception with the IOException
 	 */
-	public synchronized void activateMarlinspike(NodeDeviceDemuxer ndd) throws IOException {
+	public synchronized void activateMarlinspike(DeviceEntry ndd) throws IOException {
 		if(DEBUG)
 			System.out.printf("%s.activateMarlinspike preparing to initialize %s%n",this.getClass().getName(), ndd);
-		ndd.setAsynchDemuxer(asynchDemuxer);
 		ndd.setMarlinspikeControl(new MarlinspikeControl(asynchDemuxer));
 	}
 	
@@ -238,12 +199,12 @@ public class MarlinspikeManager {
 	 * Internal configuration generator that sets up initial commands to Marlinspike controller
 	 * based on configuration, to prepare to send them to the attached controller.<p/>
 	 * Called as final phase of initialization pipeline.
-	 * @param ndd NodeDeviceDemuxer that handles IO
+	 * @param ndd DeviceEntry
 	 * @param lun Logical unit from configuration file
 	 * @param tsce The type, slot, and channel designator that defines hierarchy of Marlinspike controller devices
 	 * @throws IOException If commands fail in send or confirmation
 	 */
-	private synchronized void configureMarlinspike(NodeDeviceDemuxer ndd, TypedWrapper lun, TypeSlotChannelEnable tsce) throws IOException {
+	private synchronized void configureMarlinspike(DeviceEntry ndd, TypedWrapper lun, TypeSlotChannelEnable tsce) throws IOException {
 		Optional<Object> pin1 = Optional.ofNullable(lun.get("SignalPin1"));
 		Optional<Object> pin0 = Optional.ofNullable(lun.get("SignalPin0"));
 		Optional<Object> enc = Optional.ofNullable(lun.get("EncoderPin"));
@@ -257,11 +218,9 @@ public class MarlinspikeManager {
 			Pins.setAnalogPollRate(Integer.parseInt((String)aPollRate.get()));
 		if(aChangeDelta.isPresent())
 			Pins.setAnalogChangeDelta(Integer.parseInt((String)aChangeDelta.get()));		
-		int ipin0=0,ipin1=0,ienc=0;
-		if(pin0.isPresent())
-			ipin0 = Integer.parseInt((String) pin0.get());
-		if(pin1.isPresent())
-			ipin1 = Integer.parseInt((String) pin1.get());
+		int ienc=0;
+		tsce.setPin0(pin0);
+		tsce.setPin1(pin1);
 		if(enc.isPresent()) {
 			ienc = Integer.parseInt((String) enc.get());
 			tsce.setEncoderPin(ienc);
@@ -296,22 +255,40 @@ public class MarlinspikeManager {
 				}
 			}
 		}
+	}
+	/**
+	 * Configure the {@link AsynchDemuxer} to handle traffic from the Marlinspike SBC. 
+	 * Call this from the node with attached Marlinspike
+	 * @throws IOException 
+	 */
+	public synchronized void configureDemuxer() throws IOException {
+		asynchDemuxer = new AsynchDemuxer(this);
+		try {
+			if(robot.getDataPort().equals("MarlinspikeDataPort"))
+				asynchDemuxer.connect(new MarlinspikeDataPort());
+			else
+				asynchDemuxer.connect(new ByteSerialDataPort(robot.getDataPort()));
+		} catch(IOException ioe) {
+			throw new RuntimeException(ioe);
+		}
 		// determine if confg has already taken place
-		ndd.asynchDemuxer.addWrite("M798");
-		TopicListInterface tli = ndd.asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
+		asynchDemuxer.addWrite("M798");
+		TopicListInterface tli = asynchDemuxer.getTopic(AsynchDemuxer.topicNames.CONTROLLERSTATUS.val());
 		MachineBridge readings = tli.getMachineBridge();
 		MachineReading mr = readings.waitForNewReading();
-		tsce.parseStatus(mr.getReadingValString());
-		List<String> M10Gen = null;
-		M10Gen = tsce.genM10(ipin0, ipin1);
-		if(M10Gen.size() > 0) {
-			addInit(M10Gen);
-			if(DEBUG) 
-				System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);
+		String mRead = mr.getReadingValString();
+		for(TypeSlotChannelEnable tsce : deviceToType.values()) {
+			TypeSlotChannelEnable.parseStatus(mRead,tsce);
+			List<String> M10Gen = null;
+			M10Gen = tsce.genM10();
+			if(M10Gen.size() > 0) {
+				addInit(M10Gen);
+				if(DEBUG) 
+					System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);
+			}
 		}
 		init();
 	}
-
 	/**
 	 * Get the class with methods that talk to the Marlinspike board by the descriptive name of the device
 	 * as it appears in the config.
@@ -319,20 +296,19 @@ public class MarlinspikeManager {
 	 * @return the MarlinspikeControlInterface with methods to communicate with the board
 	 */
 	public synchronized MarlinspikeControlInterface getMarlinspikeControl(String name) throws NoSuchElementException {
-			NodeDeviceDemuxer ndd = (NodeDeviceDemuxer) getNodeDeviceDemuxer(name);
+			DeviceEntry ndd = devices.get(devices.indexOf(new DeviceEntry(name)));
 			return ndd.getMarlinspikeControl();
 	}
 	
 	/**
-	 * Get the set of NodeDeviceDemuxer which contains AsynchDemuxers for this node based on the set of
+	 * Get the set of DeviceEntry which contains 
 	 * TypeSlotChannelEnable.<p/>
-	 * getNodeDeviceDemuxerByType(getTypeSlotChannelEnableByType(String type))
+	 * getDeviceEntryByType(getTypeSlotChannelEnableByType(String type))
 	 * @param tsce The set retrieved from one of the getTypeSlotChannelEnable methods
-	 * @return The list of NodeDeviceDemuxer associated with the passed list of tsce
+	 * @return The list of DeviceEntry associated with the passed list of tsce
 	 */
-	//ConcurrentHashMap<NodeDeviceDemuxer, Map<String, TypeSlotChannelEnable>> deviceToType 
-	public synchronized Collection<NodeDeviceDemuxer> getNodeDeviceDemuxerByType(Collection<TypeSlotChannelEnable> tsce) {
-		return Stream.of(deviceToType).flatMap(map -> map.entrySet().stream()).filter(map->tsce.containsAll(map.getValue().values()))
+	public synchronized Collection<DeviceEntry> getDeviceEntryByType(Collection<TypeSlotChannelEnable> tsce) {
+		return Stream.of(deviceToType).flatMap(map -> map.entrySet().stream()).filter(map->tsce.contains(map.getValue()))
 				.map(e -> e.getKey() ).collect(Collectors.toCollection(ArrayList::new));
 	}
 		
@@ -341,12 +317,11 @@ public class MarlinspikeManager {
 	 * @return device of a particular name, which points to the actual device of a particular type, attached to the Marlinspike on this node
 	 */
 	public synchronized TypeSlotChannelEnable getTypeSlotChannelEnableByName(String name) throws NoSuchElementException {
-		Iterator<Map<String,TypeSlotChannelEnable>> it = deviceToType.values().iterator();
-		while(it.hasNext()){
-			Map<String,TypeSlotChannelEnable> tsces = it.next();
-			TypeSlotChannelEnable ret = tsces.get(name);
-			if(ret != null)
-				return ret;
+		Iterator<Entry<DeviceEntry, TypeSlotChannelEnable>> it = deviceToType.entrySet().iterator();
+		while(it.hasNext()) {
+			Entry<DeviceEntry, TypeSlotChannelEnable> ret = it.next();
+			if(ret != null && ret.getKey().getName().equals(name))
+				return ret.getValue();
 		}
 		throw new NoSuchElementException("The name "+name+" was not found in the collection of device to type");
 	}
@@ -356,31 +331,7 @@ public class MarlinspikeManager {
 	 * @return All the devices attached to all the Marlinspikes on this node
 	 */
 	public synchronized Collection<TypeSlotChannelEnable> getTypeSlotChannelEnable() {
-		Collection<TypeSlotChannelEnable> tsce = new ArrayList<TypeSlotChannelEnable>();
-		Stream.of(deviceToType).flatMap(map -> map.entrySet().stream())
-				.map(map->map.getValue().values())
-				.forEach(tsce::addAll);
-		return tsce;
-	}
-	
-	/**
-	 * Get the NodeDeviceDemuxer from DeviceToType
-	 * @param string The DeviceName, i.e. "LeftWheel"
-	 * @return
-	 */
-	public synchronized NodeDeviceDemuxer getNodeDeviceDemuxer(String name) throws NoSuchElementException  {
-		try {
-			return devices.get(devices.indexOf(new DeviceEntry(name))).getNodeDeviceDemuxer();
-		} catch(NullPointerException | NoSuchElementException | IndexOutOfBoundsException nse) {
-			throw new NoSuchElementException("The device "+name+" was not found in the collection");
-		}
-	}
-	/**
-	 * Return the NodeDeviceDemuxer KeySet as ArrayList collection
-	 * @return the Collection of unique NodeDeviceDemuxer by Control of LUN
-	 */
-	public synchronized Collection<NodeDeviceDemuxer> getNodeDeviceDemuxers() {
-		return new ArrayList<NodeDeviceDemuxer>(deviceToType.keySet());
+		return deviceToType.values();
 	}
 	
 	/**
