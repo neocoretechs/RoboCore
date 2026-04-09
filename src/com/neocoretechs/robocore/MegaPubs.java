@@ -114,7 +114,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2025
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static String robotName;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();

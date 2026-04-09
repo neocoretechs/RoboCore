@@ -40,7 +40,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
  */
 public class MarlinspikeManager implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	RobotInterface robot;
 	String hostName;
 	TypedWrapper[] lun;

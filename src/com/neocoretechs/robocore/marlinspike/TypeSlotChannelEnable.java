@@ -65,7 +65,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
  */
 public class TypeSlotChannelEnable implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	typeNames cntrltype;
 	int pin;
 	private int slot;

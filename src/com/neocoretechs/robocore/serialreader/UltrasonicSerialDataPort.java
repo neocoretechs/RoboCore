@@ -16,7 +16,7 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
  */
 public class UltrasonicSerialDataPort implements DataPortInterface {
 	private static boolean DEBUG = false;
-	private static boolean PORTDEBUG = true;
+	private static boolean PORTDEBUG = false;
 	private static boolean INFO = true;
 	private SerialPort serialPort;
 	private OutputStream outStream;

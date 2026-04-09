@@ -24,7 +24,7 @@ import java.math.RoundingMode;
  */
 public class IMUSerialDataPort implements DataPortInterface {
 	public static boolean DEBUG = false;
-	private static boolean PORTDEBUG = true;
+	private static boolean PORTDEBUG = false;
 	private static boolean INFO = true;
 	private SerialPort serialPort;
 	private boolean openedSuccessfully = false;

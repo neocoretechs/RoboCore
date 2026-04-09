@@ -21,7 +21,7 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2026
  */
 public class ByteSerialDataPort implements DataPortCommandInterface {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean PORTDEBUG = false;
 	private SerialPort serialPort;
 	private OutputStream outStream;
