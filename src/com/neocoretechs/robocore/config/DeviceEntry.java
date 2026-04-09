@@ -22,6 +22,7 @@ public class DeviceEntry implements Serializable{
 	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
 	private int LUN; // integer LUN position, points to LUN array in Robot, such as 1
 	private transient MarlinspikeControlInterface controlHost;
+	private transient Class<?> controlClass;
 	/**
 	 * 
 	 * @param Name name entry in properties configuration file, such as "LeftWheel"
@@ -29,11 +30,11 @@ public class DeviceEntry implements Serializable{
 	 * @param LUN integer LUN position, points to LUN array in Robot, such as 1
 	 * @param controller alternate controller implementing MarlinspikeControlInterface
 	 */
-	public DeviceEntry(String Name, String NodeName, int LUN, MarlinspikeControlInterface controller) {
+	public DeviceEntry(String Name, String NodeName, int LUN, Class<?> controller) {
 		this.Name = Name;
 		this.NodeName = NodeName;
 		this.LUN = LUN;
-		this.controlHost = controller;
+		this.controlClass = controller;
 	}
 	/**
 	 * Form a template for locating in collection via name
@@ -87,6 +88,10 @@ public class DeviceEntry implements Serializable{
 		return controlHost;
 	}
 
+	public Class<?> getControlClass() {
+		return controlClass;
+	}
+	
 	@Override
 	public boolean equals(Object o) {
 		return Name.equals(((DeviceEntry)o).getName());
@@ -97,6 +102,6 @@ public class DeviceEntry implements Serializable{
 	}
 	@Override
 	public String toString() {
-		return String.format("%s %s %s %d %s%n", this.getClass().getName(), Name, NodeName, LUN, controlHost);
+		return String.format("%s %s Node=%s LUN=%d Control=%s%n", this.getClass().getName(), Name, NodeName, LUN, controlHost);
 	}
 }

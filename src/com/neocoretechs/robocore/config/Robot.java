@@ -78,7 +78,6 @@ public class Robot implements RobotInterface, Serializable {
 	MarlinspikeManager marlinspikeManager = null;
 	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
 	boolean[] isActive;
-
 	
 	public Robot(String robotName) throws IOException {
 		this.robotName = robotName;
@@ -115,7 +114,7 @@ public class Robot implements RobotInterface, Serializable {
 
 	public void configureMarlinspike() throws IOException {
 		marlinspikeManager = new MarlinspikeManager(this);
-		marlinspikeManager.createControllers(false, true);
+		marlinspikeManager.createControllers(true);
 		isActive = new boolean[marlinspikeManager.getDevices().size()];
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
 		// if it matched the name of this host the entry is included in the collection. 

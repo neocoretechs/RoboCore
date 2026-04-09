@@ -216,6 +216,11 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * @param readingValString
 	 */
 	public static void parseStatus(String stat, TypeSlotChannelEnable tsce) {
+		if(DEBUG)
+			System.out.println("M798 status:"+stat);
+		String[] motors = stat.split(" Motor Slot:");
+		for(int i = 0; i < motors.length; i++)
+			System.out.println(i+".)"+motors[i]);
 		int iSlot = stat.indexOf(" Motor Slot:");
 		int nSlot = -1;
 		if(iSlot != -1) {
@@ -225,6 +230,9 @@ public class TypeSlotChannelEnable implements Serializable {
 		}
 		if(nSlot != -1 && nSlot == tsce.slot)
 			tsce.isSlot = true;
+		String[] chans = stat.split(" Motor Channel:");
+		for(int i = 0; i < chans.length; i++)
+			System.out.println(i+".)"+chans[i]);
 		int iChan = stat.indexOf(" Motor Channel:");
 		int nChan = -1;
 		while(iChan != -1) {

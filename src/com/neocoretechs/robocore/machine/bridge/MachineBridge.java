@@ -61,8 +61,7 @@ import java.util.Iterator;
 		public String getGroup() { return group; }
 		/**
 		 * Wait for a new reading to arrive or get the next available one
-		 * @param preVal The value to retrieve, updates this value to the next for re-use
-		 * @return
+		 * @return the MachineReading
 		 */
 		public MachineReading waitForNewReading() {
 					try {

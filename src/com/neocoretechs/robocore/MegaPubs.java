@@ -281,6 +281,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	}
 	
 	try {
+		// createControllers should have been performed in MotionCOntroller and Robot placed in ParameterTree
 		robot.getManager().configureDemuxer();
 	} catch (IOException e) {
 		e.printStackTrace();

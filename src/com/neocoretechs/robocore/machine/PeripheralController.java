@@ -246,7 +246,7 @@ public class PeripheralController extends AbstractNodeMain {
 		// statpub has status alerts that may come from sensors.
 		marlinspikeManager = new MarlinspikeManager(robot);
 		try {
-			marlinspikeManager.createControllers(true, false);
+			marlinspikeManager.createControllers(true);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

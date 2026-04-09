@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.neocoretechs.robocore.SynchronizedThreadManager;
 import com.neocoretechs.robocore.config.Robot;
@@ -211,8 +214,6 @@ public class AsynchDemuxer implements Runnable {
 	 * @param req The request to be enqueued.
 	 */
 	public void addWrite(String req) {
-		if(!req.endsWith("\r") && !req.endsWith("\n"))
-			req += "\r";
 		requestQueue.addLast(req);
 		if(DEBUG)
 			System.out.println("Adding request to demuxer:"+this+" "+req+" len:"+requestQueue.length());
@@ -819,7 +820,7 @@ public class AsynchDemuxer implements Runnable {
 	 * by first looking it up in the {@link TopicList}.
 	 * {@see java.lang.Runnable#run()}
 	 */
-	@Override
+
 	public void run() {
 		// Take Marlinspike lines from circular blocking deque and demux them.
 		// this will process the responses from the dataport that have been placed on the deque.

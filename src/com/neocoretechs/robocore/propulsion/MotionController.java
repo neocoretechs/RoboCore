@@ -145,7 +145,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  * of small corrections to stay on course. Regardless of the amount the machine is knocked off course it can find its way back to the
  * proper heading through a circuitous route gradually refined to require only small correction.<p>
  * 
- * MarlinspikeManager will load but not activate the nodes listed in configuration when {@link MarlinspikeManager#createControllers(boolean, boolean)}
+ * MarlinspikeManager will load but not activate the nodes listed in configuration when {@link MarlinspikeManager#createControllers(boolean)}
  * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
  * want to get configuration for all available control nodes, but not activate them from this module since this module
  * issues directives to the attached controllers rather than control them directly.<p>

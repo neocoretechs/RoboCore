@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+
 import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 /**
@@ -25,6 +27,9 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	private OutputStream outStream;
 	private InputStream inStream;
 	private boolean connected = false;
+	private static int READ_DELAY = 2; // ms delay between character
+	private static int WRITE_DELAY = 2; // ms delay
+	private static int READ_TIMEOUT = 200;
 	// serial settings
 	//Port=/dev/ttyACM0
 	//PortSettings=115200,n,8,1
@@ -85,7 +90,13 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 			System.out.println("Error code was " + serialPort.getLastErrorCode() + " at Line " + serialPort.getLastErrorLocation());
 			return;
 		}
+		// Disable hardware flow control and DTR if Pico resets on open
+		serialPort.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
 		serialPort.clearDTR();
+		serialPort.clearRTS();
+		// Set semi-blocking read with a modest timeout (ms)
+		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, READ_TIMEOUT, 0);
+		SerialPort.autoCleanupAtShutdown();
 		serialPort.setBaudRate(baud);
 		serialPort.setNumDataBits(datab);
 		switch(stopb) {
@@ -97,14 +108,13 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 			case 1 -> serialPort.setParity(SerialPort.ODD_PARITY);
 			case 2 -> serialPort.setParity(SerialPort.EVEN_PARITY);
 		}
-
 		// Open the input and output streams for the connection. If they won't
 		// open, close the port before throwing an exception.
+		/*
 		inStream = serialPort.getInputStream();
 		if( inStream == null ) {
 			throw new IOException("Cant get InputStream for port "+portName);
 		}   
-		//(new Thread(new SerialReader(inStream))).start();
 		SerialReader readThread = new SerialReader(inStream);
 		SynchronizedThreadManager.getInstance().spin(readThread, "SYSTEM");
 		while(!readThread.isRunning)
@@ -125,6 +135,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 					Thread.sleep(1);
 				} catch (InterruptedException e) {}
 		}
+		*/
 		connected = true;
 		if( PORTDEBUG ) 
 			System.out.println("Connected to "+portName);
@@ -150,14 +161,13 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	public void write(int c) throws IOException {
 		if( PORTDEBUG ) 
 			System.out.print("<"+c+">");
-		synchronized(writeMx) {
-			checkWriteBuffer();
-			writeBuffer[writeBufferTail++] = c;
-			//checkWriteBuffer();
-			//writeBuffer[writeBufferTail++] = -1;
-			writeMx.notify();
-		}
+    	synchronized(writeMx) {
+    		checkWriteBuffer();
+    		writeBuffer[writeBufferTail++] = (byte)( c & 0xFF);
+       		writeMx.notify();
+    	}
 	}
+
 	@Override
 	public void writeLine(String bytesToWrite) throws IOException {
 		if( PORTDEBUG ) 
@@ -171,7 +181,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 			}
 			checkWriteBuffer();
 			writeBuffer[writeBufferTail++] = '\r';
-			writeBuffer[writeBufferTail++] = '\n';	
+			//writeBuffer[writeBufferTail++] = '\n';	
 			//writeBuffer[writeBufferTail++] = -1;
 			//checkWriteBuffer();
 			writeMx.notify();
@@ -205,7 +215,6 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 				System.out.println("readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
 			return readBuffer[readBufferHead++];
 		}
-		//return inStream.read();
 	}
 	/**
 	 * Read with thrown MachineNotReadyException on timeout
@@ -222,12 +231,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 					readMx.wait(timeout);
 				if( readBufferHead == readBuffer.length)
 					readBufferHead = 0;
-			} catch (InterruptedException e) {
-			}
-			// if we waited and nothing came back after timeout, machine no go
-			if( readBufferHead == readBufferTail ) {
-				throw new IOException("Serial port not responding..");
-			}
+			} catch (InterruptedException e) {}
 			if( PORTDEBUG ) 
 				System.out.println(this.getClass().getName()+".read readBufferHead="+readBufferHead+" readBufferTail="+readBufferTail+" = "+readBuffer[readBufferHead]);
 			return readBuffer[readBufferHead++];
@@ -244,11 +248,11 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		int c = -1;
 		StringBuffer sb = new StringBuffer();
 		try {
-			while( c != '\r' && c != '\n' || sb.length() <= 1 ) {
+			while( c != '\r' && c != '\n' && c != 0 || sb.length() <= 1 ) {
 				c = read();
 				if( PORTDEBUG )
 					System.out.print("["+Character.toChars(c)[0]+"]");
-				if( c != -1 && c != '\r' && c != '\n')
+				if( c != -1 && c != '\r' && c != '\n' && c != 0)
 					sb.append(Character.toString((char)c));
 			}
 		} catch (IOException e) {
@@ -272,26 +276,13 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		int c = -1;
 		StringBuffer sb = new StringBuffer();
 		try {
-			while( c != '\r' ) {
+			while( c != '\r' && c != '\n' && c != 0 || sb.length() <= 1 ) {
 				c = read(timeout);
 				if( PORTDEBUG )
 					System.out.print("["+Character.toChars(c)[0]+"]");
-				if( c != -1 ) {
-					// not an 'r' but we got an 'n' must have dropped the 'r'?
-					if( c == '\n')
-						return sb.toString();
-					sb.append((char)c);
-				}
-			}
-			// got an 'r', must get an 'n' anything else is bad 
-			while( c != '\n' ) {
-				c = read(timeout);
-				if( PORTDEBUG )
-					System.out.print("["+Character.toChars(c)[0]+"]");
-				// got an 'r' but no 'n', must have dropped the 'n'?
-				if( c != -1 ) {
-					break;
-				}
+				// not an 'r' but we got an 'n' must have dropped the 'r'?
+				if( c != -1 && c != '\r' && c != '\n' && c != 0)
+					sb.append(Character.toString((char)c));
 			}
 		} catch (IOException e) {
 			System.out.println("IOException "+e+" reading line:"+sb.toString());
@@ -321,6 +312,20 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 
 	@Override
 	public ArrayList<String> sendCommand(String command) throws IOException {
+		byte[] buffer = new byte[1024];
+		ArrayList<String> ret = new ArrayList<String>();
+		command += "\r";
+		serialPort.writeBytes(command.getBytes(), command.getBytes().length);
+		int num = serialPort.readBytes(buffer, buffer.length); // blocks until >=1 byte or timeout
+		if (num > 0) {
+			ret.add(new String(Arrays.copyOf(buffer, num)));
+		} else {
+			// timeout expired, continue loop (not an error)
+		}
+		return ret;
+	}
+	/*
+	public ArrayList<String> sendCommand(String command) throws IOException {
 		writeLine(command);
 		ArrayList<String> ret = new ArrayList<String>();
 		while(bytesToRead() <= 0) {
@@ -329,10 +334,14 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 			} catch (InterruptedException e) {}
 		}
 		while(bytesToRead() > 0) {
-			ret.add(readLine());
+			if(READ_TIMEOUT != -1)
+				ret.add(readLine(READ_TIMEOUT));
+			else
+				ret.add(readLine());
 		}
 		return ret;
 	}
+	*/
 	public String getPortName() { return portName; }
 	public int getBaudRate() { return baud; }
 	public int getDataBits() { return datab; }
@@ -387,10 +396,8 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 						EOT = false;
 					}
 				} catch(IOException ioe) {
-					if(ioe instanceof SerialPortTimeoutException)
-						continue;
-					ioe.printStackTrace();
-					System.out.println(ioe);
+					if(!(ioe instanceof SerialPortTimeoutException))
+						System.out.println(ioe);
 					continue;
 				}
 
@@ -404,6 +411,9 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 						System.out.println("Possible buffer overrun "+readBufferHead+" "+readBufferTail);
 					readMx.notify();
 				}
+				try {
+					Thread.sleep(READ_DELAY);
+				} catch (InterruptedException e) {}
 			}
 			isRunning = false;
 		}
@@ -439,13 +449,12 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 						this.out.write(writeBuffer[writeBufferHead++]);
 						writeMx.notify();
 					}
+	           		Thread.sleep(WRITE_DELAY);
 				}
 				catch ( IOException ioe ) {
 					System.out.println("Write exception on serial write:"+ioe);
 				} 
-				catch (InterruptedException e) {
-				}
-
+				catch (InterruptedException e) {}
 			}
 			isRunning = false;
 		}
