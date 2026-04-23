@@ -26,6 +26,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * <pre>
  * Read the paramaterized properties from the properties class. Config as follows by LUN, logical unit number:<p>
  * DataPort:/dev/ttyACM0
+ * PowerScale:0
  * LUN[0].Name:LeftWheel 
  * LUN[0].NodeName:Control1
  * LUN[0].Type:H-Bridge 
@@ -47,20 +48,20 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * AXIS[0].AxisY:2
  * </pre>
  * Also, BUTTON, WHEEL, etc as needed.<p>
- * It may seem odd that values are redundant. For instance, wheel track would seem absolute, as would wheel diameter.
- * However, its possible that in a 4 wheel vehicle, diameter can vary slightly as in, say, the drive wheels of a tracked vehicle
+ * Its possible that in a 4 wheel vehicle, wheel diameter can vary slightly as in, say, the drive wheels of a tracked vehicle
  * and if the tracks are driven by 4 motors with 2 sets of cogs differing in size front to back the rotation rates will
- * have to by synchronized despite the differing 'wheel' sizes. So to may the track vary slightly, and other instances I cant yet forsee.<p>
- * With that in mind the parameters that would seem to warrant global status have been repeated so as to appear from the
+ * have to by synchronized despite the differing 'wheel' sizes. The track vary slightly, etc.<p>
+ * Parameters that would seem to warrant global status have been repeated so as to appear from the
  * perspective of each individual component, and if necessary, appear in aggregate as global.<p>
  * If we initialize a diff drive, we expect PID control settings, and IMU settings even if one never appears.
+ * Global power scale can divide power level by divisor to make device more indoor safe.
  * @author Jonathan Groff (C) NeoCoreTechs 2021,2026
  *
  */
 public class Robot implements RobotInterface, Serializable {
 	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
-	private boolean indoor;
+	private int powerScale;
 	private String robotName = "UNDEFINED";
 	private int temperatureThreshold;
 	private MotionPIDController motionPIDController;
@@ -93,7 +94,7 @@ public class Robot implements RobotInterface, Serializable {
 		extractPID();
 		extractAXIS();
 		extractBUTTON();
-		indoor = Props.toBoolean("IsIndoor"); // div power by ten indoor mode
+		powerScale = Props.toInt("PowerScale"); // div power by divisor
 		dataPort = Props.toString("DataPort");
 		if(WHEEL.length > 0) {
 			robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
@@ -328,8 +329,8 @@ public class Robot implements RobotInterface, Serializable {
 	}
 	
 	@Override
-	public boolean isIndoor() {
-		return indoor;
+	public int getPowerScale() {
+		return powerScale;
 	}
 	
 	@Override
@@ -346,9 +347,9 @@ public class Robot implements RobotInterface, Serializable {
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("Robot %s%nIndoor=%b Drive: %s%nMotion Controller:%s%n IMU:%s%n",
+		sb.append(String.format("Robot %s%nPower Scale=%b Drive: %s%nMotion Controller:%s%n IMU:%s%n",
 				getName(),
-				indoor,
+				powerScale,
 				robotDrive == null ? "NULL" : robotDrive.toString(),
 				motionPIDController == null ? "NULL" : motionPIDController.toString(),
 					IMUSetpoint == null ? "NULL" : IMUSetpoint.toString()));

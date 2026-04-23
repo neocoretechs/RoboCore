@@ -24,6 +24,7 @@ import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
@@ -312,10 +313,21 @@ public class MarlinspikeManager implements Serializable {
 				addInit(M10Gen);
 				if(DEBUG) 
 					System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);
+				if(robot.getPowerScale() > 0)
+					addInit(M6Gen(tsce.getSlot()));
 			}
 		}
 		init();
 	}
+	
+	private List<String> M6Gen(int slot) {
+		ArrayList<String> m6 = new ArrayList<String>();
+		StringBuilder sb = new StringBuilder(topicNames.M6.val());
+		sb.append(" Z").append(slot).append(" S").append(robot.getPowerScale());
+		m6.add(sb.toString());
+		return m6;
+	}
+
 	/**
 	 * Get the class with methods that talk to the Marlinspike board by the descriptive name of the device
 	 * as it appears in the config.

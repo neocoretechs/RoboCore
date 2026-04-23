@@ -248,7 +248,8 @@ public class MotionController extends AbstractNodeMain {
 	boolean init = true;
 	static boolean holdBearing = false; // hold steering to current bearing
 
-	static float speedL, speedR, SPEEDSCALE;
+	static float speedL, speedR;
+	static float SPEEDSCALE = 1000.0f;
 
 	static long lastTime = System.currentTimeMillis();
 	static int SampleTime = 100; //.1 sec
@@ -316,10 +317,6 @@ public class MotionController extends AbstractNodeMain {
 		// statpub has status alerts that may come from sensors.
 		// Check startup for indoor speed scale setting ((stick -1 to 1) * SPEEDSCALE), then check cmdl for override of speed scale from startup and defaults
 		// MAX is always 1000
-		if(robot.isIndoor())
-			SPEEDSCALE = 100.0f;
-		else
-			SPEEDSCALE = 1000.0f;
 		if( remaps.containsKey("__speedscale") )
 			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
 		// see if we are implementing software dead-man protocol True or False
@@ -989,7 +986,7 @@ public class MotionController extends AbstractNodeMain {
 		// If the button square or circle is depressed, rotate in place at stick position Y speed
 		if( buttons[7] != 0 ) { // left pivot
 			speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
-			speedL = -speedR;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+			speedL = -speedR;
 			// set it up to send
 			publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
 			if(DEBUG)
@@ -1095,7 +1092,6 @@ public class MotionController extends AbstractNodeMain {
 		// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
 		// or on the computed derivation from desired course if a straight line course is set.
 		// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-		// scale it from -1 to 0 to 1 to -1000 to 0 to 1000, or the value of SPEEDSCALE which is our speed control range 
 		speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
 		speedL = speedR;
 		// PTerm has the positive or negative difference in degrees (left or right offset)
@@ -1595,14 +1591,9 @@ public class MotionController extends AbstractNodeMain {
 		}
 
 		// Calculate final mix of Drive and Pivot
-		// Set the target speeds in wheel rotation command units -1000, 1000 and if indoor mode div by ten
-		if(robot.isIndoor()) {
-			robot.getLeftSpeedSetpointInfo().setTarget(spd_left/10);
-			robot.getRightSpeedSetpointInfo().setTarget(spd_left/10);
-		} else {
-			robot.getLeftSpeedSetpointInfo().setTarget(spd_left);
-			robot.getRightSpeedSetpointInfo().setTarget(spd_left);
-		}
+		// Set the target speeds in wheel rotation command units 
+		robot.getLeftSpeedSetpointInfo().setTarget(spd_left);
+		robot.getRightSpeedSetpointInfo().setTarget(spd_left);
 		if( DEBUG )
 			System.out.println("Linear x:"+x+" angular z:"+th+" Motor L:"+robot.getLeftSpeedSetpointInfo().getTarget()+
 					" R:"+robot.getRightSpeedSetpointInfo().getTarget());
@@ -1628,8 +1619,7 @@ public class MotionController extends AbstractNodeMain {
 		//	System.out.println("Motor:"+leftWheel.TargetSpeed+" "+rightWheel.TargetSpeed);
 		// call to motor controller to update speed using absolute terms
 		//motorControl.updateSpeed(slot1, channel1, (int)leftWheel.TargetSpeed, slot2, channel2, (int)rightWheel.TargetSpeed);
-		return new int[]{(int) robot.getLeftSpeedSetpointInfo().getTarget(),
-				(int) robot.getRightSpeedSetpointInfo().getTarget()};
+		return new int[]{(int) robot.getLeftSpeedSetpointInfo().getTarget(),(int) robot.getRightSpeedSetpointInfo().getTarget()};
 	}
 
 	private void publishRobotMoveRelative(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, 

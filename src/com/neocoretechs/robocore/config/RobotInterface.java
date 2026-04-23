@@ -40,7 +40,7 @@ public interface RobotInterface {
 	public SetpointInfoInterface getRightSpeedSetpointInfo(); // Maximum speeds and indoor/outdoor characteristics
 	public SetpointInfoInterface getLeftTickSetpointInfo(); // Ticks and odometry related to the differing diff drives
 	public SetpointInfoInterface getRightTickSetpointInfo(); // Ticks and odometry related to the differing diff drives
-	public boolean isIndoor();
+	public int getPowerScale();
 	public float getTemperatureThreshold();
 	public TypedWrapper[] getLUN();
 	public TypedWrapper[] getWHEEL();
