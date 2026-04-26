@@ -98,20 +98,18 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
     /**
      * send motor power command (!G)
      *
-     * @param ch channel
-     * @param p power level (-1000, 1000)
+     * @param p power levels per channel (-1000, 1000)
      * @return ROBOTEQ_OK if successful 
      */
-	public int commandMotorPower(int ch, int p) throws IOException {
+	public int commandMotorPower(int... p) throws IOException {
 		/*
 		* Command the motor to spin. May reset current direction. Encoders reset regardless if present. Checks for ultrasonic shutdown if present.
-		* ch - channel. max is controller dependent
 		* p - power level -1000 to 10000
 		*/
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return ROBOTEQ_OK;
-		if( ch < 1 || ch > getChannels() )
+		if( p.length == 0 || p.length > getChannels() )
 			return ROBOTEQ_BAD_COMMAND;
 		// add offset for min power, 0 is default if not set by M5
 		//if( p != 0 )
@@ -120,9 +118,10 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 		//	p = MAXMOTORPOWER;
 		//if( MOTORPOWERSCALE != 0 )
 		//	p /= MOTORPOWERSCALE;
-		setMotorSpeed(ch, p);
+		for(int ch = 1; ch <= p.length; ch++) {
+			setMotorSpeed(ch, p[ch-1]);
 			
-		if( p < 0 )  // and we want to go backward
+		if( p[ch-1] < 0 )  // and we want to go backward
 				currentDirection[ch-1] = 0; // set new direction value
 		else // dir is 1 forward
 				currentDirection[ch-1] = 1;		
@@ -133,24 +132,26 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 			return ROBOTEQ_OK;
 		// If this wheel is mirrored, invert power
 		if( defaultDirection[ch-1] != 0)
-			p = -p;
-		if( p != 0 && Math.abs(p) < motorSpeed[ch-1]) {
-			if(p > 0 )
-				p = minMotorPower[ch-1];
+			p[ch-1] = -p[ch-1];
+		if( p[ch-1] != 0 && Math.abs(p[ch-1]) < motorSpeed[ch-1]) {
+			if(p[ch-1] > 0 )
+				p[ch-1] = minMotorPower[ch-1];
 			else
-				p = -minMotorPower[ch-1];
+				p[ch-1] = -minMotorPower[ch-1];
 		}
-		if( Math.abs(p) > MAXMOTORPOWER ) { // cap it at max
-			if(p > 0)
-				p = MAXMOTORPOWER;
+		if( Math.abs(p[ch-1]) > MAXMOTORPOWER ) { // cap it at max
+			if(p[ch-1] > 0)
+				p[ch-1] = MAXMOTORPOWER;
 			else
-				p = -MAXMOTORPOWER;
+				p[ch-1] = -MAXMOTORPOWER;
 		}
 		// Scale motor power if necessary and save it in channel speed array with proper sign for later use
-		p /= MOTORPOWERSCALE;
-		command = String.format("!G %02d %d\r", ch, p);
-		fault_flag = 0;
-		return sendCommand(command);
+		if(MOTORPOWERSCALE != 0)
+			p[ch-1] /= MOTORPOWERSCALE;
+		command = String.format("!G %02d %d\r", ch, p[ch-1]);
+		fault_flag |=  sendCommand(command);
+		}
+		return fault_flag;
 	}
 
 	private int sendCommand(String commandx) {
@@ -769,21 +770,6 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 	public void setInterruptServiceHandler(int intPin) {	
 	}
 	
-	public static void main(String[] args) throws IOException {
-		RoboteqDevice rd = new RoboteqDevice(1000);
-		/*
-		while(rd.isConnected() == 0) {
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		*/
-		System.out.println(rd.getDriverInfo(1));
-	}
-	
 	@Override
 	public String reportAllControllerStatus() throws IOException {
 		StringBuffer sb = new StringBuffer(getDriverInfo(1));
@@ -801,12 +787,22 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 		commandEmergencyStop(0);
 	}
 	@Override
-	public void setDeviceLevel(String deviceName, int deviceLevel) throws IOException {
-		commandMotorPower(Integer.parseInt(deviceName), deviceLevel);	
-	}
-	@Override
-	public void commandPWM(String string) {
-		throw new RuntimeException("unsupported");
+	public void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException {
+		commandMotorPower(deviceLevel);	
 	}
 
+	public static void main(String[] args) throws IOException {
+		RoboteqDevice rd = new RoboteqDevice(1000);
+		/*
+		while(rd.isConnected() == 0) {
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		*/
+		System.out.println(rd.getDriverInfo(1));
+	}
 }

@@ -10,7 +10,9 @@ import java.io.IOException;
  * which instantiates and control the lifecycle for these objects.<p>
  * Multiple controllers occupy virtual 'slots' that correspond to hardware such as bridges.
  * Each controller 'slot' can accommodate several motor control channels.
- * Each channel receives a value representing a power level.
+ * Each channel receives a value representing a power level. setDeviceLevels calls the {@link TypeSlotChannelEnable}
+ * configuration for the given deviceName and applies the proper arguments to the G-code that controls that device.
+ * It then writes the directive to the {@link AsynchDemuxer}.
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2018,2020,2021
  *
  */
@@ -19,6 +21,5 @@ public interface MarlinspikeControlInterface {
 	public String reportSystemId() throws IOException;
 	public void commandStop() throws IOException;
 	public int commandReset() throws IOException;
-	public void setDeviceLevel(String deviceName, int deviceLevel) throws IOException;
-	public void commandPWM(String string);
+	public void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException;
 }

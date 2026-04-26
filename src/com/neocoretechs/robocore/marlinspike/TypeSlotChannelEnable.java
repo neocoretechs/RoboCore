@@ -20,8 +20,8 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
  * Example organization of Robocore.Properties parameters:
  * LUN[0].Name:LeftWheel
  * LUN[0].NodeName:CONTROL1
- * #LUN[0].Controller:/dev/ttyACM0 (this is commented out optional configuration 1)
- * LUN[0].Controller:MarlinspikeDataPort
+ * LUN[0].Controller:/dev/ttyACM0 (port to the Marlinspike USB pico connection)
+ * #LUN[0].Controller:MarlinspikeDataPort (If we were using the Linux userspace Java version of Marlinspike)
  * LUN[0].Type:H-Bridge
  * LUN[0].Slot:0
  * #LUN[0].SignalPin0:8 (optional alternate config 1)
@@ -29,7 +29,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
  * LUN[0].Channel:1
  * #LUN[0].EnablePin:38 (optional alternate config 1)
  * LUN[0].EnablePin:2
- * LUN[0].Direction:0>
+ * LUN[0].Direction:0
  * #LUN[0].EncoderPin:68 (optional alternate config 1)
  * LUN[0].EncoderPin:40
  * LUN[0].EncoderType:Analog
@@ -114,7 +114,6 @@ public class TypeSlotChannelEnable implements Serializable {
 				case SWITCHHBRIDGE:
 				case PWM:
 				case DELAYHBRIDGE:
-					//return String.format("G5 Z%d C%d P%d%n",slot,channel,deviceLevel);
 					return new G5(tsce);
 				case INPUTPIN:
 					//return String.format("M44 P%d%n", pin);
@@ -148,6 +147,8 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.channel = channel;
 		this.enable = enable;
 		this.activator = cntrltype.activatorFactory(this);
+		isSlot = true;
+		isChannel = true;
 	}
 	/**
 	 * Create a template to initialize a logical controller within the Marlinspike where we have an enable pin and a direction pin.
@@ -164,12 +165,16 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.enable = enable;
 		this.dirdefault = dirdefault;
 		this.activator = cntrltype.activatorFactory(this);
+		isSlot = true;
+		isChannel = true;
 	}
 	
 	public TypeSlotChannelEnable(typeNames cntrltype, int pin) {
 		this.cntrltype = cntrltype;
 		this.pin = pin;
 		this.activator = cntrltype.activatorFactory(this);
+		isSlot = false;
+		isChannel = false;
 	}
 	
 	public void setEncoderPin(int ienc) {
@@ -192,6 +197,14 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.maxValue = maxValue;
 	}
 	
+	public boolean getIsSlot() {
+		return isSlot;
+	}
+	
+	public boolean getIsChannel() {
+		return isChannel;
+	}
+	
 	public int getMaxValue() { return maxValue; }
 	
 	public void setPin0(Optional<Object> pin) {
@@ -211,39 +224,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	public int getPin1() {
 		return pin1;
 	}
-	/**
-	 * Parse the result of M798 status call
-	 * @param readingValString
-	 */
-	public static void parseStatus(String stat, TypeSlotChannelEnable tsce) {
-		if(DEBUG)
-			System.out.println("M798 status:"+stat);
-		String[] motors = stat.split(" Motor Slot:");
-		for(int i = 0; i < motors.length; i++)
-			System.out.println(i+".)"+motors[i]);
-		int iSlot = stat.indexOf(" Motor Slot:");
-		int nSlot = -1;
-		if(iSlot != -1) {
-			nSlot = Integer.parseInt(stat.substring(iSlot+12,iSlot+13));
-			if(DEBUG)
-				System.out.printf("parseStatus slot=%d%n",nSlot);
-		}
-		if(nSlot != -1 && nSlot == tsce.slot)
-			tsce.isSlot = true;
-		String[] chans = stat.split(" Motor Channel:");
-		for(int i = 0; i < chans.length; i++)
-			System.out.println(i+".)"+chans[i]);
-		int iChan = stat.indexOf(" Motor Channel:");
-		int nChan = -1;
-		while(iChan != -1) {
-			nChan = Integer.parseInt(stat.substring(iChan+15,iChan+16));
-			if(nChan == tsce.channel) {
-				tsce.isChannel = true;
-				break;
-			}
-			iChan = stat.indexOf(" Motor Channel:",iChan+15);
-		}
-	}
+
 	/**
 	 * CALL THIS FIRST to establish instance of controller for further operations and to refer to it numerically by type.
 	 * This is done AFTER the call to M798 to determine whether the slot and channel has already been configured.
@@ -273,11 +254,11 @@ public class TypeSlotChannelEnable implements Serializable {
 		if(cntrltype.val().endsWith("Pin")) {
 			ab.add(sb.append("M").append(configCodes[M10CtrlType]).append(" P").append(pin).toString());
 		} else {
-			if(!isSlot) {
+			if(isSlot) {
 				// Generate the M10 followed by the the M codes to create the type, the encoder, the interrupt linkage, etc.
 				ab.add(sb.append("M10 ").append("Z").append(getSlot()).append(" T").append(M10CtrlType).toString());
 			}
-			if(!isChannel) {
+			if(isChannel) {
 				// build a line to add to list
 				sb = new StringBuilder();
 				sb.append(genTypeAndSlot()).append(genDrivePins(getPin0(), getPin1())).append(genChannelDirDefaultEncoder());
@@ -290,11 +271,13 @@ public class TypeSlotChannelEnable implements Serializable {
 	}
 	/**
 	 * Call at time of activation of command immediately before sending to Marlinspike to generate proper
-	 * M or G code sequence for configured resource in MarlinSpikeControl setDeviceLevel
-	 * @param deviceLevel
-	 * @return
+	 * M or G code sequence for configured resource in MarlinSpikeControl setDeviceLevels.
+	 * @see G5
+	 * @see G6
+	 * @param deviceLevel the array of channel power levels for the device
+	 * @return The activation string code
 	 */
-	public String genActivate(int deviceLevel) {
+	public String genActivate(int... deviceLevel) {
 		return activator.getActivation(deviceLevel);
 	}
 	/**

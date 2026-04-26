@@ -79,7 +79,7 @@ public abstract class AbstractMotorControl {
 	protected int MAXMOTORPOWER = 1000; // Max motor power in controller
 	protected int fault_flag = 0;
 
-	public abstract int commandMotorPower(int ch, int p) throws IOException;//make AbstractMotorControl not instantiable
+	public abstract int commandMotorPower(int... deviceLevel) throws IOException;//make AbstractMotorControl not instantiable
 	public abstract int commandEmergencyStop(int status) throws IOException;
 	public abstract int isConnected() throws IOException;
 	public abstract String getDriverInfo(int ch);
@@ -235,9 +235,9 @@ public abstract class AbstractMotorControl {
 	public int getMinMotorPower(int ch) { return minMotorPower[ch-1] ; }
 	public int getMaxMotorPower() { return MAXMOTORPOWER; }
 	public void setMaxMotorPower(int p) { MAXMOTORPOWER = p; }
-	public void setMotorSpeed(int ch, int speed) {
+	public void setMotorSpeed(int... speed) {
 		MOTORSHUTDOWN = false;
-		motorSpeed[ch-1] = speed;
+		motorSpeed = speed;
 	}
 	public int getMotorSpeed(int ch) { return motorSpeed[ch-1]; }
 	public int getCurrentDirection(int ch) { return currentDirection[ch-1]; }

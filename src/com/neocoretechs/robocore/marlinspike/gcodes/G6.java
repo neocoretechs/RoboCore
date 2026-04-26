@@ -9,24 +9,23 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
 /**
- * The list of channel power levels is a variable list depending on the number of channels the device is configured with.
- * 10 possible channels, P-Y parameters in the G5 directive.
- * G5 - Absolute command motor [Z<controller>] [P<motor power -1000 to 1000>] [Q<channel2 power>] [R<channel 3 power>] ... [Y[channel 10 power]
- * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2026
+ * The list of channel power levels is a variable list depending on the number of channels the PWM device was configured with
+ * G6 - Absolute command PWM [Z<controller>] [P<PWM power 0 to 2000>(scaled 0-2000)] [Q Power channel 2] [R Power channel 3...] [S] [T] [U] [V] [W] [X] [Y]
+ * @author Jonathan Groff (C) NeoCoreTechs 2026
  *
  */
-public class G5 extends AbstractBasicResponse implements ActivationInterface, Serializable {
+public class G6 extends AbstractBasicResponse implements ActivationInterface, Serializable {
 	private static final long serialVersionUID = 1L;
 	private boolean DEBUG = false;
-	private TypeSlotChannelEnable tsce;
+	private TypeSlotChannelEnable tsce; 
 	private static final String[] channels= {"P","Q","R","S","T","U","V","W","X","Y"};
-	public G5(AsynchDemuxer asynchDemuxer) {
+	public G6(AsynchDemuxer asynchDemuxer) {
 		//
-		// G5
+		// G6
 		//
-		super(asynchDemuxer, topicNames.G5.val(), 2);
+		super(asynchDemuxer, topicNames.G6.val(), 2);
 	}
-	public G5(TypeSlotChannelEnable tsce) {
+	public G6(TypeSlotChannelEnable tsce) {
 		this.tsce = tsce;
 	}
 	@Override
@@ -37,7 +36,7 @@ public class G5 extends AbstractBasicResponse implements ActivationInterface, Se
 			sb.append(deviceLevel[level]);
 			sb.append(" ");
 		}
-		return String.format("G5 Z%d %s%n",tsce.getSlot(),sb.toString());
+		return String.format("G6 Z%d %s%n",tsce.getSlot(),sb.toString());
 	}
 
 }

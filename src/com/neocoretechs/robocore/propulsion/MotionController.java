@@ -31,10 +31,12 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
+import com.neocoretechs.robocore.config.SlotEntry;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
+import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
 
 import org.json.JSONObject;
 
@@ -157,7 +159,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  *
  */
 public class MotionController extends AbstractNodeMain {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static boolean IMUDEBUG = false;
 	private static boolean DEBUGBEARING = true;
 	//
@@ -680,21 +682,26 @@ public class MotionController extends AbstractNodeMain {
 	* Configure a publisher to talk to a MarlinSpikeControlInterface which receives 
 	* a message of type: LUN#, value of control for that LUN#. <br>
 	* Create publishing channels to send commands to remote destination to supply 32 bit int values 
-	* and apply those to the device channels LUNs. <br>
-	* The ordinals represent a logical unit LUN in the configuration which is
-	* a collection of node, device, slot, channel of a controller attached to a ROS node, which has
-	* a number of tty ports (devices) which have marlinspike boards attached (Mega2560 or Pico via USB running the firmware)
+	* and apply those to the non-slots, then the slots. <br>
+	* The slotted entries represent a slot in the configuration which can be an aggregate of property file LUN's;
+	* a collection of node, device, channel of a controller attached to a ROS node, which has
+	* a number of tty ports (devices) which have Marlinspike boards attached (Mega2560 or Pico via USB running the firmware)
 	* which have a number of logical software controllers configured by slot and channels.<p>
 	* Set up a trigger value for the remote destination, most likely originating from a controller such as PS/3 or the AI model.<p>
 	* Take the 2 trigger values as int32 and send them on to the microcontroller 
-	* related subsystem at the int valued LUNs. The marlinspike subsystem is composed of a software 
-	* controller or SBC such as Pico talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
+	* related subsystem at the int valued LUN slots. The Marlinspike subsystem is composed of a software 
+	* controller or SBC such as Pico talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.<p>
+	* Unslotted entries are configured by name in the properties file
 	* @param connectedNode the Ros node we are using
 	* @param pubschannel the collection of publishing channels for the device populated from DeviceEntry collection
 	* @param statpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
 	*/
 	private void configurePublisherListener(ConnectedNode connectedNode, HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel, Publisher<diagnostic_msgs.DiagnosticStatus> statpub) {
 		for(DeviceEntry ndd : robot.getManager().getDevices()) {
+			// non-slot device demuxxers, we configure slotted ones as slots
+			TypeSlotChannelEnable tsce = robot.getManager().getTypeSlotChannelEnable(ndd);
+			if(tsce.getIsSlot()) 
+				continue;
 			if(DEBUG)
 				System.out.printf("configurePublisherListener for DeviceEntry %s%n", ndd);
 			//if(ndd.getNodeName().equals(serveNode)) {
@@ -750,8 +757,65 @@ public class MotionController extends AbstractNodeMain {
 			});
 			publishedLUNRestValue.put(ndd.getLUN(),false);
 		}
-		//}	
-
+		//--------------------------------
+		// now handle the slots
+		//
+		for(SlotEntry slots : robot.getManager().getSlots().keySet()) {
+			// slot device demuxxers
+			String slot = slots.getName();
+			if(DEBUG)
+				System.out.printf("configurePublisherListener for Slot %s%n", slot);
+			//if(ndd.getNodeName().equals(serveNode)) {
+			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(slot, std_msgs.Int32MultiArray._TYPE));
+			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
+				@Override
+				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, slot,
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);				
+				}
+				@Override
+				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Successful Master Registration for %s%n", pub);
+					}
+					pubschannel.put(slot, pub);
+					if(DEBUG)
+						System.out.println("Bringing up publisher "+slot);
+				}
+				@Override
+				public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
+					}
+					ArrayList<String> st = new ArrayList<String>();
+					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, slot,
+							diagnostic_msgs.DiagnosticStatus.ERROR, st);
+				}
+				@Override
+				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Successful Master Unregistration for %s%n", pub);
+					}
+					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
+				}
+				@Override
+				public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
+					if(DEBUG) {
+						System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
+					}				
+				}
+				@Override
+				public void onShutdown(Publisher<Int32MultiArray> pub) {
+					if(DEBUG) {
+						System.out.printf("Shutdown initiated for %s%n", pub);
+					}
+					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
+				}	
+			});
+		}
 	}
 	/**
 	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
@@ -845,7 +909,6 @@ public class MotionController extends AbstractNodeMain {
 			if( speedR < 0.0) speedR = 0.0f;
 		}
 		 */
-
 	}
 	/**
 	 * Apply a solution in triangles as we do with solution in arcs to reduce left wheel speed.
@@ -1008,11 +1071,13 @@ public class MotionController extends AbstractNodeMain {
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 
 		// horizontal axis is 0 to -180/180 degrees, we want 0 at the top 
-		//         -90
+		//<pre>
+		//         -90	
 		//          |
 		//-180/180 --- 0
 		//          |
 		//         90
+		//</pre>
 		stickDegrees += 90; // fixes 2 right quadrants and top left quadrant, orients 0 at top, 180 at bottom, 0 to -90 top left.
 		if(stickDegrees > 180.0 ) // fixes bottom left quadrant, sets -90 to -180
 			stickDegrees -= 360.0;
@@ -1373,18 +1438,15 @@ public class MotionController extends AbstractNodeMain {
 			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) {
 		ArrayList<Integer> speedVals = new ArrayList<Integer>();
 		if(DEBUG)
-			System.out.printf("%s Publish propulsion sending LeftWheel %d RightyWheel%d%n" , this.getClass().getName(), leftSpeed, rightSpeed);
+			System.out.printf("%s Publish propulsion sending LeftWheel: %d RightWheel: %d%n" , this.getClass().getName(), leftSpeed, rightSpeed);
 		speedVals.add(leftSpeed);
-		pubschannel.get("LeftWheel").publish(setupPub(connectedNode, speedVals));
+		speedVals.add(rightSpeed);
+		
+		pubschannel.get("slot0").publish(setupPub(connectedNode, speedVals));
 		try {
 			Thread.sleep(1);
 		} catch (InterruptedException e) {}		
 		speedVals.clear();
-		speedVals.add(rightSpeed);
-		pubschannel.get("RightWheel").publish(setupPub(connectedNode, speedVals));
-		try {
-			Thread.sleep(1);
-		} catch (InterruptedException e) {}
 		if(SOFTSTOP) {
 			softStop(connectedNode, twistpub, twistmsg);
 		}

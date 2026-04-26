@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 
 /**
@@ -42,17 +43,17 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	public MarlinspikeControl(AsynchDemuxer asynchDemuxer) { this.asynchDemuxer = asynchDemuxer; }
 	
 	/**
-	 * Single channel device control
+	 * Multi channel device control
 	 * @param deviceName The deviceName as it appears in the configuration 
-	 * @param deviceLevel the value to set the level of the device
+	 * @param deviceLevel the values to set the levels of the device, int array one entry per channel
 	 * @throws IOException
 	 */
-	public synchronized void setDeviceLevel(String deviceName, int deviceLevel) throws IOException {
+	public synchronized void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException {
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getId());
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevels:"+Arrays.toString(deviceLevel)+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getName());
 		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevel:"+deviceLevel+" slot:"+tsce.getSlot()+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getId());
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevels:"+Arrays.toString(deviceLevel)+" slot:"+tsce.getSlot()+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getName());
 		//String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
 		asynchDemuxer.addWrite(tsce.genActivate(deviceLevel));
 	}
@@ -89,16 +90,15 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 			System.out.println(this.getClass().getName()+".reportAllControllerStatus");
 		return "Ok";
 	}
-	
-	  // 
-    // Report methods. The sequence is to issue the M-code to the MarlinSpike. The returned data will
-    // include the proper <headers> which are 'demuxxed' and the correct MachineReadings are created from
-    // the retrieved data and added to the queues in each MachineBridge instance for that topic
-    // as they are retrieved from the MarlinSpike.<br/>
-    // After issuing each M-code, call one of these methods to acquire the queue with the MachineReadings 
-    // and call toString on them to build the proper output buffer for each topic, then do whatever with the String
-    // payload.
-    //
+	/** 
+    * Report methods. The sequence is to issue the M-code to the MarlinSpike. The returned data will
+    * include the proper <headers> which are 'demuxxed' and the correct MachineReadings are created from
+    * the retrieved data and added to the queues in each MachineBridge instance for that topic
+    * as they are retrieved from the MarlinSpike.<br/>
+    * After issuing each M-code, call one of these methods to acquire the queue with the MachineReadings 
+    * and call toString on them to build the proper output buffer for each topic, then do whatever with the String
+    * payload.
+    */
 	public synchronized String reportSystemId() throws IOException {
 		String statCommand1 = "M115"; // system id
 		asynchDemuxer.addWrite(statCommand1);
@@ -156,7 +156,7 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 		asynchDemuxer.addWrite(statCommand1);
     }
     /**
-     * M798 Z<slot> X
+     * M798 [Z<slot> X]
      * @throws IOException 
      */
     public synchronized void getPWMControlSetting() throws IOException {
@@ -176,11 +176,7 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
     	}
     	return 0;
     }
-    
-	@Override
-	public void commandPWM(String req) {
-		asynchDemuxer.addWrite(req);
-	}
+
     /**
      * M798 [Z&lt;slot&gt;]
      * @return A String payload of the status of each of the assigned motor controllers.
@@ -192,17 +188,10 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
     		String statCommand1 = "M798"; // report all pins in use
     		asynchDemuxer.addWrite(statCommand1);
     }
-    
-	
 	@Override
 	public void commandStop() throws IOException {
 		String motorCommand1 = "M81";
 		asynchDemuxer.addWrite(motorCommand1);	
 	}
-
-	
-
 }
-
-
 

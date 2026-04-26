@@ -50,7 +50,7 @@ public class digitalpin extends AbstractBasicDataLoader implements ActivationInt
 	}
 
 	@Override
-	public String getActivation(int deviceLevel) {
+	public String getActivation(int... deviceLevel) {
 		return String.format("M44 P%d%n", tsce.getPin());
 	}
 

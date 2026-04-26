@@ -8,12 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import com.neocoretechs.robocore.SynchronizedThreadManager;
-import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.machine.bridge.FileIOUtilities;
 import com.neocoretechs.robocore.machine.bridge.MachineBridge;
@@ -23,6 +19,7 @@ import com.neocoretechs.robocore.machine.bridge.TopicListInterface;
 import com.neocoretechs.robocore.marlinspike.gcodes.G100;
 import com.neocoretechs.robocore.marlinspike.gcodes.G4;
 import com.neocoretechs.robocore.marlinspike.gcodes.G5;
+import com.neocoretechs.robocore.marlinspike.gcodes.G6;
 import com.neocoretechs.robocore.marlinspike.gcodes.G99;
 import com.neocoretechs.robocore.marlinspike.mcodes.M0;
 import com.neocoretechs.robocore.marlinspike.mcodes.M1;
@@ -132,7 +129,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static boolean PORTDEBUG = false;
 	private volatile boolean shouldRun = true;
 	private DataPortCommandInterface dataPort;
@@ -176,7 +173,7 @@ public class AsynchDemuxer implements Runnable {
 		LINESEQ("Line Number is not Last Line Number+1, Last Line: "),
 		EEPROM("eeprom"),
 		ERROR("ERROR"),
-		G4("G4"),G5("G5"),G99("G99"),G100("G100"),
+		G4("G4"),G5("G5"),G6("G6"),G99("G99"),G100("G100"),
 		M0("M0"),M1("M1"),M2("M2"),M3("M3"),M4("M4"),M5("M5"),M6("M6"),M7("M7"),M8("M8"),M9("M9"),M10("M10"),M11("M11"),M12("M12"),M13("M13"),
 		M14("M14"),M15("M15"),M16("M16"),M33("M33"),M35("M35"),M36("M36"),M37("M37"),M38("M38"),M39("M39"),M40("M40"),M41("M41"),M42("M42"),M45("M45"),M47("M47"),
 		M80("M80"),M81("M81"),M301("M301"),M302("M302"),M304("M304"),M306("M306"),
@@ -263,6 +260,12 @@ public class AsynchDemuxer implements Runnable {
 			//if(DEBUG)
 			//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.G5.val());
 			topics.put(topicNames.G5.val(),new G5(this).getTopicList());
+			//
+			// G6
+			//
+			//if(DEBUG)
+			//	System.out.println("AsynchDemuxer.Init bring up "+topicNames.G6.val());
+			topics.put(topicNames.G6.val(),new G6(this).getTopicList());			
 			//
 			// G99
 			//

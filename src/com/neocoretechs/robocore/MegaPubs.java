@@ -7,7 +7,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -40,11 +43,12 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
 import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
-
+import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
 import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
 import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
+import com.neocoretechs.robocore.config.SlotEntry;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.services.ControllerStatusMessage;
 import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
@@ -93,7 +97,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * 
  * The realtime subsystem is activated by being issued a series of M and G codes similar to 3D printer and CNC standard codes.<br/>
  * Examples:<br>
- * <code> G5 Z[slot] C[channel] P[power] </code>- Issue move command to controller in slot Z&lt;slot&gt; on channel C (1 or 2 for left/right wheel) with P&lt;-1000 to 1000&gt;
+ * <code> G5 Z[slot] P[power] Q[power] R[power] S...Y[power]</code>- Issue move command to controller in slot Z&lt;slot&gt; for channels P-Y (0 and 1 element left/right wheel) with P-Y&lt;-1000 to 1000&gt;
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
  * H Bridge Driver:
@@ -114,7 +118,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2025
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static String robotName;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
@@ -124,7 +128,6 @@ public class MegaPubs extends AbstractNodeMain  {
 	//private MarlinspikeControlInterface motorControlHost;
 	NavListenerMotorControlInterface navListener = null;
 	private AuxGPIOControl auxGPIO = null;
-	private AuxPWMControl auxPWM = null;
 	private boolean isMoving = false;
 	private boolean shouldMove = true;
 	private int targetPitch;
@@ -281,7 +284,7 @@ public void onStart(final ConnectedNode connectedNode) {
 	}
 	
 	try {
-		// createControllers should have been performed in MotionCOntroller and Robot placed in ParameterTree
+		// createControllers should have been performed in MotionController and Robot placed in ParameterTree
 		robot.getManager().configureDemuxer();
 	} catch (IOException e) {
 		e.printStackTrace();
@@ -297,15 +300,33 @@ public void onStart(final ConnectedNode connectedNode) {
 	// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
 	final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 	//
-	// Iterate the list of device demuxxers we put together in configureMarlinspikeManager method below.
-	// for each NodeDeviceDemuxer, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
+	// Iterate the list of non-slot device demuxxers we put together in configureMarlinspikeManager method.
+	// for each Device, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
 	//
 	for(DeviceEntry ndd : robot.getManager().getDevices()) {
-		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
-		subscriberDevice.put(subscr, ndd.getName());
+		TypeSlotChannelEnable tsce = robot.getManager().getTypeSlotChannelEnable(ndd);
+		if(!tsce.getIsSlot()) {
+			Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
+			subscriberDevice.put(subscr, ndd.getName());
+			configureSubscriberListener(subscr, connectedNode, statpub);
+		}
+	}
+	//-------------------------------------
+	// Iterate the list of slots we put together in configureMarlinspikeManager.
+	// for each slot, create a subscriber on the channel <slot name> of type Int32MultiArray
+	ConcurrentHashMap<SlotEntry, ArrayList<TypeSlotChannelEnable>> slots = robot.getManager().getSlots();
+	Iterator<SlotEntry> it = slots.keys().asIterator();
+	while(it.hasNext()) {
+		String sslot = ((SlotEntry)it.next()).getName();
+		Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(sslot, std_msgs.Int32MultiArray._TYPE);
+		subscriberDevice.put(subscr, sslot);
 		configureSubscriberListener(subscr, connectedNode, statpub);
 	}
 	
+	//	Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
+	//	subscriberDevice.put(subscr, ndd.getName());
+	//	configureSubscriberListener(subscr, connectedNode, statpub);
+	//}
 	// Initialize the collection of DiagnosticStatus response handlers
 	for(int i = 0; i < stopics.length; i++) {
 		responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics);
@@ -350,8 +371,7 @@ public void onStart(final ConnectedNode connectedNode) {
 					e.printStackTrace();
 				}
 				robot.getOperating().replaceAll((key, value) -> false);
-			}
-				
+			}		
 		}
 	});
 
@@ -448,42 +468,75 @@ public void onStart(final ConnectedNode connectedNode) {
 				String deviceName = subscriberDevice.get(subs);
 				int[] valch = message.getData();
 				if(DEBUG)
-					System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%d Thread:%s%n", this.getClass().getName(), subs, deviceName, message.toString(), valch.length, Thread.currentThread().getName());
+					System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%s Thread:%s%n", this.getClass().getName(), subs, deviceName, message.toString(), Arrays.toString(valch), Thread.currentThread().getName());
 				try {
-						MarlinspikeControlInterface control = robot.getManager().getMarlinspikeControl(deviceName);
+					MarlinspikeControlInterface control = null;
+					try {
+						control = robot.getManager().getMarlinspikeControl(deviceName);
 						if(DEBUG)
 							System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
-						if(control == null) {
+						} catch(NoSuchElementException nse) {
 							System.out.println("Controller:"+deviceName+" not configured for this node");
-							synchronized(statPub) {
-								statPub.add("Controller:"+deviceName+" not configured for this node");
-								new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
+							statPub.add("Controller:"+deviceName+" not configured for this node");
+							new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, subs.toString(), 
 										diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
-							}
 							return;
 						}
-						for(int iarg = 0; iarg < valch.length; iarg++) {
-							int affectorSpeed = valch[iarg];
-							if(DEBUG)
-								System.out.printf("%s Message:%s DeviceName=%s arg=%d speed:%d operating:%b%n", this.getClass().getName(), message.toString(), 
-										deviceName, iarg, affectorSpeed, robot.getOperating().get(deviceName));
-							// keep Marlinspike from getting bombed with zeroes
-							if(robot.getOperating().get(deviceName)) {
-								if(affectorSpeed == 0) {
-									control.setDeviceLevel(deviceName, 0);
-									robot.getOperating().replace(deviceName, true, false);
-								} else {
-									control.setDeviceLevel(deviceName, affectorSpeed);
-								}
-							} else {
-								if(affectorSpeed != 0) {
-									robot.getOperating().replace(deviceName, false, true);
-									control.setDeviceLevel(deviceName, affectorSpeed);
-								}
+						if(DEBUG)
+							System.out.printf("%s Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), message.toString(), 
+									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
+						// keep Marlinspike from getting bombed with zeroes
+						boolean affectorSpeed = true;
+						for(int val: valch) {
+							if(val != 0) {
+								affectorSpeed = false;
+								break;
 							}
-							if(DEBUG)
-								System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getName(),deviceName,affectorSpeed);
 						}
+						if(robot.getOperating().get(deviceName)) {
+							if(affectorSpeed) 
+								robot.getOperating().replace(deviceName, true, false);
+						} else {
+							if(affectorSpeed) 
+								robot.getOperating().replace(deviceName, false, true);
+						}
+						switch(valch.length) {
+							case 1:
+								control.setDeviceLevels(deviceName, valch[0]);
+								break;
+							case 2:
+								control.setDeviceLevels(deviceName, valch[0],valch[1]);
+								break;
+							case 3:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2]);
+								break;
+							case 4:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3]);
+								break;
+							case 5:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4]);
+								break;
+							case 6:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5]);
+								break;
+							case 7:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6]);
+								break;
+							case 8:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7]);
+								break;
+							case 9:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8]);
+								break;
+							case 10:
+								control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8],valch[9]);
+								break;
+							default:
+								System.out.println("Bad param length to control:"+valch.length);
+								return;	
+						}
+						if(DEBUG)
+							System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getName(),deviceName,affectorSpeed);
 					} catch (IOException e) {
 						System.out.println("There was a problem communicating with the controller:"+e);
 						e.printStackTrace();
@@ -594,38 +647,18 @@ public void onStart(final ConnectedNode connectedNode) {
 			    new ServiceResponseBuilder<PWMControlMessageRequest, PWMControlMessageResponse>() {
 					@Override
 					public void build(PWMControlMessageRequest request, PWMControlMessageResponse response) {	
-						try {
-							switch(PWM_MODE) {
-								case "controller":
-									break;
-									// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
-									// Activates a direct PWM timer without going through one of the various controller
-									// objects. Issues an M45 to the Marlinspike on the Mega2560
-								case "direct":
-								default:
-									System.out.println("PWM direct");
-									if( auxPWM == null )
-										auxPWM = new AuxPWMControl();
-									auxPWM.activateAux(robot.getManager().getMarlinspikeControl("PWM"), request.getData().getData());	
-									break;
-							}
-							response.setData("success");
-						} catch (IOException e) {
-							System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE");
-							e.printStackTrace();
-							response.setData("fail");
-							synchronized(statPub) {
-								statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA PWM SERVICE:"+e);
-								new PublishDiagnosticResponse(connectedNode, tstatpub, outgoingDiagnostics, "MARLINSPIKE PWM ACTIVATION", 
-										diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-								while(!outgoingDiagnostics.isEmpty()) {
-									try {
-										tstatpub.publish(outgoingDiagnostics.takeFirst());
-										Thread.sleep(1);
-									} catch (InterruptedException e1) {}
-								}
-							}
+						switch(PWM_MODE) {
+							case "controller":
+								break;
+								// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
+								// Activates a direct PWM timer without going through one of the various controller
+								// objects. Issues an M45 to the Marlinspike on the Mega2560
+							case "direct":
+							default:
+								System.out.println("PWM direct");
+								break;
 						}
+						response.setData("success");
 					}
 				});	
 			servicePWMServer.addListener(servicePWMServerListener);	      

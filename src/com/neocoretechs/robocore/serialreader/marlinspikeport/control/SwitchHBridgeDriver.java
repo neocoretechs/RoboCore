@@ -41,17 +41,18 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 	}
 	
 	@Override
-	public int commandMotorPower(int channel, int motorPower) throws IOException {
+	public int commandMotorPower(int... motorPower) throws IOException {
 		// check shutdown override
 		if( MOTORSHUTDOWN )
 			return 0;
-		setMotorSpeed(channel, motorPower == 0 ? 0 : (motorPower < 0 ? -MAXMOTORPOWER : MAXMOTORPOWER));
+		for(int channel = 1; channel <= getChannels(); channel++) {
+		setMotorSpeed(channel, motorPower[channel-1] == 0 ? 0 : (motorPower[channel-1] < 0 ? -MAXMOTORPOWER : MAXMOTORPOWER));
 		int pIndex = getMotorDigitalPin(channel); // drive pin
 		int dirPinIndex = getMotorEnablePin(channel); // index to dir pin array
 		// get mapping of channel to pin
 		// see if we need to make a direction change, check array of [PWM pin][dir pin][dir]
 		if( getCurrentDirection(channel) == 1) { // if dir 1, we are going what we define as 'forward' 
-			if( motorPower < 0 ) { // and we want to go backward
+			if( motorPower[channel-1] < 0 ) { // and we want to go backward
 				// reverse dir, send dir change to pin
 				// default is 0 (LOW), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0) 
@@ -59,10 +60,10 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 				else 
 					Pins.getOutputPin(dirPinIndex,0);
 				setCurrentDirection(channel, 0); // set new direction value
-				motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val
+				motorPower[channel-1] = -motorPower[channel-1]; //setMotorSpeed(channel,-motorPower); // absolute val
 			}
 		} else { // dir is 0
-			if( motorPower > 0 ) { // we are going 'backward' as defined by our initial default direction and we want 'forward'
+			if( motorPower[channel-1] > 0 ) { // we are going 'backward' as defined by our initial default direction and we want 'forward'
 				// reverse, send dir change to pin
 				/// default is 0 (HIGH), if we changed the direction to reverse wheel rotation call the opposite dir change signal
 				if(getDefaultDirection(channel) > 0)  
@@ -72,16 +73,16 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 				setCurrentDirection(channel, 1);
 			} else { // backward with more backwardness
 				// If less than 0 take absolute value, if zero dont play with sign
-				if( motorPower < 0) motorPower = -motorPower; //setMotorSpeed(channel,-motorPower); // absolute val;
+				if( motorPower[channel-1] < 0) motorPower[channel-1] = -motorPower[channel-1]; //setMotorSpeed(channel,-motorPower); // absolute val;
 			}
 		}
 		// scale motor power
-		if( motorPower != 0 && motorPower < getMinMotorPower(channel))
-				motorPower = getMinMotorPower(channel);
-		if( motorPower > getMaxMotorPower() ) // cap it at max
-				motorPower = getMaxMotorPower();
+		if( motorPower[channel-1] != 0 && motorPower[channel-1] < getMinMotorPower(channel))
+				motorPower[channel-1] = getMinMotorPower(channel);
+		if( motorPower[channel-1] > getMaxMotorPower() ) // cap it at max
+				motorPower[channel-1] = getMaxMotorPower();
 		// Scale motor power
-		motorPower /= getMotorPowerScale();
+		motorPower[channel-1] /= getMotorPowerScale();
 		//
 		// Reset encoders on new speed setting
 		resetEncoders();
@@ -95,10 +96,11 @@ public class SwitchHBridgeDriver extends SwitchBridgeDriver {
 			return fault_flag;
 		}
 		fault_flag = 0;
-		if(motorPower == 0)
+		if(motorPower[channel-1] == 0)
 			Pins.getOutputPin(pIndex,0);
 		else
 			Pins.getOutputPin(pIndex,1);
+		} //channels
 		return 0;
 	}
 
