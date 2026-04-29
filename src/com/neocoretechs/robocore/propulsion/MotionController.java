@@ -2,9 +2,11 @@ package com.neocoretechs.robocore.propulsion;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -159,7 +161,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  *
  */
 public class MotionController extends AbstractNodeMain {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean IMUDEBUG = false;
 	private static boolean DEBUGBEARING = true;
 	//
@@ -1024,6 +1026,7 @@ public class MotionController extends AbstractNodeMain {
 		if(DEBUG) {
 			System.out.printf("%s Axes:%s Buttons:%s%n", this.getClass().getName(),Arrays.toString(message.getAxes()),Arrays.toString(message.getButtons()));
 		}
+	
 		float[] axes = message.getAxes();
 		int[] buttons = message.getButtons();
 		// check for emergency stop, on X or A or green or lower button
@@ -1350,6 +1353,9 @@ public class MotionController extends AbstractNodeMain {
 				}
 				switch(axisType) {
 				case "Stick":
+					String stickType = (String) robot.getAXIS()[luni].get("StickType");
+					if(stickType != null)
+						System.out.println("Stick type not yet implemented");
 					if(robot.getAXIS()[luni].get("AxisX") != null) {
 						String sx = (String) robot.getAXIS()[luni].get("AxisX");
 						String sy = (String) robot.getAXIS()[luni].get("AxisY");
@@ -1381,6 +1387,9 @@ public class MotionController extends AbstractNodeMain {
 					}
 					break;
 				case "Trigger":
+					String triggerType = (String) robot.getAXIS()[luni].get("TriggerType");
+					if(triggerType != null)
+						System.out.println("Trigger type not yet implemented");
 					String ax = (String) robot.getAXIS()[luni].get("Axis");
 					float a = axes[Integer.parseInt(ax)] * 1000;
 					if(a != -1000) {
@@ -1438,11 +1447,11 @@ public class MotionController extends AbstractNodeMain {
 			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) {
 		ArrayList<Integer> speedVals = new ArrayList<Integer>();
 		if(DEBUG)
-			System.out.printf("%s Publish propulsion sending LeftWheel: %d RightWheel: %d%n" , this.getClass().getName(), leftSpeed, rightSpeed);
+			System.out.printf("%s Publish propulsion sending LeftWheel: %d RightWheel: %d Thread:%s %s%n", this.getClass().getName(), leftSpeed, rightSpeed, Thread.currentThread(), Date.from(Instant.now()));
 		speedVals.add(leftSpeed);
 		speedVals.add(rightSpeed);
 		
-		pubschannel.get("slot0").publish(setupPub(connectedNode, speedVals));
+		pubschannel.get("slot"+robot.getSlotByName("LeftWheel")).publish(setupPub(connectedNode, speedVals));
 		try {
 			Thread.sleep(1);
 		} catch (InterruptedException e) {}		

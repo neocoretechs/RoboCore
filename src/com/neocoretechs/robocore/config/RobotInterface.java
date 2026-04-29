@@ -49,4 +49,5 @@ public interface RobotInterface {
 	public TypedWrapper[] getBUTTON();
 	public int getLUN(String name);
 	public String getNameByLUN(int lun);
+	public String getSlotByName(String name);
 }

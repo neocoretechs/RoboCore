@@ -315,13 +315,31 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		byte[] buffer = new byte[1024];
 		ArrayList<String> ret = new ArrayList<String>();
 		command += "\r";
-		serialPort.writeBytes(command.getBytes(), command.getBytes().length);
-		int num = serialPort.readBytes(buffer, buffer.length); // blocks until >=1 byte or timeout
-		if (num > 0) {
-			ret.add(new String(Arrays.copyOf(buffer, num)));
-		} else {
-			// timeout expired, continue loop (not an error)
+		byte[] bcomm = command.getBytes();
+		int blen = bcomm.length;
+		int wlen = 0;
+		int tlen = 0;
+		while(tlen < blen) {
+			wlen = serialPort.writeBytes(bcomm, blen, tlen);
+			if(wlen > 0 && tlen < blen) {
+				tlen += wlen;
+				blen -= wlen;
+				try {
+					Thread.sleep(1);
+				} catch (InterruptedException e) {
+					break;
+				}
+			}
 		}
+		int num = 0;
+		while((num = serialPort.readBytes(buffer, buffer.length)) <= 0) {
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {
+				break;
+			}
+		}
+		ret.add(new String(Arrays.copyOf(buffer, num)));
 		return ret;
 	}
 	/*

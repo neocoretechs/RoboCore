@@ -1,8 +1,10 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -129,12 +131,12 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static boolean PORTDEBUG = false;
 	private volatile boolean shouldRun = true;
 	private DataPortCommandInterface dataPort;
 	//public CyclicBarrier mutexWrite = new CyclicBarrier(3);
-	private CircularBlockingDeque<String> requestQueue = new CircularBlockingDeque<String>(1024);
+	private CircularBlockingDeque<String> requestQueue = new CircularBlockingDeque<String>(16);
 	private MarlinspikeManager marlinSpikeManager;
 	private final static String MSG_BEGIN = "<";
 	private final static String MSG_TERMINATE ="/>";
@@ -193,7 +195,15 @@ public class AsynchDemuxer implements Runnable {
 	public TopicListInterface getTopic(String group) { return topics.get(group); }
 	
 	public void clearWriteBuffer() { requestQueue.clear(); }
-	
+	/**
+	 * Called by setDeviceLevels, will search in slotEntry and deviceEntry and in the case of
+	 * slotEntry can be expected to return the first TypeSlotChannelEnable in order to obtain the slot designator
+	 * NOTE: calls from other methods may result in erroneous return of TypeSlotChannelEnable if the
+	 * name is a slot, unless the expected behavior is the first TypeSlotChannelEnable
+	 * @param name The device name or slot name in the form of "slot"+slot number
+	 * @return The TypeSlotChannelEnable for the device or first entry for slot
+	 * @throws RuntimeException encapsulating NoSuchElementException if NoSuchElement
+	 */
 	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
 		try {
 			return marlinSpikeManager.getTypeSlotChannelEnableByName(name);
@@ -213,7 +223,7 @@ public class AsynchDemuxer implements Runnable {
 	public void addWrite(String req) {
 		requestQueue.addLast(req);
 		if(DEBUG)
-			System.out.println("Adding request to demuxer:"+this+" "+req+" len:"+requestQueue.length());
+			System.out.println("Adding request to demuxer:"+this+" "+req+" len:"+requestQueue.length()+" thread:"+Thread.currentThread()+" "+Date.from(Instant.now()));
 	}
 	/**
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.

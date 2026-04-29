@@ -170,10 +170,6 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
      * @throws IOException 
      */
     public synchronized int commandReset() throws IOException {
-    	for(int i = 0; i < 10; i++) {
-    		String statCommand1 = "M999"; // report all pins in use
-    		asynchDemuxer.addWrite(statCommand1);
-    	}
     	return 0;
     }
 

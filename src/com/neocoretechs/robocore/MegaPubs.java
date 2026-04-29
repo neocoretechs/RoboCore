@@ -118,7 +118,7 @@ import diagnostic_msgs.DiagnosticStatus;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2025
  */
 public class MegaPubs extends AbstractNodeMain  {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static String robotName;
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
@@ -464,7 +464,8 @@ public void onStart(final ConnectedNode connectedNode) {
 		subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 			@Override
 			public void onNewMessage(std_msgs.Int32MultiArray message) {
-				//std_msgs.Int32 valch1 = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Int32._TYPE);
+				if(DEBUG)
+					System.out.printf("%s Subscriber:%s  Message:%s %n", this.getClass().getName(), subs, message.toString());
 				String deviceName = subscriberDevice.get(subs);
 				int[] valch = message.getData();
 				if(DEBUG)
@@ -482,24 +483,21 @@ public void onStart(final ConnectedNode connectedNode) {
 										diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
 							return;
 						}
-						if(DEBUG)
-							System.out.printf("%s Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), message.toString(), 
-									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
 						// keep Marlinspike from getting bombed with zeroes
-						boolean affectorSpeed = true;
+						boolean affectorSpeed = false;
 						for(int val: valch) {
 							if(val != 0) {
-								affectorSpeed = false;
+								affectorSpeed = true;
 								break;
 							}
 						}
-						if(robot.getOperating().get(deviceName)) {
-							if(affectorSpeed) 
-								robot.getOperating().replace(deviceName, true, false);
-						} else {
-							if(affectorSpeed) 
-								robot.getOperating().replace(deviceName, false, true);
-						}
+						if(DEBUG)
+							System.out.printf("%s Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), message.toString(), 
+									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
+						robot.getOperating().put(deviceName, affectorSpeed);
+						if(DEBUG)
+							System.out.printf("%s affector:%b Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), affectorSpeed, message.toString(), 
+									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
 						switch(valch.length) {
 							case 1:
 								control.setDeviceLevels(deviceName, valch[0]);
@@ -536,7 +534,7 @@ public void onStart(final ConnectedNode connectedNode) {
 								return;	
 						}
 						if(DEBUG)
-							System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s Value:%d%n",Thread.currentThread().getName(),deviceName,affectorSpeed);
+							System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s%n",Thread.currentThread().getName(),deviceName);
 					} catch (IOException e) {
 						System.out.println("There was a problem communicating with the controller:"+e);
 						e.printStackTrace();
@@ -561,26 +559,27 @@ public void onStart(final ConnectedNode connectedNode) {
 	connectedNode.executeCancellableLoop(new CancellableLoop() {
 		@Override
 		protected void setup() {
+		    try {
+				awaitStart.await();
+			} catch (InterruptedException e) {}
+			// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike	
+			for(int i = 0; i < stopics.length; i++) {
+				if(DEBUG)
+					System.out.printf("%s response publish: %s%n",this.getClass().getName(),responses[i]);
+				responses[i].publish();
+			}
 		}
 
 		@Override
 		protected void loop() throws InterruptedException {
-		    try {
-				awaitStart.await();
-			} catch (InterruptedException e) {}
-
 			diagnostic_msgs.DiagnosticStatus statmsg = null;
-			
-			// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike
-		
-			for(int i = 0; i < stopics.length; i++) {
-				responses[i].publish();
-			}
 			//
 			// Poll the outgoing message array for diagnostics enqueued by the above processing
 			//
-			while(!outgoingDiagnostics.isEmpty()) {
-				statmsg = outgoingDiagnostics.takeFirst();
+			statmsg = outgoingDiagnostics.poll(1, TimeUnit.MILLISECONDS);
+			if(statmsg != null) {
+				if(DEBUG)
+					System.out.printf("%s outgoing diagnostics: %s%n",this.getClass().getName(),outgoingDiagnostics);
 				statpub.publish(statmsg);
 				if(DEBUG)
 					System.out.println("Published "+statmsg.getMessage());

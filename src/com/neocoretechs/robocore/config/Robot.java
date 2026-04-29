@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
@@ -43,7 +44,8 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * PID[0].MotorKd:1.0 
  * PID[0].MotorKi:1.0 
  * PID[0].MotorKo:1.0 
- * AXIS[0].AxisType:Stick 
+ * AXIS[0].AxisType:Stick
+ * AXIS[0].StickType:Left/Right/Any - TBI
  * AXIS[0].AxisX:0 
  * AXIS[0].AxisY:2
  * </pre>
@@ -271,6 +273,11 @@ public class Robot implements RobotInterface, Serializable {
 	@Override
 	public String getNameByLUN(int lun) {
 		return (String) LUN[lun].get("Name");
+	}
+	
+	@Override
+	public String getSlotByName(String name) {
+		return (String) LUN[getLUN(name)].get("Slot");
 	}
 	
 	@Override

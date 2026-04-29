@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.neocoretechs.robocore.marlinspike.gcodes.G5;
+import com.neocoretechs.robocore.marlinspike.mcodes.M41;
 import com.neocoretechs.robocore.marlinspike.mcodes.M42;
 import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
 
@@ -116,12 +117,8 @@ public class TypeSlotChannelEnable implements Serializable {
 				case DELAYHBRIDGE:
 					return new G5(tsce);
 				case INPUTPIN:
-					//return String.format("M44 P%d%n", pin);
-					return new digitalpin(tsce);
+					return new M41(tsce);
 				case OUTPUTPIN:
-					//if(deviceLevel != maxValue)
-						//deviceLevel = 0;
-					//return String.format("M42 P%d S%d%n", pin, deviceLevel);
 					return new M42(tsce);
 			}
 			throw new RuntimeException("Bad TypeSlotChannel config "+this);

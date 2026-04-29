@@ -36,7 +36,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
  */
 public class MarlinspikeManager implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	RobotInterface robot;
 	String hostName;
 	TypedWrapper[] lun;
@@ -421,7 +421,15 @@ public class MarlinspikeManager implements Serializable {
 			if(ret != null && ret.getKey().getName().equals(name))
 				return ret.getValue();
 		}
-		throw new NoSuchElementException("The name "+name+" was not found in the collection of device to type");
+		// type a search through slots
+		Iterator<Entry<SlotEntry, ArrayList<TypeSlotChannelEnable>>> its = slotToType.entrySet().iterator();
+		while(its.hasNext()) {
+			Entry<SlotEntry, ArrayList<TypeSlotChannelEnable>> ret = its.next();
+			if(ret != null && ret.getKey().getName().equals(name))
+				return ret.getValue().getFirst();
+		}
+		throw new NoSuchElementException("The name "+name+" was not found in the collection of device to type or slot to type array"
+				+ "");
 	}
 	
 	/**

@@ -53,7 +53,7 @@ import org.ros.internal.loader.CommandLineLoader;
  * Button 8	Stick Press
  * Button 9	Stick Press
  * 
- * @author JOnathan Groff Copyright (C) NeoCoreTechs 2025
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
  */
 public class PS3ControllerPubs extends AbstractNodeMain  {
 	private static final boolean DEBUG = true;

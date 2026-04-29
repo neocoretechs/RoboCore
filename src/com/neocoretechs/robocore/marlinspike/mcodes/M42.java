@@ -24,8 +24,6 @@ public class M42 extends AbstractBasicResponse implements ActivationInterface {
 	
 	@Override
 	public String getActivation(int... deviceLevel) {
-		if(tsce.isPinToggle())
-			return String.format("M42 P%d S%d L%d H%d T%n", tsce.getPin(), deviceLevel, tsce.getMinValue(), tsce.getMaxValue());
-		return String.format("M42 P%d S%d L%d H%d%n", tsce.getPin(), deviceLevel, tsce.getMinValue(), tsce.getMaxValue());
+		return String.format("M42 P%d S%dn", tsce.getPin(), deviceLevel[0]);
 	}
 }
