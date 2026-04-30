@@ -247,28 +247,28 @@ public class MotionController extends AbstractNodeMain {
 	// and the arc describing the outer wheel has a radius equivalent to the wheelbase and the 
 	// outer wheel turns at the robot wheelbase through 90 degrees.
 	public static float WHEELBASE = 1000.0f;
-
 	boolean hasData = false; // have we received any feedback from callback?
 	boolean init = true;
 	static boolean holdBearing = false; // hold steering to current bearing
-
 	static float speedL, speedR;
 	static float SPEEDSCALE = 1000.0f;
-
+	static int lastSpeedL, lastSpeedR;
 	static long lastTime = System.currentTimeMillis();
 	static int SampleTime = 100; //.1 sec
 	static float outMin, outMax;
 	static boolean inAuto = false;
 	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
 	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
+	static final long SHUTDOWN_NS = 500000;
+	static long lastCmdTime = System.nanoTime();
 	// slope speed change over time analysis
 	private CircularBlockingDeque<Float> speedQueueL = new CircularBlockingDeque<Float>(5);
 	private CircularBlockingDeque<Float> speedQueueR = new CircularBlockingDeque<Float>(5);
 	private float maxSpeedSlope = 100;
+	private boolean SOFTSTOP = false;
 
 	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
 	
-	private boolean SOFTSTOP = false;
 
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -1445,6 +1445,11 @@ public class MotionController extends AbstractNodeMain {
 	 */
 	private void publishPropulsion(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, 
 			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) {
+		if(leftSpeed == lastSpeedL && rightSpeed == lastSpeedR && (lastCmdTime+SHUTDOWN_NS) < System.nanoTime())
+			return;
+		lastCmdTime = System.nanoTime();
+		lastSpeedL = leftSpeed;
+		lastSpeedR = rightSpeed;
 		ArrayList<Integer> speedVals = new ArrayList<Integer>();
 		if(DEBUG)
 			System.out.printf("%s Publish propulsion sending LeftWheel: %d RightWheel: %d Thread:%s %s%n", this.getClass().getName(), leftSpeed, rightSpeed, Thread.currentThread(), Date.from(Instant.now()));
