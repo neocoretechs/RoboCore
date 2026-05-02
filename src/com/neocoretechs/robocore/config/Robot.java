@@ -2,8 +2,7 @@ package com.neocoretechs.robocore.config;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -50,6 +49,12 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * AXIS[0].AxisY:2
  * </pre>
  * Also, BUTTON, WHEEL, etc as needed.<p>
+ * The handler method for the slot is defined by annotation in the {@link com.neocoretechs.robocore.propulsion.MotionController}.
+ * Motor controls are aggregated by slot. In the Marlinspike configurations, the motor controller are assigned a slot
+ * from 0-9 and the controls such as G5 are first identified by slot. So G5 Z0 P300 Q300 would set the power
+ * levels of the motor controller at slot 0 to P, channel 1, level 300, Q, channel 2, level 300. If it had a third wheel
+ * there would be an entry in the configs for that at channel 3 slot 0 and the G5 could be G5 Z0 P300 Q300 R300, etc up to
+ * 10 wheels at Y.<p>
  * Its possible that in a 4 wheel vehicle, wheel diameter can vary slightly as in, say, the drive wheels of a tracked vehicle
  * and if the tracks are driven by 4 motors with 2 sets of cogs differing in size front to back the rotation rates will
  * have to by synchronized despite the differing 'wheel' sizes. The track vary slightly, etc.<p>
@@ -57,6 +62,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * perspective of each individual component, and if necessary, appear in aggregate as global.<p>
  * If we initialize a diff drive, we expect PID control settings, and IMU settings even if one never appears.
  * Global power scale can divide power level by divisor to make device more indoor safe.
+ * @see com.neocoretechs.robocore.propulsion.MotionController
  * @author Jonathan Groff (C) NeoCoreTechs 2021,2026
  *
  */
@@ -129,6 +135,22 @@ public class Robot implements RobotInterface, Serializable {
 		}
 	}
 	
+	public String getDataPort() {
+		return dataPort;
+	}
+	
+	public MarlinspikeManager getManager() {
+		return marlinspikeManager;
+	}
+	
+	public HashMap<String, Boolean> getOperating() {
+		return isOperating;
+	}
+	
+	public boolean[] active() {
+		return isActive;
+	}
+	
 	private void extractBUTTON() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> button = globalConfigs.get("BUTTON");
@@ -154,21 +176,6 @@ public class Robot implements RobotInterface, Serializable {
 		 }	
 	}
 	
-	public String getDataPort() {
-		return dataPort;
-	}
-	
-	public MarlinspikeManager getManager() {
-		return marlinspikeManager;
-	}
-	
-	public HashMap<String, Boolean> getOperating() {
-		return isOperating;
-	}
-	
-	public boolean[] active() {
-		return isActive;
-	}
 	private void extractAXIS() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> axis = globalConfigs.get("AXIS");
@@ -422,7 +429,6 @@ public class Robot implements RobotInterface, Serializable {
 	public String getName() {
 		return Props.toString("Name");
 	}
-
 
 	@Override
 	public TypedWrapper[] getLUN() {

@@ -264,51 +264,39 @@ public class Props {
 		return mainMap;
 	}
 	
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws Exception {
 		FileOutputStream fos;
 		StringBuilder sb = new StringBuilder("<<MarlinSpike Configs>>\r\n");
-		try {
-			fos = new FileOutputStream(dataDirectory+"XML"+propsFile);
-			properties.storeToXML(fos, "MarlinSpike Configs");
-			try {
-				Map<String, Map<Integer, Map<String, Object>>> globalConfigs = Props.collectivizeProps();
-				Set<Entry<String, Map<Integer, Map<String, Object>>>> props = globalConfigs.entrySet();
-				for(Entry<String, Map<Integer, Map<String, Object>>> e : props ) {
-					sb.append(e.getKey());
+
+		fos = new FileOutputStream(dataDirectory+"XML"+propsFile);
+		properties.storeToXML(fos, "MarlinSpike Configs");
+		Map<String, Map<Integer, Map<String, Object>>> globalConfigs = Props.collectivizeProps();
+		Set<Entry<String, Map<Integer, Map<String, Object>>>> props = globalConfigs.entrySet();
+		for(Entry<String, Map<Integer, Map<String, Object>>> e : props ) {
+			sb.append(e.getKey());
+			sb.append("\r\n");
+			Map<Integer, Map<String, Object>> prop1 = e.getValue();
+			Set<Integer> iset = prop1.keySet();
+			Set<Entry<Integer, Map<String, Object>>> jset = prop1.entrySet();
+			Iterator<Entry<Integer, Map<String, Object>>> it = jset.iterator();
+			for(Integer i: iset) {
+				sb.append("[");
+				sb.append(i);
+				sb.append("].");
+				Entry<Integer, Map<String, Object>> elem = it.next();
+				Map<String,Object> o = elem.getValue();
+				Set<String> s = o.keySet();
+				Collection<Object> c = o.values();
+				Iterator<String> its = s.iterator();
+				Iterator<Object> ito = c.iterator();
+				while(its.hasNext()) {
+					sb.append(its.next());
+					sb.append(":");
+					sb.append(ito.next());
 					sb.append("\r\n");
-					Map<Integer, Map<String, Object>> prop1 = e.getValue();
-					Set<Integer> iset = prop1.keySet();
-					Set<Entry<Integer, Map<String, Object>>> jset = prop1.entrySet();
-					Iterator<Entry<Integer, Map<String, Object>>> it = jset.iterator();
-					for(Integer i: iset) {
-						sb.append("[");
-						sb.append(i);
-						sb.append("].");
-						Entry<Integer, Map<String, Object>> elem = it.next();
-						Map<String,Object> o = elem.getValue();
-						Set<String> s = o.keySet();
-						Collection<Object> c = o.values();
-						Iterator<String> its = s.iterator();
-						Iterator<Object> ito = c.iterator();
-						while(its.hasNext()) {
-							sb.append(its.next());
-							sb.append(":");
-							sb.append(ito.next());
-							sb.append("\r\n");
-						}
-					}
-						
 				}
-			} catch (IllegalAccessException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
 			}
-			System.out.println(sb.toString());
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+
 		}
-
 	}
-
 }

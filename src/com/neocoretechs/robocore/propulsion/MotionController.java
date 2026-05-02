@@ -1,15 +1,25 @@
 package com.neocoretechs.robocore.propulsion;
 
 import java.io.IOException;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
@@ -23,11 +33,15 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.DefaultNodeMainExecutor;
 import org.ros.node.NodeMainExecutor;
 import org.ros.node.parameter.ParameterTree;
+import org.ros.node.service.CountDownServiceServerListener;
+import org.ros.node.service.ServiceResponseBuilder;
+import org.ros.node.service.ServiceServer;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.PublisherListener;
 import org.ros.node.topic.Subscriber;
 import org.ros.node.topic.SubscriberListener;
 
+import com.neocoretechs.robocore.AuxGPIOControl;
 import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.DeviceEntry;
@@ -35,10 +49,25 @@ import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.SlotEntry;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
-
+import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControl;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
 import com.neocoretechs.robocore.marlinspike.PublishDiagnosticResponse;
+import com.neocoretechs.robocore.marlinspike.PublishResponseInterface;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
+import com.neocoretechs.robocore.navigation.NavListenerMotorControlInterface;
+import com.neocoretechs.robocore.services.ControllerStatusMessage;
+import com.neocoretechs.robocore.services.ControllerStatusMessageRequest;
+import com.neocoretechs.robocore.services.ControllerStatusMessageResponse;
+import com.neocoretechs.robocore.services.GPIOControlMessage;
+import com.neocoretechs.robocore.services.GPIOControlMessageRequest;
+import com.neocoretechs.robocore.services.GPIOControlMessageResponse;
+import com.neocoretechs.robocore.services.PWMControlMessage;
+import com.neocoretechs.robocore.services.PWMControlMessageRequest;
+import com.neocoretechs.robocore.services.PWMControlMessageResponse;
+
+import diagnostic_msgs.DiagnosticStatus;
 
 import org.json.JSONObject;
 
@@ -50,6 +79,33 @@ import trajectory_msgs.ComeToHeadingStamped;
  * MotionController is the primary process we need to configure the other nodes via parameter tree.<p>
  * We are fusing data from the IMU, any joystick input, and other autonomous controls to send down to the Marlinspike controllers.
  * Subscribing to:
+ * <pre>
+ * The joystick message from the ps3 using jinput delivers the message with the following structure:<br>
+ * float[]-axis
+ * [0] - left horiz (X)						<br>
+ * [1] - left vert (Y)						<br>
+ * [2] - right horiz (X)						<br>
+ * [3] - right vert (Y) 						<br>
+ * [4] - left trigger						<br>
+ * [5] - right trigger						<br>
+ * [6] - POV									<br>
+ * --int[] buttons--							<br>
+ * [0] - select								<br>
+ * [1] - start								<br>
+ * [2] - left stick press					<br>
+ * [3] - right stick press					<br>
+ * [4] - triangle -- HOLD CURRENT BEARING	<br>
+ * [5] - circle -- RIGHT PIVOT				<br>
+ * [6] - X button -- EMERGENCY STOP			<br>
+ * [7] - square -- LEFT PIVOT				<br>
+ * [8] - left bumper							<br>
+ * [9] - right bumper						<br>
+ * -- joystick only --						<br>
+ * [10] - back								<br>
+ * [11] - extra								<br>
+ * [12] - mode								<br>
+ * [13] - side								<br><br>
+ * </pre>
  * <pre>
  * sensor_msgs/Joy (joystick information boxed as an array of buttons and axis values common to standard controllers):
  * NYCO CORE CONTROLLER: <br>
@@ -108,6 +164,58 @@ import trajectory_msgs.ComeToHeadingStamped;
  *Button Select - Select<br>
  *Button Mode - Mode<br><br>
  *</pre>
+ * * Functions:<br>
+ * Process data acquired from the Real-time telemetry from the Marlinspike realtime subsystem.
+ * Respond to messages from bus as subscriber to device name in configuration and process via realtime subsystem.
+ * <p>
+ * Messages can relate to Motor control, controller status, ultrasonic sensor, voltage reading, etc, acquired from the attached UART/USB of an aux 
+ * board such as Mega2560 via RS-232, Pico via USB, or from the SBC running the Ros node using the GPIO header and libgpiod, or from the USB
+ * port of the SBC talking to a smart controller.
+ * <p> 
+ * Serial communications are centralized in the {@link com.neocoretechs.robocore.serialreader.DataPortInterface} and {@link com.neocoretechs.robocore.serialreader.DataPortCommandInterface} interface class implementors.<p>
+ * 
+ * As input from realtime subsystem is received, the {@link AsynchDemuxer} decodes the header and prepares the data for publication
+ * to the Ros bus. It may also publish various warnings over the 'robocore/status' topic. It will also send motor controller and other configuration information
+ * over the robocore/status topic.<p>
+ * The MarlinSpikeManager is
+ * constructed with the static instance of (@link Robot}, then the configureMarlinSpike method is called.
+ * We can then iterate the {@link DeviceEntry} from MarlinSpikeManager.getDevices().
+ * for each DeviceEntry, create a subscriber on the channel [demuxer device name] of type Int32MultiArray.
+ * The topic name is formed from the name entry in the properties file, which should be unique across the bus.
+ * Add a message listener for each subscriber device key. When a new message comes in
+ * extract the device name from the map based on the subscriber instance associated with the incoming message.
+ * Based on the device name, get the MarlinspikeControlInterface from the MarlinspikeManager.
+ * We can then set the power level etc on the device from the data in the message. When a new message comes in it gets
+ * the device name based on the subscriber hash map. It then gets the {@link MarlinspikeControlInterface} based on device name. The
+ * message has an array if integers as payload. The setDeviceLevel method is called on the control with device name and value for each array value.
+ * <p>
+ * <h3>AsynchDemuxer:</h3>
+ * The demuxer processes formatted responses from the realtime subsystem in response to various directives.<p>
+ * The messages are organized by topics identified by a header delimited by chevrons and containing the message topic identifier.<p>
+ * Each line after the header has a parameter number and value. For instance, for an analog pin input or an ultrasonic reading
+ * we have numeric values for the distance or pin reading value bracketed by the proper headers.
+ * The end of the message is delimited with '&lt;/topic&gt;' with topic being the matching header element.<p>
+ * 
+ * The realtime subsystem is activated by being issued a series of M and G codes similar to 3D printer and CNC standard codes.<br/>
+ * Examples:<br>
+ * <code> G5 Z[slot] P[power] Q[power] R[power] S...Y[power]</code>- Issue move command to controller in slot Z&lt;slot&gt; for channels P-Y (0 and 1 element left/right wheel) with P-Y&lt;-1000 to 1000&gt;
+ * a negative value on power means reverse.
+ * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
+ * H Bridge Driver:
+ * <code><br/>
+ * M45 P[pin] S[0-255] - start PWM on pin P with value S, many optional arguments for timer setup<br>
+ * M41 P[pin] - Set digital pin P high forward <br>
+ * M42 P[pin] - Set digital pin P low reverse <br>
+ * </code>
+ * Certain command line remappings are used to affect behavior as follows:<br>
+ * determine debugging directives __debug:=publisher,demuxer,marlinspike any of these 3 arguments are optional to turn on debugging<br>
+ * __pwm:=controller<br>
+ * Indicates that PWM directives sent as a service are to be processed through a PWM based controller
+ * initialized with a previous M-code<p>
+ * __pwm:=direct<br>
+ * Indicates that PWM directives sent as a service are to be directly applied as a set of values working
+ * on a PWM pin<p>
+ * GPIO service invocation always works directly on a pin.<p>  
  *<pre>
  * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)<br>
  * sensor_msgs/Temperature (most likely from IMU)<br>
@@ -115,7 +223,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  *</pre>
  *<pre>
  * Publishing to:<br>
- * All topics enumerated in MegaPubs typeNames which correspond to types that may appear in configuration by LUN.k<br>
+ * All topics enumerated in typeNames which correspond to types that may appear in configuration by LUN.k<br>
  * robocore/status (status update channel to receive information on alerts, etc, derived from IMU and other sensors)<br>
  * </pre>
  * Published are the values from 0-1000 that represent actual power to each differential drive wheel.<p>
@@ -165,9 +273,15 @@ public class MotionController extends AbstractNodeMain {
 	private static boolean IMUDEBUG = false;
 	private static boolean DEBUGBEARING = true;
 	//
+	// Initialize various types of responses that will be published to the various outgoing message busses.
+	// Generate base {@link Robot} that bootstraps configs from RoboCore.properties via VM command line directive
+	//
 	static RobotInterface robot;
 	static String robotName;
 	public String RPT_SERVICE = "robo_status";
+	private final String PWM_SERVICE = "cmd_pwm";
+	private final String GPIO_SERVICE = "cmd_gpio";
+	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
 
 	//private InetSocketAddress master;
@@ -214,6 +328,12 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}
 	AngularTime angs = new AngularTime();
+	
+	@Retention(RetentionPolicy.RUNTIME)
+	@Target(ElementType.METHOD)
+	public @interface SlotHandler {
+	    int slot(); // This maps to slot in .properties file
+	}
 
 	//TwistInfo twistInfo;
 	float last_theta;
@@ -268,7 +388,87 @@ public class MotionController extends AbstractNodeMain {
 	private boolean SOFTSTOP = false;
 
 	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
+	//-----mega
+	Object statMutex = new Object(); 
+	Object navMutex = new Object();
+	//private String host;
+	//private InetSocketAddress master;
+	//private MarlinspikeControlInterface motorControlHost;
+	NavListenerMotorControlInterface navListener = null;
+	private AuxGPIOControl auxGPIO = null;
+	private boolean shouldMove = true;
+	private int targetPitch;
+	private int targetDist;
+	private float targetYaw;
+	// if angularMode is true, interpret the last TWIST subscription as intended target to move to and
+	// compute incoming channel velocities as scaling factors to that movement
+	protected boolean angularMode = false;
+
+	// Queue for outgoing ranging messages, if any such sensors are present
+	CircularBlockingDeque<sensor_msgs.Range> outgoingRanges = new CircularBlockingDeque<sensor_msgs.Range>(256);
+	// Preload the collection of response handlers that match responses from attached Marlinspike microcontrollers
+	String[] stopics = new String[] {
+	AsynchDemuxer.topicNames.BATTERY.val(),
+	AsynchDemuxer.topicNames.MOTORFAULT.val(), 
+	AsynchDemuxer.topicNames.TIME.val(),
+	AsynchDemuxer.topicNames.CONTROLLERSTATUS.val(),
+	AsynchDemuxer.topicNames.STATUS.val(),
+	AsynchDemuxer.topicNames.CONTROLLERSTOPPED.val(),
+	AsynchDemuxer.topicNames.NOMORGCODE.val(),
+	AsynchDemuxer.topicNames.BADMOTOR.val(),
+	AsynchDemuxer.topicNames.BADPWM.val(),
+	AsynchDemuxer.topicNames.UNKNOWNG.val(),
+	AsynchDemuxer.topicNames.UNKNOWNM.val(),
+	AsynchDemuxer.topicNames.BADCONTROL.val(),
+	AsynchDemuxer.topicNames.NOCHECKSUM.val(),
+	AsynchDemuxer.topicNames.NOLINECHECK.val(),
+	AsynchDemuxer.topicNames.CHECKMISMATCH.val(),
+	AsynchDemuxer.topicNames.LINESEQ.val(),
+	AsynchDemuxer.topicNames.M115.val(),
+	AsynchDemuxer.topicNames.ASSIGNEDPINS.val(),
+	AsynchDemuxer.topicNames.MOTORCONTROLSETTING.val(),
+	AsynchDemuxer.topicNames.PWMCONTROLSETTING.val(),
+	AsynchDemuxer.topicNames.DIGITALPINSETTING.val(),
+	AsynchDemuxer.topicNames.ANALOGPINSETTING.val(),
+	AsynchDemuxer.topicNames.ULTRASONICPINSETTING.val(),
+	AsynchDemuxer.topicNames.PWMPINSETTING.val()
+	};
+
+	Byte[] publishStatus = new Byte[] {	 diagnostic_msgs.DiagnosticStatus.WARN,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.WARN,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.ERROR,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK,
+	diagnostic_msgs.DiagnosticStatus.OK};
+		
+
+	// Map of subscriber to node device name for external controls
+	HashMap<Subscriber<Int32MultiArray>, String> subscriberDevice = new HashMap<Subscriber<Int32MultiArray>, String>();
+	// Map of slot to method for internal controls
+	HashMap<String, Method> slotToMethod = new HashMap<String, Method>();
 	
+	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses;
+	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic;
+	
+	private Collection<String> statPub = Collections.synchronizedCollection(new ArrayList<String>());
 
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -286,6 +486,33 @@ public class MotionController extends AbstractNodeMain {
 		return GraphName.of("pubsubs_motion");
 	}
 
+	/**
+	 * Extract the linear and angular components from cmd_vel topic Twist quaternion, take the linear X (pitch) and
+	 * angular Z (yaw) and send them to motor control. This results in motion planning computing a turn which
+	 * involves rotation about a point in space located at a distance related to speed and angular velocity. The distance
+	 * is used to compute the radius of the arc segment traversed by the wheel track to make the turn. If not moving we can
+	 * make the distance 0 and rotate about a point in space, otherwise we must inscribe an appropriate arc. The distance
+	 * in that case is the linear travel, otherwise the distance is the diameter of the arc segment.
+	 * If we get commands on the cmd_vel topic we assume we are moving, if we do not get the corresponding IMU readings, we have a problem
+	 * If we get a 0,0 on the X,yaw move we stop. If we dont see stable IMU again we have a problem, Houston.
+	 * 'targetDist' is x. if x = 0 we are going to turn in place.
+	 *  If we are turning in place and th &lt; 0, turn left. if th &gt;= 0 turn right
+	 *  If x != 0 and th = 0 its a forward or backward motion
+	 *  If x != 0 and th != 0 its a rotation around a point in space with forward motion, describing an arc.
+	 *  theta is th and gets calculated as difference of last imu and wheel theta.
+	 *  Rotation about a point in space
+	 *  <code>
+	 *  <pre>
+	 *		if( th &lt; 0 ) { // left
+	 *			spd_left = (float) (x - th * wheelTrack / 2.0);
+	 *			spd_right = (float) (x + th * wheelTrack / 2.0);
+	 *		} else {
+	 *			spd_right = (float) (x - th * wheelTrack / 2.0);
+	 *			spd_left = (float) (x + th * wheelTrack / 2.0);
+	 *		}
+	 *</pre>
+	 *</code>
+	 */
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
@@ -307,8 +534,17 @@ public class MotionController extends AbstractNodeMain {
 		}
 		//final Log log = connectedNode.getLog();
 
-		if(remaps.containsKey("__debug"))
+		if( remaps.containsKey("__debug") ) {
+			String debug = remaps.get("__debug");
 			DEBUG = true;
+			String[] debugs = debug.split(",");
+			for(String debugx : debugs) {
+				if(debugx.equals("demuxer"))
+					AsynchDemuxer.DEBUG = true;
+				if(debugx.equals("marlinspike"))
+					MarlinspikeControl.DEBUG = true;
+			}
+		}
 		if( remaps.containsKey("__speedlimit") ) {
 			robot.getLeftSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
 			robot.getRightSpeedSetpointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
@@ -334,12 +570,84 @@ public class MotionController extends AbstractNodeMain {
 
 		// process the DeviceEntries into publishing channels
 		configurePublisherListener(connectedNode, pubschannel, statpub);
-		
+		// in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
+		if( remaps.containsKey("__pwm") )
+			PWM_MODE = remaps.get("__pwm");
+
+		ParameterTree pTree = connectedNode.getParameterTree();
+		robot = (RobotInterface) pTree.get(robotName, new Robot());
+		if(robot.getHostName().equals("UNDEFINED")) {
+			throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
+		}
+
+		try {
+			// createControllers should have been performed in MotionController and Robot placed in ParameterTree
+			robot.getManager().configureDemuxer();
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new RuntimeException("Marlinspike configuration error "+e);
+		}
+
+		responses = new PublishDiagnosticResponse[stopics.length];
+
+		//final RosoutLogger log = (Log) connectedNode.getLog();
+
+		// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
+		final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
+		//
+		// Iterate the list of non-slot device demuxxers we put together in configureMarlinspikeManager method.
+		// for each Device, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
+		//
+		for(DeviceEntry ndd : robot.getManager().getDevices()) {
+			TypeSlotChannelEnable tsce = robot.getManager().getTypeSlotChannelEnable(ndd);
+			if(!tsce.getIsSlot()) {
+				Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
+				subscriberDevice.put(subscr, ndd.getName());
+				configureSubscriberListener(subscr, connectedNode, statpub);
+			}
+		}
+		//-------------------------------------
+		// Iterate the list of slots we put together in configureMarlinspikeManager.
+		// for each slot, create a subscriber on the channel <slot name> of type Int32MultiArray
+		//ConcurrentHashMap<SlotEntry, ArrayList<TypeSlotChannelEnable>> slots = robot.getManager().getSlots();
+		//Iterator<SlotEntry> it = slots.keys().asIterator();
+		//while(it.hasNext()) {
+			//String sslot = ((SlotEntry)it.next()).getName();
+			//Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(sslot, std_msgs.Int32MultiArray._TYPE);
+			//subscriberDevice.put(subscr, sslot);
+			//configureSubscriberListener(subscr, connectedNode, statpub);
+		//}
+		registerSlotHandlers();
+
+		// Initialize the collection of DiagnosticStatus response handlers
+		for(int i = 0; i < stopics.length; i++) {
+			responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, statusQueue);
+			responses[i].takeBridgeAndQueueMessage(stopics[i], robot.getManager().getDemuxer().getTopic(stopics[i]), publishStatus[i]);
+		}
+		//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
+		//		connectedNode.newSubscriber("absolute/cmd_vel", std_msgs.Int32MultiArray._TYPE);
+		//final Subscriber<std_msgs.Int32MultiArray> substrigger = 
+		//connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
+
+		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
+				CountDownServiceServerListener.newDefault();
+		configureControllerStatusServer(serviceServerListener, connectedNode, statpub);	
+
+		final CountDownServiceServerListener<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServerListener =
+				CountDownServiceServerListener.newDefault();
+		configurePWMServer(servicePWMServerListener, connectedNode, statpub);
+
+		final CountDownServiceServerListener<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServerListener =
+				CountDownServiceServerListener.newDefault();
+		configureGPIOServer(serviceGPIOServerListener, connectedNode, statpub);	
+
+		//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+		//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
+
 		final Publisher<geometry_msgs.Twist> twistpub = 
 				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 
 		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
-
 		final Subscriber<sensor_msgs.Joy> substick = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		final Subscriber<std_msgs.String> subsrange = connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
@@ -459,7 +767,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 
 		});
-	
+
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
 			@Override
 			public void onNewMessage(sensor_msgs.Imu message) {
@@ -478,7 +786,7 @@ public class MotionController extends AbstractNodeMain {
 							angs.orientation.setY(message.getOrientation().getY());
 							angs.orientation.setZ(message.getOrientation().getZ());
 							angs.orientation.setW(message.getOrientation().getW());
-							
+
 							euler.compassHeading = message.getCompassHeadingDegrees();
 							euler.roll = message.getRoll();
 							euler.pitch = message.getPitch();
@@ -591,14 +899,14 @@ public class MotionController extends AbstractNodeMain {
 							System.out.println(mags);
 						if( MAG_THRESHOLD[0] != -1 ) {
 							if( mags.mag3.getX() > MAG_THRESHOLD[0] && 
-								mags.mag3.getY() > MAG_THRESHOLD[1] && 
-								mags.mag3.getZ() > MAG_THRESHOLD[2] ) {
+									mags.mag3.getY() > MAG_THRESHOLD[1] && 
+									mags.mag3.getZ() > MAG_THRESHOLD[2] ) {
 								if(DEBUG)
 									System.out.println("Mag EXCEEDS threshold..");
 								ArrayList<String> magVals = new ArrayList<String>(3);
-									magVals.add(String.valueOf(mags.mag3.getX()));
-									magVals.add(String.valueOf(mags.mag3.getY()));
-									magVals.add(String.valueOf(mags.mag3.getZ()));		
+								magVals.add(String.valueOf(mags.mag3.getX()));
+								magVals.add(String.valueOf(mags.mag3.getY()));
+								magVals.add(String.valueOf(mags.mag3.getZ()));		
 								new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Magnetic anomaly detected", 
 										diagnostic_msgs.DiagnosticStatus.WARN, magVals);
 							}
@@ -621,13 +929,13 @@ public class MotionController extends AbstractNodeMain {
 					isTemperature = true;
 					if( temperature > robot.getTemperatureThreshold() ) {
 						isOverTemp = true;
-							if( DEBUG )
-								System.out.println("DANGER Temp:"+temperature);
-							isOverTemp = false;
-							ArrayList<String> tempVals = new ArrayList<String>(1);
-							tempVals.add(String.valueOf(temperature));
-							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Temperature warning", 
-									diagnostic_msgs.DiagnosticStatus.WARN, tempVals);
+						if( DEBUG )
+							System.out.println("DANGER Temp:"+temperature);
+						isOverTemp = false;
+						ArrayList<String> tempVals = new ArrayList<String>(1);
+						tempVals.add(String.valueOf(temperature));
+						new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Temperature warning", 
+								diagnostic_msgs.DiagnosticStatus.WARN, tempVals);
 					}
 				} else
 					isTemperature = false;
@@ -640,12 +948,213 @@ public class MotionController extends AbstractNodeMain {
 				}
 			}
 		});
+		//-------------------------------------------
+		//--mega
+		substwist.addMessageListener(new MessageListener<geometry_msgs.Twist>() {
+			@Override
+			public void onNewMessage(geometry_msgs.Twist message) {
+				geometry_msgs.Vector3 val = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Vector3._TYPE);
+				val = message.getLinear();
+				targetPitch = (int) val.getX();
+				targetDist = (int) val.getY();
+				val = message.getAngular();
+				targetYaw = (float) val.getZ();
+				if( targetPitch == -1 && targetDist == -1 && targetYaw == -1) {
+					shouldMove = false;
+					try {
+						for(DeviceEntry ndd : robot.getManager().getDevices())
+							ndd.getMarlinspikeControl().commandStop();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					robot.getOperating().replaceAll((key, value) -> false);
+				}		
+			}
+		});
 
+		/*
+		 * Provide an emergency stop via image recognition facility	 
+		tagsub.addMessageListener(new MessageListener<geometry_msgs.Quaternion>() {
+			@Override
+			public void onNewMessage(geometry_msgs.Quaternion message) {
+				try {
+					//if( DEBUG )
+						System.out.println("Emergency directive:"+message.getW());
+					if( (message.getW() >= 0.0 && message.getW() <= 180.0) ) {
+						motorControlHost.commandStop();
+						isMoving = false;
+						shouldMove = false;
+						System.out.println("Command stop issued for "+message.getW());
+					} else {
+						shouldMove = true;
+						System.out.println("Movement reinstated for "+message.getW());
+					}
+				} catch (IOException e) {
+					System.out.println("Cannot issue motor stop! "+e);
+					e.printStackTrace();
+				}
+			}
+		});
+		 */
+
+		/*
+		subsrange.addMessageListener(new MessageListener<sensor_msgs.Range>() {
+			@Override
+			public void onNewMessage(Range message) {
+				float range = message.getRange();
+				if( DEBUG )
+					System.out.println("Floor Range "+range);
+				try {
+					if(speak && (message.getRange() < 300.0) ) {
+						//speaker.doSpeak
+						diagnostic_msgs.DiagnosticStatus statmsg = null;
+						statmsg = statpub.newMessage();
+						statmsg.setName("FloorRange");
+						statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
+						statmsg.setMessage(message.getRange()++" centimeters from feet");
+						diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+						li.add(kv);
+						statmsg.setValues(li);
+						outgoingDiagnostics.addLast(statmsg);
+					}
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}	
+			}
+		});
+
+		subsrange2.addMessageListener(new MessageListener<sensor_msgs.Range>() {
+			@Override
+			public void onNewMessage(Range message) {
+				float range = message.getRange();
+				if( DEBUG )
+					System.out.println("Head Range "+range);
+				try {
+					if(speak && (message.getRange() < 350.0) ) {
+						//speaker.doSpeak
+						diagnostic_msgs.DiagnosticStatus statmsg = null;
+						statmsg = statpub.newMessage();
+						statmsg.setName("HeadRange");
+						statmsg.setLevel(diagnostic_msgs.DiagnosticStatus.WARN);
+						statmsg.setMessage(message.getRange()++" centimeters from head");
+						diagnostic_msgs.KeyValue kv = connectedNode.getTopicMessageFactory().newFromType(diagnostic_msgs.KeyValue._TYPE);
+						List<diagnostic_msgs.KeyValue> li = new ArrayList<diagnostic_msgs.KeyValue>();
+						li.add(kv);
+						statmsg.setValues(li);
+						outgoingDiagnostics.addLast(statmsg);
+					}
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}	
+			}
+		});
+		 */
+		//
+		// Add a message listener for each subscriber device key. When a new message comes in
+		// extract the device name from the map based on the subscriber instance associated with the incoming message.
+		// Based on the device name, get the MarlinspikeControlInterface from the MarlinspikeManager.
+		// We can then set the power level etc on the device from the data in the message.
+		//
+		for(Subscriber<std_msgs.Int32MultiArray> subs : subscriberDevice.keySet()) {
+			subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
+				@Override
+				public void onNewMessage(std_msgs.Int32MultiArray message) {
+					if(DEBUG)
+						System.out.printf("%s Subscriber:%s  Message:%s %n", this.getClass().getName(), subs, message.toString());
+					String deviceName = subscriberDevice.get(subs);
+					int[] valch = message.getData();
+					if(DEBUG)
+						System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%s Thread:%s%n", this.getClass().getName(), subs, deviceName, message.toString(), Arrays.toString(valch), Thread.currentThread().getName());
+					try {
+						MarlinspikeControlInterface control = null;
+						try {
+							control = robot.getManager().getMarlinspikeControl(deviceName);
+							if(DEBUG)
+								System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
+						} catch(NoSuchElementException nse) {
+							System.out.println("Controller:"+deviceName+" not configured for this node");
+							statPub.add("Controller:"+deviceName+" not configured for this node");
+							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), 
+									diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
+							return;
+						}
+						// keep Marlinspike from getting bombed with zeroes
+						boolean affectorSpeed = false;
+						for(int val: valch) {
+							if(val != 0) {
+								affectorSpeed = true;
+								break;
+							}
+						}
+						if(DEBUG)
+							System.out.printf("%s Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), message.toString(), 
+									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
+						robot.getOperating().put(deviceName, affectorSpeed);
+						if(DEBUG)
+							System.out.printf("%s affector:%b Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), affectorSpeed, message.toString(), 
+									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
+						switch(valch.length) {
+						case 1:
+							control.setDeviceLevels(deviceName, valch[0]);
+							break;
+						case 2:
+							control.setDeviceLevels(deviceName, valch[0],valch[1]);
+							break;
+						case 3:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2]);
+							break;
+						case 4:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3]);
+							break;
+						case 5:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4]);
+							break;
+						case 6:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5]);
+							break;
+						case 7:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6]);
+							break;
+						case 8:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7]);
+							break;
+						case 9:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8]);
+							break;
+						case 10:
+							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8],valch[9]);
+							break;
+						default:
+							System.out.println("Bad param length to control:"+valch.length);
+							return;	
+						}
+						if(DEBUG)
+							System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s%n",Thread.currentThread().getName(),deviceName);
+					} catch (IOException e) {
+						System.out.println("There was a problem communicating with the controller:"+e);
+						e.printStackTrace();
+						synchronized(statPub) {
+							statPub.add("There was a problem communicating with the controller:");
+							statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
+							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), 
+									diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+						}
+					}
+				}
+			});
+		} // subscriber devices
+	
 		// tell the waiting constructors that we have registered publishers
 		awaitStart.countDown();
 
 		//----------------------------------------
 		// Begin publishing loop
+		//
+		// A CancellableLoop will be canceled automatically when the node shuts down.
+		// Check the various topic message queues for entries and if any are present, multiplex them onto the outbound bus
+		// under the DiagnosticStatus topics for any waiting subscribers to process and deal with.
+		//
 		//----------------------------------------
 		connectedNode.executeCancellableLoop(new CancellableLoop() {
 			private int sequenceNumber;
@@ -661,24 +1170,51 @@ public class MotionController extends AbstractNodeMain {
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
+				try {
+					awaitStart.await();
+				} catch (InterruptedException e) {}
+				// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike	
+				for(int i = 0; i < stopics.length; i++) {
+					if(DEBUG)
+						System.out.printf("%s response publish: %s%n",this.getClass().getName(),responses[i]);
+					responses[i].publish();
+				}
 			}
 
 			@Override
 			protected void loop() throws InterruptedException {	
-				try {
-					awaitStart.await();
-				} catch (InterruptedException e) {}
+				diagnostic_msgs.DiagnosticStatus statmsg = null;
 				//
-				// publish messages to status listener if applicable
+				// Poll the outgoing message array for diagnostics enqueued by the above processing
 				//
-				statpub.publish(statusQueue.takeFirst());
-				++sequenceNumber;
-				if( DEBUG )
-					System.out.println("Sequence:"+sequenceNumber);
+				statmsg = statusQueue.poll(1, TimeUnit.MILLISECONDS);
+				if(statmsg != null) {
+					if(DEBUG)
+						System.out.printf("%s outgoing diagnostics: %s%n",this.getClass().getName(),statusQueue);
+					statpub.publish(statmsg);
+					if(DEBUG)
+						System.out.println("Published "+statmsg.getMessage());
+					Thread.sleep(1);
+				}
 			}
 		}); // cancellable loop
 
 	} // onStart
+	
+	/**
+	 * Register the handler method for each slot in the configs 
+	 */
+	private void registerSlotHandlers() {
+        for (Method method : this.getClass().getDeclaredMethods()) {
+            if (method.isAnnotationPresent(SlotHandler.class)) {
+                int key = method.getAnnotation(SlotHandler.class).slot();
+                slotToMethod.put("slot"+key, method);
+                if(DEBUG)
+                    System.out.println("Mapped slot [" + key + "] to method: " + method.getName());
+            }
+        }
+    }
+
 	/**
 	* {@link com.neocoretechs.robocore.MegaPubs#configureSubscriberListener}<br>
 	* Configure a publisher to talk to a MarlinSpikeControlInterface which receives 
@@ -1711,6 +2247,200 @@ public class MotionController extends AbstractNodeMain {
 		speedL = speeds[0];
 		speedR = speeds[1];
 		publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
+	}
+	/**
+	 * Configure the GPIO direct service.
+	 * @param serviceGPIOServerListener
+	 * @param connectedNode
+	 * @param tstatpub
+	 */
+	private void configureGPIOServer(CountDownServiceServerListener<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServerListener,
+		ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
+		final ServiceServer<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServer = connectedNode.newServiceServer(GPIO_SERVICE, GPIOControlMessage._TYPE,
+			    new ServiceResponseBuilder<GPIOControlMessageRequest, GPIOControlMessageResponse>() {
+					@Override
+					public void build(GPIOControlMessageRequest request, GPIOControlMessageResponse response) {	
+						//try {
+							System.out.println("GPIO direct");
+							if( auxGPIO == null )
+								auxGPIO = new AuxGPIOControl();
+							auxGPIO.activateAux(robot.getManager().getMarlinspikeControl("GPIO"), request.getData().getData());
+							response.setData("success");
+						/*} catch (NoSuchElementException e) {
+							System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
+							e.printStackTrace();
+							response.setData("fail");
+							synchronized(statPub) {
+								statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE:"+e);
+								new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE GPIO ACTIVATION", 
+										diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+								while(!outgoingDiagnostics.isEmpty()) {
+									try {
+										statpub.publish(outgoingDiagnostics.takeFirst());
+										Thread.sleep(1);
+									} catch (InterruptedException e1) {}
+								}
+							}
+						}*/
+					}
+				});	
+			serviceGPIOServer.addListener(serviceGPIOServerListener);	      
+			try {
+				serviceGPIOServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+			} catch (InterruptedException e1) {
+				System.out.println("GPIO SERVICE REGISTRATION WAS INTERRUPTED");
+				e1.printStackTrace();
+			}
+	
+	}
+	/**
+	 * Configure the PWM direct service
+	 * @param servicePWMServerListener
+	 * @param connectedNode
+	 * @param tstatpub
+	 */
+	private void configurePWMServer(CountDownServiceServerListener<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServerListener,
+		ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
+		final ServiceServer<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServer = connectedNode.newServiceServer(PWM_SERVICE, PWMControlMessage._TYPE,
+			    new ServiceResponseBuilder<PWMControlMessageRequest, PWMControlMessageResponse>() {
+					@Override
+					public void build(PWMControlMessageRequest request, PWMControlMessageResponse response) {	
+						switch(PWM_MODE) {
+							case "controller":
+								break;
+								// Directly Activates PWM M45 Pin Level on Marlinspike with 2 values of request.
+								// Activates a direct PWM timer without going through one of the various controller
+								// objects. Issues an M45 to the Marlinspike on the Mega2560
+							case "direct":
+							default:
+								System.out.println("PWM direct");
+								break;
+						}
+						response.setData("success");
+					}
+				});	
+			servicePWMServer.addListener(servicePWMServerListener);	      
+			try {
+				servicePWMServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+			} catch (InterruptedException e1) {
+				System.out.println("PWM SERVICE REGISTRATION WAS INTERRUPTED");
+				e1.printStackTrace();
+			}
+	}
+	/**
+	 * Configure the controller status service
+	 * @param serviceServerListener
+	 * @param connectedNode
+	 * @param tstatpub
+	 */
+	private void configureControllerStatusServer(CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener, 
+			ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
+		final ServiceServer<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServer = connectedNode.newServiceServer(RPT_SERVICE, ControllerStatusMessage._TYPE,
+		    new ServiceResponseBuilder<ControllerStatusMessageRequest, ControllerStatusMessageResponse>() {
+				@Override
+				public void build(ControllerStatusMessageRequest request,ControllerStatusMessageResponse response) {
+					StringBuilder sb = new StringBuilder();
+					try {
+						switch(request.getData()) {
+							case "id":
+								for(DeviceEntry ndd : robot.getManager().getDevices())
+									sb.append(ndd.getMarlinspikeControl().reportSystemId());
+								response.setData(sb.toString());
+								break;
+							case "reset":
+								for(DeviceEntry ndd : robot.getManager().getDevices())
+									sb.append(ndd.getMarlinspikeControl().commandReset());
+								response.setData(sb.toString());
+								break;
+							case "status":
+							default:
+								for(DeviceEntry ndd : robot.getManager().getDevices())
+									sb.append(ndd.getMarlinspikeControl().reportAllControllerStatus());
+								response.setData(sb.toString());
+								break;		
+						}
+					} catch (IOException e) {
+						System.out.println("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
+						e.printStackTrace();
+						synchronized(statPub) {
+							statPub.add("EXCEPTION FROM SERVICE REQUESTING ALL CONTROLLER STATUS REPORT FROM MARLINSPIKE:"+e);
+							new PublishDiagnosticResponse(connectedNode, tstatpub, statusQueue, "MARLINSPIKE STATUS", 
+									diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+							while(!statusQueue.isEmpty()) {
+								try {
+									tstatpub.publish(statusQueue.takeFirst());
+									Thread.sleep(1);
+								} catch (InterruptedException e1) {}
+							}
+						}
+					}
+				}
+			});	
+		serviceServer.addListener(serviceServerListener);	      
+		try {
+			serviceServerListener.awaitMasterRegistrationSuccess(1, TimeUnit.SECONDS);
+		} catch (InterruptedException e1) {
+			System.out.println("REPORT SERVICE REGISTRATION WAS INTERRUPTED");
+			e1.printStackTrace();
+		}
+	}
+
+	/**
+	* Configure a subscriber to talk to a MarlinSpikeControlInterface which receives 
+	* a message of type: LUN#, value of control for that LUN#. <br>
+	* Process the commands from remote source to extract 32 bit int values and apply those to the
+	* device channels LUNs. The ordinals represent a logical unit LUN in the configuration which is
+	* a collection of node, device, slot, channel of a controller attached to a ROS node, which has
+	* a number of tty ports (devices) which have marlinspike boards attached (Mega2560 or Pico via USB running the firmware)
+	* which have a number of logical software controllers configured by slot and channels.<p>
+	* Process a trigger value from the remote source, most likely a controller such as PS/3.<p>
+	* Take the 2 trigger values as int32 and send them on to the microcontroller 
+	* related subsystem at the int valued LUNs. The marlinspike subsystem is composed of a software 
+	* controller instance talking to a hardware driver such as an H-bridge or half bridge or even a simple switch.
+	* @param subscr The target subscriber
+	* @param connectedNode the Ros node we are using
+	* @param tstatpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
+	*/
+	private void configureSubscriberListener(Subscriber<Int32MultiArray> subscr, ConnectedNode connectedNode, 
+					Publisher<DiagnosticStatus> tstatpub) {
+		subscr.addSubscriberListener(new SubscriberListener<std_msgs.Int32MultiArray>() {
+				@Override
+				public void onNewPublisher(Subscriber<Int32MultiArray> subs, PublisherIdentifier pubs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s new publisher %s%n", this.getClass().getName(), subs, pubs);				
+				}
+				@Override
+				public void onShutdown(Subscriber<std_msgs.Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s SHUTDOWN%n", this.getClass().getName(), subs);	
+				}
+				@Override
+				public void onMasterRegistrationFailure(Subscriber<Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);				
+				}
+				@Override
+				public void onMasterRegistrationSuccess(Subscriber<Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s successfully registered with master%n", this.getClass().getName(), subs);
+					//final int affector = ((ArrayList<Subscriber<Int32MultiArray>>)subschannel).indexOf(subs);
+				}
+				@Override
+				public void onMasterUnregistrationFailure(Subscriber<Int32MultiArray> subs) {			
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);	
+				}
+				@Override
+				public void onMasterUnregistrationSuccess(Subscriber<Int32MultiArray> subs) {
+					if(DEBUG)
+						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);	
+				}
+		});
+	}
+	
+	@SlotHandler(slot=0)
+	private void handleSlot0(int[] params) {
+		
 	}
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 
