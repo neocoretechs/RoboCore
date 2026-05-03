@@ -11,11 +11,13 @@ package com.neocoretechs.robocore.propulsion;
  *
  */
 public interface RobotDiffDriveInterface {
-	public DrivenWheelInterface getLeftWheel();
-	public DrivenWheelInterface getRightWheel();
-	public void setDriveWheels(DrivenWheelInterface leftWheels, DrivenWheelInterface rightWheel);
-	public int getLeftwheelLun();
-	public int getRightWheelLun();
+	public DrivenWheelInterface getLeftWheel(int chan);
+	public DrivenWheelInterface getRightWheel(int chan);
+	public void setDriveWheels(DrivenWheelInterface leftWheels, int chanl, DrivenWheelInterface rightWheel, int chanr);
+	public int getLeftwheelLun(int chan);
+	public int getRightWheelLun(int chan);
 	public int getControllerAxisX(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
 	public int getControllerAxisY(); //derived by Props.toInt(getControllerAxisPropertyName()+"Y");
+	public int getSlot();
+	public int getChannels();
 }

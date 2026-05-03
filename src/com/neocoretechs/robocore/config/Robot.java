@@ -298,13 +298,13 @@ public class Robot implements RobotInterface, Serializable {
 	}
 
 	@Override
-	public PIDParameterInterface getLeftMotorPIDController() {
-		return robotDrive.getLeftWheel().getPIDController();
+	public PIDParameterInterface getLeftMotorPIDController(int chan) {
+		return robotDrive.getLeftWheel(chan).getPIDController();
 	}
 
 	@Override
-	public SetpointInfoInterface getLeftDistanceSetpointInfo() {
-		return robotDrive.getLeftWheel().getTickSetpointInfo();
+	public SetpointInfoInterface getLeftDistanceSetpointInfo(int chan) {
+		return robotDrive.getLeftWheel(chan).getTickSetpointInfo();
 	}
 
 	@Override
@@ -313,33 +313,33 @@ public class Robot implements RobotInterface, Serializable {
 	}
 
 	@Override
-	public SetpointInfoInterface getLeftSpeedSetpointInfo() {
-		return robotDrive.getLeftWheel().getSpeedsetPointInfo();
+	public SetpointInfoInterface getLeftSpeedSetpointInfo(int chan) {
+		return robotDrive.getLeftWheel(chan).getSpeedsetPointInfo();
 	}
 
 	@Override
-	public SetpointInfoInterface getLeftTickSetpointInfo() {
-		return robotDrive.getLeftWheel().getTickSetpointInfo();
+	public SetpointInfoInterface getLeftTickSetpointInfo(int chan) {
+		return robotDrive.getLeftWheel(chan).getTickSetpointInfo();
 	}
 
 	@Override
-	public PIDParameterInterface getRightMotorPIDController() {
-		return robotDrive.getRightWheel().getPIDController(); // for now, both the same one due to limited function
+	public PIDParameterInterface getRightMotorPIDController(int chan) {
+		return robotDrive.getRightWheel(chan).getPIDController(); // for now, both the same one due to limited function
 	}
 
 	@Override
-	public SetpointInfoInterface getRightDistanceSetpointInfo() {
-		return robotDrive.getRightWheel().getTickSetpointInfo();
+	public SetpointInfoInterface getRightDistanceSetpointInfo(int chan) {
+		return robotDrive.getRightWheel(chan).getTickSetpointInfo();
 	}
 
 	@Override
-	public SetpointInfoInterface getRightSpeedSetpointInfo() {
-		return robotDrive.getRightWheel().getSpeedsetPointInfo();
+	public SetpointInfoInterface getRightSpeedSetpointInfo(int chan) {
+		return robotDrive.getRightWheel(chan).getSpeedsetPointInfo();
 	}
 
 	@Override
-	public SetpointInfoInterface getRightTickSetpointInfo() {
-		return robotDrive.getRightWheel().getTickSetpointInfo();
+	public SetpointInfoInterface getRightTickSetpointInfo(int chan) {
+		return robotDrive.getRightWheel(chan).getTickSetpointInfo();
 	}
 	
 	@Override

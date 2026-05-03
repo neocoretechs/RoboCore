@@ -4,7 +4,6 @@ import java.io.Serializable;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import com.neocoretechs.robocore.config.TypedWrapper;
-import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 
 /**
 * Configuration for generic robot differential drive.
@@ -19,11 +18,15 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	TypedWrapper[] PID;
 	int leftWheelLun = -1;
 	int rightWheelLun = -1;
+	int leftChan = -1;
+	int rightChan = -1;
 	int controllerAxisX = -1; 
 	int controllerAxisY = -1;
+	int slot;
+	int channels = 0;
 	/* Define the robot parameters */
-	DrivenWheelInterface leftWheel;
-	DrivenWheelInterface rightWheel;
+	DrivenWheelInterface[] leftWheel = new DrivenWheelInterface[10]; // by channel
+	DrivenWheelInterface[] rightWheel = new DrivenWheelInterface[10]; // or a front wheel where left right is left wheel servo
 	//public static int MAXOUTPUT = 50; // indoor
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.
@@ -36,20 +39,31 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		this.PID = pID;
 		// extract the wheel definitions from the logical units in config
 		for(int i = 0; i < LUN.length; i++) {
-			if(LUN[i].get("Name").equals("LeftWheel"))
-					leftWheelLun = i;
-			else
-				if(LUN[i].get("Name").equals("RightWheel"))
+			if(LUN[i].get("Name").equals("LeftWheel")) {
+				Object ochan = LUN[i].get("Channel");
+				if(ochan == null)
+					throw new RuntimeException("Configuration is absent left or right wheel channel LUN declaration");
+				leftChan = Integer.parseInt((String) ochan);
+				if(leftChan > channels) channels = leftChan;
+				leftWheelLun = i;
+			} else {
+				if(LUN[i].get("Name").equals("RightWheel")) {
+					Object ochan = LUN[i].get("Channel");
+					if(ochan == null)
+						throw new RuntimeException("Configuration is absent left or right wheel channel LUN declaration");
+					rightChan = Integer.parseInt((String) ochan);
+					if(rightChan > channels) channels = rightChan;
 					rightWheelLun = i;
-			if(leftWheelLun != -1 && rightWheelLun != -1)
-				break;
+				}
+			}
+			if(leftWheelLun != -1 && rightWheelLun != -1) {
+				setDrive(leftWheelLun, rightWheelLun, leftChan, rightChan);
+				leftWheelLun = rightWheelLun = -1;
+			}
 		}
-		if(leftWheelLun == -1 || rightWheelLun == -1)
-			throw new RuntimeException("Configuration is absent left or right wheel LUN declaration");
-		setDrive();
 	}
 	
-	private void setDrive() {
+	private void setDrive(int leftWheelLun, int rightWheelLun, int leftChan, int rightChan) {
 		Optional<Float> leftWheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
 		Optional<Float> leftWheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
 		Optional<Integer> leftTicksPerRevolution = Optional.empty();
@@ -111,7 +125,8 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		motorPIDRateR = Optional.ofNullable(PID[rightWheelLun].get("MotorPIDRate")).filter(String.class::isInstance)
 		        .map(e -> Integer.parseInt((String) e));
 		try {
-			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), 
+			
+			leftWheel[leftChan-1] = new RobotWheel((String) LUN[leftWheelLun].get("Name"), 
 					leftWheelDiameter.get(), 
 					leftWheelTrack.get(), 
 					minSpeedL.get(), 
@@ -121,22 +136,15 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 					motorKiL.get(), motorKoL.get(),
 					motorPIDRateL.get());
 		} catch(NoSuchElementException nse) {
-			System.out.println("<<WARNING; USING PID DEFAULTS leftWheelLun: "+leftWheelLun+" PID[leftWheelLun]: "+
+			throw new RuntimeException("<<WARNING; USING PID DEFAULTS leftWheelLun: "+leftWheelLun+" PID[leftWheelLun]: "+
 					(leftWheelLun < PID.length ? 
 					PID[leftWheelLun]+(" "+" finally: "+(PID[leftWheelLun] != null ? 
 					(PID[leftWheelLun].get("MotorKp")+","+PID[leftWheelLun].get("MotorKd")+","+PID[leftWheelLun].get("MotorKi")+","+PID[leftWheelLun].get("MotorKo")+","+PID[leftWheelLun].get("MotorPIDRate")):
 						" COLLECTION NULL ")) :
 						" PID ARRAY LEN BAD:"+PID.length));
-			leftWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"), 
-					leftWheelDiameter.get(), 
-					leftWheelTrack.get(), 
-					minSpeedL.get(), 
-					maxSpeedL.get(), 
-					leftTicksPerRevolution.get(), 
-					1.0f, 1.0f, 1.0f, 1.0f, 1);
 		}
 		try {
-			rightWheel = new RobotWheel((String)LUN[rightWheelLun].get("Name"), 
+			rightWheel[rightChan-1] = new RobotWheel((String)LUN[rightWheelLun].get("Name"), 
 					rightWheelDiameter.get(), 
 					rightWheelTrack.get(), 
 					minSpeedR.get(), 
@@ -148,18 +156,12 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 					motorKoR.get(), 
 					motorPIDRateR.get());
 		} catch(NoSuchElementException nse) {
-			System.out.println("<<WARNING USING PID DEFAULTS rightWheelLun: "+rightWheelLun+" PID[rightWheelLun]: "+
+			throw new RuntimeException("<<WARNING USING PID DEFAULTS rightWheelLun: "+rightWheelLun+" PID[rightWheelLun]: "+
 					(rightWheelLun < PID.length ? 
 					PID[rightWheelLun]+(" "+" finally: "+(PID[rightWheelLun] != null ? 
 					(PID[rightWheelLun].get("MotorKp")+","+PID[rightWheelLun].get("MotorKd")+","+PID[rightWheelLun].get("MotorKi")+","+PID[rightWheelLun].get("MotorKo")+","+PID[rightWheelLun].get("MotorPIDRate") ):
 						" COLLECTION NULL ")) :
 						" PID ARRAY LEN BAD:"+PID.length));
-			rightWheel = new RobotWheel((String) LUN[leftWheelLun].get("Name"),
-					rightWheelDiameter.get(), 
-					rightWheelTrack.get(), 
-					minSpeedR.get(), 
-					maxSpeedR.get(), 
-					rightTicksPerRevolution.get(), 1.0f, 1.0f, 1.0f, 1.0f, 1);
 		}
 		
 		Optional<Integer> controllerAxisXO = Optional.ofNullable(AXIS[rightWheelLun].get("AxisX")).filter(String.class::isInstance)
@@ -181,20 +183,20 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 	
 	@Override
-	public DrivenWheelInterface getLeftWheel() {
-		return leftWheel;
+	public DrivenWheelInterface getLeftWheel(int chan) {
+		return leftWheel[chan-1];
 	}
 
 	@Override
-	public DrivenWheelInterface getRightWheel() {
-		return rightWheel;
+	public DrivenWheelInterface getRightWheel(int chan) {
+		return rightWheel[chan-1];
 	}
 
 	
 	@Override
-	public void setDriveWheels(DrivenWheelInterface leftWheel, DrivenWheelInterface rightWheel) {
-		this.leftWheel = leftWheel;
-		this.rightWheel = rightWheel;	
+	public void setDriveWheels(DrivenWheelInterface leftWheel, int chanl, DrivenWheelInterface rightWheel, int chanr) {
+		this.leftWheel[chanl] = leftWheel;
+		this.rightWheel[chanr] = rightWheel;	
 	}
 
 	public String toString() {
@@ -212,13 +214,23 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 
 	@Override
-	public int getLeftwheelLun() {
+	public int getLeftwheelLun(int chan ) {
 		return leftWheelLun;
 	}
 
 	@Override
-	public int getRightWheelLun() {
+	public int getRightWheelLun(int chan) {
 		return rightWheelLun;
+	}
+
+	@Override
+	public int getSlot() {
+		return slot;
+	}
+
+	@Override
+	public int getChannels() {
+		return channels;
 	}
 
 }
