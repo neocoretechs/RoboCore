@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 
 import com.neocoretechs.robocore.SynchronizedThreadManager;
 
@@ -313,6 +314,9 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	@Override
 	public ArrayList<String> sendCommand(String command) throws IOException {
 		byte[] buffer = new byte[1024];
+		long writeTime = System.nanoTime();
+		long writeSleepTime = 0L;
+		long readSleepTime = 0L;
 		ArrayList<String> ret = new ArrayList<String>();
 		command += "\r";
 		byte[] bcomm = command.getBytes();
@@ -325,21 +329,27 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 				tlen += wlen;
 				blen -= wlen;
 				try {
-					Thread.sleep(1);
+					Thread.sleep(0,5000);
+					writeSleepTime += 5000;
 				} catch (InterruptedException e) {
 					break;
 				}
 			}
 		}
+		writeTime = System.nanoTime() - writeTime;
+		long readTime = System.nanoTime();
 		int num = 0;
 		while((num = serialPort.readBytes(buffer, buffer.length)) <= 0) {
 			try {
-				Thread.sleep(1);
+				Thread.sleep(0,5000);
+				readSleepTime += 5000;
 			} catch (InterruptedException e) {
 				break;
 			}
 		}
 		ret.add(new String(Arrays.copyOf(buffer, num)));
+		readTime = System.nanoTime() - readTime;
+		System.out.println("Marlinspike comm time read:"+readTime+" read sleep:"+readSleepTime+" | write:"+writeTime+" write sleep:"+writeSleepTime);
 		return ret;
 	}
 	/*

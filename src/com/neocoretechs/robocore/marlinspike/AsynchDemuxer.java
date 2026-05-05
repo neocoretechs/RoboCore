@@ -840,41 +840,43 @@ public class AsynchDemuxer implements Runnable {
 		String fop;
 		ArrayList<String> payload;
 		while(shouldRun) {
-				try {
+			try {
+				if(DEBUG)
+					System.out.println("AsynchDemux "+this+" queue="+requestQueue.size());
+				long cmdTime = System.nanoTime();
+				payload = dataPort.sendCommand(requestQueue.takeFirst());
+				System.out.println("Marlinspike time="+(System.nanoTime()-cmdTime));
+				if(DEBUG)
+					System.out.println("AsynchDemux "+this+" response:"+payload+" from dataport:"+dataPort);
+				if(payload == null || payload.size() == 0 ) {
+					throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
+							" RESPONSE FROM PORT "+dataPort.getPortName()+" NULL DIRECTIVE:"+Arrays.toString(payload.toArray()));
+				}
+				fop = parseDirective(payload.get(0));
+				if(fop != null) {
 					if(DEBUG)
-						System.out.println("AsynchDemux "+this+" queue="+requestQueue.size());
-						payload = dataPort.sendCommand(requestQueue.takeFirst());
+						System.out.println("AsynchDemux "+this+" Parsed directive:"+fop);
+					if(fop.endsWith("ERROR"))
+						fop = topicNames.ERROR.val();
+					TopicListInterface tl = topics.get(fop);
+					if( tl != null ) {
 						if(DEBUG)
-							System.out.println("AsynchDemux "+this+" response:"+payload+" from dataport:"+dataPort);
-						if(payload == null || payload.size() == 0 ) {
-							throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
-									" RESPONSE FROM PORT "+dataPort.getPortName()+" NULL DIRECTIVE:"+Arrays.toString(payload.toArray()));
-						}
-						fop = parseDirective(payload.get(0));
-						if(fop != null) {
-							if(DEBUG)
-								System.out.println("AsynchDemux "+this+" Parsed directive:"+fop);
-							if(fop.endsWith("ERROR"))
-								fop = topicNames.ERROR.val();
-							TopicListInterface tl = topics.get(fop);
-							if( tl != null ) {
-								if(DEBUG)
-									System.out.println("AsynchDemux "+this+" call out to topic:"+tl.getMachineBridge().getGroup());
-								// consume the lines from the Marlinspike response until we see a terminal directive
-								// once this happens we pass it to the proper TopicList {@link AbstractBasicResponse}
-								// retrieveData method that consumes the payload line(s) 
-								if(DEBUG)
-									System.out.println(this.getClass().getName()+" "+tl+" payload:"+Arrays.toString(payload.toArray()));
-								tl.retrieveData(payload);
-							} else {
-								throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
-										" RESPONSE FROM PORT "+dataPort.getPortName()+" NO TOPIC FOR:"+fop+", CANNOT DEMUX DIRECTIVE:"+Arrays.toString(payload.toArray()));
-							}
-						}
-				} catch(Exception e) {
-					e.printStackTrace();
-					//shouldRun = false;
-				}				
+							System.out.println("AsynchDemux "+this+" call out to topic:"+tl.getMachineBridge().getGroup());
+						// consume the lines from the Marlinspike response until we see a terminal directive
+						// once this happens we pass it to the proper TopicList {@link AbstractBasicResponse}
+						// retrieveData method that consumes the payload line(s) 
+						if(DEBUG)
+							System.out.println(this.getClass().getName()+" "+tl+" payload:"+Arrays.toString(payload.toArray()));
+						tl.retrieveData(payload);
+					} else {
+						throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
+								" RESPONSE FROM PORT "+dataPort.getPortName()+" NO TOPIC FOR:"+fop+", CANNOT DEMUX DIRECTIVE:"+Arrays.toString(payload.toArray()));
+					}
+				}
+			} catch(Exception e) {
+				e.printStackTrace();
+				//shouldRun = false;
+			}				
 		}
 		System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+" exiting run...");
 	}

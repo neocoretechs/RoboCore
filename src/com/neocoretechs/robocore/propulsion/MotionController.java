@@ -368,7 +368,7 @@ public class MotionController extends AbstractNodeMain {
 	static boolean inAuto = false;
 	static boolean outputNeg = false; // used to prevent integral windup by resetting ITerm when crossing track
 	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
-	static final long SHUTDOWN_NS = 500000;
+	static final long SHUTDOWN_NS = 250000;
 	static long lastCmdTime = System.nanoTime();
 	// slope speed change over time analysis
 	private CircularBlockingDeque<Float> speedQueueL = new CircularBlockingDeque<Float>(5);
@@ -1972,7 +1972,7 @@ public class MotionController extends AbstractNodeMain {
 	 */
 	private void publishPropulsion(ConnectedNode connectedNode,
 			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) throws IOException {
-		if(leftSpeed == lastSpeedL && rightSpeed == lastSpeedR && (lastCmdTime+SHUTDOWN_NS) < System.nanoTime())
+		if(leftSpeed == lastSpeedL && rightSpeed == lastSpeedR && (lastCmdTime+SHUTDOWN_NS) > System.nanoTime())
 			return;
 		lastCmdTime = System.nanoTime();
 		lastSpeedL = leftSpeed;
@@ -2448,62 +2448,62 @@ public class MotionController extends AbstractNodeMain {
 		String deviceName;
 		public SlotHandler(String deviceName) throws NoSuchElementException {
 			this.deviceName = deviceName;
-				control = robot.getManager().getMarlinspikeControl(deviceName);
-				if(DEBUG)
-					System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
+			control = robot.getManager().getMarlinspikeControl(deviceName);
+			if(DEBUG)
+				System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
 		}
 		public void setSpeed(int[] valch) throws IOException{
 			if(DEBUG)
 				System.out.printf("%s DeviceName=%s args:%s Thread:%s%n", this.getClass().getName(), deviceName, Arrays.toString(valch), Thread.currentThread().getName());
-				// keep Marlinspike from getting bombed with zeroes
-				boolean affectorSpeed = false;
-				for(int val: valch) {
-					if(val != 0) {
-						affectorSpeed = true;
-						break;
-					}
+			// keep Marlinspike from getting bombed with zeroes
+			boolean affectorSpeed = false;
+			for(int val: valch) {
+				if(val != 0) {
+					affectorSpeed = true;
+					break;
 				}
-				robot.getOperating().put(deviceName, affectorSpeed);
-				if(DEBUG)
-					System.out.printf("%s affector:%b DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), affectorSpeed, 
-							deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
-				switch(valch.length) {
-				case 1:
-					control.setDeviceLevels(deviceName, valch[0]);
-					break;
-				case 2:
-					control.setDeviceLevels(deviceName, valch[0],valch[1]);
-					break;
-				case 3:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2]);
-					break;
-				case 4:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3]);
-					break;
-				case 5:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4]);
-					break;
-				case 6:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5]);
-					break;
-				case 7:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6]);
-					break;
-				case 8:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7]);
-					break;
-				case 9:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8]);
-					break;
-				case 10:
-					control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8],valch[9]);
-					break;
-				default:
-					System.out.println("Bad param length to control:"+valch.length);
-					return;	
-				}
-				if(DEBUG)
-					System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s%n",Thread.currentThread().getName(),deviceName);
+			}
+			robot.getOperating().put(deviceName, affectorSpeed);
+			if(DEBUG)
+				System.out.printf("%s affector:%b DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), affectorSpeed, 
+						deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
+			switch(valch.length) {
+			case 1:
+				control.setDeviceLevels(deviceName, valch[0]);
+				break;
+			case 2:
+				control.setDeviceLevels(deviceName, valch[0],valch[1]);
+				break;
+			case 3:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2]);
+				break;
+			case 4:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3]);
+				break;
+			case 5:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4]);
+				break;
+			case 6:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5]);
+				break;
+			case 7:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6]);
+				break;
+			case 8:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7]);
+				break;
+			case 9:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8]);
+				break;
+			case 10:
+				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8],valch[9]);
+				break;
+			default:
+				System.out.println("Bad param length to control:"+valch.length);
+				return;	
+			}
+			if(DEBUG)
+				System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s%n",Thread.currentThread().getName(),deviceName);
 		}
 	}
 	/*
