@@ -1,58 +1,33 @@
 package com.neocoretechs.robocore.test;
 
-import java.awt.BorderLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
-import java.io.File;
+
+import java.io.BufferedReader;
+import java.io.Console;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.io.InputStreamReader;
 import java.util.Scanner;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
-import javax.swing.JTextArea;
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
-import javax.swing.text.DefaultEditorKit;
-import javax.swing.text.DefaultEditorKit.PasteAction;
-import javax.swing.Action;
-
-import org.apache.commons.logging.Log;
-import org.ros.Topics;
 import org.ros.concurrent.CancellableLoop;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
 import org.ros.node.ConnectedNode;
 import org.ros.node.Node;
-import org.ros.node.NodeListener;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
+import org.ros.node.NodeListener;
 
-import std_msgs.Time;
-
-/**
- * This class tests LLM ROS node function via user integration
- * @author Jonathan Groff Copyright (C) NeoCoreTechs 2025
- *
- */
 public class ChatTexter extends AbstractNodeMain {
 
     private static final String USER_PROMPT = "/user_prompt";
     private static final String LLM = "/model";
 
-    private volatile boolean running = true;
-
+    //private volatile boolean running = true;
+    //private Thread inputThread;
+    private final AtomicInteger sequenceNumber = new AtomicInteger(0);
+    Console console;
+    
     @Override
     public GraphName getDefaultNodeName() {
         return GraphName.of("chattest");
@@ -63,45 +38,63 @@ public class ChatTexter extends AbstractNodeMain {
 
         final Publisher<std_msgs.String> chatpub =
                 connectedNode.newPublisher(USER_PROMPT, std_msgs.String._TYPE);
-
-        connectedNode.newSubscriber(LLM, std_msgs.String._TYPE)
-                .addMessageListener(msg -> {
-                    System.out.println();
-                    System.out.println(((std_msgs.String) msg).getData());
-                });
-
-        Thread inputThread = new Thread(() -> {
-            try (Scanner in = new Scanner(System.in)) {
-				while (running && in.hasNextLine()) {
-				    System.out.print(">");
-				    String line = in.nextLine().trim();
-				    if (!line.isEmpty()) {
-				        std_msgs.String sm = chatpub.newMessage();
-				        sm.setData(line);
-				        chatpub.publish(sm);
-				    }
-				}
-			}
-        });
-
-        inputThread.setDaemon(true);
-        inputThread.start();
+        final Subscriber<std_msgs.String> subschat = connectedNode.newSubscriber(LLM, std_msgs.String._TYPE);
+        subschat.addMessageListener(
+        		new MessageListener<std_msgs.String>() {
+        			@Override
+        			public void onNewMessage(std_msgs.String msg) {
+        				System.out.println(sequenceNumber.get() + ".) " + msg.getData());
+        			}
+                }
+        );
 
         connectedNode.addListener(new NodeListener() {
-			@Override
-			public void onError(Node arg0, Throwable arg1) {	
-				running = false;
-			}
-			@Override
-			public void onShutdown(Node arg0) {
-				running = false;	
-			}
-			@Override
-			public void onShutdownComplete(Node arg0) {		
-			}
-			@Override
-			public void onStart(ConnectedNode arg0) {
-			}
+            @Override
+            public void onError(Node node, Throwable throwable) {
+            	System.out.println("Error "+throwable+" on node:"+node);
+            	node.shutdown();
+                //running = false;
+                //if (inputThread != null) inputThread.interrupt();
+            }
+            @Override
+            public void onShutdown(Node node) {
+             	System.out.println("Shutdown on node:"+node);
+                //running = false;
+                //if (inputThread != null) inputThread.interrupt();
+            }
+            @Override public void onShutdownComplete(Node node) {
+               	System.exit(1);
+            }
+            @Override public void onStart(ConnectedNode node) {
+            	System.out.println("Startup on node:"+node);
+            }
         });
+        
+    	connectedNode.executeCancellableLoop(new CancellableLoop() {
+    		
+    		@Override
+    		protected void setup() {
+    			console = System.console();
+    	        if (console == null) {
+    	            System.out.println("Console not available");
+    	            return;
+    	        }
+    		}
+
+    		@Override
+    		protected void loop() throws InterruptedException {
+    				int seq = sequenceNumber.incrementAndGet();
+    				System.out.print(seq + ">");
+    				String line = console.readLine();
+    				if(line != null && !line.isBlank() && !line.isEmpty()) {
+    					line = line.trim();
+    					std_msgs.String sm = chatpub.newMessage();
+    					sm.setData(line);
+    					System.out.println("publishing to "+chatpub);
+    					chatpub.publish(sm);
+    				}
+    		}
+    	});
     }
+    	
 }
