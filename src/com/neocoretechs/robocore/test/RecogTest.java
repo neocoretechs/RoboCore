@@ -306,7 +306,7 @@ public class RecogTest
 		}
 		try {
 			// attach to running RosCore with embedded Relatrix server
-			rt.session = new AsynchRelatrixClientTransaction(args[0], args[1], 8092);
+			rt.session = new AsynchRelatrixClientTransaction(args[0], 8092);
 			rt.xid = rt.session.getTransactionId();
 			//tensorAlias = new Alias("Tensors");
 			//try {

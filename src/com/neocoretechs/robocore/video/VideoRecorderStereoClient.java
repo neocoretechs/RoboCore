@@ -90,7 +90,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 			DATABASE_PORT = Integer.parseInt(remaps.get("__databasePort"));
 		try {
 			System.out.println(">> ATTEMPTING TO ACCESS "+DATABASE+" PORT:"+DATABASE_PORT);
-			session = new RelatrixClient(DATABASE, DATABASE, DATABASE_PORT);
+			session = new RelatrixClient(DATABASE, DATABASE_PORT);
 		} catch (IOException e2) {
 			//System.out.println("Relatrix database volume "+DATABASE+" does not exist!");
 			throw new RuntimeException(e2);
@@ -393,7 +393,7 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 		Scanner console = new Scanner(System.in);
 		console.nextLine();
 		console.close();
-		RelatrixClient session = new RelatrixClient(argv[0], argv[1], Integer.parseInt(argv[2]));
+		RelatrixClient session = new RelatrixClient(argv[1], Integer.parseInt(argv[2]));
 	    RemoteStream stream = (RemoteStream) session.findStream('*', '*', '*');
 		stream.forEach(e -> {
 			try {
@@ -402,7 +402,6 @@ public class VideoRecorderStereoClient extends AbstractNodeMain
 				e1.printStackTrace();
 			}
 		});
-		session.close();
 	}
 }
 

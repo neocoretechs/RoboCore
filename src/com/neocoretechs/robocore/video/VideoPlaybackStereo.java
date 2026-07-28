@@ -31,7 +31,9 @@ import javax.swing.SwingUtilities;
 
 //import com.neocoretechs.machinevision.CannyEdgeDetector;
 import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
+import com.neocoretechs.relatrix.Relation;
 import com.neocoretechs.relatrix.Result;
+import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
 import com.neocoretechs.rocksack.TransactionId;
 
@@ -85,7 +87,7 @@ public class VideoPlaybackStereo  {
 				System.out.println("usage: java com.neocoretechs.robocore.video.VideoPlaybackStereo [local node] [remote node] [server port] <previous hours to display>");
 				System.exit(1);
 			}
-			rkvc = new AsynchRelatrixClientTransaction(args[0], args[1], Integer.parseInt(args[2]));
+			rkvc = new AsynchRelatrixClientTransaction(args[0], Integer.parseInt(args[1]));
 			xid = rkvc.getTransactionId();
 		} catch (IOException e2) {
 			throw new RuntimeException(e2);
@@ -123,8 +125,7 @@ public class VideoPlaybackStereo  {
 		//}
 		
 		try {
-			CompletableFuture<Stream> sstream;
-		    Stream stream = null;
+		    Stream<Result> sstream = null;
 		    if(args.length == 4) {
 		    	long ptimh = Long.parseLong(args[3]);
 		    	long ptim = System.currentTimeMillis() - (ptimh*3600000L);
@@ -133,35 +134,13 @@ public class VideoPlaybackStereo  {
 		    	//long ptim = (ptimh*3600000L);
 		    	//Long firstTim = (Long)rkvc.firstKey(Long.class);
 		    	System.out.println("From:"+new Date(ptim)+" To:"+new Date(lastTim));
-		    	sstream = rkvc.findSubStream(xid, '*', Integer.class, '?',ptim,lastTim);
+		    	sstream = rkvc.findSubStream(xid, '*', Integer.class, '*',ptim,lastTim).get();
 		    } else {
-		    	sstream =  rkvc.findStream(xid,'?', '?', '?');
+		    	//sstream =  rkvc.findStream(xid,'?', '?', '?');
+		    	sstream = rkvc.findStream(xid, '*', '*', '*').get();
 		    }
-		    try {
-				stream = sstream.get();
-			} catch (InterruptedException | ExecutionException e2) {
-				e2.printStackTrace();
-			}
-		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
-			//Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),
-		    //		Collectors.groupingBy(d -> d[1].toString(), 
-		    //		Collectors.groupingBy(e -> e[2].toString(), Collectors.counting()))));
-	        //nameCount.forEach((name, count) -> {
-	        //    System.out.println(name + ":" + count);
-	        //});	        
-		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
-		    //stream.flatMap(e -> Stream.of(e))
-		    //	.forEach((l,m,n) -> System.out.println("Element B:"+l));
-		    	//.forEach(g -> System.out.println("Element B:"+g));
-			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
-			//RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
-			stream.forEach(e2 -> {
-				// try to push frames in realtime, capped at 1 second max wait since we detect motion
-				// if the recorded time between the frames is longer than the realtime display, slow
-				// the display down to match the difference in recorded frame time to the difference in real time (capped at 1 sec).
-				// We want to avoid playing faster than realtime.
-				Result e = (Result)e2;
-					Long tim = (long)e.get(0);
+		    sstream.parallel().forEach(e -> {
+					Long tim = (long)(((Relation)e.get()).getDomain());
 					if(timdiff == 0) {
 						timdiff = tim;
 						realtimdiff = System.currentTimeMillis();
@@ -221,20 +200,40 @@ public class VideoPlaybackStereo  {
 							} 
 						}
 
-	        			displayPanel1.setLastFrame((java.awt.Image)imagel);
-	        			displayPanel2.setLastFrame((java.awt.Image)imager);
-	    				displayPanel2.setComputedValues(String.valueOf(e.get(1)), (long)e.get(0),(double) 0);
-	        			displayPanel1.setComputedValues(String.valueOf(e.get(1)), (long)e.get(0), (double)0); // values from db for time, yaw
-	        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
-	        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
-	        			displayPanel1.invalidate();
-	        			displayPanel2.invalidate();
-	        			displayPanel1.updateUI();
-	        			displayPanel2.updateUI();
+						displayPanel1.setLastFrame((java.awt.Image)imagel);
+						displayPanel2.setLastFrame((java.awt.Image)imager);
+						displayPanel2.setComputedValues(String.valueOf(e.get(1)), (long)e.get(0),(double) 0);
+						displayPanel1.setComputedValues(String.valueOf(e.get(1)), (long)e.get(0), (double)0); // values from db for time, yaw
+						//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
+						//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
+						displayPanel1.invalidate();
+						displayPanel2.invalidate();
+						displayPanel1.updateUI();
+						displayPanel2.updateUI();
 					}
 					++sequenceNumber; // we want to inc seq regardless to see how many we drop	
-				//}
-		});
+				});
+		    
+		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?", true);
+			//Map<Object, Map<Object, Map<Object, Long>>> nameCount = stream.collect(Collectors.groupingBy(b -> b[0].toString(),
+		    //		Collectors.groupingBy(d -> d[1].toString(), 
+		    //		Collectors.groupingBy(e -> e[2].toString(), Collectors.counting()))));
+	        //nameCount.forEach((name, count) -> {
+	        //    System.out.println(name + ":" + count);
+	        //});	        
+		    //stream = (Stream<Comparable[]>) Relatrix.findStream("?", "?", "?");
+		    //stream.flatMap(e -> Stream.of(e))
+		    //	.forEach((l,m,n) -> System.out.println("Element B:"+l));
+		    	//.forEach(g -> System.out.println("Element B:"+g));
+			//Iterator<?> it = Relatrix.findSet("?", "?", "?");
+			//RemoteStream it = rkvc.entrySetStream(java.lang.Long.class);
+			//stream.forEach(e2 -> {
+				// try to push frames in realtime, capped at 1 second max wait since we detect motion
+				// if the recorded time between the frames is longer than the realtime display, slow
+				// the display down to match the difference in recorded frame time to the difference in real time (capped at 1 sec).
+				// We want to avoid playing faster than realtime.
+
+		//});
 		System.out.println("End of retrieval. sequence="+sequenceNumber);
 		} catch(IllegalArgumentException | InterruptedException | ExecutionException iae) {
 			iae.printStackTrace();
