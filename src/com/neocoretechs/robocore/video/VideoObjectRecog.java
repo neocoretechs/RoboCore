@@ -20,7 +20,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
-import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
+import com.neocoretechs.relatrix.client.asynch.json.AsynchRelatrixClientTransactionJson;
 import com.neocoretechs.relatrix.key.NoIndex;
 
 import com.neocoretechs.rknn4j.image.Instance;
@@ -51,7 +51,7 @@ public class VideoObjectRecog extends AbstractNodeMain
 	private static boolean DEBUGDISPARITY = true;
 	private static boolean SAVE_DETECTIONS = false;
 	private static final int SAMPLERATE = 5; // display pubs per SAMPLERATE if > 0
-	AsynchRelatrixClientTransaction session = null;
+	AsynchRelatrixClientTransactionJson session = null;
 	TransactionId xid = null;
 	Alias tensorAlias = null;
     ByteBuffer cbl;
