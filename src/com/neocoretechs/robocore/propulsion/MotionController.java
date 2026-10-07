@@ -530,8 +530,12 @@ public class MotionController extends AbstractNodeMain {
 			for(String debugx : debugs) {
 				if(debugx.equals("demuxer"))
 					AsynchDemuxer.DEBUG = true;
-				if(debugx.equals("marlinspike"))
-					MarlinspikeControl.DEBUG = true;
+				else
+					if(debugx.equals("marlinspike"))
+						MarlinspikeControl.DEBUG = true;
+					else
+						if(debugx.equals("config"))
+							Robot.DEBUG = true;
 			}
 		}
 		if( remaps.containsKey("__speedlimit") ) {

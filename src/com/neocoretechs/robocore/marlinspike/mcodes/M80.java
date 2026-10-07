@@ -1,5 +1,7 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
@@ -8,7 +10,7 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2020,2021,2026
  *
  */
-public class M80 extends AbstractBasicResponse {
+public class M80 extends AbstractBasicResponse implements Serializable {
 	private boolean DEBUG;
 	public M80(AsynchDemuxer asynchDemuxer) {
 		super(asynchDemuxer, topicNames.M80.val());

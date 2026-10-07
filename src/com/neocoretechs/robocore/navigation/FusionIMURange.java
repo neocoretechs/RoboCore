@@ -198,14 +198,26 @@ public class FusionIMURange   {
 			ImuMessage.setHeader(header);
 		}
 	}
-
+	/**
+	 * Initialize
+	 * @param uart true for ultrasonic UART port default, false for GPIO
+	 */
 	public FusionIMURange(boolean uart) {	
 		init(uart);
 	}
+	/**
+	 * Initialize with ultrasonic UART port
+	 * @param urmPort
+	 */
 	public FusionIMURange(String urmPort) {
 		this.URMPort = urmPort;
-		init(false);
+		init(true);
 	}
+	/**
+	 * Initialize with IMU port and UART ultrasonic port
+	 * @param imuPort
+	 * @param urmPort
+	 */
 	public FusionIMURange(String imuPort, String urmPort) {
 		this.IMUPort = imuPort;
 		this.URMPort = urmPort;
@@ -1265,7 +1277,7 @@ public class FusionIMURange   {
 				@Override
 				protected void loop() throws InterruptedException {
 					if(DEBUG)
-						System.out.println("<<< Enter publishing loop >>>");
+						System.out.println("<<< Enter publishing loop for "+this.getClass().getName()+" >>>");
 					//
 					// Begin IMU message processing
 					//
@@ -1345,7 +1357,7 @@ public class FusionIMURange   {
 				@Override
 				protected void loop() throws InterruptedException {
 					if(DEBUG)
-						System.out.println("<<< Enter publishing loop >>>");
+						System.out.println("<<< Enter publishing loop for "+this.getClass().getName()+" >>>");
 					// Publish status to message bus, then, begin calibration if necessary
 					// with prompts and status to status bus
 					ArrayList<String> stats = new ArrayList<String>();
@@ -1408,7 +1420,7 @@ public class FusionIMURange   {
 				@Override
 				protected void loop() throws InterruptedException {
 					if(DEBUG)
-						System.out.println("<<< Enter publishing loop >>>");
+						System.out.println("<<< Enter publishing loop for "+this.getClass().getName()+" >>>");
 					// Publish IMU to message bus
 					sensor_msgs.Imu imuMessage = imus.take();
 					if(DEBUG)

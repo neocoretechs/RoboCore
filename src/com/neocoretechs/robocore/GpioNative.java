@@ -3,9 +3,9 @@ package com.neocoretechs.robocore;
 import java.util.Scanner;
 
 public class GpioNative {
-    static {
-        System.loadLibrary("gpiodjni"); // Your compiled .so
-    }
+    //static {
+    //    System.loadLibrary("gpiodjni"); // Your compiled .so
+    //}
 
     public native int openChip(String chipName);
     public native int findChipLine(String lineNum);

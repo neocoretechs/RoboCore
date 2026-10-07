@@ -1,6 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes.status;
 
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.machine.bridge.MachineReading;
 import com.neocoretechs.robocore.marlinspike.AbstractBasicDataLoader;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
@@ -10,7 +12,7 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
-public class M115 extends AbstractBasicDataLoader {
+public class M115 extends AbstractBasicDataLoader implements Serializable {
 	private boolean DEBUG = false;
 
 	public M115(AsynchDemuxer asynchDemuxer) {

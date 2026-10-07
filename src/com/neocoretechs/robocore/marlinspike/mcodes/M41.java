@@ -1,6 +1,8 @@
 package com.neocoretechs.robocore.marlinspike.mcodes;
 
 
+import java.io.Serializable;
+
 import com.neocoretechs.robocore.marlinspike.AbstractBasicResponse;
 import com.neocoretechs.robocore.marlinspike.ActivationInterface;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
@@ -11,7 +13,7 @@ import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
  *
  */
-public class M41 extends AbstractBasicResponse implements ActivationInterface {
+public class M41 extends AbstractBasicResponse implements ActivationInterface, Serializable {
 	private boolean DEBUG;
 	private TypeSlotChannelEnable tsce;
 	public M41(AsynchDemuxer asynchDemuxer) {
