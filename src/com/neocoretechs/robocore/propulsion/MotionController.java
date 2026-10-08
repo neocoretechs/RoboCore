@@ -199,8 +199,8 @@ import trajectory_msgs.ComeToHeadingStamped;
  * H Bridge Driver:
  * <code><br/>
  * M45 P[pin] S[0-255] - start PWM on pin P with value S, many optional arguments for timer setup<br>
- * M41 P[pin] - Set digital pin P high forward <br>
- * M42 P[pin] - Set digital pin P low reverse <br>
+ * M41 P[pin] S1- Set digital pin P high forward <br>
+ * M41 P[pin] S0- Set digital pin P low reverse <br>
  * </code>
  * Certain command line remappings are used to affect behavior as follows:<br>
  * determine debugging directives __debug:=publisher,demuxer,marlinspike any of these 3 arguments are optional to turn on debugging<br>
@@ -278,9 +278,6 @@ public class MotionController extends AbstractNodeMain {
 	private final String GPIO_SERVICE = "cmd_gpio";
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
-
-	//private InetSocketAddress master;
-	private CountDownLatch awaitStart = new CountDownLatch(1);
 
 	//private String serveNode = null;
 	float rangetop, rangebot;
@@ -538,23 +535,6 @@ public class MotionController extends AbstractNodeMain {
 							Robot.DEBUG = true;
 			}
 		}
-		if( remaps.containsKey("__speedlimit") ) {
-			robot.getLeftSpeedSetpointInfo(1).setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
-			robot.getRightSpeedSetpointInfo(2).setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
-		}
-		if( remaps.containsKey("__kp") )
-			robot.getMotionPIDController().setKp(Float.parseFloat(remaps.get("__kp")));
-		if( remaps.containsKey("__kd") )
-			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
-		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
-		// statpub has status alerts that may come from sensors.
-		// Check startup for indoor speed scale setting ((stick -1 to 1) * SPEEDSCALE), then check cmdl for override of speed scale from startup and defaults
-		// MAX is always 1000
-		if( remaps.containsKey("__speedscale") )
-			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
-		// see if we are implementing software dead-man protocol True or False
-		if( remaps.containsKey("__softstop") )
-			SOFTSTOP  = Boolean.parseBoolean(remaps.get("__softstop"));
 
 		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
 				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
@@ -580,13 +560,29 @@ public class MotionController extends AbstractNodeMain {
 			e.printStackTrace();
 			throw new RuntimeException("Marlinspike configuration error "+e);
 		}
-
+		//-----------------------------
+		// process remappings to override configs
+		if( remaps.containsKey("__speedlimit") ) {
+			robot.getLeftSpeedSetpointInfo(1).setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
+			robot.getRightSpeedSetpointInfo(2).setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
+		}
+		if( remaps.containsKey("__kp") )
+			robot.getMotionPIDController().setKp(Float.parseFloat(remaps.get("__kp")));
+		if( remaps.containsKey("__kd") )
+			robot.getMotionPIDController().setKd(Float.parseFloat(remaps.get("__kd")));
+		//final Publisher<geometry_msgs.Twist> mopub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
+		// statpub has status alerts that may come from sensors.
+		// Check startup for indoor speed scale setting ((stick -1 to 1) * SPEEDSCALE), then check cmdl for override of speed scale from startup and defaults
+		// MAX is always 1000
+		if( remaps.containsKey("__speedscale") )
+			SPEEDSCALE = Float.parseFloat(remaps.get("__speedscale"));
+		// see if we are implementing software dead-man protocol True or False
+		if( remaps.containsKey("__softstop") )
+			SOFTSTOP  = Boolean.parseBoolean(remaps.get("__softstop"));
+		//-----------------------------
 		responses = new PublishDiagnosticResponse[stopics.length];
 
 		//final RosoutLogger log = (Log) connectedNode.getLog();
-
-		// We use the twist topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
-		final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 		//
 		// Iterate the list of non-slot device demuxxers we put together in configureMarlinspikeManager method.
 		// for each Device, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
@@ -643,11 +639,12 @@ public class MotionController extends AbstractNodeMain {
 
 		//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
-
-		final Publisher<geometry_msgs.Twist> twistpub = 
-				connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
+		// publisher to twist cmd_vel
+		final Publisher<geometry_msgs.Twist> twistpub = connectedNode.newPublisher("cmd_vel", geometry_msgs.Twist._TYPE);
 
 		final geometry_msgs.Twist twistmsg = connectedNode.getTopicMessageFactory().newFromType(geometry_msgs.Twist._TYPE);
+		// We use the twist subscriber cmd_vel topic to get the generic universal stop command for all attached devices when pose = -1,-1,-1
+		final Subscriber<geometry_msgs.Twist> substwist = connectedNode.newSubscriber("cmd_vel", geometry_msgs.Twist._TYPE);
 		final Subscriber<sensor_msgs.Joy> substick = connectedNode.newSubscriber("/sensor_msgs/Joy", sensor_msgs.Joy._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 		final Subscriber<std_msgs.String> subsrange = connectedNode.newSubscriber("/sensor_msgs/range",std_msgs.String._TYPE);
@@ -1150,9 +1147,6 @@ public class MotionController extends AbstractNodeMain {
 			});
 		} // subscriber devices
 	
-		// tell the waiting constructors that we have registered publishers
-		awaitStart.countDown();
-
 		//----------------------------------------
 		// Begin publishing loop
 		//
@@ -1175,9 +1169,6 @@ public class MotionController extends AbstractNodeMain {
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
-				try {
-					awaitStart.await();
-				} catch (InterruptedException e) {}
 				// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike	
 				for(int i = 0; i < stopics.length; i++) {
 					if(DEBUG)
@@ -1869,27 +1860,31 @@ public class MotionController extends AbstractNodeMain {
 	 * @param axes the values of the stick axes
 	 */
 	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes) {
+		if(robot.getManager().getDevices() == null) {
+			System.out.printf("%s.publishPeripheral can not get the basic device list based on configs.%n",this.getClass().getName());
+			return;
+		}
 		robot.getManager().getDevices().forEach( lun -> {
 			if(!(lun.getName().endsWith("Wheel"))) {
 				int luni = lun.getLUN();
-				String axisType = (String) robot.getAXIS()[luni].get("AxisType");
+				ConcurrentHashMap<String, Object> axis = robot.getAXIS()[luni];
+				if(axis == null) {
+					System.out.printf("%s.publishPeripheral can not get the axis for LUN %d based on configs.%n",this.getClass().getName(),luni);
+					return;
+				}
+				String axisType = (String) axis.get("AxisType");
 				if(axisType == null) {
-					if(DEBUG) {
-						System.out.printf("%s NO axis type attribute device %s%n", this.getClass().getName(), lun);
-					}
+					System.out.printf("%s.publishPeripheral NO axis type attribute device %s%n", this.getClass().getName(), lun);
 					return; // continue with next iteration
 				}
 				if(DEBUG) {
-					System.out.printf("%s axis type %s attribute device %s%n", this.getClass().getName(), axisType, lun);
+					System.out.printf("%s.publishPeripheral axis type %s attribute device %s%n", this.getClass().getName(), axisType, lun);
 				}
 				switch(axisType) {
 				case "Stick":
-					String stickType = (String) robot.getAXIS()[luni].get("StickType");
-					if(stickType != null)
-						System.out.println("Stick type not yet implemented");
-					if(robot.getAXIS()[luni].get("AxisX") != null) {
-						String sx = (String) robot.getAXIS()[luni].get("AxisX");
-						String sy = (String) robot.getAXIS()[luni].get("AxisY");
+					if(axis.get("AxisX") != null && axis.get("AxisY") != null) {
+						String sx = (String) axis.get("AxisX");
+						String sy = (String) axis.get("AxisY");
 						float x = -axes[Integer.parseInt(sx)] * 1000;
 						float y = -axes[Integer.parseInt(sy)] * 1000;
 						if( y != 0 || x != 0) {
@@ -1897,51 +1892,50 @@ public class MotionController extends AbstractNodeMain {
 							publishedLUNRestValue.replace(luni, false);
 						} else {
 							// rest value here
-							if(!publishedLUNRestValue.get(luni)) {
+							if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
 								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y, (int)x); // not published, so hit once
 								publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 							}
 						}
 					} else {
-						String sy = (String) robot.getAXIS()[luni].get("AxisY");
-						float y = -axes[Integer.parseInt(sy)] * 1000;
-						if( y != 0) {
-							publishAxis(connectedNode, pubschannel, lun.getName(), (int)y);
-							publishedLUNRestValue.replace(luni, false); // rest value not yet sent
-						} else {
-							// rest value here
-							if(!publishedLUNRestValue.get(luni)) {
-								publishAxis(connectedNode, pubschannel, lun.getName(), (int)y); // rest not yet published, so do it
-								publishedLUNRestValue.replace(luni, true); // rest value sent
-							}
-						}
+							System.out.printf("%s.publishPeripheral Axis X or Y missing from config%n",this.getClass().getName());
+							return;
 					}
 					break;
 				case "Trigger":
-					String triggerType = (String) robot.getAXIS()[luni].get("TriggerType");
-					if(triggerType != null)
-						System.out.println("Trigger type not yet implemented");
-					String ax = (String) robot.getAXIS()[luni].get("Axis");
+					String ax = (String) axis.get("Axis");
+					if(ax == null) {
+						System.out.printf("%s.publishPeripheral Axis missing from config%n",this.getClass().getName());
+						return;
+					}
 					float a = axes[Integer.parseInt(ax)] * 1000;
 					if(a != -1000) {
 						publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
 						publishedLUNRestValue.replace(luni, false);
 					} else {
 						// rest value here
-						if(!publishedLUNRestValue.get(luni)) {
+						if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
 							publishAxis(connectedNode, pubschannel, lun.getName(), (int)a); // not published, so hit it
 							publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 						}
 					}
 					break;
 				case "POV":
-					ax = (String) robot.getAXIS()[luni].get("Axis");
+					ax = (String) axis.get("Axis");
+					if(ax == null) {
+						System.out.printf("%s.publishPeripheral Axis missing from config%n",this.getClass().getName());
+						return;
+					}
 					a = axes[Integer.parseInt(ax)] * 1000;
-					String saxUp = (String) robot.getAXIS()[luni].get(("AxisUp"));
+					String saxUp = (String) axis.get(("AxisUp"));
 					if(saxUp == null) {
 						publishAxis(connectedNode, pubschannel, lun.getName(), (int)a);
 					} else {
-						String saxDown = (String) robot.getAXIS()[luni].get(("AxisDown"));
+						String saxDown = (String) axis.get(("AxisDown"));
+						if(saxDown == null) {
+							System.out.printf("%s.publishPeripheral AxisDown missing from config%n",this.getClass().getName());
+							return;
+						}
 						float axUp = Float.parseFloat(saxUp) * 1000;
 						float axDown = Float.parseFloat(saxDown) * 1000;
 						if(a == axUp) {
@@ -2011,7 +2005,11 @@ public class MotionController extends AbstractNodeMain {
 		for(int v : vals)
 			axisVals.add(v);
 		if(DEBUG)
-			System.out.printf("%s Publish axis channel %s sending values %s%n" , this.getClass().getName(), channel, Arrays.toString(vals));
+			System.out.printf("%s.publishAxis() channel %s sending values %s%n" , this.getClass().getName(), channel, Arrays.toString(vals));
+		if(pubschannel.get(channel) == null) {
+			System.out.printf("%s.publishAxis() Cannot find channel %s in publisher channel map, may not have been configured.%n", this.getClass().getName(), channel);
+			return;
+		}
 		pubschannel.get(channel).publish(setupPub(connectedNode, axisVals));
 		try {
 			Thread.sleep(1);
@@ -2269,28 +2267,27 @@ public class MotionController extends AbstractNodeMain {
 			    new ServiceResponseBuilder<GPIOControlMessageRequest, GPIOControlMessageResponse>() {
 					@Override
 					public void build(GPIOControlMessageRequest request, GPIOControlMessageResponse response) {	
-						//try {
+						try {
 							System.out.println("GPIO direct");
 							if( auxGPIO == null )
 								auxGPIO = new AuxGPIOControl();
 							auxGPIO.activateAux(robot.getManager().getMarlinspikeControl("GPIO"), request.getData().getData());
 							response.setData("success");
-						/*} catch (NoSuchElementException e) {
+						} catch (IOException e) {
 							System.out.println("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE");
 							e.printStackTrace();
 							response.setData("fail");
 							synchronized(statPub) {
 								statPub.add("EXCEPTION ACTIVATING MARLINSPIKE VIA GPIO SERVICE:"+e);
-								new PublishDiagnosticResponse(connectedNode, statpub, outgoingDiagnostics, "MARLINSPIKE GPIO ACTIVATION", 
-										diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-								while(!outgoingDiagnostics.isEmpty()) {
+								new PublishDiagnosticResponse(connectedNode, tstatpub, statusQueue, "MARLINSPIKE GPIO ACTIVATION", diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+								while(!statusQueue.isEmpty()) {
 									try {
-										statpub.publish(outgoingDiagnostics.takeFirst());
+										tstatpub.publish(statusQueue.takeFirst());
 										Thread.sleep(1);
 									} catch (InterruptedException e1) {}
 								}
 							}
-						}*/
+						}
 					}
 				});	
 			serviceGPIOServer.addListener(serviceGPIOServerListener);	      

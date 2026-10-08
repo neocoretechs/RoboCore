@@ -1377,9 +1377,12 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			//
 		case 41:
 			pin_number = -1;
+			int state = 0;
 			if (code_seen('P')) {
 				pin_number = (int)code_value();
-				ret.add(String.format("%sM41%s%n",MSG_BEGIN,MSG_TERMINATE));
+				if(code_seen('S'))
+					state = (int)code_value();
+				ret.add(String.format("%sM41s%n",MSG_BEGIN,MSG_TERMINATE));
 				return ret;
 			}
 			break;
@@ -1420,7 +1423,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			break;
 			//
 			// M43 P<pin>
-			// Create persistent digital input pin
+			// Create persistent analog input pin
 			//
 		case 43:
 			pin_number = -1;
@@ -1547,7 +1550,7 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 				 */
 			}
 			break;
-
+			// enter bootsel
 		case 80: //
 			ret.add(String.format("%sM80%s%n",MSG_BEGIN,MSG_TERMINATE));
 			return ret;

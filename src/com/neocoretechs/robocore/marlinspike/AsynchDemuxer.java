@@ -244,13 +244,15 @@ public class AsynchDemuxer implements Runnable {
 	
 	public synchronized void connect(DataPortCommandInterface dataPort) throws IOException {
 		this.dataPort = dataPort;
-		dataPort.connect(true);
-		while(!dataPort.isConnected()) {
+		this.dataPort.connect(true);
+		while(!this.dataPort.isConnected()) {
 			try {
 				Thread.sleep(100);
 			} catch (InterruptedException e) {}
 		}
 		init();
+		if(DEBUG)
+			System.out.println(this.getClass().getName()+".connect() connected to "+this.dataPort.getPortName()+" and initialized.");
 	}
 	/**
 	 * Initialize the topic names for this AsynchDemuxer, then spin the main thread that runs this demuxer.
@@ -730,7 +732,7 @@ public class AsynchDemuxer implements Runnable {
 		SynchronizedThreadManager.getInstance().spin(this, "ASYNCHDEMUXER");
 
 		if(DEBUG)
-			System.out.println("AsynchDemuxer.Init END OF INITIALIZATION of Marlinspike topic listeners");
+			System.out.println("AsynchDemuxer.Init END OF INITIALIZATION of topic listeners for status and MCode responses to Marlinspike directives. Total of "+topics.size());
 	}
 	
 	//

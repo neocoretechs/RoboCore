@@ -292,6 +292,9 @@ public class MarlinspikeManager implements Serializable {
 		} catch(IOException ioe) {
 			throw new RuntimeException(ioe);
 		}
+		// send the codes to reset Marlinspike pins and controllers
+		MarlinspikeControl.clearMarlinspikeSettings(asynchDemuxer);
+		
 		devices.forEach(e->{
 			MarlinspikeControlInterface controller;
 			if(e.getControlClass() == null) {

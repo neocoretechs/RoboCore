@@ -25,6 +25,12 @@ public class M41 extends AbstractBasicResponse implements ActivationInterface, S
 	
 	@Override
 	public String getActivation(int... deviceLevel) {
-		return String.format("M41 P%d S%dn", tsce.getPin(), deviceLevel[0]);
+		int state = deviceLevel[0];
+		if(state < 0)
+			state = 0;
+		else
+			if(state > 1)
+				state = 1;
+		return String.format("M41 P%d S%d%n", tsce.getPin(), state);
 	}
 }

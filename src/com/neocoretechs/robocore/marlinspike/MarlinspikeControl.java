@@ -40,8 +40,19 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	
 	protected static boolean moving = false; // is the base in motion?
 
-	public MarlinspikeControl(AsynchDemuxer asynchDemuxer) { this.asynchDemuxer = asynchDemuxer; }
+	public MarlinspikeControl(AsynchDemuxer asynchDemuxer) { 
+		this.asynchDemuxer = asynchDemuxer; 
+	}
 	
+	public static synchronized void clearMarlinspikeSettings(AsynchDemuxer asynchDemuxer) {
+		String statCommand1 = "M37"; // clear PWM
+		asynchDemuxer.addWrite(statCommand1);
+		statCommand1 = "M35"; // clear digital pins
+		asynchDemuxer.addWrite(statCommand1);
+		statCommand1 = "M36"; // clear analog pins
+		asynchDemuxer.addWrite(statCommand1);
+	}
+
 	/**
 	 * Multi channel device control
 	 * @param deviceName The deviceName as it appears in the configuration 

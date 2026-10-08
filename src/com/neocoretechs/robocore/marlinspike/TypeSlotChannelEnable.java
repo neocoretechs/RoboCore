@@ -100,8 +100,8 @@ public class TypeSlotChannelEnable implements Serializable {
 		SWITCHBRIDGE("SwitchBridge"),
 		SWITCHHBRIDGE("SwitchHBridge"),
 		PWM("PWM"),
-		INPUTPIN("InputPin"),
 		OUTPUTPIN("OutputPin"),
+		INPUTPIN("InputPin"),
 		DELAYHBRIDGE("DelayH-Bridge");
 		String name;
 		typeNames(String name) { this.name = name;} 
@@ -116,17 +116,18 @@ public class TypeSlotChannelEnable implements Serializable {
 				case PWM:
 				case DELAYHBRIDGE:
 					return new G5(tsce);
-				case INPUTPIN:
-					return new M41(tsce);
 				case OUTPUTPIN:
+					return new M41(tsce);
+				case INPUTPIN:
 					return new M42(tsce);
 			}
 			throw new RuntimeException("Bad TypeSlotChannel config "+this);
 		}
 	};
 	
-	// M code to generate for ordinal of typeNames
-	static final String[] configCodes = {"2","3","4","5","5","9","43","41","16"};
+	// M code to generate for ordinal of typeNames, if type 'Pin' use literal code appended to M, if type isSlot, use it as T type in M10 designation
+	// M16
+	static final String[] configCodes = {"2","3","4","5","5","9","41","42","16"};
 	
 	// This interface is responsible for generating the actual M or G code that is passed to the Marlinspike to activate the device
 	private ActivationInterface activator = null;
