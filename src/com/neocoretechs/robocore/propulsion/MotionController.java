@@ -15,6 +15,7 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.ros.concurrent.CancellableLoop;
@@ -42,7 +43,7 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
-import com.neocoretechs.robocore.config.SlotEntry;
+import com.neocoretechs.robocore.config.DeviceDetail;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControl;
@@ -448,13 +449,12 @@ public class MotionController extends AbstractNodeMain {
 
 	// Map of subscriber to node device name for external controls
 	HashMap<Subscriber<Int32MultiArray>, String> subscriberDevice = new HashMap<Subscriber<Int32MultiArray>, String>();
-	// Map of slot to method for internal controls
-	HashMap<String, SlotHandler> slotToHandler = new HashMap<String, SlotHandler>();
 	
 	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses;
 	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic;
 	
 	private Collection<String> statPub = Collections.synchronizedCollection(new ArrayList<String>());
+	protected CountDownLatch awaitStart = new CountDownLatch(1);
 
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -509,12 +509,12 @@ public class MotionController extends AbstractNodeMain {
 		}
 		try {
 			ParameterTree pTree = connectedNode.getParameterTree();
-			robot = (RobotInterface) pTree.get(robotName, new Robot());
+			robot = (RobotInterface) pTree.get(robotName, new Robot(robotName));
 			if(robot.getHostName().equals("UNDEFINED")) {
 				robot = new Robot(robotName);
-				robot.configureMarlinspike();
 				pTree.set(robotName, robot);
 			}
+			robot.configureMarlinspike();
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -553,13 +553,6 @@ public class MotionController extends AbstractNodeMain {
 			throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
 		}
 
-		try {
-			// createControllers should have been performed in MotionController and Robot placed in ParameterTree
-			robot.getManager().configureDemuxer();
-		} catch (IOException e) {
-			e.printStackTrace();
-			throw new RuntimeException("Marlinspike configuration error "+e);
-		}
 		//-----------------------------
 		// process remappings to override configs
 		if( remaps.containsKey("__speedlimit") ) {
@@ -592,29 +585,14 @@ public class MotionController extends AbstractNodeMain {
 			if(!tsce.getIsSlot()) {
 				Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
 				subscriberDevice.put(subscr, ndd.getName());
+				if(DEBUG)
+					System.out.printf("%s Creating new Non-Slot Handler for :%s for device %s%n", this.getClass().getName(),tsce,ndd.getName());
 				configureSubscriberListener(subscr, connectedNode, statpub);
 			}
 		}
 		//-------------------------------------
 		// Iterate the list of slots we put together in configureMarlinspikeManager.
 		// for each slot, create a subscriber on the channel <slot name> of type Int32MultiArray
-		ConcurrentHashMap<SlotEntry, ArrayList<TypeSlotChannelEnable>> slots = robot.getManager().getSlots();
-		Iterator<SlotEntry> it = slots.keys().asIterator();
-		while(it.hasNext()) {
-			String sslot = ((SlotEntry)it.next()).getName();
-			try {
-				slotToHandler.put(sslot, new SlotHandler(sslot));
-			} catch(NoSuchElementException nse) {
-				System.out.println("Controller:"+sslot+" not configured for this node");
-				statPub.add("Controller:"+sslot+" not configured for this node");
-				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, sslot, 
-					diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
-			}
-			//Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(sslot, std_msgs.Int32MultiArray._TYPE);
-			//subscriberDevice.put(subscr, sslot);
-			//configureSubscriberListener(subscr, connectedNode, statpub);
-		}
-
 		// Initialize the collection of DiagnosticStatus response handlers
 		for(int i = 0; i < stopics.length; i++) {
 			responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, statusQueue);
@@ -680,8 +658,7 @@ public class MotionController extends AbstractNodeMain {
 					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);
 				ArrayList<String> st = new ArrayList<String>();
 				st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, this.getClass().getName(),
-						diagnostic_msgs.DiagnosticStatus.ERROR, st);
+				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, this.getClass().getName(),diagnostic_msgs.DiagnosticStatus.ERROR, st);
 			}
 			@Override
 			public void onMasterUnregistrationSuccess(Subscriber<Joy> subs) {
@@ -1058,27 +1035,30 @@ public class MotionController extends AbstractNodeMain {
 		// We can then set the power level etc on the device from the data in the message.
 		// These are for the non-slotted devices, i.e. the non-propulsion peripherals on other nodes
 		//
+		if(DEBUG)
+			System.out.printf("%s >>>>> Enter Subscriber Device setup loop for %d keySet entries%n", this.getClass().getName(), subscriberDevice.keySet().size());
 		for(Subscriber<std_msgs.Int32MultiArray> subs : subscriberDevice.keySet()) {
+			if(DEBUG)
+				System.out.printf("%s Subscriber:%s loop addMessageListener%n", this.getClass().getName(), subs);
 			subs.addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
 				@Override
 				public void onNewMessage(std_msgs.Int32MultiArray message) {
 					if(DEBUG)
-						System.out.printf("%s Subscriber:%s  Message:%s %n", this.getClass().getName(), subs, message.toString());
+						System.out.printf("%s Subscriber:%s onNewMessage:%s %n", this.getClass().getName(), subs, message.toString());
 					String deviceName = subscriberDevice.get(subs);
 					int[] valch = message.getData();
 					if(DEBUG)
-						System.out.printf("%s Subscriber:%s DeviceName=%s Message:%s args:%s Thread:%s%n", this.getClass().getName(), subs, deviceName, message.toString(), Arrays.toString(valch), Thread.currentThread().getName());
+						System.out.printf("%s Subscriber:%s onNewMessage DeviceName=%s Message:%s args:%s Thread:%s%n", this.getClass().getName(), subs, deviceName, message.toString(), Arrays.toString(valch), Thread.currentThread().getName());
 					try {
 						MarlinspikeControlInterface control = null;
 						try {
 							control = robot.getManager().getMarlinspikeControl(deviceName);
 							if(DEBUG)
-								System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
+								System.out.printf("%s Subscriber:%s onNewMessage got Control %s from MarlinspikeManager%n", this.getClass().getName(), subs, control);
 						} catch(NoSuchElementException nse) {
-							System.out.println("Controller:"+deviceName+" not configured for this node");
-							statPub.add("Controller:"+deviceName+" not configured for this node");
-							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), 
-									diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
+							System.out.printf("%s Subscriber:%s onNewMessage Controller:%s not configured for this node, exception:%s%n",this.getClass().getName(), subs, deviceName,nse);
+							statPub.add(String.format("%s Subscriber:%s onNewMessage Controller:%s not configured for this node, exception:%s%n",this.getClass().getName(), subs, deviceName,nse));
+							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
 							return;
 						}
 						// keep Marlinspike from getting bombed with zeroes
@@ -1089,12 +1069,9 @@ public class MotionController extends AbstractNodeMain {
 								break;
 							}
 						}
-						if(DEBUG)
-							System.out.printf("%s Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), message.toString(), 
-									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
 						robot.getOperating().put(deviceName, affectorSpeed);
 						if(DEBUG)
-							System.out.printf("%s affector:%b Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), affectorSpeed, message.toString(), 
+							System.out.printf("%s Subscriber:%s onNewMessage affector:%b Message:%s DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), subs, affectorSpeed, message.toString(), 
 									deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
 						switch(valch.length) {
 						case 1:
@@ -1128,25 +1105,26 @@ public class MotionController extends AbstractNodeMain {
 							control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8],valch[9]);
 							break;
 						default:
-							System.out.println("Bad param length to control:"+valch.length);
+							System.out.printf("%s Subscriber:%s onNewMessage DeviceName=%s speeds:%s exceeds 10 params%n", this.getClass().getName(), subs, deviceName, Arrays.toString(valch));
 							return;	
 						}
 						if(DEBUG)
-							System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s%n",Thread.currentThread().getName(),deviceName);
+							System.out.printf("%s Subscriber:%s onNewMessage, thread %s received Affector directives DeviceName:%s%n",this.getClass().getName(), subs, Thread.currentThread().getName(),deviceName);
 					} catch (IOException e) {
-						System.out.println("There was a problem communicating with the controller:"+e);
+						System.out.printf("%s Subscriber:%s onNewMessage,There was a problem communicating with the controller:%s%n:",this.getClass().getName(), subs, e);
 						e.printStackTrace();
 						synchronized(statPub) {
-							statPub.add("There was a problem communicating with the controller:");
+							statPub.add(String.format("%s Subscriber:%s onNewMessage,There was a problem communicating with the controller:%s%n:",this.getClass().getName(), subs, e));
 							statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), 
-									diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
+							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
 						}
 					}
 				}
 			});
 		} // subscriber devices
-	
+		if(DEBUG)
+			System.out.printf("%s <<<<<<<<<< End Subscriber Device setup loop for %d keySet entries%n", this.getClass().getName(),subscriberDevice.keySet().size());
+		awaitStart.countDown();
 		//----------------------------------------
 		// Begin publishing loop
 		//
@@ -1160,6 +1138,9 @@ public class MotionController extends AbstractNodeMain {
 
 			@Override
 			protected void setup() {
+			    try {
+					awaitStart .await();
+				} catch (InterruptedException e) {}
 				sequenceNumber = 0;
 				robot.getIMUSetpointInfo().setPrevErr(0.0f); // 0 degrees yaw
 				robot.getIMUSetpointInfo().setMinimum(-robot.getIMUSetpointInfo().getMaximum()); //degree minimum integral windup
@@ -1170,9 +1151,11 @@ public class MotionController extends AbstractNodeMain {
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
 				// Invoke the collection of response handlers, this is done for each asynchDemuxer attached to this node, i.e. each Marlinspike	
+				if(DEBUG)
+					System.out.printf("%s.setup responses to publish: %d%n",this.getClass().getName(),responses.length);
 				for(int i = 0; i < stopics.length; i++) {
 					if(DEBUG)
-						System.out.printf("%s response publish: %s%n",this.getClass().getName(),responses[i]);
+						System.out.printf("%s.setup response publish: %s%n",this.getClass().getName(),responses[i]);
 					responses[i].publish();
 				}
 			}
@@ -1186,7 +1169,7 @@ public class MotionController extends AbstractNodeMain {
 				statmsg = statusQueue.poll(1, TimeUnit.MILLISECONDS);
 				if(statmsg != null) {
 					if(DEBUG)
-						System.out.printf("%s outgoing diagnostics: %s%n",this.getClass().getName(),statusQueue);
+						System.out.printf("%s.loop outgoing diagnostics: %s%n",this.getClass().getName(),statusQueue);
 					statpub.publish(statmsg);
 					if(DEBUG)
 						System.out.println("Published "+statmsg.getMessage());
@@ -1223,25 +1206,30 @@ public class MotionController extends AbstractNodeMain {
 		for(DeviceEntry ndd : robot.getManager().getDevices()) {
 			// non-slot device demuxxers, we configure slotted ones as slots
 			TypeSlotChannelEnable tsce = robot.getManager().getTypeSlotChannelEnable(ndd);
-			if(tsce.getIsSlot()) 
+			if(tsce.getIsSlot()) {
+				if(DEBUG)
+					System.out.printf("%s configurePublisherListener skipping slot for DeviceEntry %s TypeSlotchannelEnable:%s%n", this.getClass().getName(),(ndd != null ? ndd : "DEVICE NULL"),tsce);
 				continue;
+			}
 			if(DEBUG)
-				System.out.printf("configurePublisherListener for DeviceEntry %s%n", ndd);
+				System.out.printf("%s configurePublisherListener for DeviceEntry %s%n", this.getClass().getName(),(ndd != null ? ndd : "DEVICE NULL"));
 			//if(ndd.getNodeName().equals(serveNode)) {
-			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(ndd.getName(), std_msgs.Int32MultiArray._TYPE));
+			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher((ndd != null ? ndd.getName() : "DEVICE NULL"), std_msgs.Int32MultiArray._TYPE));
 			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
 				@Override
 				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
 					ArrayList<String> st = new ArrayList<String>();
 					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, (ndd != null ? ndd.getName() : "DEVICE NULL"),
 							diagnostic_msgs.DiagnosticStatus.ERROR, st);
-					//throw new RuntimeException("Failed to register with master "+pub);					
+					if(DEBUG) {
+						System.out.printf("Publisher listener Master Registration failure for %s for DeviceEntry %s%n", pub, (ndd != null ? ndd : "DEVICE NULL"));
+					}				
 				}
 				@Override
 				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
 					if(DEBUG) {
-						System.out.printf("Successful Master Registration for %s%n", pub);
+						System.out.printf("Publisher listener Successful Master Registration for %s for DeviceEntry %s%n", pub, (ndd != null ? ndd : "DEVICE NULL"));
 					}
 					pubschannel.put(ndd.getName(), pub);
 					if(DEBUG)
@@ -1254,8 +1242,7 @@ public class MotionController extends AbstractNodeMain {
 					}
 					ArrayList<String> st = new ArrayList<String>();
 					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(),
-							diagnostic_msgs.DiagnosticStatus.ERROR, st);
+					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getName(), diagnostic_msgs.DiagnosticStatus.ERROR, st);
 				}
 				@Override
 				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
@@ -1267,7 +1254,7 @@ public class MotionController extends AbstractNodeMain {
 				@Override
 				public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
 					if(DEBUG) {
-						System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
+						System.out.printf("New subscriber for %s Header: %s DeviceEntry%s%n", pub, sub.toConnectionHeader().getFields(), (ndd != null ? ndd : "DEVICE NULL"));
 					}				
 				}
 				@Override
@@ -1861,21 +1848,26 @@ public class MotionController extends AbstractNodeMain {
 	 */
 	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes) {
 		if(robot.getManager().getDevices() == null) {
-			System.out.printf("%s.publishPeripheral can not get the basic device list based on configs.%n",this.getClass().getName());
-			return;
+			throw new RuntimeException(String.format("%s.publishPeripheral can not get the basic device list based on configs.%n",this.getClass().getName()));
+		}
+		if(DEBUG) {
+			AtomicInteger t = new AtomicInteger(0);
+			robot.getManager().getDevices().forEach(lun -> {
+				if(!lun.getName().endsWith("Wheel"))
+					t.getAndIncrement();
+			});
+			System.out.printf("%s.publishPeripheral processing %d LUN.%n",this.getClass().getName(),t.intValue());
 		}
 		robot.getManager().getDevices().forEach( lun -> {
 			if(!(lun.getName().endsWith("Wheel"))) {
 				int luni = lun.getLUN();
 				ConcurrentHashMap<String, Object> axis = robot.getAXIS()[luni];
 				if(axis == null) {
-					System.out.printf("%s.publishPeripheral can not get the axis for LUN %d based on configs.%n",this.getClass().getName(),luni);
-					return;
+					throw new RuntimeException(String.format("%s.publishPeripheral can not get the axis for LUN %d based on configs.%n",this.getClass().getName(),luni));
 				}
 				String axisType = (String) axis.get("AxisType");
 				if(axisType == null) {
-					System.out.printf("%s.publishPeripheral NO axis type attribute device %s%n", this.getClass().getName(), lun);
-					return; // continue with next iteration
+					throw new RuntimeException(String.format("%s.publishPeripheral NO axis type attribute device %s%n", this.getClass().getName(), lun));
 				}
 				if(DEBUG) {
 					System.out.printf("%s.publishPeripheral axis type %s attribute device %s%n", this.getClass().getName(), axisType, lun);
@@ -1898,15 +1890,13 @@ public class MotionController extends AbstractNodeMain {
 							}
 						}
 					} else {
-							System.out.printf("%s.publishPeripheral Axis X or Y missing from config%n",this.getClass().getName());
-							return;
+							throw new RuntimeException(String.format("%s.publishPeripheral Axis X or Y missing from config%n",this.getClass().getName()));
 					}
 					break;
 				case "Trigger":
 					String ax = (String) axis.get("Axis");
 					if(ax == null) {
-						System.out.printf("%s.publishPeripheral Axis missing from config%n",this.getClass().getName());
-						return;
+						throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
 					}
 					float a = axes[Integer.parseInt(ax)] * 1000;
 					if(a != -1000) {
@@ -1923,8 +1913,7 @@ public class MotionController extends AbstractNodeMain {
 				case "POV":
 					ax = (String) axis.get("Axis");
 					if(ax == null) {
-						System.out.printf("%s.publishPeripheral Axis missing from config%n",this.getClass().getName());
-						return;
+						throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
 					}
 					a = axes[Integer.parseInt(ax)] * 1000;
 					String saxUp = (String) axis.get(("AxisUp"));
@@ -1933,8 +1922,7 @@ public class MotionController extends AbstractNodeMain {
 					} else {
 						String saxDown = (String) axis.get(("AxisDown"));
 						if(saxDown == null) {
-							System.out.printf("%s.publishPeripheral AxisDown missing from config%n",this.getClass().getName());
-							return;
+							throw new RuntimeException(String.format("%s.publishPeripheral AxisDown missing from config%n",this.getClass().getName()));
 						}
 						float axUp = Float.parseFloat(saxUp) * 1000;
 						float axDown = Float.parseFloat(saxDown) * 1000;
@@ -1959,7 +1947,7 @@ public class MotionController extends AbstractNodeMain {
 	}
 
 	/**
-	 * Send the motor speed values down the wheel channels. If our <b>SOFTSTOP</b> field is true
+	 * Send the motor speed values down the wheel channels for 2 wheel drive systems. If our <b>SOFTSTOP</b> field is true
 	 * the issue a soft stop message immediately after the propulsion for dead-man safety.
 	 * @param connectedNode The connectedNode
 	 * @param pubschannel the channel hash map from which the wheel channels are extracted via configuration params. e.g. "LeftWheel", "RightWheel"
@@ -1968,28 +1956,20 @@ public class MotionController extends AbstractNodeMain {
 	 * @param leftSpeed the integral speed value -1000 to 1000
 	 * @param rightSpeed the right wheel speed value -1000 to 1000
 	 */
-	private void publishPropulsion(ConnectedNode connectedNode,
-			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) throws IOException {
+	private void publishPropulsion(ConnectedNode connectedNode,Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) throws IOException {
 		if(leftSpeed == lastSpeedL && rightSpeed == lastSpeedR && (lastCmdTime+SHUTDOWN_NS) > System.nanoTime())
 			return;
 		lastCmdTime = System.nanoTime();
 		lastSpeedL = leftSpeed;
 		lastSpeedR = rightSpeed;
-		ArrayList<Integer> speedVals = new ArrayList<Integer>();
+		int[] speedVals = new int[] {leftSpeed, rightSpeed};
 		if(DEBUG)
 			System.out.printf("%s Publish propulsion sending LeftWheel: %d RightWheel: %d Thread:%s %s%n", this.getClass().getName(), leftSpeed, rightSpeed, Thread.currentThread(), Date.from(Instant.now()));
-		speedVals.add(leftSpeed);
-		speedVals.add(rightSpeed);
-		int slot = robot.getDiffDrive().getSlot();
-		String sslot = "slot"+slot;
-		SlotHandler slotHandler = slotToHandler.get(sslot);
-		int[] valch = new int[] {leftSpeed, rightSpeed};
-		slotHandler.setSpeed(valch);
+		robot.getManager().setDiffDriveSpeed(speedVals);
 		//pubschannel.get("slot"+robot.getSlotByName("LeftWheel")).publish(setupPub(connectedNode, speedVals));
 		try {
 			Thread.sleep(1);
-		} catch (InterruptedException e) {}		
-		speedVals.clear();
+		} catch (InterruptedException e) {}
 		if(SOFTSTOP) {
 			softStop(connectedNode, twistpub, twistmsg);
 		}
@@ -2007,8 +1987,7 @@ public class MotionController extends AbstractNodeMain {
 		if(DEBUG)
 			System.out.printf("%s.publishAxis() channel %s sending values %s%n" , this.getClass().getName(), channel, Arrays.toString(vals));
 		if(pubschannel.get(channel) == null) {
-			System.out.printf("%s.publishAxis() Cannot find channel %s in publisher channel map, may not have been configured.%n", this.getClass().getName(), channel);
-			return;
+			throw new RuntimeException(String.format("%s.publishAxis() Cannot find channel %s in publisher channel map, may not have been configured.%n", this.getClass().getName(), channel));
 		}
 		pubschannel.get(channel).publish(setupPub(connectedNode, axisVals));
 		try {
@@ -2439,74 +2418,7 @@ public class MotionController extends AbstractNodeMain {
 				}
 		});
 	}
-	/**
-	 * This class defines the internal slot handler to control a drive via a single slot designation
-	 * Whereas we had subscribers for each named LUN device when another node processed movement commands
-	 * we collapsed the pipeline and made this internal class handle that traffic in one combined slot designation
-	 */
-	final class SlotHandler {
-		MarlinspikeControlInterface control = null;
-		String deviceName;
-		public SlotHandler(String deviceName) throws NoSuchElementException {
-			this.deviceName = deviceName;
-			control = robot.getManager().getMarlinspikeControl(deviceName);
-			if(DEBUG)
-				System.out.printf("%s got Control %s from MarlinspikeManager%n", this.getClass().getName(),control);
-		}
-		public void setSpeed(int[] valch) throws IOException{
-			if(DEBUG)
-				System.out.printf("%s DeviceName=%s args:%s Thread:%s%n", this.getClass().getName(), deviceName, Arrays.toString(valch), Thread.currentThread().getName());
-			// keep Marlinspike from getting bombed with zeroes
-			boolean affectorSpeed = false;
-			for(int val: valch) {
-				if(val != 0) {
-					affectorSpeed = true;
-					break;
-				}
-			}
-			robot.getOperating().put(deviceName, affectorSpeed);
-			if(DEBUG)
-				System.out.printf("%s affector:%b DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), affectorSpeed, 
-						deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
-			switch(valch.length) {
-			case 1:
-				control.setDeviceLevels(deviceName, valch[0]);
-				break;
-			case 2:
-				control.setDeviceLevels(deviceName, valch[0],valch[1]);
-				break;
-			case 3:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2]);
-				break;
-			case 4:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3]);
-				break;
-			case 5:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4]);
-				break;
-			case 6:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5]);
-				break;
-			case 7:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6]);
-				break;
-			case 8:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7]);
-				break;
-			case 9:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8]);
-				break;
-			case 10:
-				control.setDeviceLevels(deviceName, valch[0],valch[1],valch[2],valch[3],valch[4],valch[5],valch[6],valch[7],valch[8],valch[9]);
-				break;
-			default:
-				System.out.println("Bad param length to control:"+valch.length);
-				return;	
-			}
-			if(DEBUG)
-				System.out.printf("NewMessage, thread %s received Affector directives DeviceName:%s%n",Thread.currentThread().getName(),deviceName);
-		}
-	}
+
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 
 	double yy = quat.y() * quat.y(); // 2 Uses below

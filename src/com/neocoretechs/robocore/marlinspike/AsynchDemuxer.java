@@ -223,7 +223,7 @@ public class AsynchDemuxer implements Runnable {
 	public void addWrite(String req) {
 		requestQueue.addLast(req);
 		if(DEBUG)
-			System.out.println("Adding request to demuxer:"+this+" "+req+" len:"+requestQueue.length()+" thread:"+Thread.currentThread()+" "+Date.from(Instant.now()));
+			System.out.println("Adding request to demuxer:"+this+" "+req+" pending queue length:"+requestQueue.length()+" thread:"+Thread.currentThread()+" "+Date.from(Instant.now()));
 	}
 	/**
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.

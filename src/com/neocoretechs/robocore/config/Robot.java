@@ -67,7 +67,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  *
  */
 public class Robot implements RobotInterface, Serializable {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final long serialVersionUID = 1L;
 	private int powerScale;
 	private String robotName = "UNDEFINED";
@@ -123,6 +123,8 @@ public class Robot implements RobotInterface, Serializable {
 
 	public void configureMarlinspike() throws IOException {
 		marlinspikeManager = new MarlinspikeManager(this);
+		if(DEBUG)
+			System.out.printf("%s.configureMarlinspike marlinSpikeManager=%s asynchDemuxer=%s%n", this.getClass().getName(), marlinspikeManager, marlinspikeManager.getDemuxer());
 		marlinspikeManager.createControllers(true);
 		isActive = new boolean[marlinspikeManager.getDevices().size()];
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,

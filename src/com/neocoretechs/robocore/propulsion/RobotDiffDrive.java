@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.propulsion;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import com.neocoretechs.robocore.config.TypedWrapper;
@@ -200,7 +201,7 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 
 	public String toString() {
-		return String.format("%s\r\n%s",leftWheel == null ? "NULL" : leftWheel.toString(), rightWheel == null ? "NULL" : rightWheel.toString());
+		return String.format("%s\r\n%s",leftWheel == null ? "Left Wheel NULL" : Arrays.toString(leftWheel), rightWheel == null ? "Right Wheel NULL" : Arrays.toString(rightWheel));
 	}
 	
 	@Override

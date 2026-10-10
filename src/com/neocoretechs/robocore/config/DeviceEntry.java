@@ -17,7 +17,7 @@ import java.util.Objects;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022,2026
  *
  */
-public class DeviceEntry extends SlotEntry implements Serializable{
+public class DeviceEntry extends DeviceDetail implements Serializable{
 	private static final long serialVersionUID = 1L;
 	private int LUN; // integer LUN position, points to LUN array in Robot, such as 1
 
@@ -55,7 +55,7 @@ public class DeviceEntry extends SlotEntry implements Serializable{
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
-		SlotEntry other = (SlotEntry) obj;
+		DeviceEntry other = (DeviceEntry) obj;
 		return Objects.equals(getName(), other.getName()) && Objects.equals(getNodeName(), other.getNodeName());
 	}
 	

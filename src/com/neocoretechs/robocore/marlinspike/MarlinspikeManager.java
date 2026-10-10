@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -18,9 +20,12 @@ import java.util.stream.Stream;
 import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.SlotEntry;
+import com.neocoretechs.robocore.config.DeviceDetail;
 import com.neocoretechs.robocore.config.TypedWrapper;
+
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
+
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
@@ -36,13 +41,14 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMo
  */
 public class MarlinspikeManager implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	RobotInterface robot;
 	String hostName;
 	TypedWrapper[] lun;
 	TypedWrapper[] wheel;
 	TypedWrapper[] pid;
 	transient AsynchDemuxer asynchDemuxer;
+	
 	/**
 	 * deviceToType  [Name of device, i.e. "LeftWheel", TypeSlotChannelEnable]
 	 */
@@ -58,22 +64,28 @@ public class MarlinspikeManager implements Serializable {
 	/**
 	 * By slot, LUN and TypeSlotChannelEnable
 	 */
-	private ConcurrentHashMap<SlotEntry, ArrayList<TypeSlotChannelEnable>> slotToType = new ConcurrentHashMap<SlotEntry, ArrayList<TypeSlotChannelEnable>>();
+	private ConcurrentHashMap<DeviceDetail, ArrayList<TypeSlotChannelEnable>> slotToType = new ConcurrentHashMap<DeviceDetail, ArrayList<TypeSlotChannelEnable>>();
 	/**
 	 * slots
 	 */
-	private ArrayList<SlotEntry> slots = new ArrayList<SlotEntry>();
+	private ArrayList<DeviceDetail> slots = new ArrayList<DeviceDetail>();
+	
+	// Map of slot to method for internal controls
+	private HashMap<Integer, SlotHandler> slotToHandler = new HashMap<Integer, SlotHandler>();
+
 	/**
 	 * Each individual robot uses this class to manage its collection of attributes initially parsed from config file, including
 	 * LUN, WHEEL, PID. Further configuration is performed to deliver needed services.
 	 * @param robot The RobotInterface from which parsed config directives are acquired.
+	 * @throws IOException 
 	 */
-	public MarlinspikeManager(RobotInterface robot) {
+	public MarlinspikeManager(RobotInterface robot) throws IOException {
 		this.robot = robot;
 		this.lun = robot.getLUN();
 		this.wheel = robot.getWHEEL();
 		this.pid = robot.getPID();
 		this.hostName = robot.getHostName();
+		configureDemuxer();
 	}
 	
 	public AsynchDemuxer getDemuxer() {
@@ -81,23 +93,30 @@ public class MarlinspikeManager implements Serializable {
 	}
 	
 	/**
-	 * Create the controllers from the lun properties. Aggregate them by port.<p/>
-	 * Each unique NODENAME and CONTROLLER for each LUN should have its own demuxer.<p/>
-	 * So each unique serial port attached to microcontroller, for example, needs it own message handing demuxer.<p/>
+	 * Create the controllers from the lun properties. Aggregate them by port.<p>
+	 * Each unique NODENAME and CONTROLLER for each LUN should have its own demuxer.<p>
+	 * So each unique serial port attached to microcontroller, for example, needs it own message handing demuxer.<p>
 	 * @param override true to ignore node-based limitations on config params. All params loaded regardless of node name for testing, for example.
 	 * @throws IOException
 	 */
 	public void createControllers(boolean override) throws IOException {
+		if(DEBUG)
+			System.out.printf("%s.createControllers(%b) LUN length=%d%n",this.getClass().getName(), override, lun.length);
 		for(int i = 0; i < lun.length; i++) {
-			if(override || hostName.equals(lun[i].get("NodeName"))) {
+			String nodeName = (String) lun[i].get("NodeName");
+			if(nodeName == null)
+				throw new IOException("Must specify NodeName parameter in configuration file for host "+hostName);
+			String name = (String)lun[i].get("Name");
+			if(name == null)
+				throw new IOException("Must specify Name parameter in configuration file for host "+hostName);
+			if(DEBUG)
+				System.out.printf("%s.createControllers(%b) len=%s LUN[%d] HostName=%s NodeName=%s name=%s%n",this.getClass().getName(), override, lun.length, i, hostName, nodeName, name);
+			if(override || hostName.equals(nodeName)) {
 				// general min and max values
 				Optional<Object> ominValue = Optional.ofNullable(lun[i].get("Min"));
 				Optional<Object> omaxValue = Optional.ofNullable(lun[i].get("Max"));
-				String name = (String)lun[i].get("Name");
-				if(name == null)
-					throw new IOException("Must specify Name parameter in configuration file for host "+hostName);
 				String controllerInst = (String)lun[i].get("Controller");
-				DeviceEntry deviceEntry = new DeviceEntry(name, (String) lun[i].get("NodeName"), i, controllerInst);
+				DeviceEntry deviceEntry = new DeviceEntry(name, nodeName, i, controllerInst);
 				devices.add(deviceEntry);
 				// map within a map, nameToTypeMap, 
 				// has deviceName, demuxer, indexed by name of device so "LeftWheel" can retrieve 
@@ -128,7 +147,9 @@ public class MarlinspikeManager implements Serializable {
 						sb.append(et.val()+" ");
 					throw new IOException("Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controllerInst+" Type:"+type+" must be one of "+sb.toString());
 				}
-				if(!type.endsWith("Pin")) { // such as InputPin, OutputPin. i.e. a more sophisticated control with multiple constructor args
+				// If the type is not ending in "Pin", its expected to have an associated slot. A river has a slot that allows it to be referenced
+				// in configs. A slot can have multiple channels and thus entries in the properties
+				if(!type.endsWith("Pin")) { // Not a type of 'Pin', such as InputPin, OutputPin. i.e. a more sophisticated control with multiple constructor args
 					String slot = (String)lun[i].get("Slot");
 					if(slot == null)
 						throw new IOException("Must specify Slot paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controllerInst+" Type:"+type);
@@ -146,7 +167,8 @@ public class MarlinspikeManager implements Serializable {
 								Integer.parseInt(channel), 
 								ienable);
 					}
-					SlotEntry sslot = new SlotEntry("slot"+slot,(String) lun[i].get("NodeName"), controllerInst);
+					// creates SlotHandler
+					SlotEntry sslot = new SlotEntry(robot, name, nodeName, i, controllerInst, Integer.parseInt(slot));
 					if(!slots.contains(sslot))
 						slots.add(sslot);
 					ArrayList<TypeSlotChannelEnable> tsceList = slotToType.get(sslot);
@@ -155,6 +177,20 @@ public class MarlinspikeManager implements Serializable {
 						slotToType.put(sslot,tsceList);
 					}
 					tsceList.add(tsce);
+					// slots
+					MarlinspikeControlInterface controller;
+					if(sslot.getControlClass() == null) {
+						controller = new MarlinspikeControl(asynchDemuxer);
+					} else {
+						// extract max power value to instantiate MarlinspikeControlInterface AbstractMotorControl
+						try {
+							Class<?> controlClass = Class.forName(sslot.getControlClass());
+							controller = (MarlinspikeControlInterface) controlClass.getConstructor(Integer.class).newInstance(tsce.maxValue);
+						} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e1) {
+							throw new IOException(e1);
+						}
+						sslot.setMarlinspikeControl(controller);
+					}
 				} else { // type of Pin, so get actual pin number and construct TypeSlotChannelEnable accordingly
 					String pin = (String)lun[i].get("Pin");
 					if(pin == null)
@@ -172,24 +208,33 @@ public class MarlinspikeManager implements Serializable {
 				deviceToType.put(deviceEntry, tsce);
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				configureMarlinspike(deviceEntry, lun[i], tsce);
+				// DeviceEntries
+				MarlinspikeControlInterface controller;
+				if(deviceEntry.getControlClass() == null) {
+					controller = new MarlinspikeControl(asynchDemuxer);
+				} else {
+					try {
+						Class<?> controlClass = Class.forName(deviceEntry.getControlClass());
+						controller = (MarlinspikeControlInterface) controlClass.getConstructor(Integer.class).newInstance(tsce.maxValue);
+					} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e1) {
+						throw new RuntimeException(e1);
+					}
+				}
+				deviceEntry.setMarlinspikeControl(controller);
+				// tsce gen M10
+				List<String> M10Gen = tsce.genM10();
+				if(M10Gen.size() > 0) {
+					addInit(M10Gen);
+					if(DEBUG) 
+						System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);
+					if(robot.getPowerScale() > 0)
+						addInit(M6Gen(tsce.getSlot()));
+				}
+				init();
 			}
 		}
 		if(deviceToType.isEmpty())
 			throw new IOException("No configuration information found for any controller for this node:"+hostName);
-	}
-	
-	/**
-	 * Active the asynchDemuxer for the given Marlinspike if it has not been previously
-	 * activated. We must ensure that 1 demuxer/device is activated for a particular physical port
-	 * and that subsequent attempts at activation are met with an assignment 
-	 * to an existing instance of asynchDemuxer.
-	 * @param deviceEntry or SlotEntry The mapping of configs
-	 * @throws IOException If we attempt to re-use a port, we box up the runtime exception with the IOException
-	 */
-	private void activateMarlinspike(SlotEntry ndd) throws IOException {
-		if(DEBUG)
-			System.out.printf("%s.activateMarlinspike preparing to initialize %s%n",this.getClass().getName(), ndd);
-		ndd.setMarlinspikeControl(new MarlinspikeControl(asynchDemuxer));
 	}
 	
 	/**
@@ -212,7 +257,7 @@ public class MarlinspikeManager implements Serializable {
 	}
 	/**
 	 * Internal configuration generator that sets up initial commands to Marlinspike controller
-	 * based on configuration, to prepare to send them to the attached controller.<p/>
+	 * based on configuration, to prepare to send them to the attached controller.<p>
 	 * Called as final phase of initialization pipeline.
 	 * @param ndd DeviceEntry
 	 * @param lun Logical unit from configuration file
@@ -220,6 +265,8 @@ public class MarlinspikeManager implements Serializable {
 	 * @throws IOException If commands fail in send or confirmation
 	 */
 	private void configureMarlinspike(DeviceEntry ndd, TypedWrapper lun, TypeSlotChannelEnable tsce) throws IOException {
+		if(DEBUG)
+			System.out.printf("%s.configureMarlinspike for DeviceEntry %s TypedWrapper %s TypeSlotChannelEnable %s%n",this.getClass().getName(), ndd, lun, tsce);
 		Optional<Object> pin1 = Optional.ofNullable(lun.get("SignalPin1"));
 		Optional<Object> pin0 = Optional.ofNullable(lun.get("SignalPin0"));
 		Optional<Object> enc = Optional.ofNullable(lun.get("EncoderPin"));
@@ -275,83 +322,41 @@ public class MarlinspikeManager implements Serializable {
 	 * Configure the {@link AsynchDemuxer} to handle traffic from the Marlinspike SBC or Userspace process
 	 * simulating an SBC and calling GPIO activation libs etc, depending on whether the DataPort config is MarlinspikeDataPort
 	 * or an actual tty port.<p>
+	 * Calls init() before returning.<p>
+	 * Calls connect() in asynchDemuxer, then clears Marlinspike settings on the microcontroller<p>
 	 * Call this from the node with attached Marlinspike, it will use the named Robot configured in the ParameterTree.<p>
-	 * It will assign the AsynchDemuxer to a {@link MarlinspikeControl} for each {@link DeviceEntry}
+	 * It will connect the AsynchDemuxer.
+	 *  to a {@link MarlinspikeControl} for each {@link DeviceEntry}
 	 * if the device control class is null, otherwise it will use the control class to instantiate an {@link AbstractMotorControl}<p>
 	 * Most of what happens here is to compensate for the non-serializable members of the Robot configuration and
 	 * to set up the Marlinspike.
 	 * @throws IOException 
 	 */
-	public void configureDemuxer() throws IOException {
-		asynchDemuxer = new AsynchDemuxer(this);
+	private void configureDemuxer() throws IOException {
+		if(DEBUG)
+			System.out.printf("%s.configureDemuxer  %s%n",this.getClass().getName(), this.asynchDemuxer);
+		this.asynchDemuxer = new AsynchDemuxer(this);
 		try {
 			if(robot.getDataPort().equals("MarlinspikeDataPort"))
-				asynchDemuxer.connect(new MarlinspikeDataPort());
+				this.asynchDemuxer.connect(new MarlinspikeDataPort());
 			else
-				asynchDemuxer.connect(new ByteSerialDataPort(robot.getDataPort()));
+				this.asynchDemuxer.connect(new ByteSerialDataPort(robot.getDataPort()));
 		} catch(IOException ioe) {
 			throw new RuntimeException(ioe);
 		}
 		// send the codes to reset Marlinspike pins and controllers
-		MarlinspikeControl.clearMarlinspikeSettings(asynchDemuxer);
-		
-		devices.forEach(e->{
-			MarlinspikeControlInterface controller;
-			if(e.getControlClass() == null) {
-				controller = new MarlinspikeControl(asynchDemuxer);
-			} else {
-				// extract max power value to instantiate MarlinspikeControlInterface AbstractMotorControl
-				TypeSlotChannelEnable tsce = deviceToType.get(e);
-				try {
-					Class<?> controlClass = Class.forName(e.getControlClass());
-					controller = (MarlinspikeControlInterface) controlClass.getConstructor(Integer.class).newInstance(tsce.maxValue);
-				} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e1) {
-					throw new RuntimeException(e1);
-				}
-			}
-			try {
-				e.setMarlinspikeControl(controller);
-				activateMarlinspike(e);
-			} catch (IOException e1) {
-				throw new RuntimeException(e1);
-			}
-		});
-		slots.forEach(e->{
-			MarlinspikeControlInterface controller;
-			if(e.getControlClass() == null) {
-				controller = new MarlinspikeControl(asynchDemuxer);
-			} else {
-				// extract max power value to instantiate MarlinspikeControlInterface AbstractMotorControl
-				TypeSlotChannelEnable tsce = slotToType.get(e).getFirst();
-				try {
-					Class<?> controlClass = Class.forName(e.getControlClass());
-					controller = (MarlinspikeControlInterface) controlClass.getConstructor(Integer.class).newInstance(tsce.maxValue);
-				} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e1) {
-					throw new RuntimeException(e1);
-				}
-			}
-			try {
-				e.setMarlinspikeControl(controller);
-				activateMarlinspike(e);
-			} catch (IOException e1) {
-				throw new RuntimeException(e1);
-			}
-		});
-		for(TypeSlotChannelEnable tsce : deviceToType.values()) {
-			List<String> M10Gen = null;
-			M10Gen = tsce.genM10();
-			if(M10Gen.size() > 0) {
-				addInit(M10Gen);
-				if(DEBUG) 
-					System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);
-				if(robot.getPowerScale() > 0)
-					addInit(M6Gen(tsce.getSlot()));
-			}
-		}
-		init();
+		MarlinspikeControl.clearMarlinspikeSettings(this.asynchDemuxer);
 	}
 	
-
+	/**
+	 * Set the speed values for the differential drive, regardless of number of wheels
+	 * @param speedVals The array of speed values ordered left/right/left/right for the number of wheel pairs
+	 * @throws IOException 
+	 */
+	public void setDiffDriveSpeed(int[] speedVals) throws IOException {
+		SlotHandler slotHandler = slotToHandler.get(robot.getDiffDrive().getSlot());
+		slotHandler.setSpeed(speedVals);
+	}
 	/**
 	 * M6 - Power scale factor by slot
 	 * @param slot the slot
@@ -390,7 +395,7 @@ public class MarlinspikeManager implements Serializable {
 			}
 			if(devIndex == -1)
 				throw new NoSuchElementException(name+" not found in DeviceEntry or SlotEntry list");
-			SlotEntry sdd = slots.get(devIndex);
+			DeviceDetail sdd = slots.get(devIndex);
 			if(DEBUG)
 				System.out.println("Slot "+name+" getMarlinSpikeControl:"+sdd);
 			return sdd.getMarlinspikeControl();
@@ -425,9 +430,9 @@ public class MarlinspikeManager implements Serializable {
 				return ret.getValue();
 		}
 		// type a search through slots
-		Iterator<Entry<SlotEntry, ArrayList<TypeSlotChannelEnable>>> its = slotToType.entrySet().iterator();
+		Iterator<Entry<DeviceDetail, ArrayList<TypeSlotChannelEnable>>> its = slotToType.entrySet().iterator();
 		while(its.hasNext()) {
-			Entry<SlotEntry, ArrayList<TypeSlotChannelEnable>> ret = its.next();
+			Entry<DeviceDetail, ArrayList<TypeSlotChannelEnable>> ret = its.next();
 			if(ret != null && ret.getKey().getName().equals(name))
 				return ret.getValue().getFirst();
 		}
@@ -463,7 +468,7 @@ public class MarlinspikeManager implements Serializable {
 	 * Get the table of slots to types
 	 * @return the table of slots to types
 	 */
-	public ConcurrentHashMap<SlotEntry,ArrayList<TypeSlotChannelEnable>> getSlots() {
+	public ConcurrentHashMap<DeviceDetail,ArrayList<TypeSlotChannelEnable>> getSlots() {
 		return slotToType;
 	}
 	/**
@@ -472,7 +477,7 @@ public class MarlinspikeManager implements Serializable {
 	 * @return the ArrayList of TypeSlotChannelEnables for the slot according to properties
 	 */
 	public ArrayList<TypeSlotChannelEnable> getSlot(String slot) {
-		for(Map.Entry<SlotEntry,ArrayList<TypeSlotChannelEnable>> kv : slotToType.entrySet()) {
+		for(Map.Entry<DeviceDetail,ArrayList<TypeSlotChannelEnable>> kv : slotToType.entrySet()) {
 			if(kv.getKey().getName().equals(slot))
 				return kv.getValue();
 		}

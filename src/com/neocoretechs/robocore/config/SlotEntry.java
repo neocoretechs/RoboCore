@@ -1,14 +1,14 @@
 package com.neocoretechs.robocore.config;
 
+import com.neocoretechs.robocore.marlinspike.SlotHandler;
 import java.io.Serializable;
 import java.util.Objects;
 
-import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
-
 /**
- * List of unique Slots from RoboCore.properties loaded from parameter tree. 
+ * List of unique devices from RoboCore.properties loaded from parameter tree. 
  * Assembled into collection in {@link MarlinspikeManager}<p>
- * Contains the Slot name entry in properties configuration file, such as "0", the NodeName which is 
+ * Contains the LUN, the Logical Unit Number an integer ordinal, and an integer value for Slot.<p>
+ * The superclass contains the name entry in properties configuration file, such as "LeftWheel", the NodeName which is 
  * the node attached to the host computer name of the Ros node, such as "CONTROL1", the Controller which is
  * the physical device port the microcontroller for this entry is attached to, such as /dev/ttyACM0 using 
  * {@link com.neocoretechs.robocore.serialreader.ByteSerialDataPort}, or a class that
@@ -18,83 +18,45 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022,2026
  *
  */
-public class SlotEntry implements Serializable{
+public class SlotEntry extends DeviceEntry implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private String Name; // name entry in properties configuration file, such as "LeftWheel"
-	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
-	private transient MarlinspikeControlInterface controlHost;
-	private String controlClass;
-	
+	private int slot;
+	private SlotHandler slotHandler;
+
 	public SlotEntry() {}
 	/**
-	 * 
-	 * @param Name Slot name entry in properties configuration file, such as "0"
+	 * @param Name DeviceName entry in properties configuration file, such as "LeftWheel"
 	 * @param NodeName the node attached to, typically the SSID name of the Ros node, such as "ROSCOE1"
+	 * @param LUN integer LUN position, points to LUN array in Robot, such as 1
 	 * @param controller alternate controller implementing MarlinspikeControlInterface
+	 * @param slot the "Slot" property that corresponds to the Marlinspike slot in the M10 Z(slot) code
 	 */
-	public SlotEntry(String Name, String NodeName, String controller) {
-		this.Name = Name;
-		this.NodeName = NodeName;
-		this.controlClass = controller;
-	}
-	/**
-
-	/**
-	 * @return the name
-	 */
-	public String getName() {
-		return Name;
-	}
-	/**
-	 * @param name the name to set
-	 */
-	public void setName(String name) {
-		Name = name;
-	}
-	/**
-	 * @return the nodeName
-	 */
-	public String getNodeName() {
-		return NodeName;
-	}
-	
-	/**
-	 * @param nodeName the nodeName to set
-	 */
-	public void setNodeName(String nodeName) {
-		NodeName = nodeName;
+	public SlotEntry(RobotInterface robot, String deviceName, String NodeName, int LUN, String controller, int slot) {
+		super(deviceName, NodeName, LUN, controller);
+		this.slot = slot;
+		this.slotHandler = new SlotHandler(robot, deviceName, slot);
 	}
 
-	public void setMarlinspikeControl(MarlinspikeControlInterface controlHost) {
-		this.controlHost = controlHost;
-	}
-	
-	public MarlinspikeControlInterface getMarlinspikeControl() {
-		return controlHost;
-	}
-
-	public String getControlClass() {
-		return controlClass;
+	public SlotHandler getSlotHandler() {
+		return slotHandler;
 	}
 	
 	@Override
 	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		SlotEntry other = (SlotEntry) obj;
-		return Objects.equals(Name, other.Name) && Objects.equals(NodeName, other.NodeName);
+		boolean eq = super.equals(obj);
+		if(!eq)
+			return eq;
+		int other = ((SlotEntry)obj).slot;
+		return slot == other;
 	}
+	
 	@Override
 	public int hashCode() {
-		return Objects.hash(Name, NodeName);
+		return Objects.hash(getName(), getNodeName(), slot);
 	}
+	
 	@Override
 	public String toString() {
-		return String.format("%s %s Node=%s Control=%s%n", this.getClass().getName(), Name, NodeName, getControlClass());
+		return String.format("%s slot=%d%n", super.toString(), slot);
 	}
-
 }
