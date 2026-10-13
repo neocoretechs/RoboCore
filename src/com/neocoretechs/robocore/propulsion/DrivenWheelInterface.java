@@ -1,7 +1,6 @@
 package com.neocoretechs.robocore.propulsion;
 
 import com.neocoretechs.robocore.PID.AbstractPIDController;
-import com.neocoretechs.robocore.PID.SetpointInfoInterface;
 import com.neocoretechs.robocore.PID.SpeedSetpointInfo;
 import com.neocoretechs.robocore.PID.TickSetpointInfo;
 
@@ -24,6 +23,9 @@ import com.neocoretechs.robocore.PID.TickSetpointInfo;
 */
 public interface DrivenWheelInterface {
 	/* Define the robot parameters */
+	public String getName();
+	public int getSlot();
+	public int getChannel();
 	public void setprevX(float t);
 	public void setTickSetpointInfo(TickSetpointInfo t);
 	public TickSetpointInfo getTickSetpointInfo();

@@ -5,8 +5,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
 
-import com.neocoretechs.robocore.config.RobotInterface;
-
+import com.neocoretechs.robocore.config.Robot;
 /**
  * This class defines the internal slot handler to control a drive via a single slot designation
  * Whereas we had subscribers for each named LUN device when another node processed movement commands
@@ -18,14 +17,12 @@ public final class SlotHandler implements Serializable{
 	MarlinspikeControlInterface control = null;
 	String deviceName;
 	int slot;
-	private RobotInterface robot;
 	
 	public SlotHandler() {}
-	public SlotHandler(RobotInterface robot, String deviceName, int slot) throws NoSuchElementException {
-		this.robot = robot;
+	public SlotHandler(MarlinspikeControlInterface control, String deviceName, int slot) throws NoSuchElementException {
 		this.deviceName = deviceName;
 		this.slot = slot;
-		this.control = robot.getManager().getMarlinspikeControl(deviceName);
+		this.control = control;
 		if(DEBUG)
 			System.out.printf("%s got DeviceName:%s Slot:%d Control %s from MarlinspikeManager%n", this.getClass().getName(),deviceName, slot, control);
 	}
@@ -34,7 +31,7 @@ public final class SlotHandler implements Serializable{
 	 * @param valch
 	 * @throws IOException
 	 */
-	public void setSpeed(int[] valch) throws IOException{
+	public void setSpeed(Robot robot, int[] valch) throws IOException{
 		if(DEBUG)
 			System.out.printf("%s DeviceName=%s args:%s Thread:%s%n", this.getClass().getName(), deviceName, Arrays.toString(valch), Thread.currentThread().getName());
 		// keep Marlinspike from getting bombed with zeroes
@@ -47,8 +44,7 @@ public final class SlotHandler implements Serializable{
 		}
 		robot.getOperating().put(deviceName, affectorSpeed);
 		if(DEBUG)
-			System.out.printf("%s affector:%b DeviceName=%s speeds:%s operating:%b%n", this.getClass().getName(), affectorSpeed, 
-					deviceName, Arrays.toString(valch), robot.getOperating().get(deviceName));
+			System.out.printf("%s affector:%b DeviceName=%s speeds:%s %n", this.getClass().getName(), affectorSpeed, deviceName, Arrays.toString(valch));
 		switch(valch.length) {
 		case 1:
 			control.setDeviceLevels(deviceName, valch[0]);

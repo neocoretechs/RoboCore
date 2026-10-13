@@ -67,16 +67,6 @@ public interface RobotInterface {
 	public void configureMarlinspike() throws IOException;
 	public HashMap<String, Boolean> getOperating();
 	public RobotDiffDriveInterface getDiffDrive(); // embodies different differential drive characteristics
-	public PIDParameterInterface getMotionPIDController(); // PID control parameters for trave by the different diff drives
-	public PIDParameterInterface getLeftMotorPIDController(int chan); // motor PID control accounting for different drivers and propulsion motors
-	public PIDParameterInterface getRightMotorPIDController(int chan); // motor PID control accounting for different drivers and propulsion motors
-	public SetpointInfoInterface getLeftDistanceSetpointInfo(int chan); // The wheel diameters and baselines from the diff drive affecting travel
-	public SetpointInfoInterface getRightDistanceSetpointInfo(int chan); // The wheel diameters and baselines from the diff drive affecting travel
-	public SetpointInfoInterface getIMUSetpointInfo(); // IMU navigation and its interaction with the above different drive characteristics
-	public SetpointInfoInterface getLeftSpeedSetpointInfo(int chan); // Maximum speeds and indoor/outdoor characteristics
-	public SetpointInfoInterface getRightSpeedSetpointInfo(int chan); // Maximum speeds and indoor/outdoor characteristics
-	public SetpointInfoInterface getLeftTickSetpointInfo(int chan); // Ticks and odometry related to the differing diff drives
-	public SetpointInfoInterface getRightTickSetpointInfo(int chan); // Ticks and odometry related to the differing diff drives
 	public int getPowerScale();
 	public float getTemperatureThreshold();
 	public TypedWrapper[] getLUN();
@@ -84,7 +74,10 @@ public interface RobotInterface {
 	public TypedWrapper[] getPID();
 	public TypedWrapper[] getAXIS();
 	public TypedWrapper[] getBUTTON();
-	public int getLUN(String name);
+	public int[] getLUNs(String name);
 	public String getNameByLUN(int lun);
-	public String getSlotByName(String name);
+	public PIDParameterInterface getMotionPIDController();
+	public SetpointInfoInterface getIMUSetpointInfo();
+	public Object[] getSlots(String name);
+	
 }

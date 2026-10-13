@@ -22,10 +22,16 @@ public class RobotWheel implements DrivenWheelInterface, Serializable {
 	private TickSetpointInfo tickSetpointInfo;
 	private SpeedSetpointInfo speedSetpointInfo;
 	private MotorPIDController motorPIDController;
+	private int slot;
+	private int channel;
 	private float x;
 	
-	public RobotWheel(String name, float wheelDiameter, float wheelTrack, int minimumSpeed, int maximumSpeed, int ticksPerRevolution, float kp, float ki, float kd, float ko, int pidRate) {
+	public RobotWheel() {}
+	
+	public RobotWheel(String name, int slot, int channel, float wheelDiameter, float wheelTrack, int minimumSpeed, int maximumSpeed, int ticksPerRevolution, float kp, float ki, float kd, float ko, int pidRate) {
 		this.name = name;
+		this.slot = slot;
+		this.channel = channel;
 		speedSetpointInfo = new SpeedSetpointInfo(wheelTrack, minimumSpeed, maximumSpeed);
 		tickSetpointInfo = new TickSetpointInfo(wheelDiameter, ticksPerRevolution);
 		motorPIDController = new MotorPIDController(kp, ki, kd, ko, pidRate);
@@ -56,9 +62,14 @@ public class RobotWheel implements DrivenWheelInterface, Serializable {
 		return motorPIDController;
 	}
 	
+	@Override
+	public String getName() {
+		return name;
+	}
+	
 	public String toString() {
-		return String.format("%s Tick Setpoint: %s\r\nSpeed Setpoint: %s\r\nPID Control: %s\r\n",
-				name,
+		return String.format("%s slot %d channel %d Tick Setpoint: %sSpeed Setpoint: %s PID Control: %s%n",
+				name == null ? "UNUSED" : name, slot, channel,
 				tickSetpointInfo == null ? "NULL" : tickSetpointInfo.toString(),
 				speedSetpointInfo == null ? "NULL" : speedSetpointInfo.toString(),
 				motorPIDController == null ? "NULL" : motorPIDController.toString());
@@ -71,6 +82,16 @@ public class RobotWheel implements DrivenWheelInterface, Serializable {
 		float linearY;	         // total linear y distance traveled
 		float angularZ;		 // total angular distance traveled
 	}
+
+	 @Override
+	 public int getSlot() {
+		 return slot;
+	 }
+
+	 @Override
+	 public int getChannel() {
+		 return channel;
+	 }
 
 
 }

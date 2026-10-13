@@ -2,6 +2,7 @@ package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 
 /**
@@ -62,7 +63,9 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	public synchronized void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException {
 		if(DEBUG) 
 			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevels:"+Arrays.toString(deviceLevel)+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getName());
-		TypeSlotChannelEnable tsce = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
+		List<TypeSlotChannelEnable> tsceList = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
+		// even though we may define multiple tsce per device, we will send multiple values to control for one G5 or other command, so just take first channel entry
+		TypeSlotChannelEnable tsce = tsceList.get(0);
 		if(DEBUG) 
 			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevels:"+Arrays.toString(deviceLevel)+" slot:"+tsce.getSlot()+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getName());
 		//String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);

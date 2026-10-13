@@ -1,13 +1,26 @@
 package com.neocoretechs.robocore.propulsion;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+
+import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.TypedWrapper;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
+import com.neocoretechs.robocore.marlinspike.SlotHandler;
 
 /**
 * Configuration for generic robot differential drive.
+* Based on the Marlinspike specification, there can be up to 10 AbstractMotorControl "slots".<p>
+* Each "slot" can have up to 10 PWM pins (wheels) defined<p>
+* So if you are powering an Ogre from the famous microgame "GEV", you can have 5 track banks on each side of the tank with each bank containing 10 tracks<p>
+* This would translate to slots 0-9 each of which has channels 1-10 <p>
+* However on the pico you are limited to 8 "slices" for PWM designations each with two A and B channels. so you
+* would have to power 5 tracks on each side of the Ogre and switch them as they got knocked out by GEVs or
+* artillery.<p>
 * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
 */
 public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
@@ -17,21 +30,17 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	TypedWrapper[] WHEEL;
 	TypedWrapper[] AXIS;
 	TypedWrapper[] PID;
-	int leftWheelLun = -1;
-	int rightWheelLun = -1;
-	int leftChan = -1;
-	int rightChan = -1;
 	int controllerAxisX = -1; 
 	int controllerAxisY = -1;
-	int slot;
 	int channels = 0;
-	/* Define the robot parameters */
-	DrivenWheelInterface[] leftWheel = new DrivenWheelInterface[10]; // by channel
-	DrivenWheelInterface[] rightWheel = new DrivenWheelInterface[10]; // or a front wheel where left right is left wheel servo
+	// Define the robot parameters, 
+	// each of these will be by slot, each slot multiple channels, slot 0, channels 1 and 2 would be left, right front wheels
+	// or front and rear 2 wheels depending on stick axis x,y setup for power blending
+	private ArrayList<ArrayList<DrivenWheelInterface>> wheels = new ArrayList<ArrayList<DrivenWheelInterface>>(); 
 	//public static int MAXOUTPUT = 50; // indoor
 	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
 	// it is variable based on desired speed.
-	private TwistInfo twistinfo = new TwistInfo();
+	private ArrayList<SlotHandler> slotHandlers = new ArrayList<SlotHandler>();
 	
 	public RobotDiffDrive(TypedWrapper[] lUN, TypedWrapper[] wHEEL, TypedWrapper[] aXIS, TypedWrapper[] pID) {
 		this.LUN = lUN;
@@ -40,198 +49,205 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		this.PID = pID;
 		// extract the wheel definitions from the logical units in config
 		for(int i = 0; i < LUN.length; i++) {
-			if(LUN[i].get("Name").equals("LeftWheel")) {
+			String name = ((String)LUN[i].get("Name"));
+			if(name.endsWith("Wheel")) {
+				Object s = LUN[i].get("Slot");
+				if(s == null)
+					throw new RuntimeException("Must declare Slot in configuration for differential drive wheel.");
+				int slot = Integer.parseInt((String) s);
 				Object ochan = LUN[i].get("Channel");
 				if(ochan == null)
 					throw new RuntimeException("Configuration is absent left or right wheel channel LUN declaration");
-				leftChan = Integer.parseInt((String) ochan);
-				if(leftChan > channels) channels = leftChan;
-				leftWheelLun = i;
+				int channel = Integer.parseInt((String) ochan);
+				if(channel > channels) channels = channel;
+
+				RobotWheel robotWheel = setDrive(name, i, slot, channel);
+				int slotRow = -1;
+				outerr: for(int sl = 0; sl < wheels.size(); sl++) {
+					ArrayList<DrivenWheelInterface> rslot = wheels.get(sl);
+					for(int rsl = 0; rsl < rslot.size(); rsl++) {
+						if(rslot.get(rsl).getSlot() == slot) {
+							slotRow = rsl;
+							// make sure we dont have the channel already for this slot
+							for(int rsl2 = 0; rsl2 < rslot.size(); rsl2++) {
+								if(rslot.get(rsl2).getChannel() == channel)
+									throw new RuntimeException("Duplicate channel "+channel+" for slot "+slot+" for name "+name);
+							}
+							// got slot, didnt find channel already, add it to row
+							rslot.add(robotWheel);
+							break outerr;
+						}
+					}
+				}
+				// did we find a row that had the matching slot?
+				if(slotRow == -1) {
+					ArrayList<DrivenWheelInterface> t = new ArrayList<DrivenWheelInterface>();
+					t.add(robotWheel);
+					wheels.add(t);
+				}
+			} 
+			Optional<Integer> controllerAxisXO = Optional.ofNullable(AXIS[i].get("AxisX")).filter(String.class::isInstance)
+					.map(e -> Integer.parseInt((String) e));
+			Optional<Integer> controllerAxisYO = Optional.ofNullable(AXIS[i].get("AxisY")).filter(String.class::isInstance)
+					.map(e -> Integer.parseInt((String) e));
+			if(controllerAxisXO.isPresent()) {
+				controllerAxisX = controllerAxisXO.get();
 			} else {
-				if(LUN[i].get("Name").equals("RightWheel")) {
-					Object ochan = LUN[i].get("Channel");
-					if(ochan == null)
-						throw new RuntimeException("Configuration is absent left or right wheel channel LUN declaration");
-					rightChan = Integer.parseInt((String) ochan);
-					if(rightChan > channels) channels = rightChan;
-					rightWheelLun = i;
+				System.out.println("<<WARNING USING X AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
+				controllerAxisX = 0;
+			}
+			if(controllerAxisYO.isPresent()) {
+				controllerAxisY = controllerAxisYO.get();
+			} else {
+				System.out.println("<<WARNING USING Y AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
+				controllerAxisY = 2;
+			}
+		}
+	}
+
+	private RobotWheel setDrive(String name, int wheelLun, int slot, int chan) {
+		Optional<Float> wheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
+		Optional<Float> wheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
+		Optional<Integer> ticksPerRevolution = Optional.empty();
+		Optional<Float> motorKp = Optional.empty();
+		Optional<Float> motorKd = Optional.empty();
+		Optional<Float> motorKi = Optional.empty();
+		Optional<Float> motorKo = Optional.empty();
+		Optional<Integer> motorPIDRate = Optional.empty();
+		Optional<Integer> minSpeed = Optional.empty();
+		Optional<Integer> maxSpeed = Optional.empty();
+
+		minSpeed = Optional.ofNullable(LUN[wheelLun].get("MinValue")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+		maxSpeed = Optional.ofNullable(LUN[wheelLun].get("MaxValue")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+
+		wheelTrack = Optional.ofNullable(WHEEL[wheelLun].get("WheelTrackMM")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		wheelDiameter = Optional.ofNullable(WHEEL[wheelLun].get("WheelDiameterMM")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		ticksPerRevolution = Optional.ofNullable(WHEEL[wheelLun].get("TicksPerRevolution")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+
+		motorKp = Optional.ofNullable(PID[wheelLun].get("MotorKp")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		motorKd = Optional.ofNullable(PID[wheelLun].get("MotorKd")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		motorKi = Optional.ofNullable(PID[wheelLun].get("MotorKi")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		motorKo = Optional.ofNullable(PID[wheelLun].get("MotorKo")).filter(String.class::isInstance)
+				.map(e -> Float.parseFloat((String) e));
+		motorPIDRate = Optional.ofNullable(PID[wheelLun].get("MotorPIDRate")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+
+		try {
+
+			return new RobotWheel(name, slot, chan, 
+					wheelDiameter.get(), 
+					wheelTrack.get(), 
+					minSpeed.get(), 
+					maxSpeed.get(), 
+					ticksPerRevolution.get(), 
+					motorKp.get(), motorKd.get(), 
+					motorKi.get(), motorKo.get(),
+					motorPIDRate.get());
+		} catch(NoSuchElementException nse) {
+			throw new RuntimeException("Cannot configure robot wheel "+name+" LUN "+wheelLun+" slot:"+slot+" channel:"+chan);
+		}
+
+	}
+
+	@Override
+	/**
+	 * Return the wheel channels for a given slot
+	 * @param slot target slot
+	 * @return ArrayList of channels of DriveWheelInterface for this slot or null if slot wasnt found
+	 */
+	public ArrayList<DrivenWheelInterface> getWheels(int slot) {
+		ArrayList<DrivenWheelInterface> rslot = null;
+		outerr: for(int sl = 0; sl < wheels.size(); sl++) {
+			rslot = wheels.get(sl);
+			for(int rsl = 0; rsl < rslot.size(); rsl++) {
+				if(rslot.get(rsl).getSlot() == slot) {
+					break outerr;
 				}
 			}
-			if(leftWheelLun != -1 && rightWheelLun != -1) {
-				setDrive(leftWheelLun, rightWheelLun, leftChan, rightChan);
-				leftWheelLun = rightWheelLun = -1;
+		}
+		// did we find a row that had the matching slot?
+		return rslot;
+	}
+
+	@Override
+	/**
+	 * Get the wheel for the given slot row and channel
+	 * @param slot The array of channels for this slot from getWheels
+	 * @param chan the target channel
+	 * @return RobotWheel or null if slots is null or channel cant be found in row for slot.
+	 */
+	public DrivenWheelInterface getWheel(ArrayList<DrivenWheelInterface> slot, int chan) {
+		if(slot == null)
+			return null;
+		if(chan <= 0 || chan > 10)
+			throw new RuntimeException("Channel must be from 1-10");
+		for(int rsl2 = 0; rsl2 < slot.size(); rsl2++) {
+			if(slot.get(rsl2).getChannel() == chan)
+				return slot.get(rsl2);
+		}
+		return null;
+	}
+	
+	@Override
+	public ArrayList<ArrayList<DrivenWheelInterface>> getWheels() {
+		return wheels;
+	}
+	
+	@Override
+	public SlotHandler getSlotHandler(int slot) {
+		return slotHandlers.get(slot);
+	}
+	
+	public void createControllers(Robot robot) throws IOException {
+		for(int i = 0; i < wheels.size(); i++) {
+			ArrayList<DrivenWheelInterface> slotWheels = wheels.get(i);
+			DrivenWheelInterface dwi = slotWheels.get(0);
+			MarlinspikeControlInterface controller = robot.getManager().createController(Optional.empty(), (int)dwi.getSpeedsetPointInfo().getMaximum());
+			slotHandlers.add(new SlotHandler(controller,dwi.getName(),i));
+		}
+	}
+	
+	@Override
+	public String toString() {
+		StringBuffer sb = new StringBuffer();
+		for(int sl = 0; sl < wheels.size(); sl++) {
+			ArrayList<DrivenWheelInterface> rslot = wheels.get(sl);
+			for(int rsl = 0; rsl < rslot.size(); rsl++) {
+				sb.append(rsl+1);
+				sb.append(".) ");
+				sb.append(rslot.get(rsl).toString());
+				sb.append("ControllerAxisX=");
+				sb.append(controllerAxisX);
+				sb.append(" ControllerAxisY=");
+				sb.append(controllerAxisY);
+				sb.append("\r\n");
 			}
 		}
-	}
-	
-	private void setDrive(int leftWheelLun, int rightWheelLun, int leftChan, int rightChan) {
-		Optional<Float> leftWheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
-		Optional<Float> leftWheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
-		Optional<Integer> leftTicksPerRevolution = Optional.empty();
-		Optional<Float> rightWheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
-		Optional<Float> rightWheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
-		Optional<Integer> rightTicksPerRevolution = Optional.empty(); 
-		Optional<Float> motorKpL = Optional.empty();
-		Optional<Float> motorKdL = Optional.empty();
-		Optional<Float> motorKiL = Optional.empty();
-		Optional<Float> motorKoL = Optional.empty();
-		Optional<Integer> motorPIDRateL = Optional.empty();
-		Optional<Float> motorKpR = Optional.empty();
-		Optional<Float> motorKdR = Optional.empty();
-		Optional<Float> motorKiR = Optional.empty();
-		Optional<Float> motorKoR = Optional.empty();
-		Optional<Integer> motorPIDRateR = Optional.empty();
-		Optional<Integer> minSpeedL = Optional.empty();
-		Optional<Integer> maxSpeedL = Optional.empty();
-		Optional<Integer> minSpeedR = Optional.empty();
-		Optional<Integer> maxSpeedR = Optional.empty();
-		minSpeedL = Optional.ofNullable(LUN[leftWheelLun].get("MinValue")).filter(String.class::isInstance)
-				.map(e -> Integer.parseInt((String) e));
-		maxSpeedL = Optional.ofNullable(LUN[leftWheelLun].get("MaxValue")).filter(String.class::isInstance)
-				.map(e -> Integer.parseInt((String) e));
-		minSpeedR = Optional.ofNullable(LUN[rightWheelLun].get("MinValue")).filter(String.class::isInstance)
-				.map(e -> Integer.parseInt((String) e));
-		maxSpeedR = Optional.ofNullable(LUN[rightWheelLun].get("MaxValue")).filter(String.class::isInstance)
-				.map(e -> Integer.parseInt((String) e));		
-		leftWheelTrack = Optional.ofNullable(WHEEL[leftWheelLun].get("WheelTrackMM")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		leftWheelDiameter = Optional.ofNullable(WHEEL[leftWheelLun].get("WheelDiameterMM")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		leftTicksPerRevolution = Optional.ofNullable(WHEEL[leftWheelLun].get("TicksPerRevolution")).filter(String.class::isInstance)
-				.map(e -> Integer.parseInt((String) e));
-		rightWheelTrack = Optional.ofNullable(WHEEL[rightWheelLun].get("WheelTrackMM")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		rightWheelDiameter = Optional.ofNullable(WHEEL[rightWheelLun].get("WheelDiameterMM")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		rightTicksPerRevolution = Optional.ofNullable(WHEEL[rightWheelLun].get("TicksPerRevolution")).filter(String.class::isInstance)
-				.map(e -> Integer.parseInt((String) e));
-		motorKpL = Optional.ofNullable(PID[leftWheelLun].get("MotorKp")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		motorKdL = Optional.ofNullable(PID[leftWheelLun].get("MotorKd")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		motorKiL = Optional.ofNullable(PID[leftWheelLun].get("MotorKi")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		motorKoL = Optional.ofNullable(PID[leftWheelLun].get("MotorKo")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		motorPIDRateL = Optional.ofNullable(PID[leftWheelLun].get("MotorPIDRate")).filter(String.class::isInstance)
-		        .map(e -> Integer.parseInt((String) e));
-		motorKpR= Optional.ofNullable(PID[rightWheelLun].get("MotorKp")).filter(String.class::isInstance)
-				.map(e -> Float.parseFloat((String) e));
-		motorKdR = Optional.ofNullable(PID[rightWheelLun].get("MotorKd")).filter(String.class::isInstance)
-		        .map(e -> Float.parseFloat((String) e));
-		motorKiR = Optional.ofNullable(PID[rightWheelLun].get("MotorKi")).filter(String.class::isInstance)
-		        .map(e -> Float.parseFloat((String) e));
-		motorKoR = Optional.ofNullable(PID[rightWheelLun].get("MotorKo")).filter(String.class::isInstance)
-		        .map(e -> Float.parseFloat((String) e));
-		motorPIDRateR = Optional.ofNullable(PID[rightWheelLun].get("MotorPIDRate")).filter(String.class::isInstance)
-		        .map(e -> Integer.parseInt((String) e));
-		try {
-			
-			leftWheel[leftChan-1] = new RobotWheel((String) LUN[leftWheelLun].get("Name"), 
-					leftWheelDiameter.get(), 
-					leftWheelTrack.get(), 
-					minSpeedL.get(), 
-					maxSpeedL.get(), 
-					leftTicksPerRevolution.get(), 
-					motorKpL.get(), motorKdL.get(), 
-					motorKiL.get(), motorKoL.get(),
-					motorPIDRateL.get());
-		} catch(NoSuchElementException nse) {
-			throw new RuntimeException("<<WARNING; USING PID DEFAULTS leftWheelLun: "+leftWheelLun+" PID[leftWheelLun]: "+
-					(leftWheelLun < PID.length ? 
-					PID[leftWheelLun]+(" "+" finally: "+(PID[leftWheelLun] != null ? 
-					(PID[leftWheelLun].get("MotorKp")+","+PID[leftWheelLun].get("MotorKd")+","+PID[leftWheelLun].get("MotorKi")+","+PID[leftWheelLun].get("MotorKo")+","+PID[leftWheelLun].get("MotorPIDRate")):
-						" COLLECTION NULL ")) :
-						" PID ARRAY LEN BAD:"+PID.length));
-		}
-		try {
-			rightWheel[rightChan-1] = new RobotWheel((String)LUN[rightWheelLun].get("Name"), 
-					rightWheelDiameter.get(), 
-					rightWheelTrack.get(), 
-					minSpeedR.get(), 
-					maxSpeedR.get(), 
-					rightTicksPerRevolution.get(),
-					motorKpR.get(),
-					motorKdR.get(), 
-					motorKiR.get(), 
-					motorKoR.get(), 
-					motorPIDRateR.get());
-		} catch(NoSuchElementException nse) {
-			throw new RuntimeException("<<WARNING USING PID DEFAULTS rightWheelLun: "+rightWheelLun+" PID[rightWheelLun]: "+
-					(rightWheelLun < PID.length ? 
-					PID[rightWheelLun]+(" "+" finally: "+(PID[rightWheelLun] != null ? 
-					(PID[rightWheelLun].get("MotorKp")+","+PID[rightWheelLun].get("MotorKd")+","+PID[rightWheelLun].get("MotorKi")+","+PID[rightWheelLun].get("MotorKo")+","+PID[rightWheelLun].get("MotorPIDRate") ):
-						" COLLECTION NULL ")) :
-						" PID ARRAY LEN BAD:"+PID.length));
-		}
-		
-		Optional<Integer> controllerAxisXO = Optional.ofNullable(AXIS[rightWheelLun].get("AxisX")).filter(String.class::isInstance)
-		        .map(e -> Integer.parseInt((String) e));
-		Optional<Integer> controllerAxisYO = Optional.ofNullable(AXIS[rightWheelLun].get("AxisY")).filter(String.class::isInstance)
-		        .map(e -> Integer.parseInt((String) e));
-		if(controllerAxisXO.isPresent()) {
-			controllerAxisX = controllerAxisXO.get();
-		} else {
-			System.out.println("<<WARNING USING AXIS DEFAULTS rightWheelLun: "+rightWheelLun+" AXIS[rightWheelLun]: ");
-			controllerAxisX = 0;
-		}
-		if(controllerAxisYO.isPresent()) {
-			controllerAxisY = controllerAxisYO.get();
-		} else {
-			System.out.println("<<WARNING USING AXIS DEFAULTS rightWheelLun: "+rightWheelLun+" AXIS[rightWheelLun]: ");
-			controllerAxisY = 2;
-		}	
-	}
-	
-	@Override
-	public DrivenWheelInterface getLeftWheel(int chan) {
-		return leftWheel[chan-1];
+		return sb.toString();
 	}
 
-	@Override
-	public DrivenWheelInterface getRightWheel(int chan) {
-		return rightWheel[chan-1];
-	}
-
-	
-	@Override
-	public void setDriveWheels(DrivenWheelInterface leftWheel, int chanl, DrivenWheelInterface rightWheel, int chanr) {
-		this.leftWheel[chanl] = leftWheel;
-		this.rightWheel[chanr] = rightWheel;	
-	}
-
-	public String toString() {
-		return String.format("%s\r\n%s",leftWheel == null ? "Left Wheel NULL" : Arrays.toString(leftWheel), rightWheel == null ? "Right Wheel NULL" : Arrays.toString(rightWheel));
-	}
-	
 	@Override
 	public int getControllerAxisX() {
-		 return controllerAxisX;
+		return controllerAxisX;
 	}
-	
+
 	@Override
 	public int getControllerAxisY() {
-		 return controllerAxisY;
-	}
-
-	@Override
-	public int getLeftwheelLun(int chan ) {
-		return leftWheelLun;
-	}
-
-	@Override
-	public int getRightWheelLun(int chan) {
-		return rightWheelLun;
-	}
-
-	@Override
-	public int getSlot() {
-		return slot;
+		return controllerAxisY;
 	}
 
 	@Override
 	public int getChannels() {
 		return channels;
 	}
+
 
 }

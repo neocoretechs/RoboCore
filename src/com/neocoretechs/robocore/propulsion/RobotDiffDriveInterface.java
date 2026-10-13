@@ -1,4 +1,11 @@
 package com.neocoretechs.robocore.propulsion;
+
+import java.io.IOException;
+import java.util.ArrayList;
+
+import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.marlinspike.SlotHandler;
+
 /**
  * Interface to represent a differential drive for a robot. Presumes 2 driven wheels
  * of type DrivenWheelInterface. Also has methods to allow communication with realtime component by
@@ -11,13 +18,12 @@ package com.neocoretechs.robocore.propulsion;
  *
  */
 public interface RobotDiffDriveInterface {
-	public DrivenWheelInterface getLeftWheel(int chan);
-	public DrivenWheelInterface getRightWheel(int chan);
-	public void setDriveWheels(DrivenWheelInterface leftWheels, int chanl, DrivenWheelInterface rightWheel, int chanr);
-	public int getLeftwheelLun(int chan);
-	public int getRightWheelLun(int chan);
+	public DrivenWheelInterface getWheel(ArrayList<DrivenWheelInterface> slots, int chan);
 	public int getControllerAxisX(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
 	public int getControllerAxisY(); //derived by Props.toInt(getControllerAxisPropertyName()+"Y");
-	public int getSlot();
+	public ArrayList<DrivenWheelInterface> getWheels(int slot);
 	public int getChannels();
+	public ArrayList<ArrayList<DrivenWheelInterface>> getWheels();
+	public SlotHandler getSlotHandler(int slot);
+	public void createControllers(Robot robot) throws IOException;
 }

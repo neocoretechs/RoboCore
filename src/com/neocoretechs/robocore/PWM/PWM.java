@@ -1,4 +1,4 @@
-package com.neocoretechs.robocore.propulsion;
+package com.neocoretechs.robocore.PWM;
 
 import java.io.IOException;
 

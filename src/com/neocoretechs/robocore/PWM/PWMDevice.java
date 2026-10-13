@@ -1,8 +1,9 @@
-package com.neocoretechs.robocore.propulsion;
+package com.neocoretechs.robocore.PWM;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 /**
+ * Linux userspace PWM hardware device support. <p>
  * Relies on -DPWMDevices=legacy or be absent to support older distros
  * must be exported first: echo 0 > /sys/class/pwm/pwmchip0/export - this will create the pwm device tree under the export directory.
  * The order is important: must write 1 - period, 2 - duty_cycle, 3 - enable. <p>

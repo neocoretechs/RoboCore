@@ -2,7 +2,7 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol;
 
 import java.io.IOException;
 
-import com.neocoretechs.robocore.propulsion.PWM;
+import com.neocoretechs.robocore.PWM.PWM;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
 

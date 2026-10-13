@@ -196,20 +196,13 @@ public class AsynchDemuxer implements Runnable {
 	
 	public void clearWriteBuffer() { requestQueue.clear(); }
 	/**
-	 * Called by setDeviceLevels, will search in slotEntry and deviceEntry and in the case of
-	 * slotEntry can be expected to return the first TypeSlotChannelEnable in order to obtain the slot designator
-	 * NOTE: calls from other methods may result in erroneous return of TypeSlotChannelEnable if the
-	 * name is a slot, unless the expected behavior is the first TypeSlotChannelEnable
-	 * @param name The device name or slot name in the form of "slot"+slot number
-	 * @return The TypeSlotChannelEnable for the device or first entry for slot
+	 * Called by setDeviceLevels, will search in devices and return array of {@link TypeSlotChannelEnable} for a given name
+	 * @param name The device name 
+	 * @return The TypeSlotChannelEnable list for the device
 	 * @throws RuntimeException encapsulating NoSuchElementException if NoSuchElement
 	 */
-	public TypeSlotChannelEnable getNameToTypeSlotChannel(String name) {
-		try {
-			return marlinSpikeManager.getTypeSlotChannelEnableByName(name);
-		} catch(NoSuchElementException npe) {
-			throw new RuntimeException(npe);
-		}
+	public List<TypeSlotChannelEnable> getNameToTypeSlotChannel(String name) {
+		return marlinSpikeManager.getTypeSlotChannelEnableByName(name);
 	}
 	
 	/**

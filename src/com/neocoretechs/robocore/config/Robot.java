@@ -2,23 +2,22 @@ package com.neocoretechs.robocore.config;
 
 import java.io.IOException;
 import java.io.Serializable;
-
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import com.neocoretechs.robocore.PID.IMUSetpointInfo;
 import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
-import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
+import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 /**
@@ -83,7 +82,6 @@ public class Robot implements RobotInterface, Serializable {
 	private TypedWrapper[] AXIS;
 	private TypedWrapper[] BUTTON;
 	private Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
-	AsynchDemuxer asynchDemuxer;
 	MarlinspikeManager marlinspikeManager = null;
 	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
 	boolean[] isActive;
@@ -112,28 +110,47 @@ public class Robot implements RobotInterface, Serializable {
 					Props.toFloat("CrosstrackKi"), 
 					Props.toFloat("CrosstrackKo"), 
 					Props.toInt("CrosstrackPIDRate"));
+		} else {
+			System.out.printf("%s No WHEEL clauses detected in property file configuration.", this.getClass().getName());
+		}
+		if(DEBUG) {
+			ArrayList<ArrayList<DrivenWheelInterface>> rw = robotDrive.getWheels();
+			System.out.printf("%sWheel Slots=%d%n", this.getClass().getName(),rw.size());
+			for(int i = 0; i < rw.size(); i++) {
+				System.out.printf("%s Wheel Slot %d Channels=%d%n", this.getClass().getName(), i, rw.get(i).size());
+				for(int j = 0; j < rw.get(i).size(); j++) {
+					System.out.printf("%s Wheel Slot %d entry=%d %s%n", this.getClass().getName(), i, j, rw.get(i).get(j).toString());
+				}
+			}
 		}
 		IMUSetpoint = new IMUSetpointInfo();
 		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
 		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation
 		temperatureThreshold = Props.toInt("TemperatureThreshold");//40 C 104 F
+		configureMarlinspike();
 	}
 
-	public Robot() {}
+	public Robot() {
+		if(DEBUG)
+			System.out.printf("%s default C'tor marlinSpikeManager=%s %n", this.getClass().getName(), marlinspikeManager);
+	}
 
 	public void configureMarlinspike() throws IOException {
 		marlinspikeManager = new MarlinspikeManager(this);
 		if(DEBUG)
 			System.out.printf("%s.configureMarlinspike marlinSpikeManager=%s asynchDemuxer=%s%n", this.getClass().getName(), marlinspikeManager, marlinspikeManager.getDemuxer());
 		marlinspikeManager.createControllers(true);
+		robotDrive.createControllers(this);
 		isActive = new boolean[marlinspikeManager.getDevices().size()];
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
 		// if it matched the name of this host the entry is included in the collection. 
 		// In this way only entries that apply to Marlinspikes attached to this host are utilized.
-		for(DeviceEntry ndd: marlinspikeManager.getDevices()) {
+		Iterator<?> it = marlinspikeManager.getDevices().keys().asIterator();
+		while(it.hasNext()) {
+			DeviceEntry dd =  ((DeviceEntry)it.next());
 			if(DEBUG)
-				System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), ndd.getName());	
-			isOperating.put(ndd.getName(), false);
+				System.out.printf("%s Setting DeviceName %s to non-operational status%n", this.getClass().getName(), dd.getName());	
+			isOperating.put(dd.getName(), false);
 		}
 	}
 	
@@ -270,13 +287,14 @@ public class Robot implements RobotInterface, Serializable {
 		 }
 	}
 	/**
-	 * Get the lun number of the lun with "Name:" property named name
-	 * @return -1 if no such name exists
+	 * Get the lun numbers of the luns with "Name:" property
+	 * @param name the Name property
+	 * @return The array of LUNs with Name
 	 */
 	@Override
-	public int getLUN(String name) {
+	public int[] getLUNs(String name) {
 		int len = LUN.length;
-        return IntStream.range(0, len).filter(i -> LUN[i].get("Name").equals(name)).findFirst().orElse(-1);          
+        return IntStream.range(0, len).filter(i -> LUN[i].get("Name").equals(name)).toArray();          
 	}
 	
 	@Override
@@ -285,8 +303,15 @@ public class Robot implements RobotInterface, Serializable {
 	}
 	
 	@Override
-	public String getSlotByName(String name) {
-		return (String) LUN[getLUN(name)].get("Slot");
+	public Object[] getSlots(String name) {
+		int[] luns = getLUNs(name);
+		ArrayList<Integer> s = new ArrayList<Integer>();
+		for(int i = 0; i < luns.length; i++) {
+			Object o = LUN[i].get("Slot");
+			if(o != null)
+				s.add(Integer.parseInt((String) o));
+		}
+		return s.toArray();
 	}
 	
 	@Override
@@ -300,48 +325,8 @@ public class Robot implements RobotInterface, Serializable {
 	}
 
 	@Override
-	public PIDParameterInterface getLeftMotorPIDController(int chan) {
-		return robotDrive.getLeftWheel(chan).getPIDController();
-	}
-
-	@Override
-	public SetpointInfoInterface getLeftDistanceSetpointInfo(int chan) {
-		return robotDrive.getLeftWheel(chan).getTickSetpointInfo();
-	}
-
-	@Override
 	public SetpointInfoInterface getIMUSetpointInfo() {
 		return IMUSetpoint;
-	}
-
-	@Override
-	public SetpointInfoInterface getLeftSpeedSetpointInfo(int chan) {
-		return robotDrive.getLeftWheel(chan).getSpeedsetPointInfo();
-	}
-
-	@Override
-	public SetpointInfoInterface getLeftTickSetpointInfo(int chan) {
-		return robotDrive.getLeftWheel(chan).getTickSetpointInfo();
-	}
-
-	@Override
-	public PIDParameterInterface getRightMotorPIDController(int chan) {
-		return robotDrive.getRightWheel(chan).getPIDController(); // for now, both the same one due to limited function
-	}
-
-	@Override
-	public SetpointInfoInterface getRightDistanceSetpointInfo(int chan) {
-		return robotDrive.getRightWheel(chan).getTickSetpointInfo();
-	}
-
-	@Override
-	public SetpointInfoInterface getRightSpeedSetpointInfo(int chan) {
-		return robotDrive.getRightWheel(chan).getSpeedsetPointInfo();
-	}
-
-	@Override
-	public SetpointInfoInterface getRightTickSetpointInfo(int chan) {
-		return robotDrive.getRightWheel(chan).getTickSetpointInfo();
 	}
 	
 	@Override
@@ -363,7 +348,7 @@ public class Robot implements RobotInterface, Serializable {
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("Robot %s%nPower Scale=%b Drive: %s%nMotion Controller:%s%n IMU:%s%n",
+		sb.append(String.format("%n----- %s -----%nPower Scale:%b%nDrive: %s%nMotion Controller:%s%n IMU:%s%n",
 				getName(),
 				powerScale,
 				robotDrive == null ? "NULL" : robotDrive.toString(),
@@ -424,6 +409,7 @@ public class Robot implements RobotInterface, Serializable {
 				sb.append("\r\n");
 			}
 		}
+		sb.append("----------\r\n");
 		return sb.toString();
 	}
 
