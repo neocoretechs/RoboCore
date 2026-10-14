@@ -75,7 +75,7 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 		Optional<Integer> enablePin = Optional.empty();
 		
 		type = Optional.ofNullable(LUN[wheelLun].get("Type")).filter(String.class::isInstance).map(e -> String.valueOf(e));
-		enablePin = Optional.ofNullable(WHEEL[wheelLun].get("EnablePin")).filter(String.class::isInstance)
+		enablePin = Optional.ofNullable(LUN[wheelLun].get("EnablePin")).filter(String.class::isInstance)
 				.map(e -> Integer.parseInt((String) e));
 		
 		minSpeed = Optional.ofNullable(LUN[wheelLun].get("MinValue")).filter(String.class::isInstance)
@@ -120,6 +120,17 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 					motorKi.get(), motorKo.get(),
 					motorPIDRate.get());
 		} catch(NoSuchElementException nse) {
+			System.out.println("enable="+enablePin.get());
+			System.out.println("wheelDiameter="+wheelDiameter.get());
+			System.out.println("wheelTrack="+wheelTrack.get());
+			System.out.println("minSpeed="+minSpeed.get());
+			System.out.println("maxSpeed="+maxSpeed.get());
+			System.out.println("ticksPerRevolution="+ticksPerRevolution.get());
+			System.out.println("motorKp="+motorKp.get());
+			System.out.println("motorKd="+motorKd.get());
+			System.out.println("motorKi="+motorKi.get());
+			System.out.println("motorKo="+motorKo.get());
+			System.out.println("motorPIDRate="+motorPIDRate.get());
 			throw new RuntimeException("Cannot configure robot wheel "+name+" LUN "+wheelLun+" slot:"+slot+" channel:"+chan);
 		}
 
