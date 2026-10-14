@@ -562,11 +562,9 @@ public class MotionController extends AbstractNodeMain {
 		//-----------------------------
 		// process remappings to override configs
 		if(remaps.containsKey("__speedlimit") ) {
-			ArrayList<ArrayList<DrivenWheelInterface>> wheels = robot.getDiffDrive().getWheels();
-			for(ArrayList<DrivenWheelInterface> wheel : wheels) {
-				for(DrivenWheelInterface dw: wheel) {
-					dw.getSpeedsetPointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
-				}
+			ArrayList<DrivenWheelInterface> wheels = robot.getDiffDrive().getWheels();
+			for(DrivenWheelInterface dw: wheels) {
+				dw.getSpeedsetPointInfo().setMaximum(Float.parseFloat(remaps.get("__speedlimit")));
 			}
 		}
 		if( remaps.containsKey("__kp") )
@@ -2247,17 +2245,17 @@ public class MotionController extends AbstractNodeMain {
 	 * @throws IOException if slot 0 not defined, or channel 1 and 2 not defined in slot0
 	 */
 	private DrivenWheelInterface[] getChannel1And2OfSlot0() throws IOException{
-		ArrayList<DrivenWheelInterface> slot0 = robot.getDiffDrive().getWheels().getFirst();
-		if(slot0 == null || slot0.getFirst().getSlot() != 0)
-			throw new IOException("Slot 0 not defined in configs as as primary drive");
-		
-		DrivenWheelInterface channel1 = robot.getDiffDrive().getWheel(slot0, 1);
+		ArrayList<DrivenWheelInterface> slot0 = robot.getDiffDrive().getWheels(0);
+		DrivenWheelInterface channel1 = slot0.get(0);
 		if(channel1 == null)
 			throw new IOException("Channel 1 not defined for slot 0 in configs");
-		DrivenWheelInterface channel2 = robot.getDiffDrive().getWheel(slot0, 2);
+		DrivenWheelInterface channel2 = slot0.get(1);
 		if(channel2 == null)
 			throw new IOException("Channel 2 not defined for slot 0 in configs");
-		return new DrivenWheelInterface[] {channel1, channel2};
+		if(channel1.getChannel() == 1)
+			return new DrivenWheelInterface[] {channel1, channel2};
+		else
+			return new DrivenWheelInterface[] {channel2, channel1};
 	}
 	/**
 	 * Send the command to move the robot relative to designated heading

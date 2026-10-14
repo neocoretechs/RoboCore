@@ -79,5 +79,6 @@ public interface RobotInterface {
 	public PIDParameterInterface getMotionPIDController();
 	public SetpointInfoInterface getIMUSetpointInfo();
 	public Object[] getSlots(String name);
+	public void setDiffDrive(RobotDiffDriveInterface diffrive);
 	
 }

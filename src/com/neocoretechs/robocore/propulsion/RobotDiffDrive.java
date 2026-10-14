@@ -4,13 +4,19 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.config.RobotInterface;
+import com.neocoretechs.robocore.config.SlotEntry;
 import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.SlotHandler;
+import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
+import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
 
 /**
 * Configuration for generic robot differential drive.
@@ -23,9 +29,10 @@ import com.neocoretechs.robocore.marlinspike.SlotHandler;
 * artillery.<p>
 * @author Jonathan Groff (C) NeoCoreTechs 2020,2021
 */
-public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
+public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface, Serializable {
 	public static boolean DEBUG = false;
 	private static final long serialVersionUID = 1L;
+	RobotInterface robot;
 	TypedWrapper[] LUN;
 	TypedWrapper[] WHEEL;
 	TypedWrapper[] AXIS;
@@ -33,79 +40,27 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	int controllerAxisX = -1; 
 	int controllerAxisY = -1;
 	int channels = 0;
-	// Define the robot parameters, 
-	// each of these will be by slot, each slot multiple channels, slot 0, channels 1 and 2 would be left, right front wheels
-	// or front and rear 2 wheels depending on stick axis x,y setup for power blending
-	private ArrayList<ArrayList<DrivenWheelInterface>> wheels = new ArrayList<ArrayList<DrivenWheelInterface>>(); 
-	//public static int MAXOUTPUT = 50; // indoor
-	// so ticks are IMU data in mm/s, I hope. In static form its locked to diameter but here, as IMU data, 
-	// it is variable based on desired speed.
-	private ArrayList<SlotHandler> slotHandlers = new ArrayList<SlotHandler>();
-	
-	public RobotDiffDrive(TypedWrapper[] lUN, TypedWrapper[] wHEEL, TypedWrapper[] aXIS, TypedWrapper[] pID) {
+
+	/**
+	 * Controller, devicename, slot goes into the initial slothandler entry, which is first wheel encountered.
+	 * This sets up the sort order in the deviceToType mapping based on nodename, name
+	 * @param deviceName
+	 * @param NodeName
+	 * @param LUN
+	 * @param controller
+	 * @param slot
+	 */
+	public RobotDiffDrive(RobotInterface robot2, String deviceName, String NodeName, int LUN, MarlinspikeControlInterface controller, int slot, TypedWrapper[] lUN, TypedWrapper[] wHEEL, TypedWrapper[] aXIS, TypedWrapper[] pID) {
+		super(deviceName, NodeName, LUN, controller, slot);
+		this.robot = robot2;
 		this.LUN = lUN;
 		this.WHEEL = wHEEL;
 		this.AXIS = aXIS;
 		this.PID = pID;
-		// extract the wheel definitions from the logical units in config
-		for(int i = 0; i < LUN.length; i++) {
-			String name = ((String)LUN[i].get("Name"));
-			if(name.endsWith("Wheel")) {
-				Object s = LUN[i].get("Slot");
-				if(s == null)
-					throw new RuntimeException("Must declare Slot in configuration for differential drive wheel.");
-				int slot = Integer.parseInt((String) s);
-				Object ochan = LUN[i].get("Channel");
-				if(ochan == null)
-					throw new RuntimeException("Configuration is absent left or right wheel channel LUN declaration");
-				int channel = Integer.parseInt((String) ochan);
-				if(channel > channels) channels = channel;
-
-				RobotWheel robotWheel = setDrive(name, i, slot, channel);
-				int slotRow = -1;
-				outerr: for(int sl = 0; sl < wheels.size(); sl++) {
-					ArrayList<DrivenWheelInterface> rslot = wheels.get(sl);
-					for(int rsl = 0; rsl < rslot.size(); rsl++) {
-						if(rslot.get(rsl).getSlot() == slot) {
-							slotRow = rsl;
-							// make sure we dont have the channel already for this slot
-							for(int rsl2 = 0; rsl2 < rslot.size(); rsl2++) {
-								if(rslot.get(rsl2).getChannel() == channel)
-									throw new RuntimeException("Duplicate channel "+channel+" for slot "+slot+" for name "+name);
-							}
-							// got slot, didnt find channel already, add it to row
-							rslot.add(robotWheel);
-							break outerr;
-						}
-					}
-				}
-				// did we find a row that had the matching slot?
-				if(slotRow == -1) {
-					ArrayList<DrivenWheelInterface> t = new ArrayList<DrivenWheelInterface>();
-					t.add(robotWheel);
-					wheels.add(t);
-				}
-			} 
-			Optional<Integer> controllerAxisXO = Optional.ofNullable(AXIS[i].get("AxisX")).filter(String.class::isInstance)
-					.map(e -> Integer.parseInt((String) e));
-			Optional<Integer> controllerAxisYO = Optional.ofNullable(AXIS[i].get("AxisY")).filter(String.class::isInstance)
-					.map(e -> Integer.parseInt((String) e));
-			if(controllerAxisXO.isPresent()) {
-				controllerAxisX = controllerAxisXO.get();
-			} else {
-				System.out.println("<<WARNING USING X AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
-				controllerAxisX = 0;
-			}
-			if(controllerAxisYO.isPresent()) {
-				controllerAxisY = controllerAxisYO.get();
-			} else {
-				System.out.println("<<WARNING USING Y AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
-				controllerAxisY = 2;
-			}
-		}
 	}
 
-	private RobotWheel setDrive(String name, int wheelLun, int slot, int chan) {
+
+	public static RobotWheel setDrive(TypedWrapper[] LUN, TypedWrapper[] WHEEL, TypedWrapper[] PID, String name, int wheelLun, int slot, int chan) {
 		Optional<Float> wheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
 		Optional<Float> wheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
 		Optional<Integer> ticksPerRevolution = Optional.empty();
@@ -116,7 +71,13 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		Optional<Integer> motorPIDRate = Optional.empty();
 		Optional<Integer> minSpeed = Optional.empty();
 		Optional<Integer> maxSpeed = Optional.empty();
-
+		Optional<String> type = Optional.empty();
+		Optional<Integer> enablePin = Optional.empty();
+		
+		type = Optional.ofNullable(LUN[wheelLun].get("Type")).filter(String.class::isInstance).map(e -> String.valueOf(e));
+		enablePin = Optional.ofNullable(WHEEL[wheelLun].get("EnablePin")).filter(String.class::isInstance)
+				.map(e -> Integer.parseInt((String) e));
+		
 		minSpeed = Optional.ofNullable(LUN[wheelLun].get("MinValue")).filter(String.class::isInstance)
 				.map(e -> Integer.parseInt((String) e));
 		maxSpeed = Optional.ofNullable(LUN[wheelLun].get("MaxValue")).filter(String.class::isInstance)
@@ -141,8 +102,15 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 				.map(e -> Integer.parseInt((String) e));
 
 		try {
-
-			return new RobotWheel(name, slot, chan, 
+			typeNames eType = null;
+			//eType = typeNames.valueOf(type) will fail because we use mixed case names;
+			for(typeNames et : typeNames.values()) {
+				if(et.name().equals((String)type.get())) {
+					eType = et;
+					break;
+				}
+			}
+			return new RobotWheel(name, eType, slot, chan, enablePin.get(),
 					wheelDiameter.get(), 
 					wheelTrack.get(), 
 					minSpeed.get(), 
@@ -156,7 +124,7 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 		}
 
 	}
-
+	
 	@Override
 	/**
 	 * Return the wheel channels for a given slot
@@ -164,27 +132,25 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	 * @return ArrayList of channels of DriveWheelInterface for this slot or null if slot wasnt found
 	 */
 	public ArrayList<DrivenWheelInterface> getWheels(int slot) {
+		ArrayList<TypeSlotChannelEnable> atsce = robot.getManager().getSlot(slot);
+		if(atsce == null)
+			return null;
 		ArrayList<DrivenWheelInterface> rslot = null;
-		outerr: for(int sl = 0; sl < wheels.size(); sl++) {
-			rslot = wheels.get(sl);
-			for(int rsl = 0; rsl < rslot.size(); rsl++) {
-				if(rslot.get(rsl).getSlot() == slot) {
-					break outerr;
-				}
-			}
+		if(atsce.getFirst() instanceof DrivenWheelInterface) {
+			rslot = new ArrayList<DrivenWheelInterface>(atsce.size());
+			for(TypeSlotChannelEnable tsce: atsce)
+				rslot.add((RobotWheel)tsce);
 		}
-		// did we find a row that had the matching slot?
 		return rslot;
 	}
 
-	@Override
 	/**
 	 * Get the wheel for the given slot row and channel
 	 * @param slot The array of channels for this slot from getWheels
 	 * @param chan the target channel
 	 * @return RobotWheel or null if slots is null or channel cant be found in row for slot.
 	 */
-	public DrivenWheelInterface getWheel(ArrayList<DrivenWheelInterface> slot, int chan) {
+	public static DrivenWheelInterface getWheel(ArrayList<DrivenWheelInterface> slot, int chan) {
 		if(slot == null)
 			return null;
 		if(chan <= 0 || chan > 10)
@@ -197,39 +163,25 @@ public class RobotDiffDrive implements RobotDiffDriveInterface, Serializable {
 	}
 	
 	@Override
-	public ArrayList<ArrayList<DrivenWheelInterface>> getWheels() {
-		return wheels;
-	}
-	
-	@Override
-	public SlotHandler getSlotHandler(int slot) {
-		return slotHandlers.get(slot);
-	}
-	
-	public void createControllers(Robot robot) throws IOException {
-		for(int i = 0; i < wheels.size(); i++) {
-			ArrayList<DrivenWheelInterface> slotWheels = wheels.get(i);
-			DrivenWheelInterface dwi = slotWheels.get(0);
-			MarlinspikeControlInterface controller = robot.getManager().createController(Optional.empty(), (int)dwi.getSpeedsetPointInfo().getMaximum());
-			slotHandlers.add(new SlotHandler(controller,dwi.getName(),i));
-		}
-	}
+	public ArrayList<DrivenWheelInterface> getWheels() {
+		 ArrayList<TypeSlotChannelEnable> atsce = robot.getManager().getTypeSlotChannelEnable(this);
+		 return atsce.stream().filter(RobotWheel.class::isInstance).map(RobotWheel.class::cast).collect(Collectors.toCollection(ArrayList::new));
+	}	
 	
 	@Override
 	public String toString() {
 		StringBuffer sb = new StringBuffer();
+		ArrayList<DrivenWheelInterface> wheels = getWheels();
 		for(int sl = 0; sl < wheels.size(); sl++) {
-			ArrayList<DrivenWheelInterface> rslot = wheels.get(sl);
-			for(int rsl = 0; rsl < rslot.size(); rsl++) {
-				sb.append(rsl+1);
+			DrivenWheelInterface rslot = wheels.get(sl);
+				sb.append(sl+1);
 				sb.append(".) ");
-				sb.append(rslot.get(rsl).toString());
+				sb.append(rslot.toString());
 				sb.append("ControllerAxisX=");
 				sb.append(controllerAxisX);
 				sb.append(" ControllerAxisY=");
 				sb.append(controllerAxisY);
 				sb.append("\r\n");
-			}
 		}
 		return sb.toString();
 	}

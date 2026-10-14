@@ -26,6 +26,8 @@ import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
 import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
+import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
+import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
@@ -47,6 +49,7 @@ public class MarlinspikeManager implements Serializable {
 	TypedWrapper[] lun;
 	TypedWrapper[] wheel;
 	TypedWrapper[] pid;
+	TypedWrapper[] axis;
 	transient AsynchDemuxer asynchDemuxer;
 
 	/**
@@ -71,6 +74,7 @@ public class MarlinspikeManager implements Serializable {
 		this.lun = robot.getLUN();
 		this.wheel = robot.getWHEEL();
 		this.pid = robot.getPID();
+		this.axis = robot.getAXIS();
 		this.hostName = robot.getHostName();
 		configureDemuxer();
 	}
@@ -90,40 +94,32 @@ public class MarlinspikeManager implements Serializable {
 		if(DEBUG)
 			System.out.printf("%s.createControllers(%b) LUN length=%d%n",this.getClass().getName(), override, lun.length);
 		for(int i = 0; i < lun.length; i++) {
-			String nodeName = (String) lun[i].get("NodeName");
-			if(nodeName == null)
+			Optional<Object> nodeName = Optional.ofNullable(lun[i].get("NodeName"));
+			if(nodeName.isEmpty())
 				throw new IOException("Must specify NodeName parameter in configuration file for host "+hostName);
-			String name = (String)lun[i].get("Name");
-			if(name == null)
+			Optional<Object> name = Optional.ofNullable(lun[i].get("Name"));
+			if(name.isEmpty())
 				throw new IOException("Must specify Name parameter in configuration file for host "+hostName);
 			if(DEBUG)
-				System.out.printf("%s.createControllers(%b) len=%s LUN[%d] HostName=%s NodeName=%s name=%s%n",this.getClass().getName(), override, lun.length, i, hostName, nodeName, name);
-			if(override || hostName.equals(nodeName)) {
+				System.out.printf("%s.createControllers(%b) len=%s LUN[%d] HostName=%s NodeName=%s name=%s%n",this.getClass().getName(), override, lun.length, i, hostName, nodeName.get(), name.get());
+			if(override || hostName.equals(nodeName.get())) {
 				// general min and max values
-				Optional<Object> ominValue = Optional.ofNullable(lun[i].get("Min"));
-				Optional<Object> omaxValue = Optional.ofNullable(lun[i].get("Max"));
+				Optional<Integer> ominValue = Optional.ofNullable(lun[i].get("MinValue")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+				Optional<Integer> omaxValue = Optional.ofNullable(lun[i].get("MaxValue")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 				Optional<Object> controllerInst = Optional.ofNullable(lun[i].get("Controller"));
-				MarlinspikeControlInterface controller = createController(controllerInst, (int)omaxValue.get());
-				DeviceEntry deviceEntry = null;//new DeviceEntry(name, nodeName, i, controller);
-				//devices.add(deviceEntry);
-				// map within a map, nameToTypeMap, 
-				// has deviceName, demuxer, indexed by name of device so "LeftWheel" can retrieve 
-				// pins. etc. 
-				Optional<Object> dir = Optional.ofNullable(lun[i].get("Direction"));
-				Optional<Object> enable = Optional.ofNullable(lun[i].get("EnablePin"));
-				int ienable = enable.isPresent() ? Integer.parseInt((String)enable.get()) : 0;
-				// standalone controls?
-				// if pin2 is present we assume pin1 is present and we are using a 2 PWM pin type
-				// if enable pin is not present we are probably using a smart controller, and we want our own
-				// constructor for TypeSlotChannelEnable
+				MarlinspikeControlInterface controller = null;
+				DeviceEntry deviceEntry = null;
+				Optional<Integer> dir = Optional.ofNullable(lun[i].get("Direction")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+				Optional<Integer> enable = Optional.ofNullable(lun[i].get("EnablePin")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+				int ienable = enable.isPresent() ? enable.get() : 0;
 				TypeSlotChannelEnable tsce = null;
-				String type = (String)lun[i].get("Type");
-				if(type == null)
-					throw new IOException("Must specify Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controllerInst);
+				Optional<Object> type = Optional.ofNullable(lun[i].get("Type"));
+				if(type.isEmpty())
+					throw new IOException("Must specify Type parameter in configuration file for host "+hostName+" Name:"+name.get()+" Controller:"+controllerInst);
 				typeNames eType = null;
 				//eType = typeNames.valueOf(type) will fail because we use mixed case names;
 				for(typeNames et : typeNames.values()) {
-					if(et.name.equals(type)) {
+					if(et.name.equals((String)type.get())) {
 						eType = et;
 						break;
 					}
@@ -133,63 +129,89 @@ public class MarlinspikeManager implements Serializable {
 					StringBuilder sb = new StringBuilder();
 					for(typeNames et : typeNames.values())
 						sb.append(et.val()+" ");
-					throw new IOException("Type paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controllerInst+" Type:"+type+" must be one of "+sb.toString());
+					throw new IOException("Type parameter in configuration file for host "+hostName+" Name:"+name.get()+" Controller:"+controllerInst+" Type:"+type.get()+" must be one of "+sb.toString());
 				}
 				// If the type is not ending in "Pin", its expected to have an associated slot. A driver has a slot that allows it to be referenced
 				// in configs. A slot can have multiple channels and thus entries in the properties
 				// Not a type of 'Pin', such as InputPin, OutputPin. i.e. a more sophisticated control with multiple constructor args, and
-				// not a name ending in "Wheel" which is handled in the RobotDiffDrive
-				if(!type.endsWith("Pin") && !name.endsWith("Wheel")) { 
-					String slot = (String)lun[i].get("Slot");
-					if(slot == null)
-						throw new IOException("Must specify Slot paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controllerInst+" Type:"+type);
-					String channel = (String)lun[i].get("Channel");
-					if(channel == null)
-						throw new IOException("Must specify Channel paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controllerInst+" Type:"+type);
-					if(dir.isPresent()) {
-						tsce = new TypeSlotChannelEnable(eType, 
-							Integer.parseInt(slot), 
-							Integer.parseInt(channel), 
-							ienable, Integer.parseInt((String)dir.get()));
+				if(!((String)type.get()).endsWith("Pin")) {
+					Optional<Integer> slot = Optional.ofNullable(lun[i].get("Slot")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+					if(slot.isEmpty())
+						throw new IOException("Must specify Slot parameter in configuration file for host "+hostName+" Name:"+name.get()+" Controller:"+controllerInst+" Type:"+type.get());
+					Optional<Integer> ochannel = Optional.ofNullable(lun[i].get("Channel")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+					if(ochannel.isEmpty())
+						throw new IOException("Must specify Channel parameter in configuration file for host "+hostName+" Name:"+name.get()+" Controller:"+controllerInst+" Type:"+type.get());
+					if(((String)name.get()).endsWith("Wheel")) {
+						int maxValue = 1000;
+						if(omaxValue.isPresent())
+							maxValue = omaxValue.get();
+						controller = createController(controllerInst, maxValue);
+						// create a new template
+						deviceEntry = new RobotDiffDrive(robot, (String)name.get(), (String)nodeName.get(), i, controller, slot.get(), lun, wheel, pid, axis);
+						// see if we have it already
+						ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
+						if(sl == null) {
+							sl = new ArrayList<TypeSlotChannelEnable>();
+							deviceToType.put(deviceEntry, sl);
+							robot.setDiffDrive((RobotDiffDriveInterface) deviceEntry);
+						} else {
+							// add to this control possibly
+							if(((SlotEntry)deviceEntry).getMarlinspikeControl(slot.get()) == null)
+									((SlotEntry)deviceEntry).setMarlinspikeControl(controller, (String)name.get(), slot.get());
+						}
+						int ti = sl.indexOf(tsce);
+						if(ti == -1) {
+							tsce = RobotDiffDrive.setDrive(lun, wheel, pid, (String)name.get(), ienable, slot.get(), ochannel.get());
+							sl.add(tsce);
+							configureMarlinspike(deviceEntry, lun[i], tsce);
+						} else {
+							throw new IOException("Already parsed "+tsce+" found at index "+ti+" in deviceToType list.");		
+						}
 					} else {
-						tsce = new TypeSlotChannelEnable(eType, 
-								Integer.parseInt(slot), 
-								Integer.parseInt(channel), 
-								ienable);
-					}
-					if(ominValue.isPresent())
-						tsce.setMinValue(Integer.parseInt((String)lun[i].get("Min")));
-					if(omaxValue.isPresent())
-						tsce.setMaxValue(Integer.parseInt((String)lun[i].get("Max")));
-					// creates SlotHandler
-					deviceEntry = new SlotEntry(name, nodeName, i, controller, Integer.parseInt(slot));
-					ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
-					if(sl == null) {
-						sl = new ArrayList<TypeSlotChannelEnable>();
-						deviceToType.put(deviceEntry, sl);
-						deviceEntry.setMarlinspikeControl(controller);
-					}
-					int ti = sl.indexOf(tsce);
-					if(ti == -1) {
-						sl.add(tsce);
-						configureMarlinspike(deviceEntry, lun[i], tsce);
-					} else {
-						throw new IOException("Already parsed "+tsce+" found at index "+ti+" in deviceToType list.");		
+						if(dir.isPresent()) {
+							tsce = new TypeSlotChannelEnable(eType, slot.get(), ochannel.get(), ienable, dir.get());
+						} else {
+							tsce = new TypeSlotChannelEnable(eType, slot.get(), ochannel.get(), ienable);
+						}
+						if(ominValue.isPresent())
+							tsce.setMinValue(ominValue.get());
+						if(omaxValue.isPresent())
+							tsce.setMaxValue(omaxValue.get());
+						controller = createController(controllerInst, tsce.getMaxValue());
+						// creates SlotHandler
+						deviceEntry = new SlotEntry((String)name.get(), (String)nodeName.get(), i, controller, slot.get());
+						ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
+						if(sl == null) {
+							sl = new ArrayList<TypeSlotChannelEnable>();
+							deviceToType.put(deviceEntry, sl);
+						} else {
+							// add to this control possibly
+							if(((SlotEntry)deviceEntry).getMarlinspikeControl(slot.get()) == null)
+									((SlotEntry)deviceEntry).setMarlinspikeControl(controller, (String)name.get(), slot.get());
+						}
+						int ti = sl.indexOf(tsce);
+						if(ti == -1) {
+							sl.add(tsce);
+							configureMarlinspike(deviceEntry, lun[i], tsce);
+						} else {
+							throw new IOException("Already parsed "+tsce+" found at index "+ti+" in deviceToType list.");		
+						}
 					}
 				} else { // type of Pin, so get actual pin number and construct TypeSlotChannelEnable accordingly
-					String pin = (String)lun[i].get("Pin");
-					if(pin == null)
-						throw new IOException("Must specify Pin paramater in configuration file for host "+hostName+" Name:"+name+" Controller:"+controllerInst+" Type:"+type);
-					tsce = new TypeSlotChannelEnable(eType, Integer.parseInt(pin));
+					Optional<Integer> pin = Optional.ofNullable(lun[i].get("Pin")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+					if(pin.isEmpty())
+						throw new IOException("Must specify Pin parameter in configuration file for host "+hostName+" Name:"+name.get()+" Controller:"+controllerInst+" Type:"+type.get());
+					tsce = new TypeSlotChannelEnable(eType, pin.get());
 					if(ominValue.isPresent())
-						tsce.setMinValue(Integer.parseInt((String)lun[i].get("Min")));
+						tsce.setMinValue(ominValue.get());
 					if(omaxValue.isPresent())
-						tsce.setMaxValue(Integer.parseInt((String)lun[i].get("Max")));
+						tsce.setMaxValue(omaxValue.get());
 					//Toggle:True,true,TRUE False,false,FALSE or absent
 					Optional<Object> oToggle = Optional.ofNullable(lun[i].get("Toggle"));
-					if(oToggle.isPresent() && Boolean.parseBoolean((String)lun[i].get("Toggle")))
-							tsce.setPinToggle();
-					deviceEntry = new DeviceEntry(name, nodeName, i, controller);
+					if(oToggle.isPresent() && Boolean.parseBoolean((String)oToggle.get()))
+						tsce.setPinToggle();
+					controller = createController(controllerInst, tsce.getMaxValue());
+					deviceEntry = new DeviceEntry((String)name.get(), (String)nodeName.get(), i, controller);
 					ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
 					if(sl == null)
 						sl = new ArrayList<TypeSlotChannelEnable>();
@@ -199,6 +221,20 @@ public class MarlinspikeManager implements Serializable {
 					deviceToType.put(deviceEntry, sl);
 					deviceEntry.setMarlinspikeControl(controller);
 					configureMarlinspike(deviceEntry, lun[i], tsce);
+				}
+				Optional<Integer> controllerAxisXO = Optional.ofNullable(axis[i].get("AxisX")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+				Optional<Integer> controllerAxisYO = Optional.ofNullable(axis[i].get("AxisY")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+				if(controllerAxisXO.isPresent()) {
+					deviceEntry.setControllerAxisX(controllerAxisXO.get());
+				} else {
+					System.out.println("<<WARNING USING X AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
+					deviceEntry.setControllerAxisX(0);
+				}
+				if(controllerAxisYO.isPresent()) {
+					deviceEntry.setControllerAxisY(controllerAxisYO.get());
+				} else {
+					System.out.println("<<WARNING USING Y AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
+					deviceEntry.setControllerAxisY(2);
 				}
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				// tsce gen M10
@@ -226,6 +262,8 @@ public class MarlinspikeManager implements Serializable {
 	 * @throws IOException if InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException
 	 */
 	public MarlinspikeControlInterface createController(Optional<Object> controllerInst, int maxValue) throws IOException {
+		if(DEBUG)
+			System.out.printf("%s:createController %s maxValue:%d%n",this.getClass().getName(),controllerInst,maxValue);
 		MarlinspikeControlInterface controller;
 		if(controllerInst.isEmpty()) {
 			controller = new MarlinspikeControl(asynchDemuxer);
@@ -362,7 +400,7 @@ public class MarlinspikeManager implements Serializable {
 		// now we have all the channels for the slot 0 controller
 		if(DEBUG)
 			System.out.printf("%s.setDiffDriveSpeed  diff drive=%s%n",this.getClass().getName(), robot.getDiffDrive());
-		SlotHandler slotHandler = robot.getDiffDrive().getSlotHandler(0);
+		SlotHandler slotHandler = robot.getDiffDrive().getMarlinspikeControl(0);
 		if(DEBUG)
 			System.out.printf("%s.setDiffDriveSpeed slotToHandler slotHandler=%s%n",this.getClass().getName(), slotHandler);
 		slotHandler.setSpeed((Robot) robot, speedVals);
@@ -383,7 +421,7 @@ public class MarlinspikeManager implements Serializable {
 	/**
 	 * Get the class with methods that talk to the Marlinspike board by the descriptive name of the device
 	 * as it appears in the config. If not found in devices, try to return a slot
-	 * @param name One of "Leftwheel", "RightWheel" etc.
+	 * @param name One of "LEDDriver", "DiffDrive" etc.
 	 * @return the MarlinspikeControlInterface with methods to communicate with the board
 	 */
 	public MarlinspikeControlInterface getMarlinspikeControl(String name) throws NoSuchElementException {
@@ -412,7 +450,8 @@ public class MarlinspikeManager implements Serializable {
 	}
 		
 	/**
-	 * @param type One of "LiftActuator" "LEDPin" etc.
+	 * @param type One of "LiftActuator", "LEDPin", etc.<p> 
+	 * "Wheel" ending entries are aggregated under "DiffDrive".<p>
 	 * @return device of a particular name, which points to the actual device of a particular type, attached to the Marlinspike on this node
 	 */
 	public ArrayList<TypeSlotChannelEnable> getTypeSlotChannelEnableByName(String name) throws NoSuchElementException {
@@ -454,18 +493,27 @@ public class MarlinspikeManager implements Serializable {
 	 * Get the table of slots to types
 	 * @return the table of slots to types
 	 */
-	public ConcurrentHashMap<DeviceEntry,ArrayList<TypeSlotChannelEnable>> getSlots() {
+	public ConcurrentHashMap<DeviceEntry,ArrayList<TypeSlotChannelEnable>> getDeviceEntries() {
 		return deviceToType;
 	}
 	/**
-	 * Return the TypeSlotchannelEnable LUN's by slot
-	 * @param slot the slotname (number)
-	 * @return the ArrayList of TypeSlotChannelEnables for the slot according to properties
+	 * Return the TypeSlotchannelEnable LUN's by slot. Look for subclass of SlotEntry in deviceToType.
+	 * Then acquire the SlotHandler for the given slot using SlotEntry.getMarlinspikeControl.
+	 * if it comes back non-null, meaning the slot was found, get the value for the deviceToType key and return it.
+	 * Otherwise, iterate the deviceToType entries until we exhaust them and return null, meaning the given
+	 * slot is not in use.
+	 * @param slot the slot number
+	 * @return the ArrayList of TypeSlotChannelEnables for the slot according to properties, or null if no slot
 	 */
-	public ArrayList<TypeSlotChannelEnable> getSlot(String slot) {
+	public ArrayList<TypeSlotChannelEnable> getSlot(int slot) {
 		for(Map.Entry<DeviceEntry,ArrayList<TypeSlotChannelEnable>> kv : deviceToType.entrySet()) {
-			if(kv.getKey().getName().equals(slot))
-				return kv.getValue();
+			if(kv.getKey() instanceof SlotEntry) {
+				SlotHandler sh = ((SlotEntry)(kv.getKey())).getMarlinspikeControl(slot);
+				// if it contains the slot we are looking for, we can then retrieve the associated array of TypeSlotChannelEnable
+				if(sh != null) {
+					return kv.getValue();
+				}
+			}
 		}
 		return null;
 	}
@@ -478,32 +526,35 @@ public class MarlinspikeManager implements Serializable {
 		return String.format("%s Robot %s host %s\r\n",this.getClass().getName(), robot, hostName);
 	}
 	
-	public static void main(String[] args) throws IOException {
-		/*
+	public static void main(String[] args) throws IOException {	
 		System.out.println(Arrays.toString((typeNames.values())));
 		RobotInterface robot = new Robot();
 		MarlinspikeManager mm = new MarlinspikeManager(robot);
-		mm.createControllers(true, true);
-		System.out.println("NodeDeviceDemuxer for LeftWheel:"+mm.getNodeDeviceDemuxer("LeftWheel"));
-		System.out.println("NodeDeviceDemuxer for RightWheel:"+mm.getNodeDeviceDemuxer("RightWheel"));
-		System.out.println("NodeDeviceDemuxer for BoomActuator:"+mm.getNodeDeviceDemuxer("BoomActuator"));
-		System.out.println("NodeDeviceDemuxer for LEDDriver:"+mm.getNodeDeviceDemuxer("LEDDriver"));
+		mm.createControllers(true);
+		System.out.println("Control for DiffDrive:"+mm.getMarlinspikeControl("DiffDrive"));
+		System.out.println("Control for BoomActuator:"+mm.getMarlinspikeControl("BoomActuator"));
+		System.out.println("Control for LEDDriver:"+mm.getMarlinspikeControl("LEDDriver"));
 		try {
-			System.out.println("MarlinspikeControl for BogusWheel:"+mm.getNodeDeviceDemuxer("BogusWheel"));
+			System.out.println("Control for BogusWheel:"+mm.getMarlinspikeControl("BogusWheel"));
 		} catch(NoSuchElementException nse) { System.out.println("passed");}
 		Stream.of(mm.deviceToType).flatMap(map -> map.entrySet().stream()).forEach(e -> System.out.println(e));
-		Collection<TypeSlotChannelEnable> tsce = mm.getTypeSlotChannelEnable();
-		System.out.println("-----");
-		for(TypeSlotChannelEnable tt : tsce)
-			System.out.println(tt);
-		System.out.println("-----");
-		Collection<NodeDeviceDemuxer> listNodeDeviceDemuxer = mm.getNodeDeviceDemuxerByType(tsce);
-		System.out.println("-----");
-		for(NodeDeviceDemuxer ndd : listNodeDeviceDemuxer)
-			System.out.println(ndd);
-		System.out.println("-----");
-		System.out.println("MarlinspikeControl for LeftWheel:"+mm.getMarlinspikeControl("LeftWheel"));
-		System.out.println("MarlinspikeControl for RightWheel:"+mm.getMarlinspikeControl("RightWheel"));
+		Collection<ArrayList<TypeSlotChannelEnable>> tsce = mm.getTypeSlotChannelEnable();
+		System.out.println("---1--");
+		for(ArrayList<TypeSlotChannelEnable> tta : tsce) {
+			System.out.println("+++++");
+			for(TypeSlotChannelEnable tt: tta)
+				System.out.println(tt);
+		}
+		System.out.println("---1--");
+		System.out.println("---2--");
+		for(ArrayList<TypeSlotChannelEnable> tta : tsce) {
+			Collection<DeviceEntry> listNodeDevice = mm.getDeviceEntryByType(tta);
+			System.out.println("+++++");
+			for(DeviceEntry ndd : listNodeDevice)
+				System.out.println(ndd);
+		}
+		System.out.println("---2--");
+		System.out.println("MarlinspikeControl for DiffDrive:"+mm.getMarlinspikeControl("DiffDrive"));
 		try {
 		System.out.println("MarlinspikeControl for BogusWheel:"+mm.getMarlinspikeControl("BogusWheel"));
 		} catch(NoSuchElementException nse) { System.out.println("passed");}
@@ -519,7 +570,7 @@ public class MarlinspikeManager implements Serializable {
 		mm.lun[i].get("Type")+","+mm.lun[i].get("Slot")+","+mm.lun[i].get("SignalPin0")+","+mm.lun[i].get("Channel")+","+
 					mm.lun[i].get("EnablePin")+","+mm.lun[i].get("Direction")+","+mm.lun[i].get("EncoderPin"));
 		}
-		*/
+		
 	}
 
 

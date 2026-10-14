@@ -3,11 +3,13 @@ package com.neocoretechs.robocore.config;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.SlotHandler;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * List of unique devices from RoboCore.properties loaded from parameter tree. 
- * Assembled into collection in {@link MarlinspikeManager}<p>
+ * Part of List of unique devices from RoboCore.properties loaded from parameter tree. 
+ * Assembled into collection in {@link com.neocoretechs.robocore.marlinspike.MarlinspikeManager}<p>
  * Contains the LUN, the Logical Unit Number an integer ordinal, and an integer value for Slot.<p>
  * These are a handled by derived class of specialized classes such as {@link com.neocoretechs.robocore.propulsion.RobotDiffDrive} subclasses.
  * Devices not part of slots used for PWM drivers are designated by {@link com.neocoretechs.robocore.config.DeviceEntry}.
@@ -23,8 +25,7 @@ import java.util.Objects;
  */
 public class SlotEntry extends DeviceEntry implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private int slot;
-	private SlotHandler slotHandler;
+	private ArrayList<SlotHandler> slotHandler = new ArrayList<SlotHandler>();
 
 	public SlotEntry() {}
 	/**
@@ -36,30 +37,26 @@ public class SlotEntry extends DeviceEntry implements Serializable {
 	 */
 	public SlotEntry(String deviceName, String NodeName, int LUN, MarlinspikeControlInterface controller, int slot) {
 		super(deviceName, NodeName, LUN, controller);
-		this.slot = slot;
-		this.slotHandler = new SlotHandler(controller, deviceName, slot);
+		slotHandler.add(new SlotHandler(controller, deviceName, slot));
 	}
 
 	public SlotHandler getSlotHandler() {
-		return slotHandler;
+		return slotHandler.get(0);
 	}
 	
-	@Override
-	public boolean equals(Object obj) {
-		boolean eq = super.equals(obj);
-		if(!eq)
-			return eq;
-		int other = ((SlotEntry)obj).slot;
-		return slot == other;
+	public void setMarlinspikeControl(MarlinspikeControlInterface controller, String deviceName, int slot) {
+		slotHandler.add(new SlotHandler(controller, deviceName, slot));
 	}
 	
-	@Override
-	public int hashCode() {
-		return Objects.hash(getName(), getNodeName(), slot);
+	public SlotHandler getMarlinspikeControl(int slot) {
+		for(SlotHandler s: slotHandler)
+			if(s.getSlot() == slot) 
+				return s;
+		return null;
 	}
 	
 	@Override
 	public String toString() {
-		return String.format("%s slot=%d%n", super.toString(), slot);
+		return String.format("%s slots=%d%n", super.toString(), Arrays.toString(slotHandler.toArray()));
 	}
 }

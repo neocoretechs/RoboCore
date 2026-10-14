@@ -11,7 +11,7 @@ import com.neocoretechs.robocore.config.Robot;
  * Whereas we had subscribers for each named LUN device when another node processed movement commands
  * we collapsed the pipeline and made this internal class handle that traffic in one combined slot designation
  */
-public final class SlotHandler implements Serializable{
+public final class SlotHandler implements Serializable {
 	private static final long serialVersionUID = 1L;
 	private static boolean DEBUG = true;
 	MarlinspikeControlInterface control = null;
@@ -25,6 +25,10 @@ public final class SlotHandler implements Serializable{
 		this.control = control;
 		if(DEBUG)
 			System.out.printf("%s got DeviceName:%s Slot:%d Control %s from MarlinspikeManager%n", this.getClass().getName(),deviceName, slot, control);
+	}
+	
+	public int getSlot() {
+		return slot;
 	}
 	/**
 	 * Set the speed for the 

@@ -103,7 +103,7 @@ public class Robot implements RobotInterface, Serializable {
 		powerScale = Props.toInt("PowerScale"); // div power by divisor
 		dataPort = Props.toString("DataPort");
 		if(WHEEL.length > 0) {
-			robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
+			//robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
 			//kp, ki, kd, ko, pidRate (hz)
 			motionPIDController = new MotionPIDController(Props.toFloat("CrosstrackKp"), 
 					Props.toFloat("CrosstrackKd"), 
@@ -114,13 +114,10 @@ public class Robot implements RobotInterface, Serializable {
 			System.out.printf("%s No WHEEL clauses detected in property file configuration.", this.getClass().getName());
 		}
 		if(DEBUG) {
-			ArrayList<ArrayList<DrivenWheelInterface>> rw = robotDrive.getWheels();
+			ArrayList<DrivenWheelInterface> rw = robotDrive.getWheels();
 			System.out.printf("%sWheel Slots=%d%n", this.getClass().getName(),rw.size());
 			for(int i = 0; i < rw.size(); i++) {
-				System.out.printf("%s Wheel Slot %d Channels=%d%n", this.getClass().getName(), i, rw.get(i).size());
-				for(int j = 0; j < rw.get(i).size(); j++) {
-					System.out.printf("%s Wheel Slot %d entry=%d %s%n", this.getClass().getName(), i, j, rw.get(i).get(j).toString());
-				}
+				System.out.printf("%s Wheel Slot %d Wheel=%d%n", this.getClass().getName(), i, rw.get(i));
 			}
 		}
 		IMUSetpoint = new IMUSetpointInfo();
@@ -140,7 +137,7 @@ public class Robot implements RobotInterface, Serializable {
 		if(DEBUG)
 			System.out.printf("%s.configureMarlinspike marlinSpikeManager=%s asynchDemuxer=%s%n", this.getClass().getName(), marlinspikeManager, marlinspikeManager.getDemuxer());
 		marlinspikeManager.createControllers(true);
-		robotDrive.createControllers(this);
+		//robotDrive.createControllers(this);
 		isActive = new boolean[marlinspikeManager.getDevices().size()];
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,
 		// if it matched the name of this host the entry is included in the collection. 
@@ -318,7 +315,12 @@ public class Robot implements RobotInterface, Serializable {
 	public RobotDiffDriveInterface getDiffDrive() {
 		return robotDrive;
 	}
-
+	
+	@Override
+	public void setDiffDrive(RobotDiffDriveInterface diffDrive) {
+		robotDrive = diffDrive;
+	}
+	
 	@Override
 	public PIDParameterInterface getMotionPIDController() {
 		return motionPIDController;

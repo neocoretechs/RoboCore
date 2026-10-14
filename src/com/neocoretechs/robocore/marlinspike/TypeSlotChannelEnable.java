@@ -9,7 +9,6 @@ import java.util.Optional;
 import com.neocoretechs.robocore.marlinspike.gcodes.G5;
 import com.neocoretechs.robocore.marlinspike.mcodes.M41;
 import com.neocoretechs.robocore.marlinspike.mcodes.M42;
-import com.neocoretechs.robocore.marlinspike.mcodes.status.digitalpin;
 
 /**
  * Class to facilitate the creation of logical controllers in the Marlinspike microcontroller subsystem.
@@ -132,6 +131,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	// This interface is responsible for generating the actual M or G code that is passed to the Marlinspike to activate the device
 	private ActivationInterface activator = null;
 	
+	public TypeSlotChannelEnable() {}
 	/**
 	 * Create a template to initialize a logical controller within the Marlinspike where we have an enable pin and no direction pin.
 	 * @param cntrltype One of SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.

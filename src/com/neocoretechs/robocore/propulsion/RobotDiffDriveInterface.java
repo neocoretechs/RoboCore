@@ -18,12 +18,15 @@ import com.neocoretechs.robocore.marlinspike.SlotHandler;
  *
  */
 public interface RobotDiffDriveInterface {
-	public DrivenWheelInterface getWheel(ArrayList<DrivenWheelInterface> slots, int chan);
 	public int getControllerAxisX(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
 	public int getControllerAxisY(); //derived by Props.toInt(getControllerAxisPropertyName()+"Y");
-	public ArrayList<DrivenWheelInterface> getWheels(int slot);
 	public int getChannels();
-	public ArrayList<ArrayList<DrivenWheelInterface>> getWheels();
-	public SlotHandler getSlotHandler(int slot);
-	public void createControllers(Robot robot) throws IOException;
+	public ArrayList<DrivenWheelInterface> getWheels();
+	public SlotHandler getMarlinspikeControl(int slot);
+	/**
+	 * Return the wheel channels for a given slot
+	 * @param slot target slot
+	 * @return ArrayList of channels of DriveWheelInterface for this slot or null if slot wasnt found
+	 */
+	public ArrayList<DrivenWheelInterface> getWheels(int slot);
 }
