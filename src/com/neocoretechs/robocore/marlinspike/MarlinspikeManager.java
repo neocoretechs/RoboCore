@@ -161,7 +161,7 @@ public class MarlinspikeManager implements Serializable {
 						}
 						int ti = sl.indexOf(tsce);
 						if(ti == -1) {
-							tsce = RobotDiffDrive.setDrive(lun, wheel, pid, (String)name.get(), ienable, slot.get(), ochannel.get());
+							tsce = RobotDiffDrive.setDrive(lun, wheel, pid, (String)name.get(), i, slot.get(), ochannel.get());
 							sl.add(tsce);
 							configureMarlinspike(deviceEntry, lun[i], tsce);
 						} else {

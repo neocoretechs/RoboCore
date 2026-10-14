@@ -113,13 +113,7 @@ public class Robot implements RobotInterface, Serializable {
 		} else {
 			System.out.printf("%s No WHEEL clauses detected in property file configuration.", this.getClass().getName());
 		}
-		if(DEBUG) {
-			ArrayList<DrivenWheelInterface> rw = robotDrive.getWheels();
-			System.out.printf("%sWheel Slots=%d%n", this.getClass().getName(),rw.size());
-			for(int i = 0; i < rw.size(); i++) {
-				System.out.printf("%s Wheel Slot %d Wheel=%d%n", this.getClass().getName(), i, rw.get(i));
-			}
-		}
+
 		IMUSetpoint = new IMUSetpointInfo();
 		IMUSetpoint.setMaximum(Props.toFloat("MaxIMUDeviationDegrees")); // max deviation allowed from course
 		IMUSetpoint.setMinimum(Props.toFloat("MinIMUDeviationDegrees")); // min deviation

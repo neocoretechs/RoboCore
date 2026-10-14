@@ -591,6 +591,12 @@ public class MotionController extends AbstractNodeMain {
 		// slot 0 primary drive
 		try {
 			wheels = getChannel1And2OfSlot0();
+			if(DEBUG) {
+				System.out.printf("%sWheel Slots=%d%n", this.getClass().getName(),wheels.length);
+				for(int i = 0; i < wheels.length; i++) {
+					System.out.printf("%s Wheel Slot %d Wheel=%d%n", this.getClass().getName(), i, wheels[i]);
+				}
+			}
 		} catch(IOException ioe) {
 			throw new RuntimeException(ioe);
 		}
@@ -2485,6 +2491,9 @@ public class MotionController extends AbstractNodeMain {
 	float yawDeg   = 57.2958 * yaw;
 	 */
 	public static void main(String[] args) throws IOException {
+		Robot robot = new Robot();
+		MotionController motionController = new MotionController(args);
+		MotionController.robot = robot;
 		ArrayList<String> pubs = new ArrayList<String>();
 		Iterator<?> it = MotionController.robot.getManager().getDevices().keys().asIterator();
 		while(it.hasNext()) {
@@ -2500,7 +2509,7 @@ public class MotionController extends AbstractNodeMain {
 				.findFirst().get());
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("BoomActuator"))
 				.findFirst().get());
-		System.out.println(pubs.stream().filter(e -> e.toString().contains("LeftWheel"))
+		System.out.println(pubs.stream().filter(e -> e.toString().contains("DiffDrive"))
 				.findFirst().get());
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("LiftActuator"))
 				.findFirst().get());
