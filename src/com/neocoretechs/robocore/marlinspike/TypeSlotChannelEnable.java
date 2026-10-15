@@ -65,7 +65,7 @@ import com.neocoretechs.robocore.marlinspike.mcodes.M42;
  */
 public class TypeSlotChannelEnable implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	typeNames cntrltype;
 	int pin;
 	private int slot;
@@ -102,7 +102,7 @@ public class TypeSlotChannelEnable implements Serializable {
 		OUTPUTPIN("OutputPin"),
 		INPUTPIN("InputPin"),
 		DELAYHBRIDGE("DelayH-Bridge");
-		String name;
+		public String name;
 		typeNames(String name) { this.name = name;} 
 		public String val() { return name; }
 		public ActivationInterface activatorFactory(TypeSlotChannelEnable tsce) {
@@ -144,6 +144,8 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.slot = slot;
 		this.channel = channel;
 		this.enable = enable;
+		if(DEBUG)
+			System.out.printf("%s type=%s slot=%d channel=%d enable=%d%n", this.getClass().getName(), cntrltype, slot, channel, enable);
 		this.activator = cntrltype.activatorFactory(this);
 		isSlot = true;
 		isChannel = true;
@@ -162,6 +164,8 @@ public class TypeSlotChannelEnable implements Serializable {
 		this.channel = channel;
 		this.enable = enable;
 		this.dirdefault = dirdefault;
+		if(DEBUG)
+			System.out.printf("%s type=%s slot=%d channel=%d enable=%d dirdefault=%d%n", this.getClass().getName(), cntrltype, slot, channel, enable, dirdefault);
 		this.activator = cntrltype.activatorFactory(this);
 		isSlot = true;
 		isChannel = true;
@@ -170,6 +174,8 @@ public class TypeSlotChannelEnable implements Serializable {
 	public TypeSlotChannelEnable(typeNames cntrltype, int pin) {
 		this.cntrltype = cntrltype;
 		this.pin = pin;
+		if(DEBUG)
+			System.out.printf("%s type=%s pin=%d%n", this.getClass().getName(), cntrltype, pin);
 		this.activator = cntrltype.activatorFactory(this);
 		isSlot = false;
 		isChannel = false;

@@ -105,11 +105,14 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 			typeNames eType = null;
 			//eType = typeNames.valueOf(type) will fail because we use mixed case names;
 			for(typeNames et : typeNames.values()) {
-				if(et.name().equals((String)type.get())) {
+				if(et.name.equals((String)type.get())) {
 					eType = et;
 					break;
 				}
 			}
+			if(eType == null)
+				throw new RuntimeException("Type of:"+(String)type.get()+" did not resolve to a legitimate type for "+name+" slot "+slot+" channel "+chan);
+			
 			return new RobotWheel(name, eType, slot, chan, enablePin.get(),
 					wheelDiameter.get(), 
 					wheelTrack.get(), 

@@ -57,6 +57,6 @@ public class SlotEntry extends DeviceEntry implements Serializable {
 	
 	@Override
 	public String toString() {
-		return String.format("%s slots=%d%n", super.toString(), Arrays.toString(slotHandler.toArray()));
+		return String.format("%s slots=%s%n", super.toString(), Arrays.toString(slotHandler.toArray()));
 	}
 }
