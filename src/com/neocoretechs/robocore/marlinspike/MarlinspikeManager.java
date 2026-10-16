@@ -24,10 +24,7 @@ import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.config.StickAxis;
 import com.neocoretechs.robocore.config.TriggerAxis;
-import com.neocoretechs.robocore.config.POVAxisUp;
-import com.neocoretechs.robocore.config.POVAxisDown;
-import com.neocoretechs.robocore.config.POVAxisLeft;
-import com.neocoretechs.robocore.config.POVAxisRight;
+import com.neocoretechs.robocore.config.POVAxis;
 import com.neocoretechs.robocore.config.Button;
 
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
@@ -235,20 +232,8 @@ public class MarlinspikeManager implements Serializable {
 					deviceEntry.setMarlinspikeControl(controller);
 					configureMarlinspike(deviceEntry, lun[i], tsce);
 				}
-				Optional<Integer> controllerAxisXO = Optional.ofNullable(axis[i].get("AxisX")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
-				Optional<Integer> controllerAxisYO = Optional.ofNullable(axis[i].get("AxisY")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
-				if(controllerAxisXO.isPresent()) {
-					//deviceEntry.setControllerAxisX(controllerAxisXO.get());
-				} else {
-					System.out.println("<<WARNING USING X AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
-					//deviceEntry.setControllerAxisX(0);
-				}
-				if(controllerAxisYO.isPresent()) {
-					//deviceEntry.setControllerAxisY(controllerAxisYO.get());
-				} else {
-					System.out.println("<<WARNING USING Y AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
-					//deviceEntry.setControllerAxisY(2);
-				}
+				// configure the manual controls if any
+				configureManualControl(deviceEntry, axis[i], button[i]);
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				// tsce gen M10
 				List<String> M10Gen = tsce.genM10();
@@ -392,61 +377,28 @@ public class MarlinspikeManager implements Serializable {
 		}
 		switch(axisType) {
 		case "Stick":
-			if(axis.get("AxisX") != null && axis.get("AxisY") != null) {
-				String sx = (String) axis.get("AxisX");
-				String sy = (String) axis.get("AxisY");
-				int x = Integer.parseInt(sx);
-				int y = Integer.parseInt(sy);
-				if( y != 0 || x != 0) {
-					de.setManualcontrol(new StickAxis(new int[]{x,y}));
-				}
-			} else {
-				throw new RuntimeException(String.format("%s.publishPeripheral Axis X or Y missing from config%n",this.getClass().getName()));
-			}
+			Optional<Integer> x = Optional.ofNullable(axis.get("AxisX")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+			if(x.isEmpty())
+				throw new RuntimeException(String.format("%s AxisX missing from config for %s%n",this.getClass().getName(), de));
+			Optional<Integer> y = Optional.ofNullable(axis.get("AxisY")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+			if(y.isEmpty())
+				throw new RuntimeException(String.format("%s AxisY missing from config for %s%n",this.getClass().getName(), de));
+			de.setManualcontrol(new StickAxis(new int[]{x.get(),y.get()}));
 			break;
 		case "Trigger":
-			String ax = (String) axis.get("Axis");
-			if(ax == null) {
-				throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
-			}
-			int a = Integer.parseInt(ax);
-			de.setManualcontrol(new TriggerAxis(new int[]{a}));
+			Optional<Integer> ax = Optional.ofNullable(axis.get("Axis")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+			if(ax.isEmpty())
+				throw new RuntimeException(String.format("%s Axis missing from config for %s%n",this.getClass().getName(), de));
+			de.setManualcontrol(new TriggerAxis(new int[]{ax.get()}));
 			break;
 		case "Button":
-			String bu = (String) axis.get("Axis");
-			if(bu == null) {
-				throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
-			}
-			a = Integer.parseInt(bu);
-			de.setManualcontrol(new Button(new int[]{a}));
+			ax = Optional.ofNullable(axis.get("Axis")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+			if(ax.isEmpty())
+				throw new RuntimeException(String.format("%s Axis missing from config for %s%n",this.getClass().getName(), de));
+			de.setManualcontrol(new Button(new int[]{ax.get()}));
 			break;
 		case "POV":
-			ax = (String) axis.get("Axis");
-			if(ax == null) {
-				throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
-			}
-			a = Integer.parseInt(ax);
-			String saxUp = (String) axis.get(("AxisUp"));
-			if(saxUp != null) {
-				de.setManualcontrol(new POVAxisUp());
-			} else {
-				String saxDown = (String) axis.get(("AxisDown"));
-				if(saxDown != null) {
-					de.setManualcontrol(new POVAxisDown());
-				} else {
-					String saxLeft = (String) axis.get(("AxisLeft"));
-					if(saxLeft != null) {
-						de.setManualcontrol(new POVAxisLeft());
-					} else {
-						String saxRight = (String) axis.get(("AxisRight"));
-						if(saxRight != null) {
-							de.setManualcontrol(new POVAxisRight());
-						} else {
-							throw new RuntimeException(String.format("%s.publishPeripheral AxisDown missing from config%n",this.getClass().getName()));
-						}
-					}	
-				}
-			}
+			de.setManualcontrol(new POVAxis());
 			break;
 		default:
 			throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+de);

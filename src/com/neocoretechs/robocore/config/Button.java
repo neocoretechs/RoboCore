@@ -1,5 +1,9 @@
 package com.neocoretechs.robocore.config;
-
+/**
+ * Defines a Button. Upon configuration we have to set the position of the button desired.
+ * We do this through the constructor.
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2026
+ */
 public final class Button implements AxisInterface<Boolean> {
 	private static final long serialVersionUID = 1L;
 	private static final String type = "Button";

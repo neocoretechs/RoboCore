@@ -1,5 +1,9 @@
 package com.neocoretechs.robocore.config;
-
+/**
+ * Defines a Trigger axis. Upon configuration we have to set the position of the axis desired.
+ * We do this through the constructor.
+ * @author Jonathan Groff Copyright (C) NeoCoreTechs 2026
+ */
 public final class TriggerAxis implements AxisInterface<Integer> {
 	private static final long serialVersionUID = 1L;
 	private static final String type = "Trigger";
@@ -26,6 +30,6 @@ public final class TriggerAxis implements AxisInterface<Integer> {
 	}
 	@Override
 	public Integer matches(float[] axes) {
-		return (int)axes[positionArray[0]]*1000;
+		return (int)(axes[positionArray[0]]*1000.0f);
 	}
 }

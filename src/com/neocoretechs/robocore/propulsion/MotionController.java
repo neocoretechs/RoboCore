@@ -45,8 +45,10 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.SlotEntry;
+import com.neocoretechs.robocore.config.AxisInterface;
 import com.neocoretechs.robocore.config.DeviceEntry;
-
+import com.neocoretechs.robocore.config.POVAxis;
+import com.neocoretechs.robocore.config.POVAxis.POVType;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
@@ -1584,7 +1586,8 @@ public class MotionController extends AbstractNodeMain {
 		// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
 		// If the button square or circle is depressed, rotate in place at stick position Y speed
 		if( buttons[7] != 0 ) { // left pivot
-			speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
+			int[] xy = (int[]) robot.getDiffDrive().getManualControl().matches(axes);
+			speedR = -((float)xy[1]);
 			speedL = -speedR;
 			// set it up to send
 			publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
@@ -1593,7 +1596,8 @@ public class MotionController extends AbstractNodeMain {
 			return;
 		} else {
 			if( buttons[5] != 0 ) { // right pivot
-				speedL = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
+				int[] xy = (int[]) robot.getDiffDrive().getManualControl().matches(axes);
+				speedL = -((float)xy[1]);
 				speedR = -speedL;
 				// set it up to send
 				publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
@@ -1604,9 +1608,9 @@ public class MotionController extends AbstractNodeMain {
 		}
 		// get radian measure of left stick x,y
 		if(DEBUG)
-			System.out.printf("%s controller AxisX:%d Axisy:%d%n",this.getClass().getName(),robot.getDiffDrive().getControllerAxisX(),robot.getDiffDrive().getControllerAxisY());
-		
-		float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[robot.getDiffDrive().getControllerAxisX()]);
+			System.out.printf("%s controller Axes:%s%n",this.getClass().getName(),Arrays.toString((int[])robot.getDiffDrive().getManualControl().matches(axes)));
+		int[] xy = (int[]) robot.getDiffDrive().getManualControl().matches(axes);
+		float radians = (float) Math.atan2((double)xy[0],(double)xy[1]);
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 
 		// horizontal axis is 0 to -180/180 degrees, we want 0 at the top 
@@ -1696,7 +1700,7 @@ public class MotionController extends AbstractNodeMain {
 		// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
 		// or on the computed derivation from desired course if a straight line course is set.
 		// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-		speedR = -axes[robot.getDiffDrive().getControllerAxisY()] * SPEEDSCALE;
+		speedR = -(float)xy[1];
 		speedL = speedR;
 		// PTerm has the positive or negative difference in degrees (left or right offset)
 		// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
@@ -1716,7 +1720,7 @@ public class MotionController extends AbstractNodeMain {
 		// This assumes that at half speed we can still make a 90 degree turn.
 		// We use value of IMU vs desired course to turn left or right via
 		// a plus or minus value from the Compute method set in the variable called PTerm.
-		float radius = Math.abs(axes[robot.getDiffDrive().getControllerAxisY()]) * SPEEDSCALE;
+		float radius = Math.abs((float)xy[1]);
 		float arcin = 0, arcout = 0;
 		//
 		if( holdBearing ) {
@@ -1890,91 +1894,55 @@ public class MotionController extends AbstractNodeMain {
 		Iterator<?> it = robot.getManager().getDevices().keySet().iterator();
 		while(it.hasNext()) {
 			DeviceEntry ndd = (DeviceEntry) it.next();
-			if(!(ndd.getName().endsWith("Wheel"))) {
 				int luni = ndd.getLUN();
-				ConcurrentHashMap<String, Object> axis = robot.getAXIS()[luni];
-				if(axis == null) {
-					throw new RuntimeException(String.format("%s.publishPeripheral can not get the axis for LUN %d based on configs.%n",this.getClass().getName(),luni));
-				}
-				String axisType = (String) axis.get("AxisType");
-				if(axisType == null) {
-					throw new RuntimeException(String.format("%s.publishPeripheral NO axis type attribute device %s%n", this.getClass().getName(), ndd));
-				}
-				if(DEBUG) {
-					System.out.printf("%s.publishPeripheral axis type %s attribute device %s%n", this.getClass().getName(), axisType, ndd);
-				}
-				switch(axisType) {
-				case "Stick":
-					if(axis.get("AxisX") != null && axis.get("AxisY") != null) {
-						String sx = (String) axis.get("AxisX");
-						String sy = (String) axis.get("AxisY");
-						float x = -axes[Integer.parseInt(sx)] * 1000;
-						float y = -axes[Integer.parseInt(sy)] * 1000;
-						if( y != 0 || x != 0) {
-							publishAxis(connectedNode, pubschannel, ndd.getName(), (int)y, (int)x);
-							publishedLUNRestValue.replace(luni, false);
-						} else {
-							// rest value here
-							if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
-								publishAxis(connectedNode, pubschannel, ndd.getName(), (int)y, (int)x); // not published, so hit once
-								publishedLUNRestValue.replace(luni, true); // and set it as published at rest
-							}
-						}
-					} else {
-							throw new RuntimeException(String.format("%s.publishPeripheral Axis X or Y missing from config%n",this.getClass().getName()));
-					}
+				AxisInterface af = ndd.getManualControl();
+				switch(af.getType()) {
+				case "Button":
 					break;
-				case "Trigger":
-					String ax = (String) axis.get("Axis");
-					if(ax == null) {
-						throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
-					}
-					float a = axes[Integer.parseInt(ax)] * 1000;
-					if(a != -1000) {
-						publishAxis(connectedNode, pubschannel, ndd.getName(), (int)a);
+				case "Stick":
+					int[] xy = (int[])af.matches(axes);
+					if( xy[0] != 0 || xy[1] != 0) {
+						publishAxis(connectedNode, pubschannel, ndd.getName(), xy[0], xy[1]);
 						publishedLUNRestValue.replace(luni, false);
 					} else {
 						// rest value here
 						if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
-							publishAxis(connectedNode, pubschannel, ndd.getName(), (int)a); // not published, so hit it
+							publishAxis(connectedNode, pubschannel, ndd.getName(), xy[0], xy[1]); // not published, so hit once
+							publishedLUNRestValue.replace(luni, true); // and set it as published at rest
+						}
+					}
+					break;
+				case "Trigger":
+					int[] a = (int[])af.matches(axes);
+					if(a[0] != -1000) {
+						publishAxis(connectedNode, pubschannel, ndd.getName(), a[0]);
+						publishedLUNRestValue.replace(luni, false);
+					} else {
+						// rest value here
+						if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
+							publishAxis(connectedNode, pubschannel, ndd.getName(), a[0]); // not published, so hit it
 							publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 						}
 					}
 					break;
 				case "POV":
-					ax = (String) axis.get("Axis");
-					if(ax == null) {
-						throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
-					}
-					a = axes[Integer.parseInt(ax)] * 1000;
-					String saxUp = (String) axis.get(("AxisUp"));
-					if(saxUp == null) {
-						publishAxis(connectedNode, pubschannel, ndd.getName(), (int)a);
-					} else {
-						String saxDown = (String) axis.get(("AxisDown"));
-						if(saxDown == null) {
-							throw new RuntimeException(String.format("%s.publishPeripheral AxisDown missing from config%n",this.getClass().getName()));
-						}
-						float axUp = Float.parseFloat(saxUp) * 1000;
-						float axDown = Float.parseFloat(saxDown) * 1000;
-						if(a == axUp) {
+					POVType pov = (POVType) af.matches(axes);
+					if(pov == POVType.AxisUp) {
 							publishAxis(connectedNode, pubschannel, ndd.getName(), 1000);
 						} else {
-							if(a == axDown) {
+							if(pov == POVType.AxisDown) {
 								publishAxis(connectedNode, pubschannel, ndd.getName(), -1000);
 							} else {
-								if(a == 0) {
+								if(pov == POVType.AxisLeft || pov == POVType.AxisRight) {
 									publishAxis(connectedNode, pubschannel, ndd.getName(), 0);
 								}
 							}
 						}
 					}
 					break;
-				default:
-					throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+ndd.getName());
-				}
-			}
-		}	
+					//default:
+					//throw new RuntimeException("Unknown Axis type in configuration:"+af.getType()+" for LUN "+ndd.getName());
+				}	
 	}
 
 	/**
@@ -2503,7 +2471,7 @@ public class MotionController extends AbstractNodeMain {
 				System.out.println("Bringing up publisher "+ndd.getName());
 			pubs.add("/"+ndd.getName());
 		}
-		System.out.printf("Diffydrive; %d %d %n", robot.getDiffDrive().getControllerAxisX(), robot.getDiffDrive().getControllerAxisY());
+		System.out.printf("Diffydrive; %s%n", robot.getDiffDrive());
 		System.out.println("----");
 		System.out.println(pubs.stream().filter(e -> e.toString().contains("LEDDriver"))
 				.findFirst().get());
