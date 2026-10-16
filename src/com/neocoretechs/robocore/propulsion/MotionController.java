@@ -1207,11 +1207,9 @@ public class MotionController extends AbstractNodeMain {
 	
 
 	/**
-	* {@link com.neocoretechs.robocore.MegaPubs#configureSubscriberListener}<br>
 	* Configure a publisher to talk to a MarlinSpikeControlInterface which receives 
 	* a message of type: LUN#, value of control for that LUN#. <br>
-	* Create publishing channels to send commands to remote destination to supply 32 bit int values 
-	* and apply those to the non-slots. <br>
+	* Create publishing channels based on configured {@link DeviceEntry}<br>
 	* The slotted entries represent a slot in the configuration which can be an aggregate of property file LUN's;
 	* a collection of node, device, channel of a controller attached to a ROS node, which has
 	* a number of tty ports (devices) which have Marlinspike boards attached (Mega2560 or Pico via USB running the firmware)
@@ -1232,11 +1230,11 @@ public class MotionController extends AbstractNodeMain {
 		while(it.hasNext()) {
 			DeviceEntry ndd  = (DeviceEntry) it.next();
 			// non-slot device demuxxers, we configure slotted ones as slots
-			if(ndd instanceof SlotEntry) {
-				if(DEBUG)
-					System.out.printf("%s configurePublisherListener skipping slot for DeviceEntry %s%n", this.getClass().getName(),(ndd != null ? ndd : "DEVICE NULL"));
-				continue;
-			}
+			//if(ndd instanceof SlotEntry) {
+			//	if(DEBUG)
+			//		System.out.printf("%s configurePublisherListener skipping slot for DeviceEntry %s%n", this.getClass().getName(),(ndd != null ? ndd : "DEVICE NULL"));
+			//	continue;
+			//}
 			if(DEBUG)
 				System.out.printf("%s configurePublisherListener for DeviceEntry %s%n", this.getClass().getName(),(ndd != null ? ndd : "DEVICE NULL"));
 			//if(ndd.getNodeName().equals(serveNode)) {
@@ -1586,8 +1584,8 @@ public class MotionController extends AbstractNodeMain {
 		// Start the motion processing for the differential drive using joystick axes[0] and [2] left stick
 		// If the button square or circle is depressed, rotate in place at stick position Y speed
 		if( buttons[7] != 0 ) { // left pivot
-			int[] xy = (int[]) robot.getDiffDrive().getManualControl().matches(axes);
-			speedR = -((float)xy[1]);
+			Integer[] xy = (Integer[]) robot.getDiffDrive().getManualControl().matches(axes);
+			speedR = -xy[1].floatValue();
 			speedL = -speedR;
 			// set it up to send
 			publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
@@ -1596,8 +1594,8 @@ public class MotionController extends AbstractNodeMain {
 			return;
 		} else {
 			if( buttons[5] != 0 ) { // right pivot
-				int[] xy = (int[]) robot.getDiffDrive().getManualControl().matches(axes);
-				speedL = -((float)xy[1]);
+				Integer[] xy = (Integer[]) robot.getDiffDrive().getManualControl().matches(axes);
+				speedL = -(xy[1].floatValue());
 				speedR = -speedL;
 				// set it up to send
 				publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
@@ -1607,10 +1605,10 @@ public class MotionController extends AbstractNodeMain {
 			}
 		}
 		// get radian measure of left stick x,y
+		Integer[] xy = (Integer[]) robot.getDiffDrive().getManualControl().matches(axes);
 		if(DEBUG)
-			System.out.printf("%s controller Axes:%s%n",this.getClass().getName(),Arrays.toString((int[])robot.getDiffDrive().getManualControl().matches(axes)));
-		int[] xy = (int[]) robot.getDiffDrive().getManualControl().matches(axes);
-		float radians = (float) Math.atan2((double)xy[0],(double)xy[1]);
+			System.out.printf("%s controller Axes:%s%n",this.getClass().getName(),Arrays.toString(xy));
+		float radians = (float) Math.atan2(xy[0].doubleValue(),xy[1].doubleValue());
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 
 		// horizontal axis is 0 to -180/180 degrees, we want 0 at the top 
@@ -1700,7 +1698,7 @@ public class MotionController extends AbstractNodeMain {
 		// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
 		// or on the computed derivation from desired course if a straight line course is set.
 		// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-		speedR = -(float)xy[1];
+		speedR = -xy[1].floatValue();
 		speedL = speedR;
 		// PTerm has the positive or negative difference in degrees (left or right offset)
 		// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
@@ -1720,7 +1718,7 @@ public class MotionController extends AbstractNodeMain {
 		// This assumes that at half speed we can still make a 90 degree turn.
 		// We use value of IMU vs desired course to turn left or right via
 		// a plus or minus value from the Compute method set in the variable called PTerm.
-		float radius = Math.abs((float)xy[1]);
+		float radius = Math.abs(xy[1].floatValue());
 		float arcin = 0, arcout = 0;
 		//
 		if( holdBearing ) {
@@ -1872,6 +1870,8 @@ public class MotionController extends AbstractNodeMain {
 	 *<br>
 	 * Assume we handle propulsion in other method, so ignore the LUN device names that end in 'Wheel' and process all others, extracting the axis
 	 * definitions, retrieving the values from the axes array, and publishing them to the LUN.name channels by:<br>
+	 * If you define a button, and it matches the config for the DeviceEntry, and said pressed button matches the configured button
+	 * positions defined in the button associated with the device entry, it will be published with a 1 on that topic
 	 * <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
 	 * @param connectedNode Our Ros node here
 	 * @param pubschannel Collection of publisher channels that represent axes
@@ -1894,55 +1894,74 @@ public class MotionController extends AbstractNodeMain {
 		Iterator<?> it = robot.getManager().getDevices().keySet().iterator();
 		while(it.hasNext()) {
 			DeviceEntry ndd = (DeviceEntry) it.next();
-				int luni = ndd.getLUN();
-				AxisInterface af = ndd.getManualControl();
-				switch(af.getType()) {
-				case "Button":
-					break;
-				case "Stick":
-					int[] xy = (int[])af.matches(axes);
-					if( xy[0] != 0 || xy[1] != 0) {
-						publishAxis(connectedNode, pubschannel, ndd.getName(), xy[0], xy[1]);
-						publishedLUNRestValue.replace(luni, false);
-					} else {
-						// rest value here
-						if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
-							publishAxis(connectedNode, pubschannel, ndd.getName(), xy[0], xy[1]); // not published, so hit once
-							publishedLUNRestValue.replace(luni, true); // and set it as published at rest
-						}
+			int luni = ndd.getLUN();
+			AxisInterface af = ndd.getManualControl();
+			switch(af.getType()) {
+			case "Button":
+				Boolean b = (Boolean)af.matches(axes);
+				if(b)
+					publishAxis(connectedNode, pubschannel, ndd.getName(), 1);
+				break;
+			case "Stick":
+				Integer[] xy = (Integer[])af.matches(axes);
+				if( xy[0].intValue() != 0 || xy[1].intValue() != 0) {
+					publishAxis(connectedNode, pubschannel, ndd.getName(), xy[0].intValue(), xy[1].intValue());
+					publishedLUNRestValue.replace(luni, false);
+				} else {
+					// rest value here
+					if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
+						publishAxis(connectedNode, pubschannel, ndd.getName(), xy[0].intValue(), xy[1].intValue()); // not published, so hit once
+						publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 					}
-					break;
-				case "Trigger":
-					int[] a = (int[])af.matches(axes);
-					if(a[0] != -1000) {
-						publishAxis(connectedNode, pubschannel, ndd.getName(), a[0]);
-						publishedLUNRestValue.replace(luni, false);
-					} else {
-						// rest value here
-						if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
-							publishAxis(connectedNode, pubschannel, ndd.getName(), a[0]); // not published, so hit it
-							publishedLUNRestValue.replace(luni, true); // and set it as published at rest
-						}
+				}
+				break;
+			case "Trigger":
+				Integer a = (Integer)af.matches(axes);
+				if(a.intValue() != -1000) {
+					publishAxis(connectedNode, pubschannel, ndd.getName(), a.intValue());
+					publishedLUNRestValue.replace(luni, false);
+				} else {
+					// rest value here
+					if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
+						publishAxis(connectedNode, pubschannel, ndd.getName(), a.intValue()); // not published, so hit it
+						publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 					}
-					break;
-				case "POV":
-					POVType pov = (POVType) af.matches(axes);
-					if(pov == POVType.AxisUp) {
-							publishAxis(connectedNode, pubschannel, ndd.getName(), 1000);
+				}
+				break;
+			case "POV":
+				POVType pov = (POVType) af.matches(axes);
+				if(pov == POVType.AxisUp) {
+					publishAxis(connectedNode, pubschannel, ndd.getName(), 1000);
+				} else {
+					if(pov == POVType.AxisDown) {
+						publishAxis(connectedNode, pubschannel, ndd.getName(), -1000);
+					} else {
+						if(pov == POVType.AxisLeft || pov == POVType.AxisRight) {
+							publishAxis(connectedNode, pubschannel, ndd.getName(), 0);
 						} else {
-							if(pov == POVType.AxisDown) {
-								publishAxis(connectedNode, pubschannel, ndd.getName(), -1000);
+							if(pov == POVType.AxisUpperLeft) {
+								publishAxis(connectedNode, pubschannel, ndd.getName(), 500);
 							} else {
-								if(pov == POVType.AxisLeft || pov == POVType.AxisRight) {
-									publishAxis(connectedNode, pubschannel, ndd.getName(), 0);
+								if(pov == POVType.AxisUpperRight) {
+									publishAxis(connectedNode, pubschannel, ndd.getName(), 250);
+								} else {
+									if(pov == POVType.AxisLowerLeft) {
+										publishAxis(connectedNode, pubschannel, ndd.getName(), -500);
+									} else {
+										if(pov == POVType.AxisLowerRight) {
+											publishAxis(connectedNode, pubschannel, ndd.getName(), -250);
+										}
+									}
 								}
 							}
 						}
 					}
-					break;
-					//default:
-					//throw new RuntimeException("Unknown Axis type in configuration:"+af.getType()+" for LUN "+ndd.getName());
-				}	
+				}
+				break;
+			default:
+				throw new RuntimeException("Unknown Axis type in configuration:"+af.getType()+" for LUN "+ndd.getName());
+			}
+		}	
 	}
 
 	/**
@@ -2240,8 +2259,7 @@ public class MotionController extends AbstractNodeMain {
 	 * @param heading
 	 * @throws IOException
 	 */
-	private void publishRobotMoveRelative(ConnectedNode connectedNode,
-			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, ComeToHeadingStamped heading) throws IOException {
+	private void publishRobotMoveRelative(ConnectedNode connectedNode,Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, ComeToHeadingStamped heading) throws IOException {
 		int[] speeds = null;
 		synchronized(euler) {
 			if((System.currentTimeMillis()-euler.eulerTime) > (System.currentTimeMillis()-heading.getTime().getData())) {

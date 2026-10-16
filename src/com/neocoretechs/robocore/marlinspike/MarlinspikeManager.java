@@ -154,7 +154,7 @@ public class MarlinspikeManager implements Serializable {
 						controller = createController(controllerInst, maxValue);
 						// create a new template
 						if(robot.getDiffDrive() == null) {
-							deviceEntry = new RobotDiffDrive(robot, (String)name.get(), (String)nodeName.get(), i, controller, slot.get(), lun, wheel, pid, axis);
+							deviceEntry = new RobotDiffDrive(robot, "DiffDrive", (String)nodeName.get(), i, controller, slot.get(), lun, wheel, pid, axis);
 							robot.setDiffDrive((RobotDiffDriveInterface) deviceEntry);
 						} else
 							deviceEntry = (DeviceEntry) robot.getDiffDrive();
@@ -233,7 +233,10 @@ public class MarlinspikeManager implements Serializable {
 					configureMarlinspike(deviceEntry, lun[i], tsce);
 				}
 				// configure the manual controls if any
-				configureManualControl(deviceEntry, axis[i], button[i]);
+				if(i < axis.length)
+					configureManualControl(deviceEntry, axis[i]);
+				if(i < button.length)
+					configureManualControl(deviceEntry, button[i]);
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				// tsce gen M10
 				List<String> M10Gen = tsce.genM10();
@@ -361,40 +364,45 @@ public class MarlinspikeManager implements Serializable {
 	/**
 	 * Configure the manual control for the DeviceEntry, if any. call setManulaControl on DeviceEntry with new AxisInterface generic.
 	 * @param de DeviceEntry target
-	 * @param axis element at AXIS array index of DeviceEntry
+	 * @param control element at AXIS or BUTTON etc array index of DeviceEntry
 	 * @param buttonelelment at BUTTON array index of DeviceEntry
 	 */
-	public void configureManualControl(DeviceEntry de, TypedWrapper axis, TypedWrapper button) {
-		if(axis == null) {
-			throw new RuntimeException(String.format("%s.publishPeripheral can not get the axis  %s based on configs.%n",this.getClass().getName(),de));
+	public void configureManualControl(DeviceEntry de, TypedWrapper control) {
+		if(DEBUG) {
+			System.out.printf("%s.configureManualControl control size=%d type %s%n", this.getClass().getName(), control.size(), de);
 		}
-		String axisType = (String) axis.get("AxisType");
+		if(control == null) {
+			throw new RuntimeException(String.format("%s.configureManualControl can not get the axis  %s based on configs.%n",this.getClass().getName(),de));
+		}
+		String axisType = (String) control.get("AxisType");
 		if(axisType == null) {
-			throw new RuntimeException(String.format("%s.publishPeripheral NO axis type attribute device %s%n", this.getClass().getName(), de));
+			axisType = (String) control.get("Button");
+			if(axisType == null)
+				throw new RuntimeException(String.format("%s.configureManualControl NO axis or button type attribute device %s%n", this.getClass().getName(), de));
 		}
 		if(DEBUG) {
-			System.out.printf("%s.publishPeripheral axis type %s attribute device %s%n", this.getClass().getName(), axisType, de);
+			System.out.printf("%s.configureManualControl axis type %s attribute device %s%n", this.getClass().getName(), axisType, de);
 		}
 		switch(axisType) {
 		case "Stick":
-			Optional<Integer> x = Optional.ofNullable(axis.get("AxisX")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+			Optional<Integer> x = Optional.ofNullable(control.get("AxisX")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 			if(x.isEmpty())
-				throw new RuntimeException(String.format("%s AxisX missing from config for %s%n",this.getClass().getName(), de));
-			Optional<Integer> y = Optional.ofNullable(axis.get("AxisY")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+				throw new RuntimeException(String.format("%s.configureManualControl AxisX missing from config for %s%n",this.getClass().getName(), de));
+			Optional<Integer> y = Optional.ofNullable(control.get("AxisY")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 			if(y.isEmpty())
-				throw new RuntimeException(String.format("%s AxisY missing from config for %s%n",this.getClass().getName(), de));
+				throw new RuntimeException(String.format("%s.configureManualControl AxisY missing from config for %s%n",this.getClass().getName(), de));
 			de.setManualcontrol(new StickAxis(new int[]{x.get(),y.get()}));
 			break;
 		case "Trigger":
-			Optional<Integer> ax = Optional.ofNullable(axis.get("Axis")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+			Optional<Integer> ax = Optional.ofNullable(control.get("Axis")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 			if(ax.isEmpty())
-				throw new RuntimeException(String.format("%s Axis missing from config for %s%n",this.getClass().getName(), de));
+				throw new RuntimeException(String.format("%s.configureManualControl Axis missing from config for %s%n",this.getClass().getName(), de));
 			de.setManualcontrol(new TriggerAxis(new int[]{ax.get()}));
 			break;
 		case "Button":
-			ax = Optional.ofNullable(axis.get("Axis")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
+			ax = Optional.ofNullable(control.get("Button")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 			if(ax.isEmpty())
-				throw new RuntimeException(String.format("%s Axis missing from config for %s%n",this.getClass().getName(), de));
+				throw new RuntimeException(String.format("%s.configureManualControl Button missing from config for %s%n",this.getClass().getName(), de));
 			de.setManualcontrol(new Button(new int[]{ax.get()}));
 			break;
 		case "POV":

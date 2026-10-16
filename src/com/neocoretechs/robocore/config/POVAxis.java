@@ -12,7 +12,12 @@ public final class POVAxis implements AxisInterface<com.neocoretechs.robocore.co
 		AxisUp("AxisUp"),
 		AxisDown("AxisDown"),
 		AxisLeft("AxisLeft"),
-		AxisRight("AxisRight");
+		AxisRight("AxisRight"),
+		AxisUpperLeft("AxisUpperLeft"),
+		AxisUpperRight("AxisUpperRight"),
+		AxisLowerLeft("AxisLowerLeft"),
+		AxisLowerRight("AxisLowerRight"),
+		AxisOff("AxisOff");
 		String name;
 		POVType(String name) { this.name = name;}
 		public String val() { return name; }
@@ -35,7 +40,10 @@ public final class POVAxis implements AxisInterface<com.neocoretechs.robocore.co
 	}
 	@Override
 	public POVType matches(float[] axes) {
-		if(axes[6] ==.25f) {
+		if(axes[6] == 0.0f) {
+			return POVType.AxisOff;
+		}
+		if(axes[6] == .25f) {
 			return POVType.AxisUp;
 		}
 		if(axes[6] == .75f) {
@@ -46,6 +54,18 @@ public final class POVAxis implements AxisInterface<com.neocoretechs.robocore.co
 		}
 		if(axes[6] == .5f) {
 			return POVType.AxisRight;
+		}
+		if(axes[6] == .125f) {
+			return POVType.AxisUpperLeft;
+		}
+		if(axes[6] == .375f) {
+			return POVType.AxisUpperRight;
+		}
+		if(axes[6] == .875f) {
+			return POVType.AxisLowerLeft;
+		}
+		if(axes[6] == .625f) {
+			return POVType.AxisLowerRight;
 		}
 		throw new RuntimeException("Bad value returned from POV axis:"+axes[6]);
 	}
