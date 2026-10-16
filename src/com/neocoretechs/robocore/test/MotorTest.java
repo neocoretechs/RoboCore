@@ -47,7 +47,12 @@ public class MotorTest extends AbstractNodeMain {
 		robot = (RobotInterface) pTree.get(robotName, new Robot());
 		if(robot.getHostName().equals("UNDEFINED"))
 			throw new RuntimeException("Could not fetch parameters for robot name:"+robotName+". Must start MotionController first.");
-		MarlinspikeManager mm = new MarlinspikeManager(robot);
+		MarlinspikeManager mm = null;
+		try {
+			mm = new MarlinspikeManager(robot);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		AsynchDemuxer ad = new AsynchDemuxer(mm);
 		try {
 			ad.connect(new ByteSerialDataPort());

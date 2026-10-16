@@ -16,7 +16,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.relatrix.Relation;
-import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
+import com.neocoretechs.relatrix.client.asynch.json.AsynchRelatrixClientTransactionJson;
 import com.neocoretechs.relatrix.key.NoIndex;
 
 import com.neocoretechs.robocore.SynchronizedThreadManager;
@@ -62,7 +62,7 @@ public class VideoRecorderStereo extends AbstractNodeMain
 	int commitRate = 500;
 	AtomicInteger commitCnt = new AtomicInteger();
 	TransactionId xid;
-	AsynchRelatrixClientTransaction session = null;
+	AsynchRelatrixClientTransactionJson session = null;
 
 	static {
 		SynchronizedThreadManager.getInstance().init(new String[] {"VIDEORECORDER"});

@@ -9,9 +9,11 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.neocoretechs.robocore.config.AxisInterface;
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.SlotEntry;
+import com.neocoretechs.robocore.config.StickAxis;
 import com.neocoretechs.robocore.config.TypedWrapper;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.SlotHandler;
@@ -37,8 +39,6 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 	TypedWrapper[] WHEEL;
 	TypedWrapper[] AXIS;
 	TypedWrapper[] PID;
-	int controllerAxisX = -1; 
-	int controllerAxisY = -1;
 	int channels = 0;
 
 	/**
@@ -59,7 +59,17 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 		this.PID = pID;
 	}
 
-
+	/**
+	 * Static helper method to parse and populate the fields for a {@link RobotWheel} instance.
+	 * @param LUN {@link TypedWrapper} for LUN properties
+	 * @param WHEEL wheel props
+	 * @param PID pid props
+	 * @param name Name property to match
+	 * @param wheelLun LUN index to use
+	 * @param slot slot prop
+	 * @param chan channel prop
+	 * @return the instantiated RobotWheel
+	 */
 	public static RobotWheel setDrive(TypedWrapper[] LUN, TypedWrapper[] WHEEL, TypedWrapper[] PID, String name, int wheelLun, int slot, int chan) {
 		Optional<Float> wheelTrack = Optional.empty();// Props.toFloat("WheelTrackMM"); // millimeters
 		Optional<Float> wheelDiameter = Optional.empty(); //Props.toFloat("WheelDiameterMM"); // millimeters, 16"
@@ -191,23 +201,11 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 				sb.append(sl+1);
 				sb.append(".) ");
 				sb.append(rslot.toString());
-				sb.append("ControllerAxisX=");
-				sb.append(controllerAxisX);
-				sb.append(" ControllerAxisY=");
-				sb.append(controllerAxisY);
+				sb.append("Controller=");
+				sb.append(getManualControl());
 				sb.append("\r\n");
 		}
 		return sb.toString();
-	}
-
-	@Override
-	public int getControllerAxisX() {
-		return controllerAxisX;
-	}
-
-	@Override
-	public int getControllerAxisY() {
-		return controllerAxisY;
 	}
 
 	@Override

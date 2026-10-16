@@ -541,11 +541,8 @@ public class MotionController extends AbstractNodeMain {
 
 		try {
 			ParameterTree pTree = connectedNode.getParameterTree();
-			robot = (RobotInterface) pTree.get(robotName, new Robot(robotName));
-			if(robot.getHostName().equals("UNDEFINED")) {
-				robot = new Robot(robotName);
-				pTree.set(robotName, robot);
-			}
+			robot = new Robot(robotName);
+			pTree.set(robotName, robot);
 			if(robot.getManager().getDemuxer() == null) {
 				if(DEBUG)
 					System.out.printf("%s Creating Demuxer came back null...%n", this.getClass().getName());
@@ -594,7 +591,7 @@ public class MotionController extends AbstractNodeMain {
 			if(DEBUG) {
 				System.out.printf("%sWheel Slots=%d%n", this.getClass().getName(),wheels.length);
 				for(int i = 0; i < wheels.length; i++) {
-					System.out.printf("%s Wheel Slot %d Wheel=%d%n", this.getClass().getName(), i, wheels[i]);
+					System.out.printf("%s Wheel Slot %d Wheel=%s%n", this.getClass().getName(), i, wheels[i]);
 				}
 			}
 		} catch(IOException ioe) {
@@ -1606,6 +1603,9 @@ public class MotionController extends AbstractNodeMain {
 			}
 		}
 		// get radian measure of left stick x,y
+		if(DEBUG)
+			System.out.printf("%s controller AxisX:%d Axisy:%d%n",this.getClass().getName(),robot.getDiffDrive().getControllerAxisX(),robot.getDiffDrive().getControllerAxisY());
+		
 		float radians = (float) Math.atan2(axes[robot.getDiffDrive().getControllerAxisY()], axes[robot.getDiffDrive().getControllerAxisX()]);
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
 

@@ -5,7 +5,7 @@ package com.neocoretechs.robocore.PID;
  *
  */
 public class MotorPIDController extends AbstractPIDController {
-
+	private static final long serialVersionUID = 1L;
 	// 
 	// - fPivYLimt  : The threshold at which the pivot action starts
 	//	                This threshold is measured in units on the Y-axis

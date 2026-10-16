@@ -1,9 +1,8 @@
 package com.neocoretechs.robocore.propulsion;
 
-import java.io.IOException;
 import java.util.ArrayList;
 
-import com.neocoretechs.robocore.config.Robot;
+import com.neocoretechs.robocore.config.AxisInterface;
 import com.neocoretechs.robocore.marlinspike.SlotHandler;
 
 /**
@@ -18,8 +17,8 @@ import com.neocoretechs.robocore.marlinspike.SlotHandler;
  *
  */
 public interface RobotDiffDriveInterface {
-	public int getControllerAxisX(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
-	public int getControllerAxisY(); //derived by Props.toInt(getControllerAxisPropertyName()+"Y");
+	public AxisInterface getManualControl(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
+	
 	public int getChannels();
 	public ArrayList<DrivenWheelInterface> getWheels();
 	public SlotHandler getMarlinspikeControl(int slot);

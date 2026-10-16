@@ -27,8 +27,7 @@ public class DeviceEntry implements Serializable {
 	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
 	private int LUN; // integer LUN position, points to LUN array in Robot, such as 1
 	private transient MarlinspikeControlInterface controlHost;
-	private int controllerAxisX;
-	private int controllerAxisY;
+	private AxisInterface manualControl;
 	
 	public DeviceEntry() {}
 	/**
@@ -83,18 +82,13 @@ public class DeviceEntry implements Serializable {
 		return controlHost;
 	}
 	
-	public int getControllerAxisX() {
-		return controllerAxisX;
+	public AxisInterface getManualControl() {
+		return manualControl;
 	}
-	public void setControllerAxisX(int controllerAxisX) {
-		this.controllerAxisX = controllerAxisX;
+	public void setManualcontrol(AxisInterface manualControl) {
+		this.manualControl = manualControl;
 	}
-	public int getControllerAxisY() {
-		return controllerAxisY;
-	}
-	public void setControllerAxisY(int controllerAxisY) {
-		this.controllerAxisY = controllerAxisY;
-	}
+
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj)

@@ -1,6 +1,7 @@
 package com.neocoretechs.robocore.marlinspike;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 
@@ -20,7 +21,8 @@ import java.util.List;
  * GPIO functions under Linux SBC and the header attached to the board serving the Ros node.<p>
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2017,2020
  */
-public class MarlinspikeControl implements MarlinspikeControlInterface {
+public class MarlinspikeControl implements MarlinspikeControlInterface, Serializable {
+	private static final long serialVersionUID = 1L;
 	public static boolean DEBUG = false;
 	//float yawIMURads; = twistInfo.imuTheta
 	int yawTargetDegrees;
@@ -29,8 +31,8 @@ public class MarlinspikeControl implements MarlinspikeControlInterface {
 	float[] accelDeltas;
 	int[] ranges;
 	boolean init = true;
-	Object mutex = new Object();
-	AsynchDemuxer asynchDemuxer;
+	transient Object mutex = new Object();
+	transient AsynchDemuxer asynchDemuxer;
 
 	/* Stop the robot if it hasn't received a movement command in this number of milliseconds */
 	public static int AUTO_STOP_INTERVAL = 2000;

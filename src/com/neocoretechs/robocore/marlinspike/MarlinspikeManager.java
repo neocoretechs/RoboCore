@@ -22,6 +22,13 @@ import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.SlotEntry;
 import com.neocoretechs.robocore.config.DeviceEntry;
 import com.neocoretechs.robocore.config.TypedWrapper;
+import com.neocoretechs.robocore.config.StickAxis;
+import com.neocoretechs.robocore.config.TriggerAxis;
+import com.neocoretechs.robocore.config.POVAxisUp;
+import com.neocoretechs.robocore.config.POVAxisDown;
+import com.neocoretechs.robocore.config.POVAxisLeft;
+import com.neocoretechs.robocore.config.POVAxisRight;
+import com.neocoretechs.robocore.config.Button;
 
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
@@ -50,6 +57,7 @@ public class MarlinspikeManager implements Serializable {
 	TypedWrapper[] wheel;
 	TypedWrapper[] pid;
 	TypedWrapper[] axis;
+	TypedWrapper[] button;
 	transient AsynchDemuxer asynchDemuxer;
 
 	/**
@@ -75,6 +83,7 @@ public class MarlinspikeManager implements Serializable {
 		this.wheel = robot.getWHEEL();
 		this.pid = robot.getPID();
 		this.axis = robot.getAXIS();
+		this.button = robot.getBUTTON();
 		this.hostName = robot.getHostName();
 		configureDemuxer();
 	}
@@ -147,15 +156,18 @@ public class MarlinspikeManager implements Serializable {
 							maxValue = omaxValue.get();
 						controller = createController(controllerInst, maxValue);
 						// create a new template
-						deviceEntry = new RobotDiffDrive(robot, (String)name.get(), (String)nodeName.get(), i, controller, slot.get(), lun, wheel, pid, axis);
+						if(robot.getDiffDrive() == null) {
+							deviceEntry = new RobotDiffDrive(robot, (String)name.get(), (String)nodeName.get(), i, controller, slot.get(), lun, wheel, pid, axis);
+							robot.setDiffDrive((RobotDiffDriveInterface) deviceEntry);
+						} else
+							deviceEntry = (DeviceEntry) robot.getDiffDrive();
 						// see if we have it already
 						ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
 						if(sl == null) {
 							sl = new ArrayList<TypeSlotChannelEnable>();
 							deviceToType.put(deviceEntry, sl);
-							robot.setDiffDrive((RobotDiffDriveInterface) deviceEntry);
 						} else {
-							// add to this control possibly
+							// add to this control if we dont have the slot already
 							if(((SlotEntry)deviceEntry).getMarlinspikeControl(slot.get()) == null)
 									((SlotEntry)deviceEntry).setMarlinspikeControl(controller, (String)name.get(), slot.get());
 						}
@@ -168,6 +180,7 @@ public class MarlinspikeManager implements Serializable {
 							throw new IOException("Already parsed "+tsce+" found at index "+ti+" in deviceToType list.");		
 						}
 					} else {
+						// Non-wheel slotted controller deviceEntry that contains SlotHandler(s)
 						if(dir.isPresent()) {
 							tsce = new TypeSlotChannelEnable(eType, slot.get(), ochannel.get(), ienable, dir.get());
 						} else {
@@ -225,16 +238,16 @@ public class MarlinspikeManager implements Serializable {
 				Optional<Integer> controllerAxisXO = Optional.ofNullable(axis[i].get("AxisX")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 				Optional<Integer> controllerAxisYO = Optional.ofNullable(axis[i].get("AxisY")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 				if(controllerAxisXO.isPresent()) {
-					deviceEntry.setControllerAxisX(controllerAxisXO.get());
+					//deviceEntry.setControllerAxisX(controllerAxisXO.get());
 				} else {
 					System.out.println("<<WARNING USING X AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
-					deviceEntry.setControllerAxisX(0);
+					//deviceEntry.setControllerAxisX(0);
 				}
 				if(controllerAxisYO.isPresent()) {
-					deviceEntry.setControllerAxisY(controllerAxisYO.get());
+					//deviceEntry.setControllerAxisY(controllerAxisYO.get());
 				} else {
 					System.out.println("<<WARNING USING Y AXIS DEFAULTS WheelLun: "+i+" AXIS[WheelLun]: ");
-					deviceEntry.setControllerAxisY(2);
+					//deviceEntry.setControllerAxisY(2);
 				}
 				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
 				// tsce gen M10
@@ -358,6 +371,85 @@ public class MarlinspikeManager implements Serializable {
 					tsce.setDigitalEncoder(iencCount, iencState, iencInterrupt);
 				}
 			}
+		}
+	}
+	/**
+	 * Configure the manual control for the DeviceEntry, if any. call setManulaControl on DeviceEntry with new AxisInterface generic.
+	 * @param de DeviceEntry target
+	 * @param axis element at AXIS array index of DeviceEntry
+	 * @param buttonelelment at BUTTON array index of DeviceEntry
+	 */
+	public void configureManualControl(DeviceEntry de, TypedWrapper axis, TypedWrapper button) {
+		if(axis == null) {
+			throw new RuntimeException(String.format("%s.publishPeripheral can not get the axis  %s based on configs.%n",this.getClass().getName(),de));
+		}
+		String axisType = (String) axis.get("AxisType");
+		if(axisType == null) {
+			throw new RuntimeException(String.format("%s.publishPeripheral NO axis type attribute device %s%n", this.getClass().getName(), de));
+		}
+		if(DEBUG) {
+			System.out.printf("%s.publishPeripheral axis type %s attribute device %s%n", this.getClass().getName(), axisType, de);
+		}
+		switch(axisType) {
+		case "Stick":
+			if(axis.get("AxisX") != null && axis.get("AxisY") != null) {
+				String sx = (String) axis.get("AxisX");
+				String sy = (String) axis.get("AxisY");
+				int x = Integer.parseInt(sx);
+				int y = Integer.parseInt(sy);
+				if( y != 0 || x != 0) {
+					de.setManualcontrol(new StickAxis(new int[]{x,y}));
+				}
+			} else {
+				throw new RuntimeException(String.format("%s.publishPeripheral Axis X or Y missing from config%n",this.getClass().getName()));
+			}
+			break;
+		case "Trigger":
+			String ax = (String) axis.get("Axis");
+			if(ax == null) {
+				throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
+			}
+			int a = Integer.parseInt(ax);
+			de.setManualcontrol(new TriggerAxis(new int[]{a}));
+			break;
+		case "Button":
+			String bu = (String) axis.get("Axis");
+			if(bu == null) {
+				throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
+			}
+			a = Integer.parseInt(bu);
+			de.setManualcontrol(new Button(new int[]{a}));
+			break;
+		case "POV":
+			ax = (String) axis.get("Axis");
+			if(ax == null) {
+				throw new RuntimeException(String.format("%s.publishPeripheral Axis missing from config%n",this.getClass().getName()));
+			}
+			a = Integer.parseInt(ax);
+			String saxUp = (String) axis.get(("AxisUp"));
+			if(saxUp != null) {
+				de.setManualcontrol(new POVAxisUp());
+			} else {
+				String saxDown = (String) axis.get(("AxisDown"));
+				if(saxDown != null) {
+					de.setManualcontrol(new POVAxisDown());
+				} else {
+					String saxLeft = (String) axis.get(("AxisLeft"));
+					if(saxLeft != null) {
+						de.setManualcontrol(new POVAxisLeft());
+					} else {
+						String saxRight = (String) axis.get(("AxisRight"));
+						if(saxRight != null) {
+							de.setManualcontrol(new POVAxisRight());
+						} else {
+							throw new RuntimeException(String.format("%s.publishPeripheral AxisDown missing from config%n",this.getClass().getName()));
+						}
+					}	
+				}
+			}
+			break;
+		default:
+			throw new RuntimeException("Unknown Axis type in configuration:"+axisType+" for LUN "+de);
 		}
 	}
 	/**

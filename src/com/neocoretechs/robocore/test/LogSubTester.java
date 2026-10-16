@@ -5,7 +5,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.ros.Topics;
-import org.ros.concurrent.CancellableLoop;
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 import org.ros.node.AbstractNodeMain;
@@ -13,7 +12,7 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.topic.Subscriber;
 
 import com.neocoretechs.relatrix.Relation;
-import com.neocoretechs.relatrix.client.asynch.AsynchRelatrixClientTransaction;
+import com.neocoretechs.relatrix.client.asynch.json.AsynchRelatrixClientTransactionJson;
 import com.neocoretechs.rocksack.TransactionId;
 
 
@@ -24,7 +23,7 @@ import com.neocoretechs.rocksack.TransactionId;
  */
 public class LogSubTester extends AbstractNodeMain  {
 	private boolean DEBUG = true;
-	private AsynchRelatrixClientTransaction rct;
+	private AsynchRelatrixClientTransactionJson rct;
 	private TransactionId xid;
 	
 	@Override

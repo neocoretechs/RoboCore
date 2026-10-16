@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import com.neocoretechs.robocore.marlinspike.gcodes.G5;
@@ -403,6 +404,23 @@ public class TypeSlotChannelEnable implements Serializable {
 		encoderCount = iencCount;
 		digitalEncoderState = iencState;
 		encInterrupt = iencInterrupt;
+	}
+	
+	@Override
+	public int hashCode() {
+		return Objects.hash(channel, cntrltype, enable, slot);
+	}
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		TypeSlotChannelEnable other = (TypeSlotChannelEnable) obj;
+		return channel == other.channel && cntrltype == other.cntrltype && enable == other.enable && slot == other.slot;
 	}
 	
 	@Override
