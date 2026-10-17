@@ -868,7 +868,8 @@ public class AsynchDemuxer implements Runnable {
 							System.out.println(this.getClass().getName()+" "+tl+" payload:"+Arrays.toString(payload.toArray()));
 						tl.retrieveData(payload);
 					} else {
-						throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
+						//throw new IndexOutOfBoundsException
+						System.out.println(this.getClass().getName()+" "+Thread.currentThread().getName()+
 								" RESPONSE FROM PORT "+dataPort.getPortName()+" NO TOPIC FOR:"+fop+", CANNOT DEMUX DIRECTIVE:"+Arrays.toString(payload.toArray()));
 					}
 				}
