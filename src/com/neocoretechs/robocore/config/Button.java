@@ -32,4 +32,8 @@ public final class Button implements AxisInterface<Boolean> {
 	public Boolean matches(float[] axes) {
 		return axes[positionArray[0]] != 0;
 	}
+	@Override
+	public Boolean matches(int[] buttons) {
+		return buttons[positionArray[0]] != 0;
+	}
 }

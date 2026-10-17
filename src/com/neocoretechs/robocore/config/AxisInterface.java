@@ -8,4 +8,5 @@ public interface AxisInterface<T> extends Serializable {
 	public int[] getPositionArray();
 	public void setPositionArray(int[] values);
 	public T matches(float[] axes);
+	public Boolean matches(int[] buttons);
 }

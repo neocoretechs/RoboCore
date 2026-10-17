@@ -1755,7 +1755,7 @@ public class MotionController extends AbstractNodeMain {
 
 		publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
 
-		publishPeripheral(connectedNode, pubschannel, axes);
+		publishPeripheral(connectedNode, pubschannel, axes, buttons);
 
 	}
 	/**
@@ -1876,8 +1876,9 @@ public class MotionController extends AbstractNodeMain {
 	 * @param connectedNode Our Ros node here
 	 * @param pubschannel Collection of publisher channels that represent axes
 	 * @param axes the values of the stick axes
+	 * @param buttons 
 	 */
-	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes) {
+	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes, int[] buttons) {
 		if(robot.getManager().getDevices() == null) {
 			throw new RuntimeException(String.format("%s.publishPeripheral can not get the basic device list based on configs.%n",this.getClass().getName()));
 		}
@@ -1898,9 +1899,8 @@ public class MotionController extends AbstractNodeMain {
 			AxisInterface af = ndd.getManualControl();
 			switch(af.getType()) {
 			case "Button":
-				Boolean b = (Boolean)af.matches(axes);
-				if(b)
-					publishAxis(connectedNode, pubschannel, ndd.getName(), 1);
+				Boolean b = (Boolean)af.matches(buttons);
+				publishAxis(connectedNode, pubschannel, ndd.getName(), b ? 1 : 0);
 				break;
 			case "Stick":
 				Integer[] xy = (Integer[])af.matches(axes);

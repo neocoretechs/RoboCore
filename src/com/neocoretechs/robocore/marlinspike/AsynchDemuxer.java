@@ -721,7 +721,7 @@ public class AsynchDemuxer implements Runnable {
 			topics.put(topicNames.ERROR.val(), new errorsetting(this).getTopicList());
 			//
 		// spin the main loop to read lines from the Marlinspike and muxx them
-		SynchronizedThreadManager.startSupervisorThread();
+		//SynchronizedThreadManager.startSupervisorThread();
 		SynchronizedThreadManager.getInstance().spin(this, "ASYNCHDEMUXER");
 
 		if(DEBUG)
@@ -816,8 +816,12 @@ public class AsynchDemuxer implements Runnable {
 	 * @throws IOException
 	 */
 	public void config(List<String> starts) throws IOException {
-		if(DEBUG)
-			System.out.printf("%s Thread:%s Port:%s Startup GCode list:%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName());
+		if(DEBUG) {
+			System.out.printf("%s Thread:%s Port:%s Startup GCode list:%d%n",this.getClass().getName(),Thread.currentThread().getName(),dataPort.getPortName(),starts.size());
+			for(int i = 0; i < starts.size(); i++)
+				System.out.printf("%d.) %s%n",i+1,starts.get(i));
+			System.out.println();
+		}
 		addWrite(starts);
 	}
 	

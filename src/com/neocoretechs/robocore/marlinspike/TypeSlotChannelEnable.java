@@ -233,7 +233,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	/**
 	 * CALL THIS FIRST to establish instance of controller for further operations and to refer to it numerically by type.
 	 * This is done AFTER the call to M798 to determine whether the slot and channel has already been configured.
-	 * TODO PWM types
+	 * If this is a Pin type, then instead of M10 another M-code will be generated to configure the poroper pin: i.e. M41 input pin, M42 output pin<p>
 	 * M10 initializes a type of controller in a specific 'slot' that becomes an ordinal number we use to refer to the controller
 	 * in subsequent M codes. Different controller types occupy different 'slots' depending on the object type hierarchy
 	 * Types 0-3 occupy the 'motor control' slots while type 4 occupies the 'PWM' slot. Each has its own sequence.
@@ -252,7 +252,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	 * pin1 PWM secondary drive pin1
 	 * @return The M10 directive list of strings, possibly multiple c/r delimited directives relating to configuring the type in the M10 preamble
 	 */
-	public List<String> genM10() {
+	public List<String> genM10Slot() {
 		ArrayList<String> ab =  new ArrayList<String>();
 		M10CtrlType = cntrltype.ordinal();
 		StringBuilder sb = new StringBuilder();
@@ -263,6 +263,14 @@ public class TypeSlotChannelEnable implements Serializable {
 				// Generate the M10 followed by the the M codes to create the type, the encoder, the interrupt linkage, etc.
 				ab.add(sb.append("M10 ").append("Z").append(getSlot()).append(" T").append(M10CtrlType).toString());
 			}
+		}
+		return ab;
+	}
+	public List<String> genMxChannel() {
+		ArrayList<String> ab =  new ArrayList<String>();
+		M10CtrlType = cntrltype.ordinal();
+		StringBuilder sb = new StringBuilder();
+		if(!cntrltype.val().endsWith("Pin")) {
 			if(isChannel) {
 				// build a line to add to list
 				sb = new StringBuilder();
@@ -322,8 +330,14 @@ public class TypeSlotChannelEnable implements Serializable {
 	public boolean isPinToggle() { return pinToggle; }
 	public void setPinToggle() { pinToggle = true; }
 	/**
-	 * Generate the drive pins for the controller, if its a smart controller (M10CtrlType == 0) return an empty string.
-	 * If the type is 2 or 3, generate a Q&lt;pin&gt; for secondary drive pin.
+	 * Based on the M10 type, which first defines a slot, we then configure the specific type of controller 
+	 * at that slot with another M code such as M4, M5, M16<p>
+	 * This method generates the drive pins for that specific M code based on type which is differentiated by
+	 * whether there are one or two drive pins for the PWM for that type of controller. At this time
+	 * types 2 and 3 designate PWM pins for forward/reverse with an enable pin, instead of 1 PWM pin and a direction
+	 * pin.<p> 
+	 * Generate the drive pins for the controller unless its a smart controller (M10CtrlType == 0) return an empty string.
+	 * If the type is 2 or 3, generate a P and a Q&lt;pin&gt; for secondary drive pin.
 	 * @param primary
 	 * @param secondary
 	 * @return config for 2 drive pins
@@ -339,6 +353,7 @@ public class TypeSlotChannelEnable implements Serializable {
 		}
 		return sb.toString();
 	}
+
 	/**
 	 * Generate remaining portion of config for direction and encoder based on M10 type&lt;p>
 	 * <pre>
@@ -482,28 +497,28 @@ public class TypeSlotChannelEnable implements Serializable {
 		TypeSlotChannelEnable tsce = new TypeSlotChannelEnable(typeNames.SMARTCONTROLLER, 0, 1, 22);
 		tsce.setPin0(Optional.of(0));
 		tsce.setPin1(Optional.of(0));
-		System.out.print(tsce.genM10());
+		System.out.print(tsce.genM10Slot());
 		StringBuilder sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(0, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");
 		tsce = new TypeSlotChannelEnable(typeNames.HBRIDGE, 0, 1, 24, 1);
-		System.out.print(tsce.genM10());
+		System.out.print(tsce.genM10Slot());
 		tsce.setEncoderPin(68);
 		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(8, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");		
 		tsce = new TypeSlotChannelEnable(typeNames.PWM, 0, 1, 30);
-		System.out.print(tsce.genM10());
+		System.out.print(tsce.genM10Slot());
 		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(13, 0)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");		
 		tsce = new TypeSlotChannelEnable(typeNames.SPLITBRIDGE, 2, 1, 32);
-		System.out.print(tsce.genM10());
+		System.out.print(tsce.genM10Slot());
 		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(6, 7)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");
 		tsce = new TypeSlotChannelEnable(typeNames.SWITCHBRIDGE, 2, 1, 32);
-		System.out.print(tsce.genM10());
+		System.out.print(tsce.genM10Slot());
 		sb = new StringBuilder(tsce.genTypeAndSlot()).append(tsce.genDrivePins(6, 7)).append(tsce.genChannelDirDefaultEncoder());
 		System.out.print(sb);
 		System.out.println("-----");

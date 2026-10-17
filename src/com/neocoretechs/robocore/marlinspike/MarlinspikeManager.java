@@ -54,7 +54,6 @@ public class MarlinspikeManager implements Serializable {
 	TypedWrapper[] wheel;
 	TypedWrapper[] pid;
 	TypedWrapper[] axis;
-	TypedWrapper[] button;
 	transient AsynchDemuxer asynchDemuxer;
 
 	/**
@@ -80,7 +79,6 @@ public class MarlinspikeManager implements Serializable {
 		this.wheel = robot.getWHEEL();
 		this.pid = robot.getPID();
 		this.axis = robot.getAXIS();
-		this.button = robot.getBUTTON();
 		this.hostName = robot.getHostName();
 		configureDemuxer();
 	}
@@ -235,23 +233,45 @@ public class MarlinspikeManager implements Serializable {
 				// configure the manual controls if any
 				if(i < axis.length)
 					configureManualControl(deviceEntry, axis[i]);
-				if(i < button.length)
-					configureManualControl(deviceEntry, button[i]);
-				// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
-				// tsce gen M10
-				List<String> M10Gen = tsce.genM10();
-				if(M10Gen.size() > 0) {
-					addInit(M10Gen);
-					if(DEBUG) 
-						System.out.printf("%s: Controller tsce:%s generating config:%s%n",this.getClass().getName(),tsce,M10Gen);
-					if(robot.getPowerScale() > 0)
-						addInit(M6Gen(tsce.getSlot()));
-				}
-				init();
 			}
 		}
 		if(deviceToType.isEmpty())
 			throw new IOException("No configuration information found for any controller for this node:"+hostName);
+		// Configure the demuxer with the type/slot/channel and aggregate the init commands for final init
+		ArrayList<String> M10gen = new ArrayList<String>();
+		deviceToType.entrySet().forEach(e->{
+			DeviceEntry de = e.getKey();
+			ArrayList<TypeSlotChannelEnable> tscea = e.getValue();
+			// this next series of nested loops is all to get one slot M10 config per SlotEntry
+			// tscea is all the channels for all the slots
+			if(de instanceof SlotEntry) {
+				List<SlotHandler> sha = ((SlotEntry)de).getSlotHandlers();
+				outer: for(SlotHandler sh: sha) {
+					for(TypeSlotChannelEnable tsce: tscea) {
+						if(tsce.getIsSlot() && tsce.getSlot() == sh.getSlot()) {		
+							M10gen.addAll(tsce.genM10Slot());
+							if(robot.getPowerScale() > 0)
+								M10gen.addAll(M6Gen(tsce.getSlot()));
+							continue outer;
+						}
+					}
+				}
+			} else // handle non slot device for which there should be one TypeSlotchannelEnable
+				M10gen.addAll(tscea.get(0).genM10Slot());
+			// add M10 per slot, tsce gen M10
+			for(TypeSlotChannelEnable tsce: tscea) {
+				List<String> mgen = tsce.genMxChannel();
+				M10gen.addAll(mgen);
+			}
+		});
+		if(M10gen.size() > 0) {
+			addInit(M10gen);
+			if(DEBUG) 
+				System.out.printf("%s: Controller generating config:%s%n",this.getClass().getName(),Arrays.toString(M10gen.toArray()));
+		} else {
+			System.out.printf("%s: <WARNING> Controller NOT generating config because the startup queue was empty.%n",this.getClass().getName());
+		}
+		init();
 	}
 	
 	/**

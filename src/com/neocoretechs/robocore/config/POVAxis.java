@@ -69,4 +69,8 @@ public final class POVAxis implements AxisInterface<com.neocoretechs.robocore.co
 		}
 		throw new RuntimeException("Bad value returned from POV axis:"+axes[6]);
 	}
+	@Override
+	public Boolean matches(int[] buttons) {
+		return false;
+	}
 }

@@ -29,13 +29,12 @@ import java.util.Map;
  * AXIS[0].AxisType:Stick <br/>
  * AXIS[0].AxisX:0 <br/>
  * AXIS[0].AxisY:2 <br/>
- * Also, BUTTON, WHEEL, etc as needed.<p/>
+ * A Button is a button, not an axis, but we include buttons in the axis definitions to simplify configuration.
  * So when the GlobalConfigs are parsed in {@code Robot} you get the following set of constructs:<p/>
  * 	private TypedWrapper[] LUN; <br/>
  *	private TypedWrapper[] WHEEL; <br/>
  *	private TypedWrapper[] PID; <br/>
  *	private TypedWrapper[] AXIS; <br/>
- *	private TypedWrapper[] BUTTON; <br/>
  * And the resulting TypedWrapper is a ConcurrentHashMap collection with the elements having key,value pairs like:<p/>
  * LUN[0]: <br/>
  * Name, LeftWheel <br/>

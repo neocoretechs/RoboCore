@@ -40,7 +40,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * AXIS[0].AxisX:0 
  * AXIS[0].AxisY:2
  * </pre>
- * Also, BUTTON, WHEEL, etc as needed.<p>
+ * A Button is a button, not an axis, but we include button in Axis definitions to simplify configuration.
  * The handler method for the slot is defined by annotation in the {@link com.neocoretechs.robocore.propulsion.MotionController}.
  * Motor controls are aggregated by slot. In the Marlinspike configurations, the motor controller are assigned a slot
  * from 0-9 and the controls such as G5 are first identified by slot. So G5 Z0 P300 Q300 would set the power
@@ -73,7 +73,6 @@ public interface RobotInterface {
 	public TypedWrapper[] getWHEEL();
 	public TypedWrapper[] getPID();
 	public TypedWrapper[] getAXIS();
-	public TypedWrapper[] getBUTTON();
 	public int[] getLUNs(String name);
 	public String getNameByLUN(int lun);
 	public PIDParameterInterface getMotionPIDController();

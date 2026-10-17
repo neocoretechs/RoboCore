@@ -32,4 +32,8 @@ public final class TriggerAxis implements AxisInterface<Integer> {
 	public Integer matches(float[] axes) {
 		return (int)(axes[positionArray[0]]*1000.0f);
 	}
+	@Override
+	public Boolean matches(int[] buttons) {
+		return false;
+	}
 }

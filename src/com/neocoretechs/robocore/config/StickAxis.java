@@ -35,4 +35,8 @@ public final class StickAxis implements AxisInterface<Integer[]> {
 		res[1] = -(int)(axes[positionArray[1]]*1000.0f);
 		return res;
 	}
+	@Override
+	public Boolean matches(int[] buttons) {
+		return false;
+	}
 }

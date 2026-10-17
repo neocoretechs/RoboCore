@@ -5,6 +5,7 @@ import com.neocoretechs.robocore.marlinspike.SlotHandler;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -53,6 +54,10 @@ public class SlotEntry extends DeviceEntry implements Serializable {
 			if(s.getSlot() == slot) 
 				return s;
 		return null;
+	}
+	
+	public List<SlotHandler> getSlotHandlers() {
+		return slotHandler;
 	}
 	
 	@Override

@@ -47,7 +47,7 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * AXIS[0].AxisX:0 
  * AXIS[0].AxisY:2
  * </pre>
- * Also, BUTTON, WHEEL, etc as needed.<p>
+ *
  * The handler method for the slot is defined by annotation in the {@link com.neocoretechs.robocore.propulsion.MotionController}.
  * Motor controls are aggregated by slot. In the Marlinspike configurations, the motor controller are assigned a slot
  * from 0-9 and the controls such as G5 are first identified by slot. So G5 Z0 P300 Q300 would set the power
@@ -80,7 +80,6 @@ public class Robot implements RobotInterface, Serializable {
 	private TypedWrapper[] WHEEL;
 	private TypedWrapper[] PID;
 	private TypedWrapper[] AXIS;
-	private TypedWrapper[] BUTTON;
 	private Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 	MarlinspikeManager marlinspikeManager = null;
 	HashMap<String, Boolean> isOperating = new HashMap<String, Boolean>();
@@ -99,7 +98,6 @@ public class Robot implements RobotInterface, Serializable {
 		extractWHEEL();
 		extractPID();
 		extractAXIS();
-		extractBUTTON();
 		powerScale = Props.toInt("PowerScale"); // div power by divisor
 		dataPort = Props.toString("DataPort");
 		if(WHEEL.length > 0) {
@@ -161,30 +159,6 @@ public class Robot implements RobotInterface, Serializable {
 		return isActive;
 	}
 	
-	private void extractBUTTON() {
-		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
-		 Map<Integer, Map<String, Object>> button = globalConfigs.get("BUTTON");
-		 if(button == null) {
-			 BUTTON = new TypedWrapper[0];
-			 return;
-		 }
-		 if(DEBUG)
-			 System.out.println("BUTTON size:"+button.size());
-		 BUTTON = new TypedWrapper[button.size()];
-		 Set<Integer> buttonChannels = button.keySet();
-		 if(DEBUG)
-			 System.out.println("BUTTONs channels:"+buttonChannels.size());
-		 Object[] buttonOChannels = buttonChannels.toArray();
-		 Arrays.sort(buttonOChannels); // make sure of order
-		 if(DEBUG)
-			 System.out.println("ButtonOChannels sorted size:"+buttonOChannels.length);
-		 for(Object buttonAChannels: buttonOChannels) {
-			 Map<String, Object> sortedButtonProp = button.get(buttonAChannels); //buttonAChannels sorted integer channels of LUNs/AXIS/BUTTON
-			 if(DEBUG)
-				 System.out.println(buttonAChannels+" index of number of SortedButtonProp:"+sortedButtonProp.size());
-			 BUTTON[(int)buttonAChannels] = new TypedWrapper(sortedButtonProp);
-		 }	
-	}
 	
 	private void extractAXIS() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
@@ -394,17 +368,6 @@ public class Robot implements RobotInterface, Serializable {
 				sb.append("\r\n");
 			}
 		}
-		for(int i = 0; i < BUTTON.length; i++) {
-			Set<Entry<String, Object>> x = BUTTON[i].entrySet();
-			Iterator<Entry<String, Object>> it = x.iterator();
-			while(it.hasNext()) {
-				Entry<String, Object> e = it.next();
-				sb.append(e.getKey());
-				sb.append(":");
-				sb.append(e.getValue());
-				sb.append("\r\n");
-			}
-		}
 		sb.append("----------\r\n");
 		return sb.toString();
 	}
@@ -432,11 +395,6 @@ public class Robot implements RobotInterface, Serializable {
 	@Override
 	public TypedWrapper[] getAXIS() {
 		return AXIS;
-	}
-
-	@Override
-	public TypedWrapper[] getBUTTON() {
-		return BUTTON;
 	}
 
 	public Map<String, Map<Integer, Map<String, Object>>> getGlobalConfigs() {
