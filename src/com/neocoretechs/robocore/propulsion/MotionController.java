@@ -12,16 +12,18 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.ConcurrentHashMap;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.ros.concurrent.CancellableLoop;
+
 import java.util.stream.Collectors;
 
-import org.ros.concurrent.CancellableLoop;
 import org.ros.internal.loader.CommandLineLoader;
 import org.ros.internal.node.topic.PublisherIdentifier;
 import org.ros.internal.node.topic.SubscriberIdentifier;
+
 import org.ros.message.MessageListener;
 import org.ros.namespace.GraphName;
 
@@ -44,11 +46,10 @@ import com.neocoretechs.robocore.PID.MotionPIDController;
 
 import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
-import com.neocoretechs.robocore.config.SlotEntry;
 import com.neocoretechs.robocore.config.AxisInterface;
 import com.neocoretechs.robocore.config.DeviceEntry;
-import com.neocoretechs.robocore.config.POVAxis;
 import com.neocoretechs.robocore.config.POVAxis.POVType;
+
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
@@ -170,11 +171,13 @@ import trajectory_msgs.ComeToHeadingStamped;
  *</pre>
  * * Functions:<br>
  * Process data acquired from the Real-time telemetry from the Marlinspike realtime subsystem.
- * Respond to messages from bus as subscriber to device name in configuration and process via realtime subsystem.
+ * Respond to messages from bus as publisher and subscriber to device name in configuration and process via realtime subsystem.
  * <p>
  * Messages can relate to Motor control, controller status, ultrasonic sensor, voltage reading, etc, acquired from the attached UART/USB of an aux 
  * board such as Mega2560 via RS-232, Pico via USB, or from the SBC running the Ros node using the GPIO header and libgpiod, or from the USB
- * port of the SBC talking to a smart controller.
+ * port of the SBC talking to a smart controller. The Marlinspike microcontroller code specifically uses the RPi RP2040 Pico via the USB port
+ * to process commands from the {@link AsynchDemuxer} based on configuration generated from the RoboCore.properties properties file to configure and drive
+ * various GPIO and H-Bridge PWM controller functions via M anf G codes such as those used in CNC and 3D printing.<p>
  * <p> 
  * Serial communications are centralized in the {@link com.neocoretechs.robocore.serialreader.DataPortInterface} and {@link com.neocoretechs.robocore.serialreader.DataPortCommandInterface} interface class implementors.<p>
  * 
@@ -205,7 +208,14 @@ import trajectory_msgs.ComeToHeadingStamped;
  * <code> G5 Z[slot] P[power] Q[power] R[power] S...Y[power]</code>- Issue move command to controller in slot Z&lt;slot&gt; for channels P-Y (0 and 1 element left/right wheel) with P-Y&lt;-1000 to 1000&gt;
  * a negative value on power means reverse.
  * M2 - start reception of controller messages - fault/ battery/status demultiplexed in AsynchDemuxer
- * H Bridge Driver:
+ * <p>
+ * H Bridge Drivers:<br>
+ * Organized into "slots" that control multiple channels, up to 10 slots each with 10 channels each with one or more PWM pins and an enable/direction pin.
+ * M10 codes define a slot with a specific type of H-bridge driver depending on one or 2 PWM pins for direction and an enable pin, or collection of GPIO pins.
+ * Depending on the properties file configuration the proper M10 codes are generated in a preamble. Special consideration is given to names ending in "Wheel" to
+ * configure the differential drive.<p>
+ * Each channel generates more M-codes in the preamble to define each channel in each slot. 
+ * Basic GPIO functions can be defined based on type of "Pin" in the properties:
  * <code><br/>
  * M45 P[pin] S[0-255] - start PWM on pin P with value S, many optional arguments for timer setup<br>
  * M41 P[pin] S1- Set digital pin P high forward <br>
@@ -221,20 +231,21 @@ import trajectory_msgs.ComeToHeadingStamped;
  * on a PWM pin<p>
  * GPIO service invocation always works directly on a pin.<p>  
  *<pre>
- * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)<br>
- * sensor_msgs/Temperature (most likely from IMU)<br>
- * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)<br>
- *</pre>
- *<pre>
  * Publishing to:<br>
+ * Devices function as publishers to data topics as well as subscribers to topics such as the sensor_msgs/Joy joystick channel<be>
  * All topics enumerated in typeNames which correspond to types that may appear in configuration by LUN.k<br>
  * robocore/status (status update channel to receive information on alerts, etc, derived from IMU and other sensors)<br>
  * </pre>
- * Published are the values from 0-1000 that represent actual power to each differential drive wheel.<p>
+ * Published values from 0-1000 represent actual power to each differential drive wheel.<p>
  * Subscribers include the process that manages serial data to the motor controller, possibly on a separate computer.<p>
  * Publishers on robocore/status provide status updates relating to IMU extremes that are picked up by the VoxHumana voice synth or others,
  * again most probably on a completely separate single board computer within the robot.
  *<pre>
+ *<pre>
+ * sensor_msgs/MagneticField (3 axis magnetic flux information most likely from IMU)<br>
+ * sensor_msgs/Temperature (most likely from IMU)<br>
+ * sensor_msgs/Imu (absolutely from IMU, contains heading information roll/pitch/yaw in Euler and Quaternion, pre-fused)<br>
+ *</pre>
  * To reduce incoming data, Two sets of flags and a threshold value are used to determine if:<br>
  * a) The values have changed from last message<br>
  * b) The value exceed a threshold deemed noteworthy<br><p>
@@ -265,7 +276,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  * is called with first parameter 'override' set to true, and second parameter 'activate' set to false to indicate we
  * want to get configuration for all available control nodes, but not activate them from this module since this module
  * issues directives to the attached controllers rather than control them directly.<p>
- * We then create collection of {@link NodeDevice} by calling {@link MarlinspikeManager#getNodeDeviceDemuxerByType}.<p>
+ * We then create collection of {@link DeviceEntry} by calling {@link MarlinspikeManager#getNodeDeviceDemuxerByType}.<p>
  * Finally we create the isActive boolean array to hold/control status of devices.
  *
  * @see MarlinspikeManager
@@ -600,20 +611,18 @@ public class MotionController extends AbstractNodeMain {
 			throw new RuntimeException(ioe);
 		}
 		//                                                                                                                             
-		// Iterate the list of non-slot device demuxxers we put together in configureMarlinspikeManager method.
+		// Iterate the list of device demuxxers we put together in configureMarlinspikeManager method.
 		// for each Device, create a subscriber on the channel <demuxer device name> of type Int32MultiArray
 		//
 		Iterator<?> it = robot.getManager().getDevices().keySet().iterator();
 		while(it.hasNext()) {
 			DeviceEntry ndd = (DeviceEntry) it.next();
 			ArrayList<TypeSlotChannelEnable> tsce = robot.getManager().getDevices().get(ndd);
-			if(!(ndd instanceof SlotEntry)) {
-				Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
-				subscriberDevice.put(subscr, ndd.getName());
-				if(DEBUG)
-					System.out.printf("%s Creating new Non-Slot Handler for :%s for device %s%n", this.getClass().getName(),tsce,ndd.getName());
-				configureSubscriberListener(subscr, connectedNode, statpub);
-			}
+			Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getName(), std_msgs.Int32MultiArray._TYPE);
+			subscriberDevice.put(subscr, ndd.getName());
+			if(DEBUG)
+				System.out.printf("%s Creating Handler for :%s for device %s%n", this.getClass().getName(),tsce,ndd.getName());
+			configureSubscriberListener(subscr, connectedNode, statpub);
 		}
 		//-------------------------------------
 		// Iterate the list of slots we put together in configureMarlinspikeManager.
@@ -1291,65 +1300,6 @@ public class MotionController extends AbstractNodeMain {
 			});
 			publishedLUNRestValue.put(ndd.getLUN(),false);
 		}
-		//--------------------------------
-		// now handle the slots, deprecated - slots handled locally
-		/*
-		for(SlotEntry slots : robot.getManager().getSlots().keySet()) {
-			// slot device demuxxers
-			String slot = slots.getName();
-			if(DEBUG)
-				System.out.printf("configurePublisherListener for Slot %s%n", slot);
-			//if(ndd.getNodeName().equals(serveNode)) {
-			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher(slot, std_msgs.Int32MultiArray._TYPE));
-			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
-				@Override
-				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
-					ArrayList<String> st = new ArrayList<String>();
-					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, slot,
-							diagnostic_msgs.DiagnosticStatus.ERROR, st);				
-				}
-				@Override
-				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Successful Master Registration for %s%n", pub);
-					}
-					pubschannel.put(slot, pub);
-					if(DEBUG)
-						System.out.println("Bringing up publisher "+slot);
-				}
-				@Override
-				public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
-					}
-					ArrayList<String> st = new ArrayList<String>();
-					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, slot,
-							diagnostic_msgs.DiagnosticStatus.ERROR, st);
-				}
-				@Override
-				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Successful Master Unregistration for %s%n", pub);
-					}
-					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
-				}
-				@Override
-				public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
-					if(DEBUG) {
-						System.out.printf("New subscriber for %s Header: %s%n", pub, sub.toConnectionHeader().getFields());
-					}				
-				}
-				@Override
-				public void onShutdown(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Shutdown initiated for %s%n", pub);
-					}
-					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
-				}	
-			});
-		}*/
 	}
 	/**
 	 * Move the buffered values into the publishing message to send absolute vals to motor and peripheral control.
@@ -1930,32 +1880,33 @@ public class MotionController extends AbstractNodeMain {
 				break;
 			case "POV":
 				POVType pov = (POVType) af.matches(axes);
-				if(pov == POVType.AxisUp) {
+				switch(pov) {
+				case POVType.AxisUp:
 					publishAxis(connectedNode, pubschannel, ndd.getName(), 1000);
-				} else {
-					if(pov == POVType.AxisDown) {
-						publishAxis(connectedNode, pubschannel, ndd.getName(), -1000);
-					} else {
-						if(pov == POVType.AxisLeft || pov == POVType.AxisRight) {
-							publishAxis(connectedNode, pubschannel, ndd.getName(), 0);
-						} else {
-							if(pov == POVType.AxisUpperLeft) {
-								publishAxis(connectedNode, pubschannel, ndd.getName(), 500);
-							} else {
-								if(pov == POVType.AxisUpperRight) {
-									publishAxis(connectedNode, pubschannel, ndd.getName(), 250);
-								} else {
-									if(pov == POVType.AxisLowerLeft) {
-										publishAxis(connectedNode, pubschannel, ndd.getName(), -500);
-									} else {
-										if(pov == POVType.AxisLowerRight) {
-											publishAxis(connectedNode, pubschannel, ndd.getName(), -250);
-										}
-									}
-								}
-							}
-						}
-					}
+					break;
+				case POVType.AxisDown:
+					publishAxis(connectedNode, pubschannel, ndd.getName(), -1000);
+					break;
+				case POVType.AxisLeft:
+				case POVType.AxisRight:
+					publishAxis(connectedNode, pubschannel, ndd.getName(), 0);
+					break;
+				case POVType.AxisUpperLeft:
+					publishAxis(connectedNode, pubschannel, ndd.getName(), 500);
+					break;
+				case POVType.AxisUpperRight:
+					publishAxis(connectedNode, pubschannel, ndd.getName(), 250);
+					break;
+				case POVType.AxisLowerLeft:
+					publishAxis(connectedNode, pubschannel, ndd.getName(), -500);
+					break;
+				case POVType.AxisLowerRight:
+					publishAxis(connectedNode, pubschannel, ndd.getName(), -250);
+					break;
+				case POVType.AxisOff:
+					break;
+				default:
+					throw new RuntimeException("Undefined POV state");
 				}
 				break;
 			default:
@@ -2422,8 +2373,7 @@ public class MotionController extends AbstractNodeMain {
 	* @param connectedNode the Ros node we are using
 	* @param tstatpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
 	*/
-	private void configureSubscriberListener(Subscriber<Int32MultiArray> subscr, ConnectedNode connectedNode, 
-					Publisher<DiagnosticStatus> tstatpub) {
+	private void configureSubscriberListener(Subscriber<Int32MultiArray> subscr, ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
 		subscr.addSubscriberListener(new SubscriberListener<std_msgs.Int32MultiArray>() {
 				@Override
 				public void onNewPublisher(Subscriber<Int32MultiArray> subs, PublisherIdentifier pubs) {

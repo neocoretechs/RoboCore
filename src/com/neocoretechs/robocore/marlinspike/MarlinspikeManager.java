@@ -29,16 +29,18 @@ import com.neocoretechs.robocore.config.Button;
 
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
-import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
+
 import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
+
 import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
 import com.neocoretechs.robocore.serialreader.MarlinspikeDataPort;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.Pins;
 import com.neocoretechs.robocore.serialreader.marlinspikeport.control.AbstractMotorControl;
 
 /**
- * Each individual robot uses this class to manage its collection of attributes initially parsed from config file, including
+ * Each individual robot uses this class to manage its collection of attributes initially parsed from the properties file: RoboCore.properties located
+ * somewhere on the resource path. The properties file is organized into logical sections including
  * LUN, WHEEL, PID. Further configuration is performed to deliver needed services.<p/>
  * Parse configs and allocate the necessary number of control elements for one or more Marlinspike boards.<p/>
  * We create the collection of devices and {@link NodeDevice} with their {@link AsynchDemuxer} to talk to the attached Marlinspikes.
