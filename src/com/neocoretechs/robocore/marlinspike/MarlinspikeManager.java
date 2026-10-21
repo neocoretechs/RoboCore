@@ -384,10 +384,10 @@ public class MarlinspikeManager implements Serializable {
 		}
 	}
 	/**
-	 * Configure the manual control for the DeviceEntry, if any. call setManulaControl on DeviceEntry with new AxisInterface generic.
+	 * Configure the manual control for the DeviceEntry, if any. call setManualControl on DeviceEntry with new AxisInterface generic.
+	 * ALthough a button is a button and not an axis, it is defined as AxisType:Button with the value being {@link Button} enum ButtonType
 	 * @param de DeviceEntry target
-	 * @param control element at AXIS or BUTTON etc array index of DeviceEntry
-	 * @param buttonelelment at BUTTON array index of DeviceEntry
+	 * @param control element at AXIS array index of DeviceEntry
 	 */
 	public void configureManualControl(DeviceEntry de, TypedWrapper control) {
 		if(DEBUG) {
@@ -422,10 +422,11 @@ public class MarlinspikeManager implements Serializable {
 			de.setManualcontrol(new TriggerAxis(new int[]{ax.get()}));
 			break;
 		case "Button":
-			ax = Optional.ofNullable(control.get("Button")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
-			if(ax.isEmpty())
+			Optional<Button.ButtonType> bt;
+			bt = Optional.ofNullable(control.get("Button")).filter(String.class::isInstance).map(e -> Button.ButtonType.valueOf((String)e));
+			if(bt.isEmpty())
 				throw new RuntimeException(String.format("%s.configureManualControl Button missing from config for %s%n",this.getClass().getName(), de));
-			de.setManualcontrol(new Button(new int[]{ax.get()}));
+			de.setManualcontrol(new Button(new int[]{bt.get().ordinal()}));
 			break;
 		case "POV":
 			de.setManualcontrol(new POVAxis());
