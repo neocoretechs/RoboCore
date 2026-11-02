@@ -1,0 +1,1 @@
+java  -Xmx2g -XX:+UseParallelGC -DBigSack.properties=/usr/share/relatrix/BigSack.properties -cp /usr/share/relatrix/Relatrix.jar:/usr/share/relatrix/BigSack.jar com.neocoretechs.relatrix.server.RelatrixKVServer $1 $2
