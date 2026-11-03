@@ -85,7 +85,8 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 		Optional<Integer> enablePin = Optional.empty();
 		
 		type = Optional.ofNullable(LUN[wheelLun].get("Type")).filter(String.class::isInstance).map(e -> String.valueOf(e));
-		enablePin = Optional.ofNullable(LUN[wheelLun].get("EnablePin")).filter(String.class::isInstance)
+		if(!type.get().equals("SmartController"))
+			enablePin = Optional.ofNullable(LUN[wheelLun].get("EnablePin")).filter(String.class::isInstance)
 				.map(e -> Integer.parseInt((String) e));
 		
 		minSpeed = Optional.ofNullable(LUN[wheelLun].get("MinValue")).filter(String.class::isInstance)
@@ -123,7 +124,7 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 			if(eType == null)
 				throw new RuntimeException("Type of:"+(String)type.get()+" did not resolve to a legitimate type for "+name+" slot "+slot+" channel "+chan);
 			
-			return new RobotWheel(name, eType, slot, chan, enablePin.get(),
+			return new RobotWheel(name, eType, slot, chan, (type.get().equals("SmartController") ? -1 : enablePin.get()),
 					wheelDiameter.get(), 
 					wheelTrack.get(), 
 					minSpeed.get(), 
@@ -133,7 +134,8 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 					motorKi.get(), motorKo.get(),
 					motorPIDRate.get());
 		} catch(NoSuchElementException nse) {
-			System.out.println("enable="+enablePin.get());
+			if(!type.get().equals("SmartController"))
+				System.out.println("enable="+enablePin.get());
 			System.out.println("wheelDiameter="+wheelDiameter.get());
 			System.out.println("wheelTrack="+wheelTrack.get());
 			System.out.println("minSpeed="+minSpeed.get());
