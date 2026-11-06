@@ -51,7 +51,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.Variabl
  * 'Motor control' and they occupy different 'slots'. A basic PWM control has no encoders or interrupts and no forward/reverse direction. <p/>
  * 
  * Examples:<br/>
- * G5  - Command motor or PWM control C<Channel> [P<Motor Power -1000,1000>] [X<PWM level -1000,1000 scaled 0-2000>] <br/>
+ * G5  - Command motor or PWM control [P<Motor Power -1000,1000>] [Q|R|S|T|U|V|W] [X<PWM level -1000,1000 scaled 0-2000>] <br/>
  * G5 Z0 C1 P500 <br/>
  * M10 - Central configuration directive for creating all types of motor and PWM controls and drivers M10 Z<slot> T<controller type> <br/>
  * M10 Z0 T1 <br/>
@@ -63,7 +63,7 @@ import com.neocoretechs.robocore.serialreader.marlinspikeport.pwmcontrol.Variabl
  * @author Jonathan Neville Groff Copyright (C) NeoCoreTechs 2020
 */
 public class MarlinspikeDataPort implements DataPortCommandInterface {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 	private static final int MAX_CMD_SIZE = 1024;
 	public static int DEFAULT_PWM_FREQUENCY = 50000;
 	public static int DEFAULT_PWM_DUTY = 25000;
@@ -257,6 +257,11 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 		return process_commands();
 	}
 	 
+	@Override
+	public String toString() {
+		return PROTOCOL_VERSION;
+	}
+	
 	void get_command() {
 		serial_count = 0;
 		if(cmdbuffer.length() == 0) {
@@ -360,49 +365,180 @@ public class MarlinspikeDataPort implements DataPortCommandInterface {
 			ret.add(String.format("%sG4%s%n",MSG_BEGIN,MSG_TERMINATE));
 			return ret;
 			//
-			// G5 [Z<controller>] C<Channel> [P<motor power -1000 to 1000>] [X<PWM power -1000 to 1000>(scaled 0-2000)]
+			// G5 - Absolute command motor [Z<controller>] [P<motor power -1000 to 1000>] Q[P] R[P] S[P] T[P] U[P] V[P] W[P] X[P] Y[P]
 			// Primary code to command power level to a given controller on a given channel.
 			//
-		case 5:
-			if(!Stopped) {
+		case 5:    
+			if(code_seen('Z')) {
+				motorController = (int) code_value();
+			}
+			fault = 0; // clear fault flag
+			ArrayList<Integer> mp = new ArrayList<Integer>();
+			if(code_seen('P'))
+				mp.add((int) code_value()); // motor power -1000,1000
+			if(code_seen('Q'))
+				mp.add((int) code_value());
+			if(code_seen('R'))
+				mp.add((int) code_value());
+			if(code_seen('S'))
+				mp.add((int) code_value());
+			if(code_seen('T')) 
+				mp.add((int) code_value());
+			if(code_seen('U'))
+				mp.add((int) code_value());
+			if(code_seen('V'))
+				mp.add((int) code_value());
+			if(code_seen('W'))
+				mp.add((int) code_value());
+			if(code_seen('X'))
+				mp.add((int) code_value());
+			if(code_seen('Y'))
+				mp.add((int) code_value());
+			int[] mpa = new int[mp.size()];
+			for(int k = 0; k < mpa.length; k++)
+				mpa[k] = mp.get(k);
+			if(DEBUG)
+				System.out.printf("%s Command Motor Power control %s for slot %d%n", this.getClass().getName(), motorControl[motorController], motorController);
+			if( (status=motorControl[motorController].commandMotorPower(mpa)) != 0) {
+				ret.add(String.format("%s%s %d %d%s%n",MSG_BEGIN,MSG_BAD_MOTOR,status,motorPower,MSG_TERMINATE));
+				if(DEBUG && status != 0)
+					System.out.printf("%s Commanded Motor Power control %s for slot %d status was %d%n", this.getClass().getName(), motorControl[motorController], motorController, status);
+				fault = status;
+				return ret;
+			}
+			ret.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
+		break;
+		
+		case 6: // G6 - Absolute command PWM [Z<controller>] [P<PWM power 0 to 2000>] Q[P] R[P] S[P] T[P] U[P] V[P] W[P] X[P] Y[P] (scaled 0-2000)]
+		    if(!Stopped) {
+				fault = 0; // clear fault flag
 				if(code_seen('Z')) {
-					motorController = (int) code_value();
+					 motorController = (int) code_value();
 				}
-				if(code_seen('C')) {
-					motorChannel = (int) code_value(); // channel 1,2
-					if(code_seen('P')) {
-						motorPower = (int) code_value(); // motor power -1000,1000
-						fault = 0; // clear fault flag
-						if(DEBUG)
-							System.out.printf("%s Command Motor Power control %s for slot %d%n", this.getClass().getName(), motorControl[motorController], motorController);
-						if( (status=motorControl[motorController].commandMotorPower(motorChannel, motorPower)) != 0) {
-							ret.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_MOTOR,status,motorChannel,motorPower,MSG_TERMINATE));
-						} else {
-							ret.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
-						}
+				if(code_seen('P')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(1, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 1 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
 						if(DEBUG && status != 0)
-							System.out.printf("%s Commanded Motor Power control %s for slot %d status was %d%n", this.getClass().getName(), motorControl[motorController], motorController, status);
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
 						return ret;
-					} else {// code P or X
-						if(code_seen('X')) {
-							PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
-							fault = 0; // clear fault flag
-							if(DEBUG)
-								System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
-							// use motor related index and value, as we have them
-							if( (status=pwmControl[motorController].commandPWMLevel(motorChannel, PWMLevel)) != 0) {
-								ret.add(String.format("%s%s%d %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,motorChannel,PWMLevel,MSG_TERMINATE));
-							} else {
-								ret.add(String.format("%sG5%s%n",MSG_BEGIN,MSG_TERMINATE));
-							}
-							if(DEBUG && status != 0)
-								System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
-							return ret;
-						} // code X
 					}
-				} // code C
-			} // stopped
-			break;
+				} // 
+				if(code_seen('Q')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(2, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 2 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('R')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(3, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 3 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('S')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(4, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 4 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('T')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(5, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 5 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('U')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(6, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 6 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('V')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(7, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 7 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('W')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(8, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 8 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('X')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(9, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 9 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+				if(code_seen('Y')) {
+					PWMLevel = (int) code_value(); // PWM level -1000,1000, scaled to 0-2000 in PWM controller, as no reverse
+					if(DEBUG)
+						System.out.printf("%s Command PWM Level control %s for slot %d%n", this.getClass().getName(), pwmControl[motorController], motorController);
+					// use motor related index and value, as we have them
+					if( (status=pwmControl[motorController].commandPWMLevel(10, PWMLevel)) != 0) {
+						ret.add(String.format("%s%s 10 %d %d%s%n",MSG_BEGIN,MSG_BAD_PWM,status,PWMLevel,MSG_TERMINATE));
+						if(DEBUG && status != 0)
+							System.out.printf("%s Commanded PWM Level control %s for slot %d status was %d%n", this.getClass().getName(), pwmControl[motorController], motorController, status);
+						return ret;
+					}
+				} // 
+		    } // stopped
+			ret.add(String.format("%sG6%s%n",MSG_BEGIN,MSG_TERMINATE));
+		    break;
+	
 			//
 			// G99 start watchdog timer. G99 T<time_in_millis> values are 15,30,60,120,250,500,1000,4000,8000 default 4000
 			//

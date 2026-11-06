@@ -3,14 +3,14 @@ package com.neocoretechs.robocore.serialreader.marlinspikeport.control;
 import java.io.IOException;
 
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
-import com.neocoretechs.robocore.serialreader.ByteSerialDataPort;
+import com.neocoretechs.robocore.serialreader.RoboteqSerialDataPort;
 /**
  * Driver for Roboteq smart motor controllers. Interface serial protocol is via RS232 over UART and level converter or CAN etc.
  * Relies on {@link ByteSerialDataPort}
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022
  */
 public class RoboteqDevice extends AbstractSmartMotorControl implements MarlinspikeControlInterface {
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;;
 	static final int ROBOTEQ_DEFAULT_TIMEOUT  =   1000;
 	static final int ROBOTEQ_BUFFER_SIZE      =   64;
 	static final int ROBOTEQ_COMMAND_BUFFER_SIZE =20;
@@ -53,7 +53,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 	final static String MSG_MOTORCONTROL_8= "Startup configuration fault";
 	final static String MSG_MOTORCONTROL_9= "Stall";
 	
-	private ByteSerialDataPort m_Serial;
+	private RoboteqSerialDataPort m_Serial;
 	//private String port = "/dev/ttyS2";
 	private String port = "/dev/ttyUSB0";
 	private int baud = 115200;
@@ -71,7 +71,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 		super(maxPower);
 		m_Timeout = ROBOTEQ_DEFAULT_TIMEOUT;
 		setChannels(2);
-		m_Serial = new ByteSerialDataPort(port, baud, dataBits, stopBits, 0);
+		m_Serial = new RoboteqSerialDataPort(port, baud, dataBits, stopBits, 0);
 		m_Serial.connect(true);
 	}
 	/**
@@ -90,7 +90,7 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 		this.stopBits = stopBits;
 		m_Timeout = ROBOTEQ_DEFAULT_TIMEOUT;
 		setChannels(2);
-		m_Serial = new ByteSerialDataPort(port, baud, dataBits, stopBits, 0);
+		m_Serial = new RoboteqSerialDataPort(port, baud, dataBits, stopBits, 0);
 		m_Serial.connect(true);
 	}
 	
