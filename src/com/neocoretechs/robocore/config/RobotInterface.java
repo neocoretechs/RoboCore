@@ -17,10 +17,12 @@ import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
  * This class represents a centralized configuration management instrument.
  * <pre>
  * Read the parameterized properties from the properties class. Config as follows by LUN, logical unit number:<p>
- * DataPort:/dev/ttyACM0
+ * PORT[0].Dataport:/dev/ttyACM0
+ * PORT[1].Dataport:MarlinspikeDataport
  * PowerScale:0
  * LUN[0].Name:LeftWheel 
  * LUN[0].NodeName:Control1
+ * LUN[0].Dataport:0
  * LUN[0].Type:H-Bridge 
  * LUN[0].Slot:0 
  * LUN[0].SignalPin0:8 
@@ -62,13 +64,13 @@ public interface RobotInterface {
 	public boolean[] active();
 	public String getName(); // The name of the Robot. Each one is special and unique.
 	public String getHostName(); // the individual processor in the robot internal network.
-	public String getDataPort();
 	public MarlinspikeManager getManager();
 	public void configureMarlinspike() throws IOException;
 	public HashMap<String, Boolean> getOperating();
 	public RobotDiffDriveInterface getDiffDrive(); // embodies different differential drive characteristics
 	public int getPowerScale();
 	public float getTemperatureThreshold();
+	public TypedWrapper[] getPORT();
 	public TypedWrapper[] getLUN();
 	public TypedWrapper[] getWHEEL();
 	public TypedWrapper[] getPID();

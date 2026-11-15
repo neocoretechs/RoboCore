@@ -17,17 +17,18 @@ import com.neocoretechs.robocore.PID.PIDParameterInterface;
 import com.neocoretechs.robocore.PID.SetpointInfoInterface;
 
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
-import com.neocoretechs.robocore.propulsion.DrivenWheelInterface;
-import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 import com.neocoretechs.robocore.propulsion.RobotDiffDriveInterface;
 /**
  * This class represents a centralized configuration management instrument.
  * <pre>
  * Read the paramaterized properties from the properties class. Config as follows by LUN, logical unit number:<p>
- * DataPort:/dev/ttyACM0
- * PowerScale:0
+ * PORT[0].Dataport:/dev/ttyACM0
+ * PORT[1].Dataport:MarlinspikeDataport or custom class
+ * PORT[2].Dataport:/dev/ttyUSB0
+ * PowerScale:1
  * LUN[0].Name:LeftWheel 
  * LUN[0].NodeName:Control1
+ * LUN[0].Controller:1
  * LUN[0].Type:H-Bridge 
  * LUN[0].Slot:0 
  * LUN[0].SignalPin0:8 
@@ -75,6 +76,7 @@ public class Robot implements RobotInterface, Serializable {
 	private RobotDiffDriveInterface robotDrive;
 	private IMUSetpointInfo IMUSetpoint;
 	private String dataPort = "/dev/ttyACM0";
+	private TypedWrapper[] PORT;
 	// These arrays are by 'channel'
 	private TypedWrapper[] LUN;
 	private TypedWrapper[] WHEEL;
@@ -94,12 +96,12 @@ public class Robot implements RobotInterface, Serializable {
 		}
 		if(globalConfigs == null)
 			throw new RuntimeException("Global property configuration failed in starting Robot, possibly data directory:"+Props.dataDirectory+" or property file:"+Props.getPropFile()+" is invalid");
+		extractPORT();
 		extractLUN();
 		extractWHEEL();
 		extractPID();
 		extractAXIS();
 		powerScale = Props.toInt("PowerScale"); // div power by divisor
-		dataPort = Props.toString("DataPort");
 		if(WHEEL.length > 0) {
 			//robotDrive = new RobotDiffDrive(LUN, WHEEL, AXIS, PID);
 			//kp, ki, kd, ko, pidRate (hz)
@@ -143,10 +145,6 @@ public class Robot implements RobotInterface, Serializable {
 		}
 	}
 	
-	public String getDataPort() {
-		return dataPort;
-	}
-	
 	public MarlinspikeManager getManager() {
 		return marlinspikeManager;
 	}
@@ -185,6 +183,26 @@ public class Robot implements RobotInterface, Serializable {
 		 }	
 	}
 
+	private void extractPORT() {
+		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
+		 Map<Integer, Map<String, Object>> port = globalConfigs.get("PORT");
+		 if(port == null) {
+			 PORT = new TypedWrapper[1];
+			 Map<String, Object> sortedPortProp = new HashMap<String, Object>();
+			 sortedPortProp.put("Dataport", dataPort);
+			 PORT[0] = new TypedWrapper(sortedPortProp);
+			 return;
+		 }
+		 PORT = new TypedWrapper[port.size()];
+		 Set<Integer> portChannels = port.keySet();
+		 Object[] portOChannels = portChannels.toArray();
+		 Arrays.sort(portOChannels); // make sure of order
+		 for(Object portAChannels: portOChannels) {
+			 Map<String, Object> sortedPortProp = port.get(portAChannels); //portAChannels sorted integer channels
+			 PORT[(int)portAChannels] = new TypedWrapper(sortedPortProp);
+		 }	
+	}
+	
 	private void extractPID() {
 		//Map<String, Map<Integer, Map<String, Object>>> globalConfigs;
 		 Map<Integer, Map<String, Object>> pids = globalConfigs.get("PID");
@@ -308,13 +326,6 @@ public class Robot implements RobotInterface, Serializable {
 	public float getTemperatureThreshold() {
 		return temperatureThreshold;
 	}
-	/**
-	 * @return the controller
-	 */
-	public String getDataport() {
-		return dataPort;
-	}
-	
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
@@ -377,6 +388,11 @@ public class Robot implements RobotInterface, Serializable {
 		return Props.toString("Name");
 	}
 
+	@Override
+	public TypedWrapper[] getPORT() {
+		return PORT;
+	}
+	
 	@Override
 	public TypedWrapper[] getLUN() {
 		return LUN;

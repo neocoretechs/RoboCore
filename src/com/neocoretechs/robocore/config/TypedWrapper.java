@@ -9,9 +9,13 @@ import java.util.Map;
  * As each property is parsed from the config, it is placed in its proper wrapper and placed in the proper array in the Robot object. 
  * For instance:<p/>
  * Config as follows by LUN, logical unit number:<p/>
+ * PORT[0].Dataport:/dev/ttyACM0
+ * PORT[1].Dataport:MarlinspikeDataport or custom class
+ * PORT[2].Dataport:/dev/ttyUSB0
+ * PowerScale:4<br/>
  * LUN[0].Name:LeftWheel <br/>
  * LUN[0].NodeName:Control1 <br/>
- * LUN[0].Controller:/dev/ttyACM0 <br/>
+ * LUN[0].Controller:0 <br/>
  * LUN[0].Type:H-Bridge <br/>
  * LUN[0].Slot:0 <br/>
  * LUN[0].SignalPin0:8 <br/>
@@ -31,6 +35,7 @@ import java.util.Map;
  * AXIS[0].AxisY:2 <br/>
  * A Button is a button, not an axis, but we include buttons in the axis definitions to simplify configuration.
  * So when the GlobalConfigs are parsed in {@code Robot} you get the following set of constructs:<p/>
+ *  private TypedWrapper[] PORT;<br/>
  * 	private TypedWrapper[] LUN; <br/>
  *	private TypedWrapper[] WHEEL; <br/>
  *	private TypedWrapper[] PID; <br/>

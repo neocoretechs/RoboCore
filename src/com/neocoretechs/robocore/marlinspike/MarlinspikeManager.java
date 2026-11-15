@@ -3,10 +3,10 @@ package com.neocoretechs.robocore.marlinspike;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -52,11 +52,12 @@ public class MarlinspikeManager implements Serializable {
 	private static boolean DEBUG = true;
 	RobotInterface robot;
 	String hostName;
+	TypedWrapper[] port;
 	TypedWrapper[] lun;
 	TypedWrapper[] wheel;
 	TypedWrapper[] pid;
 	TypedWrapper[] axis;
-	transient AsynchDemuxer asynchDemuxer;
+	transient AsynchDemuxer[] asynchDemuxer;
 
 	/**
 	 * startup - the array of startup M-codes to initialize Marlinspike
@@ -77,6 +78,7 @@ public class MarlinspikeManager implements Serializable {
 	 */
 	public MarlinspikeManager(RobotInterface robot) throws IOException {
 		this.robot = robot;
+		this.port = robot.getPORT();
 		this.lun = robot.getLUN();
 		this.wheel = robot.getWHEEL();
 		this.pid = robot.getPID();
@@ -86,7 +88,11 @@ public class MarlinspikeManager implements Serializable {
 	}
 	
 	public AsynchDemuxer getDemuxer() {
-		return asynchDemuxer;
+		return asynchDemuxer[0];
+	}
+	
+	public AsynchDemuxer getDemuxer(int adm) {
+		return asynchDemuxer[adm];
 	}
 	
 	/**
@@ -107,13 +113,20 @@ public class MarlinspikeManager implements Serializable {
 			if(name.isEmpty())
 				throw new IOException("Must specify Name parameter in configuration file for host "+hostName);
 			if(DEBUG)
-				System.out.printf("%s.createControllers(%b) len=%s LUN[%d] HostName=%s NodeName=%s name=%s%n",this.getClass().getName(), override, lun.length, i, hostName, nodeName.get(), name.get());
+				System.out.printf("%s.createControllers(%b) len=%s LUN[%d] HostName=%s NodeName=%s Dataport=name=%s%n",this.getClass().getName(), override, lun.length, i, hostName, nodeName.get(), name.get());
 			if(override || hostName.equals(nodeName.get())) {
 				// general min and max values
 				Optional<Integer> ominValue = Optional.ofNullable(lun[i].get("MinValue")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 				Optional<Integer> omaxValue = Optional.ofNullable(lun[i].get("MaxValue")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
-				Optional<Object> controllerInst = Optional.ofNullable(lun[i].get("Controller"));
+				Optional<Integer> controllerInst = Optional.ofNullable(lun[i].get("Controller")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 				MarlinspikeControlInterface controller = null;
+				// extract max power value to instantiate MarlinspikeControlInterface AbstractMotorControl
+				//try {
+				//	Class<?> controlClass = Class.forName((String) controllerInst.get());
+				//	controller = (MarlinspikeControlInterface) controlClass.getConstructor(Integer.class).newInstance(maxValue);
+				//} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e1) {
+				//	throw new IOException(e1);
+				//}
 				DeviceEntry deviceEntry = null;
 				Optional<Integer> dir = Optional.ofNullable(lun[i].get("Direction")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
 				Optional<Integer> enable = Optional.ofNullable(lun[i].get("EnablePin")).filter(String.class::isInstance).map(e -> Integer.parseInt((String) e));
@@ -151,7 +164,7 @@ public class MarlinspikeManager implements Serializable {
 						int maxValue = 1000;
 						if(omaxValue.isPresent())
 							maxValue = omaxValue.get();
-						controller = createController(controllerInst, maxValue);
+						controller = createController(maxValue, asynchDemuxer[controllerInst.get()]);
 						// create a new template
 						if(robot.getDiffDrive() == null) {
 							deviceEntry = new RobotDiffDrive(robot, "DiffDrive", (String)nodeName.get(), i, controller, slot.get(), lun, wheel, pid, axis);
@@ -187,7 +200,7 @@ public class MarlinspikeManager implements Serializable {
 							tsce.setMinValue(ominValue.get());
 						if(omaxValue.isPresent())
 							tsce.setMaxValue(omaxValue.get());
-						controller = createController(controllerInst, tsce.getMaxValue());
+						controller = createController(tsce.getMaxValue(), asynchDemuxer[controllerInst.get()]);
 						// creates SlotHandler
 						deviceEntry = new SlotEntry((String)name.get(), (String)nodeName.get(), i, controller, slot.get());
 						ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
@@ -220,7 +233,7 @@ public class MarlinspikeManager implements Serializable {
 					Optional<Object> oToggle = Optional.ofNullable(lun[i].get("Toggle"));
 					if(oToggle.isPresent() && Boolean.parseBoolean((String)oToggle.get()))
 						tsce.setPinToggle();
-					controller = createController(controllerInst, tsce.getMaxValue());
+					controller = createController(tsce.getMaxValue(), asynchDemuxer[controllerInst.get()]);
 					deviceEntry = new DeviceEntry((String)name.get(), (String)nodeName.get(), i, controller);
 					ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
 					if(sl == null)
@@ -279,26 +292,15 @@ public class MarlinspikeManager implements Serializable {
 	/**
 	 * Create a {@link MarlinspikeControl} based on whether controllerInst is is null or names a class that takes the maxValue in ctor.
 	 * If it didnt exist in configs (Optional.isEmpty) create a default MarlinspikeControl
-	 * @param controllerInst the class name from config or null
 	 * @param maxValue the maxValue to pass to newIstance ctor
+	 * @param asynchDemuxer the PORT created AsynchDemuxer
 	 * @return The MarlinspikeControl instance
 	 * @throws IOException if InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException
 	 */
-	public MarlinspikeControlInterface createController(Optional<Object> controllerInst, int maxValue) throws IOException {
+	public MarlinspikeControlInterface createController(int maxValue, AsynchDemuxer asynchDemuxer) throws IOException {
 		if(DEBUG)
-			System.out.printf("%s:createController %s maxValue:%d%n",this.getClass().getName(),controllerInst,maxValue);
-		MarlinspikeControlInterface controller;
-		if(controllerInst.isEmpty()) {
-			controller = new MarlinspikeControl(asynchDemuxer);
-		} else {
-			// extract max power value to instantiate MarlinspikeControlInterface AbstractMotorControl
-			try {
-				Class<?> controlClass = Class.forName((String) controllerInst.get());
-				controller = (MarlinspikeControlInterface) controlClass.getConstructor(Integer.class).newInstance(maxValue);
-			} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e1) {
-				throw new IOException(e1);
-			}
-		}
+			System.out.printf("%s:createController asynchDemuxer:%s maxValue:%d%n",this.getClass().getName(), asynchDemuxer, maxValue);
+		MarlinspikeControlInterface controller = new MarlinspikeControl(asynchDemuxer);
 		return controller;
 	}
 	
@@ -317,8 +319,10 @@ public class MarlinspikeManager implements Serializable {
 	private void init() throws IOException {
 		if(DEBUG)
 			System.out.printf("%s.init queue:%d%n",this.getClass().getName(),startup.size());
-		if(startup.size() > 0)
-			asynchDemuxer.config(startup);
+		if(startup.size() > 0) {
+			for(int i = 0; i < asynchDemuxer.length; i++)
+			asynchDemuxer[i].config(startup);
+		}
 	}
 	/**
 	 * Internal configuration generator that sets up initial commands to Marlinspike controller
@@ -450,19 +454,24 @@ public class MarlinspikeManager implements Serializable {
 	 * @throws IOException 
 	 */
 	private void configureDemuxer() throws IOException {
-		this.asynchDemuxer = new AsynchDemuxer(this);
-		try {
-			if(robot.getDataPort().equals("MarlinspikeDataPort"))
-				this.asynchDemuxer.connect(new MarlinspikeDataPort());
-			else
-				this.asynchDemuxer.connect(new ByteSerialDataPort(robot.getDataPort()));
-		} catch(IOException ioe) {
-			throw new RuntimeException(ioe);
+		this.asynchDemuxer = new AsynchDemuxer[port.length];
+		for(int p = 0; p < port.length; p++) {
+			this.asynchDemuxer[p] = new AsynchDemuxer(this);
+			if(DEBUG)
+				System.out.printf("%s port:%d %s%n", this.getClass().getName(), p, port[p].get("Dataport"));
+			try {
+				if(port[p].get("Dataport").equals("MarlinspikeDataPort"))
+					this.asynchDemuxer[p].connect(new MarlinspikeDataPort());
+				else
+					this.asynchDemuxer[p].connect(new ByteSerialDataPort((String) port[p].get("Dataport")));
+			} catch(IOException ioe) {
+				throw new RuntimeException(ioe);
+			}
+			// send the codes to reset Marlinspike pins and controllers
+			MarlinspikeControl.clearMarlinspikeSettings(this.asynchDemuxer[p]);
+			if(DEBUG)
+				System.out.printf("%s.configureDemuxer %d %s%n",this.getClass().getName(), p, this.asynchDemuxer[p]);
 		}
-		// send the codes to reset Marlinspike pins and controllers
-		MarlinspikeControl.clearMarlinspikeSettings(this.asynchDemuxer);
-		if(DEBUG)
-			System.out.printf("%s.configureDemuxer  %s%n",this.getClass().getName(), this.asynchDemuxer);
 	}
 	
 	/**

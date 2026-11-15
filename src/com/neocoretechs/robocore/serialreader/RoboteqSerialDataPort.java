@@ -17,6 +17,7 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
  * to effect transmission and reception. Two asynchronous threads run; one for transmit, one for receive.<p>
  * After creating the port with proper parameters such as baud rate, parity, data and stop bits, call
  * the connect method to begin communication.<p>
+ * This version is optimized to work with the RoboTeq smart controller
  * @see com.fazecast.jSerialComm.SerialPort
  * @see DataPortCommandInterface
  * @author Jonathan Groff (C) NeoCoreTechs 2020,2021,2026
@@ -54,13 +55,13 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 
 	public RoboteqSerialDataPort()  {
 		if( DEBUG ) 
-			System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
+			System.out.println(this.getClass().getName()+" "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	}
 
 	public RoboteqSerialDataPort(String tportName) {
 		portName = tportName;
 		if( DEBUG ) 
-			System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
+			System.out.println(this.getClass().getName()+" "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	}
 
 	public RoboteqSerialDataPort(String tportName, int tbaud, int tdatab, int tstopb, int tparityb) {
@@ -72,7 +73,7 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 		//connect(true);
 		//clear();
 		if( DEBUG ) 
-			System.out.println("ByteSerialDataPort "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
+			System.out.println(this.getClass().getName()+" "+portName+" baud="+baud+" databits="+datab+" stopbits="+stopb+" parity="+parityb);
 	}
 	@Override	    
 	public void connect(boolean writeable) throws IOException {
@@ -178,7 +179,7 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 			write(bytes[i]);
 		}
 		try {
-			Thread.sleep(15);
+			Thread.sleep(200);
 		} catch (InterruptedException e) {}
 
 	}
