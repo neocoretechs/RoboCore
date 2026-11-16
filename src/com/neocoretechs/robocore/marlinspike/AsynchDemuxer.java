@@ -131,7 +131,7 @@ import com.neocoretechs.robocore.serialreader.DataPortInterface;
  *
  */
 public class AsynchDemuxer implements Runnable {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	private static boolean PORTDEBUG = false;
 	private volatile boolean shouldRun = true;
 	private DataPortCommandInterface dataPort;
@@ -848,8 +848,7 @@ public class AsynchDemuxer implements Runnable {
 				if(DEBUG)
 					System.out.println("AsynchDemux "+this+" response:"+payload+" from dataport:"+dataPort);
 				if(payload == null || payload.size() == 0 ) {
-					throw new IndexOutOfBoundsException(this.getClass().getName()+" "+Thread.currentThread().getName()+
-							" RESPONSE FROM PORT "+dataPort.getPortName()+" NULL DIRECTIVE:"+Arrays.toString(payload.toArray()));
+					continue;
 				}
 				fop = parseDirective(payload.get(0));
 				if(fop != null) {

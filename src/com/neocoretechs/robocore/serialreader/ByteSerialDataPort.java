@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Hashtable;
 import java.util.concurrent.TimeUnit;
 
 import com.neocoretechs.robocore.SynchronizedThreadManager;
@@ -51,6 +52,10 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 	private int readBufferTail = 0;
 	private int writeBufferHead = 0;
 	private int writeBufferTail = 0;
+	
+	private Hashtable<String,String> lastCommand = new Hashtable<String,String>();
+	private Hashtable<String, Long> lastTime = new Hashtable<String, Long>();
+	private Long maxTime = 200L; // ms max command timeout
 
 	public ByteSerialDataPort()  {
 		if( DEBUG ) 
@@ -313,6 +318,15 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 
 	@Override
 	public ArrayList<String> sendCommand(String command) throws IOException {
+		String[] pcommand = command.split(" ");
+		String rcommand = lastCommand.get(pcommand[0]);
+		if(rcommand != null && rcommand.equals(command)) {
+			Long lastDelta = lastTime.get(pcommand[0]);
+			if((System.currentTimeMillis() - lastDelta) < maxTime)
+				return null;
+		}
+		lastCommand.put(pcommand[0], command);
+		lastTime.put(pcommand[0], System.currentTimeMillis());
 		byte[] buffer = new byte[1024];
 		long writeTime = System.nanoTime();
 		long writeSleepTime = 0L;

@@ -284,7 +284,7 @@ import trajectory_msgs.ComeToHeadingStamped;
  *
  */
 public class MotionController extends AbstractNodeMain {
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	private static boolean IMUDEBUG = false;
 	private static boolean DEBUGBEARING = true;
 	//
@@ -1556,7 +1556,7 @@ public class MotionController extends AbstractNodeMain {
 		}
 		// get radian measure of left stick x,y
 		Integer[] xy = (Integer[]) robot.getDiffDrive().getManualControl().matches(axes);
-		if(DEBUG)
+		if(DEBUG || DEBUGBEARING)
 			System.out.printf("%s controller Axes:%s%n",this.getClass().getName(),Arrays.toString(xy));
 		float radians = (float) Math.atan2(xy[0].doubleValue(),xy[1].doubleValue());
 		float stickDegrees = (float) (radians * (180.0 / Math.PI)); // convert to degrees
@@ -1647,9 +1647,9 @@ public class MotionController extends AbstractNodeMain {
 		// Speed may be plus or minus, this determines a left or right turn as the quantity is added to desired speed
 		// of wheels left and right. The speed for each wheel is modified by desired turn radius, which is based on speed,
 		// or on the computed derivation from desired course if a straight line course is set.
-		// axes[2] is y, value is -1 to 0 to 1, and for some reason forward is negative on the stick
-		speedR = -xy[1].floatValue();
-		speedL = speedR;
+		// the xy array should come out resolved via the matches method from our AxisInterface
+		speedR = xy[1].floatValue();
+		speedL = xy[0].floatValue();
 		// PTerm has the positive or negative difference in degrees (left or right offset)
 		// between IMU heading and joystick, we have to calc the scaling factors for wheel speed then apply.
 		// We determine the radius of the turn potential by the forward speed desired (joystick Y)
@@ -1668,7 +1668,7 @@ public class MotionController extends AbstractNodeMain {
 		// This assumes that at half speed we can still make a 90 degree turn.
 		// We use value of IMU vs desired course to turn left or right via
 		// a plus or minus value from the Compute method set in the variable called PTerm.
-		float radius = Math.abs(xy[1].floatValue());
+		float radius = Math.abs(speedR);
 		float arcin = 0, arcout = 0;
 		//
 		if( holdBearing ) {
@@ -1698,7 +1698,7 @@ public class MotionController extends AbstractNodeMain {
 			if(DEBUG || DEBUGBEARING) {
 				System.out.printf("MANUAL BEARING %s\n",robot.getMotionPIDController().toString());
 				synchronized(euler) {
-					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%f|speedR=%f\n",stickDegrees,offsetDegrees,euler.compassHeading,arcin,arcout,speedL,speedR);
+					System.out.printf("Stick deg=%f|Offset deg=%f|IMU=%f|arcin=%f|arcout=%f|speedL=%d|speedR=%d\n",stickDegrees,offsetDegrees,euler.compassHeading,arcin,arcout,(int)speedL,(int)speedR);
 				}
 			}
 		}

@@ -13,7 +13,7 @@ import com.neocoretechs.robocore.config.Robot;
  */
 public final class SlotHandler implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private static boolean DEBUG = true;
+	private static boolean DEBUG = false;
 	MarlinspikeControlInterface control = null;
 	String deviceName;
 	int slot;
