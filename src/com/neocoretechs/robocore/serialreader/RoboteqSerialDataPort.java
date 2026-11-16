@@ -215,8 +215,8 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 	}
 	/**
 	 * Read with thrown MachineNotReadyException on timeout
-	 * @param timeout
-	 * @return
+	 * @param timeout mutex max wait time
+	 * @return the int char from read op
 	 * @throws IOException
 	 */
 	private int read(long timeout) throws IOException {
@@ -237,7 +237,7 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 	@Override	
 	/**
 	 * Mutex wait on inputLine
-	 * @return
+	 * @return The String from combined read ops until we hit nl or cr
 	 */
 	public String readLine() {
 		if( PORTDEBUG ) 
@@ -263,7 +263,8 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 
 	/**
 	 * Mutex wait on inputLine
-	 * @return
+	 * @param timeout max wait time for read
+	 * @return String from readops until cr or nl
 	 * @throws IOException 
 	 * @Exception MachineNotReadyException on timeout
 	 */
@@ -349,7 +350,13 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 		return ret;
 	}
 	*/
-	
+
+	/**
+	 * Send the command to the port. Reduce traffic by checking table of each command sent then its params.
+	 * Maintain current time and time out on maxTime delay for each command.
+	 * @param command the command to write to port
+	 * @return ArrayList of lines read until we consume all input
+	 */
 	public ArrayList<String> sendCommand(String command) throws IOException {
 		String[] pcommand = command.split(" ");
 		String rcommand = lastCommand.get(pcommand[0]);
