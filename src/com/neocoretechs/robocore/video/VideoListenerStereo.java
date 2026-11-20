@@ -174,15 +174,21 @@ public class VideoListenerStereo extends AbstractNodeMain
 	@Override
 	public void onStart(final ConnectedNode connectedNode) {
 
-		final Subscriber<stereo_msgs.StereoImage> imgsub =
-				connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
 		final Subscriber<sensor_msgs.Imu> subsimu = 
 				connectedNode.newSubscriber("/sensor_msgs/Imu", sensor_msgs.Imu._TYPE);
 
 		Map<String, String> remaps = connectedNode.getNodeConfiguration().getCommandLineLoader().getSpecialRemappings();
 		if( remaps.containsKey("__mode") )
 			mode = remaps.get("__mode");
-		if( mode.equals("display")) {
+		Subscriber<stereo_msgs.StereoImage> imgsub = null;
+		if(mode.equals("display") || mode.equals("display_server"))
+			imgsub = connectedNode.newSubscriber("/stereo_msgs/StereoImage", stereo_msgs.StereoImage._TYPE);
+		else
+			if(mode.equals("display_segmentation"))
+				imgsub = connectedNode.newSubscriber("/stereo_msgs/ObjectDetect", stereo_msgs.StereoImage._TYPE);
+			else
+				throw new RuntimeException("__mode must be one of display, display_server, or display_segmentation");
+		if( mode.equals("display") || mode.equals("display_segmentation")) {
 			//if( DEBUG )
 				System.out.println("Invoking thread for pumping frames to AWT Panel");
 			CountDownLatch latch = new CountDownLatch(1);
@@ -217,12 +223,6 @@ public class VideoListenerStereo extends AbstractNodeMain
 					if(DEBUG)
 						System.out.println("Entering display loop");
 			        while(true) {
-			        	//java.awt.Image dimage=null;
-						//try {
-							//dimage = queue.takeFirst();
-						//} catch (InterruptedException e) {
-							//e.printStackTrace();
-						//}
 			        	if( imagel == null || imager == null) {
 							try {
 								Thread.sleep(1);
@@ -232,8 +232,6 @@ public class VideoListenerStereo extends AbstractNodeMain
 			        			displayPanel1.setLastFrame((java.awt.Image)imagel);
 			        			displayPanel2.setLastFrame((java.awt.Image)imager);
 			        			displayPanel1.setComputedValues(compassHeading, roll, pitch);
-			        			//displayPanel.lastFrame = displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
-			        			//		, newImage.imageHeight, buffer, 0, newImage.imageWidth));
 			        			displayPanel1.invalidate();
 			        			displayPanel2.invalidate();
 			        			displayPanel1.updateUI();
@@ -307,12 +305,20 @@ public class VideoListenerStereo extends AbstractNodeMain
 				lastSequenceNumber = sequenceNumber;
 			}
 			synchronized(mutex) {
-				cbl = img.getData();
-				bufferl = cbl.array(); // 3 byte BGR
-				cbr = img.getData2();
-				bufferr = cbr.array(); // 3 byte BGR
+				if(mode.equals("display") || mode.equals("display_server")) {		
+					cbl = img.getData();
+					bufferl = cbl.array(); // 3 byte BGR
+					cbr = img.getData2();
+					bufferr = cbr.array(); // 3 byte BGR
+				} else { // object segmentation pipeline
+					cbl = img.getData2();
+					byte[][] b = VideoObjectRecog.buildArray(cbl);
+					if(b[0].length > 0)
+						bufferl = b[0];
+					if(b[1].length > 0)
+						bufferr = b[1];
+				}
 			}
-			//IntBuffer ib = cb.toByteBuffer().asIntBuffer();
 			if( DEBUG ) {
 				System.out.println("New images "+img.getWidth()+","+img.getHeight()+" sizes:"+bufferl.length+", "+bufferr.length/*ib.limit()*/);
 			}
@@ -343,59 +349,53 @@ public class VideoListenerStereo extends AbstractNodeMain
 		    raster.setPixels(0, 0, img.getWidth(), img.getHeight(), ibuf);
 			*/
 			
-			if( mode.equals("display")) {
+			if( mode.equals("display") || mode.equals("display_segmentation")) {
 				synchronized(mutex) {
-				try {
+					try {
 						InputStream in = new ByteArrayInputStream(bufferl);
 						synchronized(mutex) {
-						imagel = ImageIO.read(in);
+							imagel = ImageIO.read(in);
 						}
 						in.close();
-				} catch (IOException e1) {
-					if(e1.getMessage().contains("Huffman table 0x00 was not defined")) {
-						   try {
-							   	byte[] b = injectHuffman(bufferl);
-							   	InputStream in = new ByteArrayInputStream(b);
-							   	synchronized(mutex) {
-							   	imagel = ImageIO.read(in);
-							   	}
-						        return;
-						    }catch (Exception e){
-						        e.printStackTrace();
-						    }
+					} catch (IOException e1) {
+						if(e1.getMessage().contains("Huffman table 0x00 was not defined")) {
+							try {
+								byte[] b = injectHuffman(bufferl);
+								InputStream in = new ByteArrayInputStream(b);
+								synchronized(mutex) {
+									imagel = ImageIO.read(in);
+								}
+								return;
+							}catch (Exception e){
+								e.printStackTrace();
+							}
+						}
+						System.out.println("Could not convert LEFT image payload due to:"+e1.getMessage());
+						return;
 					}
-					System.out.println("Could not convert LEFT image payload due to:"+e1.getMessage());
-					return;
-				}
-				try {
+					try {
 						InputStream in = new ByteArrayInputStream(bufferr);
 						synchronized(mutex) {
-						imager = ImageIO.read(in);
+							imager = ImageIO.read(in);
 						}
 						in.close();
-				} catch (IOException e1) {
-					if(e1.getMessage().contains("Huffman table 0x00 was not defined")) {
-						   try {
-							   	byte[] b = injectHuffman(bufferr);
-							   	InputStream in = new ByteArrayInputStream(b);
-							   	synchronized(mutex) {
-							   	imager = ImageIO.read(in);
-							   	}
-						        return;
-						    }catch (Exception e){
-						        e.printStackTrace();
-						    }
+					} catch (IOException e1) {
+						if(e1.getMessage().contains("Huffman table 0x00 was not defined")) {
+							try {
+								byte[] b = injectHuffman(bufferr);
+								InputStream in = new ByteArrayInputStream(b);
+								synchronized(mutex) {
+									imager = ImageIO.read(in);
+								}
+								return;
+							}catch (Exception e){
+								e.printStackTrace();
+							}
+						}
+						System.out.println("Could not convert RIGHT image payload due to:"+e1.getMessage());
+						return;
 					}
-					System.out.println("Could not convert RIGHT image payload due to:"+e1.getMessage());
-					return;
 				}
-				}
-				//displayPanel.setLastFrame((java.awt.Image)image);
-				//displayPanel.setLastFrame(displayPanel.createImage(new MemoryImageSource(newImage.imageWidth
-				//		, newImage.imageHeight, buffer, 0, newImage.imageWidth)));
-				//displayPanel.invalidate();
-				//displayPanel.updateUI();
-				//queue.addLast(image);
 				System.gc();
 			} else {
 				if( mode.equals("display_server")) {

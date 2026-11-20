@@ -2,7 +2,7 @@ package com.neocoretechs.robocore.video;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -115,6 +115,8 @@ public class VideoObjectRecog extends AbstractNodeMain
 		long time;
 		byte[] leftImage;
 		byte[] rightImage;
+		byte[] leftPayload;
+		byte[] rightPayload;
 		double eulersCorrelated[] = new double[]{0.0,0.0,0.0};
 		float rangeCorrelated = 0f;
 		stereo_msgs.StereoImage stereoImage;
@@ -137,9 +139,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 						prevBufferr = rimage.getImageByteArray();
 						rdrg = model.inference(rimage, MODEL);
 						imageReadyR = true;
-						if(rdrg.getCount() > 0 && SAVE_DETECTIONS && debounce(this))
-							rimage.saveDetections(rdrg,"rightimage"+time);
-						skipSegRight = false;
+						rightPayload = null;
+						if(rdrg != null && rdrg.getCount() > 0 && debounce(this)) {
+							if(SAVE_DETECTIONS)
+								rimage.saveDetections(rdrg,"rightimage"+time);
+							rightPayload = toDetections(rimage, rdrg);
+							skipSegRight = false;
+						}
 					} else
 						skipSegRight = true;
 
@@ -150,9 +156,13 @@ public class VideoObjectRecog extends AbstractNodeMain
 						prevBufferl = limage.getImageByteArray();
 						ldrg = model.inference(limage, MODEL);
 						imageReadyL = true;
-						if(ldrg.getCount() > 0 && SAVE_DETECTIONS && debounce(this))
-							limage.saveDetections(ldrg,"leftImage"+time);
-						skipSegLeft = false;
+						leftPayload = null;
+						if(ldrg != null && ldrg.getCount() > 0 && debounce(this)) {
+							if(SAVE_DETECTIONS)
+								limage.saveDetections(ldrg,"leftImage"+time);
+							leftPayload = toDetections(limage, ldrg);
+							skipSegLeft = false;
+						}
 					} else
 						skipSegLeft = true;
 				} catch (IOException e) {
@@ -210,6 +220,18 @@ public class VideoObjectRecog extends AbstractNodeMain
 			sb.append("}\r\n");
 			return sb.toString();
 		}
+		
+		public byte[] toDetections(Instance image, detect_result_group drg) {
+			byte[] payload = image.detectionsToJPEGBytes(drg);
+			//storeImage(ldrg, rdrg, leftPayload, rightPayload, imagemess, sequenceNumber);
+			if(payload != null) {
+			// for image resize back to 640x480
+			//if(RESIZE_TO_ORIG) {
+				return Instance.resizeRawJPEG(payload, image.getWidth(), image.getHeight(), image.getChannels(), dimsImage[0], dimsImage[1]);
+			}
+			return null;
+		}
+		
 		@Override
 		public int compareTo(Object o) {
 			if(time > ((TimedImage)o).time)
@@ -392,20 +414,6 @@ public class VideoObjectRecog extends AbstractNodeMain
 				}
 				if( DEBUG )
 					System.out.println(sequenceNumber+":Added frame ");
-				//synchronized(mutex) {
-				//leftPayload = limage.detectionsToJPEGBytes(ldrg);
-				//rightPayload = rimage.detectionsToJPEGBytes(rdrg);
-				//storeImage(ldrg, rdrg, leftPayload, rightPayload, imagemess, sequenceNumber);
-				//if(leftPayload != null && rightPayload != null) {
-				// for image resize back to 640x480
-				//if(RESIZE_TO_ORIG) {
-				//try {
-				//	leftPayload = Instance.resizeRawJPEG(leftPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-				//	rightPayload = Instance.resizeRawJPEG(rightPayload,widthHeightChannel[0],widthHeightChannel[1],widthHeightChannel[2],dimsImage[0],dimsImage[1]);
-				//} catch(Exception e) {
-				//	e.printStackTrace();
-				//}
-				//}
 				String toJSON = e.toJson();
 				// Did we detect anything in either image? And do we have something other than a basic timestamp
 				// which would create a string of length > 30. Crude but effective.
@@ -414,6 +422,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 						System.out.println(toJSON);
 					previousJSON = toJSON;
 					imagemess.setData(ByteBuffer.wrap(toJSON.getBytes()));
+					byte[] b1 = e.leftPayload == null ? e.leftImage : e.leftPayload;
+					byte[] b2 = e.rightPayload == null ? e.rightImage : e.rightPayload;
+					imagemess.setData2(buildFlatArray(b1, b2));
 					//imagemess.setEncoding("JPG");
 					imagemess.setEncoding("UTF8_JSON");
 					imagemess.setWidth(dimsImage[0]);
@@ -451,6 +462,44 @@ public class VideoObjectRecog extends AbstractNodeMain
 	
 	}
 	/**
+	 * Flatten 2 image arrays into a ByteBuffer for transmission
+	 * @param b1 image left
+	 * @param b2 image right
+	 * @return ByteBuffer of flattened byte, restore via buildArray
+	 */
+	public static ByteBuffer buildFlatArray(byte[] b1, byte[] b2) {
+		    int len1 = b1 == null ? 0 : b1.length;
+		    int len2 = b2 == null ? 0 : b2.length;
+		    ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + len1 + Integer.BYTES + len2);
+		    buf.order(ByteOrder.BIG_ENDIAN);
+		    buf.putInt(len1);
+		    if (b1 != null) {
+		        buf.put(b1);
+		    }
+		    buf.putInt(len2);
+		    if (b2 != null) {
+		        buf.put(b2);
+		    }
+		    buf.flip();
+		    return buf;
+	}
+	/**
+	 * Restore the transmitted ByteBuffer of flattened 2 image array
+	 * @param b The received ByteBuffer from buildFlatArray
+	 * @return The multidim byte array with 2 image byte payloads
+	 */
+	public static byte[][] buildArray(ByteBuffer b) {
+	    b.rewind();
+	    b.order(ByteOrder.BIG_ENDIAN);
+	    int len1 = b.getInt();
+	    byte[] img1 = new byte[len1];
+	    b.get(img1);
+	    int len2 = b.getInt();
+	    byte[] img2 = new byte[len2];
+	    b.get(img2);
+	    return new byte[][] { img1, img2 };
+	}
+	/**
 	 * If we have a majority of matching candidates in the circular deque, certify it as a valid detect
 	 * @param candidate the image under scrutiny
 	 * @return true if 60% match, if true, queue is cleared
@@ -459,8 +508,9 @@ public class VideoObjectRecog extends AbstractNodeMain
 		int total = 0;
 		// both zero? toss it
 		synchronized(model) {
-			if((!candidate.skipSegLeft && candidate.ldrg.getCount() != 0) || 
-					(!candidate.skipSegRight && candidate.rdrg.getCount() != 0)) {
+			int leftCount = (candidate.ldrg == null ? 0 : candidate.ldrg.getCount());
+			int rightCount = (candidate.rdrg == null ? 0 : candidate.rdrg.getCount());
+			if((!candidate.skipSegLeft && leftCount != 0) || (!candidate.skipSegRight && rightCount != 0)) {
 				Iterator<TimedImage> it = timedImageDebounce.iterator();
 				while(it.hasNext()) {
 					TimedImage ti = it.next();
