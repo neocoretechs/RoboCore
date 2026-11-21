@@ -9,7 +9,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Part of List of unique devices from RoboCore.properties loaded from parameter tree. 
+ * Part of List of unique devices from RoboCore.properties loaded from parameter tree.<p>
+ * A 'slot' can aggregate multiple devices. For instance, LeftWheel and RighWheel are collectively controlled by one slot
+ * in the Marlinspike that takes multiple values to control propulsion. So SlotEntry extends DeviceEntry
+ * and has a collection of SlotHandler instances.<p>
  * Assembled into collection in {@link com.neocoretechs.robocore.marlinspike.MarlinspikeManager}<p>
  * Contains the LUN, the Logical Unit Number an integer ordinal, and an integer value for Slot.<p>
  * These are a handled by derived class of specialized classes such as {@link com.neocoretechs.robocore.propulsion.RobotDiffDrive} subclasses.
@@ -21,6 +24,7 @@ import java.util.Objects;
  * handles the same sort of input using a line reader such as {@link com.neocoretechs.robocore.serialreader.MarlinspikeDataPort}.
  * @see com.neocoretechs.robocore.serialreader.MarlinspikeDataPort
  * @see com.neocoretechs.robocore.serialreader.ByteSerialDataPort
+ * @see com.neocoretechs.robocore.marlinspike.SlotHandler
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2022,2026
  *
  */
@@ -38,15 +42,19 @@ public class SlotEntry extends DeviceEntry implements Serializable {
 	 */
 	public SlotEntry(String deviceName, String NodeName, int LUN, MarlinspikeControlInterface controller, int slot) {
 		super(deviceName, NodeName, LUN, controller);
+		for(SlotHandler sh : slotHandler)
+			if(sh.getSlot() != slot)
+				throw new RuntimeException("Slots must be homogeneous in SlotEntry collection. Attempt to insert "+slot+" for collection based on "+sh.getSlot());
 		slotHandler.add(new SlotHandler(controller, deviceName, slot));
+		this.topicName = "Slot"+String.valueOf(slot);
 	}
 
-	public SlotHandler getSlotHandler() {
-		return slotHandler.get(0);
-	}
-	
 	public void setMarlinspikeControl(MarlinspikeControlInterface controller, String deviceName, int slot) {
+		for(SlotHandler sh : slotHandler)
+			if(sh.getSlot() != slot)
+				throw new RuntimeException("Slots must be homogeneous in SlotEntry collection. Attempt to insert "+slot+" for collection based on "+sh.getSlot());
 		slotHandler.add(new SlotHandler(controller, deviceName, slot));
+		this.topicName = "Slot"+String.valueOf(slot);
 	}
 	
 	public SlotHandler getMarlinspikeControl(int slot) {

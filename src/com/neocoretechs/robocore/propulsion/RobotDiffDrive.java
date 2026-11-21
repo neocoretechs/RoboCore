@@ -2,21 +2,17 @@ package com.neocoretechs.robocore.propulsion;
 
 import java.io.IOException;
 import java.io.Serializable;
+
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import com.neocoretechs.robocore.config.AxisInterface;
-import com.neocoretechs.robocore.config.Robot;
 import com.neocoretechs.robocore.config.RobotInterface;
 import com.neocoretechs.robocore.config.SlotEntry;
-import com.neocoretechs.robocore.config.StickAxis;
 import com.neocoretechs.robocore.config.TypedWrapper;
+
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
-import com.neocoretechs.robocore.marlinspike.SlotHandler;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable.typeNames;
 

@@ -18,7 +18,7 @@ import com.neocoretechs.robocore.marlinspike.SlotHandler;
  */
 public interface RobotDiffDriveInterface {
 	public AxisInterface getManualControl(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
-	
+	public String getTopicName();
 	public int getChannels();
 	public ArrayList<DrivenWheelInterface> getWheels();
 	public SlotHandler getMarlinspikeControl(int slot);

@@ -401,11 +401,8 @@ public class MarlinspikeManager implements Serializable {
 			throw new RuntimeException(String.format("%s.configureManualControl can not get the axis  %s based on configs.%n",this.getClass().getName(),de));
 		}
 		String axisType = (String) control.get("AxisType");
-		if(axisType == null) {
-			axisType = (String) control.get("Button");
-			if(axisType == null)
+		if(axisType == null)
 				throw new RuntimeException(String.format("%s.configureManualControl NO axis or button type attribute device %s%n", this.getClass().getName(), de));
-		}
 		if(DEBUG) {
 			System.out.printf("%s.configureManualControl axis type %s attribute device %s%n", this.getClass().getName(), axisType, de);
 		}
@@ -474,21 +471,6 @@ public class MarlinspikeManager implements Serializable {
 		}
 	}
 	
-	/**
-	 * Set the speed values for the differential drive, regardless of number of wheels.<p>
-	 * Assume the primary drive at slot 0.
-	 * @param speedVals The array of speed values ordered left/right/left/right for the number of wheel pairs
-	 * @throws IOException 
-	 */
-	public void setDiffDriveSpeed(int[] speedVals) throws IOException {
-		// now we have all the channels for the slot 0 controller
-		if(DEBUG)
-			System.out.printf("%s.setDiffDriveSpeed  diff drive=%s%n",this.getClass().getName(), robot.getDiffDrive());
-		SlotHandler slotHandler = robot.getDiffDrive().getMarlinspikeControl(0);
-		if(DEBUG)
-			System.out.printf("%s.setDiffDriveSpeed slotToHandler slotHandler=%s%n",this.getClass().getName(), slotHandler);
-		slotHandler.setSpeed((Robot) robot, speedVals);
-	}
 	/**
 	 * M6 - Power scale factor by slot
 	 * @param slot the slot

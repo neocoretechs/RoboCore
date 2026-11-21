@@ -31,8 +31,15 @@ public final class StickAxis implements AxisInterface<Integer[]> {
 	@Override
 	public Integer[] matches(float[] axes) {
 		Integer[] res = new Integer[2];
-		res[0] = -(int)(axes[positionArray[0]]*1000.0f);
-		res[1] = -(int)(axes[positionArray[1]]*1000.0f);
+		float x = axes[positionArray[0]];
+		float y = axes[positionArray[1]];
+		float mag = (float)Math.sqrt(x*x + y*y);
+		if (mag < 0.08f) {
+		    x = 0;
+		    y = 0;
+		}
+		res[0] = -(int)(x*1000.0f);
+		res[1] = -(int)(y*1000.0f);
 		return res;
 	}
 	@Override

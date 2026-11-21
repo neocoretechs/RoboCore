@@ -358,7 +358,7 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 	 * @return ArrayList of lines read until we consume all input
 	 */
 	public ArrayList<String> sendCommand(String command) throws IOException {
-		String[] pcommand = command.split(" ");
+		/*String[] pcommand = command.split(" ");
 		String rcommand = lastCommand.get(pcommand[0]);
 		if(rcommand != null && rcommand.equals(command)) {
 			Long lastDelta = lastTime.get(pcommand[0]);
@@ -366,7 +366,7 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 				return null;
 		}
 		lastCommand.put(pcommand[0], command);
-		lastTime.put(pcommand[0], System.currentTimeMillis());
+		lastTime.put(pcommand[0], System.currentTimeMillis());*/
 		writeLine(command);
 		ArrayList<String> ret = new ArrayList<String>();
 		while(bytesToRead() <= 0) {

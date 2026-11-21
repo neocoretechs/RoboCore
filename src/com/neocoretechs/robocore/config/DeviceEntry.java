@@ -23,15 +23,16 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
  */
 public class DeviceEntry implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private String Name; // name entry in properties configuration file, such as "BoomActuator"
+	protected String Name; // name entry in properties configuration file, such as "BoomActuator"
 	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
+	protected String topicName; // pub/sub bus topic name
 	private int LUN; // integer LUN position, points to LUN array in Robot, such as 1
 	private transient MarlinspikeControlInterface controlHost;
-	private AxisInterface manualControl;
+	private AxisInterface<?> manualControl;
 	
 	public DeviceEntry() {}
 	/**
-	 * 
+	 * topicName pub/sub bus name, for basic device same as deviceName, for slotted device, slot name Slot+slot number
 	 * @param Name Slot name entry in properties configuration file, such as "0"
 	 * @param NodeName the node attached to, typically the SSID name of the Ros node, such as "ROSCOE1"
 	 * @param controller alternate controller implementing MarlinspikeControlInterface
@@ -41,6 +42,7 @@ public class DeviceEntry implements Serializable {
 		this.NodeName = NodeName;
 		this.LUN = LUN;
 		this.controlHost = controller;
+		this.topicName = Name;
 	}
 	/**
 	 * @return the lUN
@@ -54,11 +56,9 @@ public class DeviceEntry implements Serializable {
 	public String getName() {
 		return Name;
 	}
-	/**
-	 * @param name the name to set
-	 */
-	public void setName(String name) {
-		Name = name;
+	
+	public String getTopicName() {
+		return topicName;
 	}
 	/**
 	 * @return the nodeName
@@ -82,10 +82,10 @@ public class DeviceEntry implements Serializable {
 		return controlHost;
 	}
 	
-	public AxisInterface getManualControl() {
+	public AxisInterface<?> getManualControl() {
 		return manualControl;
 	}
-	public void setManualcontrol(AxisInterface manualControl) {
+	public void setManualcontrol(AxisInterface<?> manualControl) {
 		this.manualControl = manualControl;
 	}
 
@@ -98,15 +98,15 @@ public class DeviceEntry implements Serializable {
 		if (getClass() != obj.getClass())
 			return false;
 		DeviceEntry other = (DeviceEntry) obj;
-		return Objects.equals(Name, other.Name) && Objects.equals(NodeName, other.NodeName);
+		return Objects.equals(topicName, other.topicName) && Objects.equals(NodeName, other.NodeName);
 	}
 	@Override
 	public int hashCode() {
-		return Objects.hash(Name, NodeName);
+		return Objects.hash(topicName, NodeName);
 	}
 	@Override
 	public String toString() {
-		return String.format("%s %s Node=%s LUN=%d Control=%s%n", this.getClass().getName(), Name, NodeName, LUN, controlHost);
+		return String.format("%s %s Node=%s Topic=%s LUN=%d Control=%s%n", this.getClass().getName(), Name, NodeName, topicName, LUN, controlHost);
 	}
 
 }
