@@ -517,7 +517,8 @@ public class MarlinspikeManager implements Serializable {
 		
 	/**
 	 * @param type One of "LiftActuator", "LEDPin", etc.<p> 
-	 * "Wheel" ending entries are aggregated under "DiffDrive".<p>
+	 * "Wheel" ending entries and other aggregates are aggregated under a topic such as "Slot0" although 
+	 * their individual channels may be retrieved here.<p>
 	 * @return device of a particular name, which points to the actual device of a particular type, attached to the Marlinspike on this node
 	 */
 	public ArrayList<TypeSlotChannelEnable> getTypeSlotChannelEnableByName(String name) throws NoSuchElementException {
@@ -527,16 +528,22 @@ public class MarlinspikeManager implements Serializable {
 			if(ret != null && ret.getKey().getName().equals(name))
 				return ret.getValue();
 		}
-		// type a search through slots
-		Iterator<Entry<DeviceEntry, ArrayList<TypeSlotChannelEnable>>> its = deviceToType.entrySet().iterator();
-		while(its.hasNext()) {
-			Entry<DeviceEntry, ArrayList<TypeSlotChannelEnable>> ret = its.next();
-			if(ret != null && ret.getKey().getName().equals(name))
-				return ret.getValue();
-		}
 		throw new NoSuchElementException("The name "+name+" was not found in the collection of device to type or slot to type array");
 	}
-	
+	/**
+	 * @param type One of "Slot0", "LEDPin", etc.<p> 
+	 * "Wheel" ending entries are aggregated under "Slot0" for example, devices with no channels are the same as their name.<p>
+	 * @return device of a particular topic, which points to the collection of actual devices of a particular type, attached to the Marlinspike on this node
+	 */
+	public ArrayList<TypeSlotChannelEnable> getTypeSlotChannelEnableByTopic(String topic) throws NoSuchElementException {
+		Iterator<Entry<DeviceEntry, ArrayList<TypeSlotChannelEnable>>> it = deviceToType.entrySet().iterator();
+		while(it.hasNext()) {
+			Entry<DeviceEntry, ArrayList<TypeSlotChannelEnable>> ret = it.next();
+			if(ret != null && ret.getKey().getTopicName().equals(topic))
+				return ret.getValue();
+		}
+		throw new NoSuchElementException("The name "+topic+" was not found in the collection of device to type or slot to type array");
+	}
 	/**
 	 * SmartController, H-Bridge, SplitBridge, SwitchBridge, PWM etc.
 	 * @return All the devices attached to all the Marlinspikes on this node

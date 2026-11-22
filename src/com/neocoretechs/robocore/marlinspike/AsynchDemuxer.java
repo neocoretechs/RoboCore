@@ -204,7 +204,15 @@ public class AsynchDemuxer implements Runnable {
 	public List<TypeSlotChannelEnable> getNameToTypeSlotChannel(String name) {
 		return marlinSpikeManager.getTypeSlotChannelEnableByName(name);
 	}
-	
+	/**
+	 * Called by setDeviceLevels, will search in devices and return array of {@link TypeSlotChannelEnable} for a given topic name
+	 * @param name The topic name 
+	 * @return The TypeSlotChannelEnable list for the topic
+	 * @throws RuntimeException encapsulating NoSuchElementException if NoSuchElement
+	 */
+	public List<TypeSlotChannelEnable> getTopicToTypeSlotChannel(String topic) {
+		return marlinSpikeManager.getTypeSlotChannelEnableByTopic(topic);
+	}
 	/**
 	 * Add a write request to the outbound queue. The queue is circular and blocking and technically, a deque.
 	 * If the elements reach a predetermined upper bound they are emplaced at the beginning. If this occurs,

@@ -15,6 +15,7 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.ros.concurrent.CancellableLoop;
@@ -55,6 +56,7 @@ import com.neocoretechs.robocore.config.POVAxis.POVType;
 import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
+import com.neocoretechs.robocore.marlinspike.DeviceSubscriber;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControl;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 import com.neocoretechs.robocore.marlinspike.MarlinspikeManager;
@@ -301,8 +303,7 @@ public class MotionController extends AbstractNodeMain {
 	private String PWM_MODE = "direct"; // in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 	
 	private CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus> statusQueue = new CircularBlockingDeque<diagnostic_msgs.DiagnosticStatus>(1024);
-	// slot 0 primary drive
-	DrivenWheelInterface[] wheels = null;
+	
 	//private String serveNode = null;
 	float rangetop, rangebot;
 	double pressure, temperature;
@@ -398,7 +399,7 @@ public class MotionController extends AbstractNodeMain {
 	private boolean SOFTSTOP = false;
 
 	HashMap<Integer, Boolean> publishedLUNRestValue = new HashMap<Integer, Boolean>();
-	//-----mega
+
 	Object statMutex = new Object(); 
 	Object navMutex = new Object();
 	//private String host;
@@ -471,13 +472,15 @@ public class MotionController extends AbstractNodeMain {
 		
 
 	// Map of subscriber to node device name for external controls
-	HashMap<Subscriber<Int32MultiArray>, DeviceEntry> subscriberDevice = new HashMap<Subscriber<Int32MultiArray>, DeviceEntry>();
+	HashMap<DeviceSubscriber, DeviceEntry> subscriberDevice = new HashMap<DeviceSubscriber, DeviceEntry>();
 	
 	PublishResponseInterface<diagnostic_msgs.DiagnosticStatus>[] responses;
 	PublishResponseInterface<sensor_msgs.Range>[] ultrasonic;
 	
 	private Collection<String> statPub = Collections.synchronizedCollection(new ArrayList<String>());
 	protected CountDownLatch awaitStart = new CountDownLatch(1);
+	
+	SubmissionPublisher<Int32MultiArray> publisher = new SubmissionPublisher<>();
 
 	public MotionController(String[] args) {
 		CommandLineLoader cl = new CommandLineLoader(Arrays.asList(args));
@@ -549,10 +552,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 		}
 
-		final Publisher<diagnostic_msgs.DiagnosticStatus> statpub =
-				connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
-
-		final HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel = new HashMap<String, Publisher<std_msgs.Int32MultiArray>>();
+		final Publisher<diagnostic_msgs.DiagnosticStatus> diagnosticStatus = connectedNode.newPublisher("robocore/status", diagnostic_msgs.DiagnosticStatus._TYPE);
 
 		try {
 			ParameterTree pTree = connectedNode.getParameterTree();
@@ -565,9 +565,14 @@ public class MotionController extends AbstractNodeMain {
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
+		//
+		// Add a message listener for each subscriber device key. When a new message comes in
+		// extract the device name from the map based on the subscriber instance associated with the incoming message.
+		// Based on the device name, get the MarlinspikeControlInterface from the MarlinspikeManager.
+		// We can then set the power level etc on the device from the data in the message.
+		//
 		// process the DeviceEntries into publishing channels
-		configurePublisherListener(connectedNode, pubschannel, statpub);
-		configureSubscriberListener(connectedNode, statpub);
+		configureSubscribers(connectedNode, diagnosticStatus, statusQueue, statPub);
 		// in direct mode, our 2 PWM values are pin, value, otherwise values of channel 1 and 2 of slot 0 controller
 		if( remaps.containsKey("__pwm") )
 			PWM_MODE = remaps.get("__pwm");
@@ -605,7 +610,7 @@ public class MotionController extends AbstractNodeMain {
 		// for each slot, create a subscriber on the channel <slot name> of type Int32MultiArray
 		// Initialize the collection of DiagnosticStatus response handlers
 		for(int i = 0; i < stopics.length; i++) {
-			responses[i] = new PublishDiagnosticResponse(connectedNode, statpub, statusQueue);
+			responses[i] = new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue);
 			responses[i].takeBridgeAndQueueMessage(stopics[i], robot.getManager().getDemuxer().getTopic(stopics[i]), publishStatus[i]);
 		}
 		//final Subscriber<std_msgs.Int32MultiArray> subsvelocity = 
@@ -613,17 +618,14 @@ public class MotionController extends AbstractNodeMain {
 		//final Subscriber<std_msgs.Int32MultiArray> substrigger = 
 		//connectedNode.newSubscriber("absolute/cmd_periph1", std_msgs.Int32MultiArray._TYPE);
 
-		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener =
-				CountDownServiceServerListener.newDefault();
-		configureControllerStatusServer(serviceServerListener, connectedNode, statpub);	
+		final CountDownServiceServerListener<ControllerStatusMessageRequest, ControllerStatusMessageResponse> serviceServerListener = CountDownServiceServerListener.newDefault();
+		configureControllerStatusServer(serviceServerListener, connectedNode, diagnosticStatus);	
 
-		final CountDownServiceServerListener<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServerListener =
-				CountDownServiceServerListener.newDefault();
-		configurePWMServer(servicePWMServerListener, connectedNode, statpub);
+		final CountDownServiceServerListener<PWMControlMessageRequest, PWMControlMessageResponse> servicePWMServerListener = CountDownServiceServerListener.newDefault();
+		configurePWMServer(servicePWMServerListener, connectedNode, diagnosticStatus);
 
-		final CountDownServiceServerListener<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServerListener =
-				CountDownServiceServerListener.newDefault();
-		configureGPIOServer(serviceGPIOServerListener, connectedNode, statpub);	
+		final CountDownServiceServerListener<GPIOControlMessageRequest, GPIOControlMessageResponse> serviceGPIOServerListener = CountDownServiceServerListener.newDefault();
+		configureGPIOServer(serviceGPIOServerListener, connectedNode, diagnosticStatus);	
 
 		//Subscriber<sensor_msgs.Range> subsrange = connectedNode.newSubscriber("LowerFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
 		//Subscriber<sensor_msgs.Range> subsrange2 = connectedNode.newSubscriber("UpperFront/sensor_msgs/Range", sensor_msgs.Range._TYPE);
@@ -664,7 +666,7 @@ public class MotionController extends AbstractNodeMain {
 					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);
 				ArrayList<String> st = new ArrayList<String>();
 				st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, this.getClass().getName(),diagnostic_msgs.DiagnosticStatus.ERROR, st);
+				new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, this.getClass().getName(),diagnostic_msgs.DiagnosticStatus.ERROR, st);
 			}
 			@Override
 			public void onMasterUnregistrationSuccess(Subscriber<Joy> subs) {
@@ -681,14 +683,14 @@ public class MotionController extends AbstractNodeMain {
 					System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);					
 			}
 			@Override
-			public void onNewPublisher(Subscriber<Joy> subs, PublisherIdentifier pubs) {
+			public void onNewPublisher(Subscriber<Joy> subs, PublisherIdentifier pubs) {			
 				if(DEBUG)
 					System.out.printf("%s Subscsriber %s registered with publisher %s!%n", this.getClass().getName(), subs, pubs);
 				substick.addMessageListener(new MessageListener<sensor_msgs.Joy>() {
 					@Override
 					public void onNewMessage(sensor_msgs.Joy message) {
 						try {
-							processJoystickMessages(connectedNode, pubschannel, message, twistpub, twistmsg);
+							processJoystickMessages(connectedNode, message, twistpub, twistmsg);
 						} catch(IOException ioe) {
 							throw new RuntimeException(ioe);
 						}
@@ -700,7 +702,6 @@ public class MotionController extends AbstractNodeMain {
 				if(DEBUG)
 					System.out.printf("%s Subscsriber %s shutdown!%n", this.getClass().getName(), subs);
 			}
-
 		});
 
 		subsmodelmove.addSubscriberListener(new SubscriberListener<trajectory_msgs.ComeToHeadingStamped>() {
@@ -710,7 +711,7 @@ public class MotionController extends AbstractNodeMain {
 					System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);
 				ArrayList<String> st = new ArrayList<String>();
 				st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-				new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, this.getClass().getName(),
+				new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, this.getClass().getName(),
 						diagnostic_msgs.DiagnosticStatus.ERROR, st);
 			}
 			@Override
@@ -734,11 +735,11 @@ public class MotionController extends AbstractNodeMain {
 					@Override
 					public void onNewMessage(trajectory_msgs.ComeToHeadingStamped message) {
 						try {
-							publishRobotMoveRelative(connectedNode, pubschannel, twistpub, twistmsg, message);
+							publishRobotMoveRelative(connectedNode, twistpub, twistmsg, message);
 						} catch (IOException e) {
 							ArrayList<String> st = new ArrayList<String>();
 							st.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "/model_commands/move",
+							new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, "/model_commands/move",
 									diagnostic_msgs.DiagnosticStatus.ERROR, st);
 						}
 					} // onMessage move from model
@@ -749,7 +750,6 @@ public class MotionController extends AbstractNodeMain {
 				if(DEBUG)
 					System.out.printf("%s Subscsriber %s shutdown!%n", this.getClass().getName(), subs);
 			}
-
 		});
 
 		subsimu.addMessageListener(new MessageListener<sensor_msgs.Imu>() {
@@ -796,7 +796,7 @@ public class MotionController extends AbstractNodeMain {
 									synchronized(angs) {
 										shockVals.add(angs.toString());
 									}
-									new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Accelerometer shock warning", 
+									new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, "Accelerometer shock warning", 
 											diagnostic_msgs.DiagnosticStatus.WARN, shockVals);
 								}
 							}
@@ -808,7 +808,7 @@ public class MotionController extends AbstractNodeMain {
 					//System.out.println("Nav subs exception:"+e.getMessage());
 					ArrayList<String> st = new ArrayList<String>();
 					st.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "IMU",
+					new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, "IMU",
 							diagnostic_msgs.DiagnosticStatus.ERROR, st);
 				}
 			}
@@ -835,7 +835,7 @@ public class MotionController extends AbstractNodeMain {
 					e.printStackTrace();
 					ArrayList<String> st = new ArrayList<String>();
 					st.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "RANGE",
+					new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, "RANGE",
 							diagnostic_msgs.DiagnosticStatus.ERROR, st);
 				}
 			}
@@ -891,7 +891,7 @@ public class MotionController extends AbstractNodeMain {
 								magVals.add(String.valueOf(mags.mag3.getX()));
 								magVals.add(String.valueOf(mags.mag3.getY()));
 								magVals.add(String.valueOf(mags.mag3.getZ()));		
-								new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Magnetic anomaly detected", 
+								new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, "Magnetic anomaly detected", 
 										diagnostic_msgs.DiagnosticStatus.WARN, magVals);
 							}
 						}
@@ -918,7 +918,7 @@ public class MotionController extends AbstractNodeMain {
 						isOverTemp = false;
 						ArrayList<String> tempVals = new ArrayList<String>(1);
 						tempVals.add(String.valueOf(temperature));
-						new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Temperature warning", 
+						new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, "Temperature warning", 
 								diagnostic_msgs.DiagnosticStatus.WARN, tempVals);
 					}
 				} else
@@ -927,13 +927,13 @@ public class MotionController extends AbstractNodeMain {
 					isOverPressure = false;
 					ArrayList<String> pressVals = new ArrayList<String>(1);
 					pressVals.add(String.valueOf(pressure));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, "Atmospheric pressure warning", 
+					new PublishDiagnosticResponse(connectedNode, diagnosticStatus, statusQueue, "Atmospheric pressure warning", 
 							diagnostic_msgs.DiagnosticStatus.WARN, pressVals);
 				}
 			}
 		});
 		//-------------------------------------------
-		//--mega
+		//
 		substwist.addMessageListener(new MessageListener<geometry_msgs.Twist>() {
 			@Override
 			public void onNewMessage(geometry_msgs.Twist message) {
@@ -1037,57 +1037,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 		});
 		 */
-		//
-		// Add a message listener for each subscriber device key. When a new message comes in
-		// extract the device name from the map based on the subscriber instance associated with the incoming message.
-		// Based on the device name, get the MarlinspikeControlInterface from the MarlinspikeManager.
-		// We can then set the power level etc on the device from the data in the message.
-		//
-		if(DEBUG)
-			System.out.printf("%s >>>>> Enter Subscriber Device setup loop for %d keySet entries%n", this.getClass().getName(), subscriberDevice.keySet().size());
-		for(Entry<Subscriber<Int32MultiArray>, DeviceEntry> subs : subscriberDevice.entrySet()) {
-			if(DEBUG)
-				System.out.printf("%s Subscriber:%s loop addMessageListener%n", this.getClass().getName(), subs);
-			subs.getKey().addMessageListener(new MessageListener<std_msgs.Int32MultiArray>() {
-				@Override
-				public void onNewMessage(std_msgs.Int32MultiArray message) {
-					if(DEBUG)
-						System.out.printf("%s Subscriber:%s onNewMessage:%s %n", this.getClass().getName(), subs, message.toString());
-					int[] valch = message.getData();
-					if(DEBUG)
-						System.out.printf("%s Subscriber:%s onNewMessage DeviceName=%s Topic=%s Message:%s args:%s Thread:%s%n", this.getClass().getName(), subs, subs.getValue().getName(), subs.getValue().getTopicName(), message.toString(), Arrays.toString(valch), Thread.currentThread().getName());
-					try {
-						MarlinspikeControlInterface control = null;
-						try {
-							control = subs.getValue().getMarlinspikeControl();//robot.getManager().getMarlinspikeControl(device.getName());
-							if(DEBUG)
-								System.out.printf("%s Subscriber:%s onNewMessage got Control %s from MarlinspikeManager%n", this.getClass().getName(), subs, control);
-						} catch(NoSuchElementException nse) {
-							System.out.printf("%s Subscriber:%s onNewMessage Controller:%s not configured for this node, exception:%s%n",this.getClass().getName(), subs, subs.getValue().getName(), nse);
-							statPub.add(String.format("%s Subscriber:%s onNewMessage Controller:%s not configured for this node, exception:%s%n",this.getClass().getName(), subs, subs.getValue().getName(), nse));
-							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
-							return;
-						}
-						// set the operation
-						control.setDeviceLevels(subs.getValue().getTopicName(), valch);
-						//
-						if(DEBUG)
-							System.out.printf("%s Subscriber:%s onNewMessage Message:%s DeviceName=%s speeds:%s operating:%b thread:%s%n", this.getClass().getName(), subs, message.toString(), 
-									subs.getValue().getTopicName(), Arrays.toString(valch), robot.getOperating().get(subs.getValue().getTopicName()), Thread.currentThread().getName());
-					} catch (IOException e) {
-						System.out.printf("%s Subscriber:%s onNewMessage,There was a problem communicating with the controller:%s%n:",this.getClass().getName(), subs, e);
-						e.printStackTrace();
-						synchronized(statPub) {
-							statPub.add(String.format("%s Subscriber:%s onNewMessage,There was a problem communicating with the controller:%s%n:",this.getClass().getName(), subs, e));
-							statPub.addAll(Arrays.stream(e.getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-							new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, subs.toString(), diagnostic_msgs.DiagnosticStatus.ERROR, statPub );
-						}
-					}
-				}
-			});
-		} // subscriber devices
-		if(DEBUG)
-			System.out.printf("%s <<<<<<<<<< End Subscriber Device setup loop for %d keySet entries%n", this.getClass().getName(),subscriberDevice.keySet().size());
+	
 		awaitStart.countDown();
 		//----------------------------------------
 		// Begin publishing loop
@@ -1110,8 +1060,8 @@ public class MotionController extends AbstractNodeMain {
 				robot.getIMUSetpointInfo().setMinimum(-robot.getIMUSetpointInfo().getMaximum()); //degree minimum integral windup
 				robot.getMotionPIDController().clearPID();
 				// wheelbase refers to max speed, both wheels averaged channels 1 and 2, 1 left, 2 right
-				
-				WHEELBASE = (wheels[0].getSpeedsetPointInfo().getMaximum()+wheels[1].getSpeedsetPointInfo().getMaximum())/2.0f;
+				Object[] wheels = robot.getDiffDrive().getWheels().toArray();
+				WHEELBASE = (((DrivenWheelInterface) wheels[0]).getSpeedsetPointInfo().getMaximum()+((DrivenWheelInterface) wheels[1]).getSpeedsetPointInfo().getMaximum())/2.0f;
 				// default kp,ki,kd;
 				//SetTunings(5.55f, 1.0f, 0.5f); // 5.55 scales a max +-180 degree difference to the 0 1000,0 -1000 scale
 				//SetOutputLimits(0.0f, SPEEDLIMIT); when pid controller created, max is specified
@@ -1135,7 +1085,7 @@ public class MotionController extends AbstractNodeMain {
 				if(statmsg != null) {
 					if(DEBUG)
 						System.out.printf("%s.loop outgoing diagnostics: %s%n",this.getClass().getName(),statusQueue);
-					statpub.publish(statmsg);
+					diagnosticStatus.publish(statmsg);
 					if(DEBUG)
 						System.out.println("Published "+statmsg.getMessage());
 					Thread.sleep(1);
@@ -1147,7 +1097,7 @@ public class MotionController extends AbstractNodeMain {
 	
 
 	/**
-	* Configure a publisher to talk to a MarlinSpikeControlInterface which receives 
+	* Configure a subscriber to talk to a MarlinSpikeControlInterface which receives 
 	* a message of type: LUN#, value of control for that LUN#. <br>
 	* Create publishing channels based on configured {@link DeviceEntry}<br>
 	* The slotted entries represent a slot in the configuration which can be an aggregate of property file LUN's;
@@ -1162,72 +1112,17 @@ public class MotionController extends AbstractNodeMain {
 	* Non slotted devices are treated as channels to be published to.
 	* Unslotted entries are configured by name in the properties file.
 	* @param connectedNode the Ros node we are using
-	* @param pubschannel the collection of publishing channels for the device populated from DeviceEntry collection
-	* @param statpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
+	 * @param statpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
 	*/
-	private void configurePublisherListener(ConnectedNode connectedNode, HashMap<String, Publisher<std_msgs.Int32MultiArray>> pubschannel, Publisher<diagnostic_msgs.DiagnosticStatus> statpub) {
-		subscriberDevice.entrySet().forEach(de -> {
-			DeviceEntry ndd = de.getValue();
-			// non-slot device demuxxers, we configure slotted ones as slots
-			//if(ndd instanceof SlotEntry) {
-			//	if(DEBUG)
-			//		System.out.printf("%s configurePublisherListener skipping slot for DeviceEntry %s%n", this.getClass().getName(),(ndd != null ? ndd : "DEVICE NULL"));
-			//	continue;
-			//}
+	private void configureSubscribers(ConnectedNode connectedNode, Publisher<diagnostic_msgs.DiagnosticStatus> statpub, CircularBlockingDeque<DiagnosticStatus> diagQueue, Collection<String> statusQueue) {
+		if(DEBUG)
+			System.out.printf("%s >>>>> Enter Subscriber Device setup loop for %d keySet entries%n", this.getClass().getName(), subscriberDevice.keySet().size());
+		robot.getManager().getDevices().keySet().forEach(ndd -> {
+			DeviceSubscriber ds = new DeviceSubscriber(connectedNode, statpub, diagQueue, statusQueue, ndd);
+			publisher.subscribe(ds);
+			subscriberDevice.put(ds, ndd);
 			if(DEBUG)
-				System.out.printf("%s configurePublisherListener for DeviceEntry %s%n", this.getClass().getName(),(ndd != null ? ndd : "DEVICE NULL"));
-			//if(ndd.getNodeName().equals(serveNode)) {
-			Publisher<std_msgs.Int32MultiArray> pub =(connectedNode.newPublisher((ndd != null ? ndd.getTopicName() : "DEVICE NULL"), std_msgs.Int32MultiArray._TYPE));
-			pub.addListener(new PublisherListener<std_msgs.Int32MultiArray>() {
-				@Override
-				public void onMasterRegistrationFailure(Publisher<Int32MultiArray> pub) {
-					ArrayList<String> st = new ArrayList<String>();
-					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, (ndd != null ? ndd.getTopicName() : "DEVICE NULL"),
-							diagnostic_msgs.DiagnosticStatus.ERROR, st);
-					if(DEBUG) {
-						System.out.printf("Publisher listener Master Registration failure for %s for DeviceEntry %s%n", pub, (ndd != null ? ndd : "DEVICE NULL"));
-					}				
-				}
-				@Override
-				public void onMasterRegistrationSuccess(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Publisher listener Successful Master Registration for %s for DeviceEntry %s%n", pub, (ndd != null ? ndd : "DEVICE NULL"));
-					}
-					pubschannel.put(ndd.getTopicName(), pub);
-					if(DEBUG)
-						System.out.println("Bringing up publisher "+ndd.getTopicName());
-				}
-				@Override
-				public void onMasterUnregistrationFailure(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("<<FAILED TO UNREGISTER WITH MASTER for %s%n", pub);
-					}
-					ArrayList<String> st = new ArrayList<String>();
-					st.addAll(Arrays.stream(new Throwable().getStackTrace()).map(m->m.toString()).collect(Collectors.toList()));
-					new PublishDiagnosticResponse(connectedNode, statpub, statusQueue, ndd.getTopicName(), diagnostic_msgs.DiagnosticStatus.ERROR, st);
-				}
-				@Override
-				public void onMasterUnregistrationSuccess(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Successful Master Unregistration for %s%n", pub);
-					}
-					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
-				}
-				@Override
-				public void onNewSubscriber(Publisher<Int32MultiArray> pub, SubscriberIdentifier sub) {
-					if(DEBUG) {
-						System.out.printf("New subscriber for %s Header: %s DeviceEntry%s%n", pub, sub.toConnectionHeader().getFields(), (ndd != null ? ndd : "DEVICE NULL"));
-					}				
-				}
-				@Override
-				public void onShutdown(Publisher<Int32MultiArray> pub) {
-					if(DEBUG) {
-						System.out.printf("Shutdown initiated for %s%n", pub);
-					}
-					pubschannel.forEach((key,value) -> { if(value == pub) pubschannel.remove(key);});
-				}	
-			});
+				System.out.printf("%s Creating Handler for device %s subscriber:%s%n", this.getClass().getName(), ndd.getTopicName(), ds);
 			publishedLUNRestValue.put(ndd.getLUN(),false);
 		});
 	}
@@ -1241,7 +1136,9 @@ public class MotionController extends AbstractNodeMain {
 	 * @return The multi array we create
 	 */
 	private Int32MultiArray setupPub(ConnectedNode connectedNode, ArrayList<Integer> vals) {
-		return RosArrayUtilities.setupInt32Array(connectedNode, vals);
+		Int32MultiArray ia = RosArrayUtilities.setupInt32Array(connectedNode, vals);
+		publisher.submit(ia);
+		return ia;
 	}
 	/**
 	 * Increase power of right wheel based on PID results
@@ -1363,7 +1260,7 @@ public class MotionController extends AbstractNodeMain {
 		// decrease the power on the opposite side by ratio of base to hypotenuse, since one wheel needs to 
 		// travel the length of base and the other needs to travel length of hypotenuse
 		if(DEBUG)
-			System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|radius/hypot=%f|Hold=%b\n",radius,chord,hypot,((radius+(wheels[0].getSpeedsetPointInfo().getWheelTrack()/2))/hypot),holdBearing);
+			System.out.printf(" LEFTANGLE=%f|chord=%f|hypot=%f|Hold=%b\n",radius,chord,hypot,holdBearing);
 		speedR *= ((radius+(WHEELBASE/2))/hypot);
 	}
 
@@ -1402,7 +1299,7 @@ public class MotionController extends AbstractNodeMain {
 	 * The triangle solution uses radius in the forward direction, rather than at right angles with WHEELBASE as the arcs do, to bring
 	 * us into refined tangents to the crosstrack. At final correction, a PID algorithm is used to maintain fine control.
 	 * axis[6] is POV, it has quantized values to represent its states.<p>
-	 * 
+	 * @param connectedNode The Ros node we are using here
 	 * @param message --float[] axis:--			<br>
 	 * [0] - left horiz (X)						<br>
 	 * [1] - left vert (Y)						<br>
@@ -1427,15 +1324,14 @@ public class MotionController extends AbstractNodeMain {
 	 * [11] - extra								<br>
 	 * [12] - mode								<br>
 	 * [13] - side								<br><br>
-	 * @param connectedNode The Ros node we are using here
-	 * @param pubschannel The map of publisher channels by LUN device name from collection of {@link NodeDevice}
 	 * @param message The joystick message with all buttons and axes
 	 * @param twistpub The twist publisher channel for broadcast messages to all devices for emergency stop, etc.
 	 * @param twistmsg The twist message template to populate with data from this method
+	 * 
 	 * @throws IOException 
 	 */
-	private void processJoystickMessages(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, Joy message, 
-			Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg) throws IOException {
+	private void processJoystickMessages(ConnectedNode connectedNode, Joy message, Publisher<geometry_msgs.Twist> twistpub, 
+			geometry_msgs.Twist twistmsg) throws IOException {
 		if(DEBUG) {
 			System.out.printf("%s Axes:%s Buttons:%s%n", this.getClass().getName(),Arrays.toString(message.getAxes()),Arrays.toString(message.getButtons()));
 		}
@@ -1468,7 +1364,7 @@ public class MotionController extends AbstractNodeMain {
 			speedR = -xy[1].floatValue();
 			speedL = -speedR;
 			// set it up to send
-			publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
+			publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
 			if(DEBUG)
 				System.out.printf("Stick Left pivot speedL=%f|speedR=%f\n",speedL,speedR);
 			return;
@@ -1478,7 +1374,7 @@ public class MotionController extends AbstractNodeMain {
 				speedL = -(xy[1].floatValue());
 				speedR = -speedL;
 				// set it up to send
-				publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
+				publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
 				if(DEBUG)
 					System.out.printf("Stick Right pivot speedL=%f|speedR=%f\n",speedL,speedR);
 				return;
@@ -1633,7 +1529,7 @@ public class MotionController extends AbstractNodeMain {
 			}
 		}
 		// propulsion should be affected via AxisInterface type Stick activating MarlinspikeControl for DiffDrive subclass SlotEntry
-		publishPeripheral(connectedNode, pubschannel, axes, buttons);
+		publishPeripheral(connectedNode, axes, buttons);
 	}
 	/**
 	 * Perform software stop by sending message on twist topic with null values for linear and angular
@@ -1751,11 +1647,10 @@ public class MotionController extends AbstractNodeMain {
 	 * positions defined in the button associated with the device entry, it will be published with a 1 on that topic
 	 * <code>getPublisher(pubschannel, LUN.name).publish(setupPub(connectedNode, ArrayList<Integer>(vals)));</code>
 	 * @param connectedNode Our Ros node here
-	 * @param pubschannel Collection of publisher channels that represent axes
 	 * @param axes the values of the stick axes
 	 * @param buttons 
 	 */
-	private void publishPeripheral(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, float[] axes, int[] buttons) {
+	private void publishPeripheral(ConnectedNode connectedNode, float[] axes, int[] buttons) {
 		if(robot.getManager().getDevices() == null) {
 			throw new RuntimeException(String.format("%s.publishPeripheral can not get the basic device list based on configs.%n",this.getClass().getName()));
 		}
@@ -1775,17 +1670,17 @@ public class MotionController extends AbstractNodeMain {
 			switch(af.getType()) {
 			case "Button":
 				Boolean b = (Boolean)af.matches(buttons);
-				publishAxis(connectedNode, pubschannel, ndd.getTopicName(), b ? 1 : 0);
+				publishAxis(connectedNode, ndd.getTopicName(), b ? 1 : 0);
 				break;
 			case "Stick":
 				Integer[] xy = (Integer[])af.matches(axes);
 				if( xy[0].intValue() != 0 || xy[1].intValue() != 0) {
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), xy[0].intValue(), xy[1].intValue());
+					publishAxis(connectedNode, ndd.getTopicName(), xy[0].intValue(), xy[1].intValue());
 					publishedLUNRestValue.replace(luni, false);
 				} else {
 					// rest value here
 					if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
-						publishAxis(connectedNode, pubschannel, ndd.getTopicName(), xy[0].intValue(), xy[1].intValue()); // not published, so hit once
+						publishAxis(connectedNode, ndd.getTopicName(), xy[0].intValue(), xy[1].intValue()); // not published, so hit once
 						publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 					}
 				}
@@ -1793,12 +1688,12 @@ public class MotionController extends AbstractNodeMain {
 			case "Trigger":
 				Integer a = (Integer)af.matches(axes);
 				if(a.intValue() != -1000) {
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), a.intValue());
+					publishAxis(connectedNode, ndd.getTopicName(), a.intValue());
 					publishedLUNRestValue.replace(luni, false);
 				} else {
 					// rest value here
 					if(publishedLUNRestValue.get(luni) == null || !publishedLUNRestValue.get(luni)) {
-						publishAxis(connectedNode, pubschannel, ndd.getTopicName(), a.intValue()); // not published, so hit it
+						publishAxis(connectedNode, ndd.getTopicName(), a.intValue()); // not published, so hit it
 						publishedLUNRestValue.replace(luni, true); // and set it as published at rest
 					}
 				}
@@ -1807,26 +1702,26 @@ public class MotionController extends AbstractNodeMain {
 				POVType pov = (POVType) af.matches(axes);
 				switch(pov) {
 				case POVType.AxisUp:
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), 1000);
+					publishAxis(connectedNode, ndd.getTopicName(), 1000);
 					break;
 				case POVType.AxisDown:
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), -1000);
+					publishAxis(connectedNode, ndd.getTopicName(), -1000);
 					break;
 				case POVType.AxisLeft:
 				case POVType.AxisRight:
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), 0);
+					publishAxis(connectedNode, ndd.getTopicName(), 0);
 					break;
 				case POVType.AxisUpperLeft:
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), 500);
+					publishAxis(connectedNode, ndd.getTopicName(), 500);
 					break;
 				case POVType.AxisUpperRight:
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), 250);
+					publishAxis(connectedNode, ndd.getTopicName(), 250);
 					break;
 				case POVType.AxisLowerLeft:
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), -500);
+					publishAxis(connectedNode, ndd.getTopicName(), -500);
 					break;
 				case POVType.AxisLowerRight:
-					publishAxis(connectedNode, pubschannel, ndd.getTopicName(), -250);
+					publishAxis(connectedNode, ndd.getTopicName(), -250);
 					break;
 				case POVType.AxisOff:
 					break;
@@ -1844,13 +1739,12 @@ public class MotionController extends AbstractNodeMain {
 	 * Send the motor speed values down the wheel channels for 2 wheel drive systems. If our <b>SOFTSTOP</b> field is true
 	 * the issue a soft stop message immediately after the propulsion for dead-man safety.
 	 * @param connectedNode The connectedNode
-	 * @param pubschannel the channel hash map from which the wheel channels are extracted via configuration params. e.g. "LeftWheel", "RightWheel"
 	 * @param twistpub the Twist publication channel to send potential emergency stop or soft stop
 	 * @param twistmsg a pre-built twist message to populate with stop params
 	 * @param leftSpeed the integral speed value -1000 to 1000
 	 * @param rightSpeed the right wheel speed value -1000 to 1000
 	 */
-	private void publishPropulsion(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) throws IOException {
+	private void publishPropulsion(ConnectedNode connectedNode, Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, int leftSpeed, int rightSpeed) throws IOException {
 		if(leftSpeed == lastSpeedL && rightSpeed == lastSpeedR && (lastCmdTime+SHUTDOWN_NS) > System.nanoTime())
 			return;
 		lastCmdTime = System.nanoTime();
@@ -1859,7 +1753,7 @@ public class MotionController extends AbstractNodeMain {
 		int[] speedVals = new int[] {leftSpeed, rightSpeed};
 		if(DEBUG)
 			System.out.printf("%s Publish propulsion sending LeftWheel: %d RightWheel: %d Thread:%s %s%n", this.getClass().getName(), leftSpeed, rightSpeed, Thread.currentThread(), Date.from(Instant.now()));
-		publishAxis(connectedNode, pubschannel, robot.getDiffDrive().getTopicName(), speedVals);
+		publishAxis(connectedNode, robot.getDiffDrive().getTopicName(), speedVals);
 		if(SOFTSTOP) {
 			softStop(connectedNode, twistpub, twistmsg);
 		}
@@ -1868,18 +1762,14 @@ public class MotionController extends AbstractNodeMain {
 	/**
 	 * Send the motor speed values down the wheel channels
 	 * @param connectedNode
-	 * @param pubschannel
 	 */
-	private void publishAxis(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, String channel, int... vals) {
+	private void publishAxis(ConnectedNode connectedNode, String channel, int... vals) {
 		ArrayList<Integer> axisVals = new ArrayList<Integer>();
 		for(int v : vals)
 			axisVals.add(v);
 		if(DEBUG)
 			System.out.printf("%s.publishAxis() channel %s sending values %s%n" , this.getClass().getName(), channel, Arrays.toString(vals));
-		if(pubschannel.get(channel) == null) {
-			throw new RuntimeException(String.format("%s.publishAxis() Cannot find channel %s in publisher channel map, may not have been configured.%n", this.getClass().getName(), channel));
-		}
-		pubschannel.get(channel).publish(setupPub(connectedNode, axisVals));
+		setupPub(connectedNode, axisVals);
 		try {
 			Thread.sleep(1);
 		} catch (InterruptedException e) {}
@@ -2015,7 +1905,8 @@ public class MotionController extends AbstractNodeMain {
 	 * @throws IOException 
 	 */
 	public synchronized int[] setMotorArcSpeed(float x, float th) throws IOException {
-		
+		DrivenWheelInterface[] wheels = new DrivenWheelInterface[2];
+		robot.getDiffDrive().getWheels().toArray(wheels);
 		float spd_left, spd_right;
 
 		/* Reset the auto stop timer */
@@ -2105,13 +1996,12 @@ public class MotionController extends AbstractNodeMain {
 	/**
 	 * Send the command to move the robot relative to designated heading
 	 * @param connectedNode
-	 * @param pubschannel
 	 * @param twistpub
 	 * @param twistmsg
 	 * @param heading
 	 * @throws IOException
 	 */
-	private void publishRobotMoveRelative(ConnectedNode connectedNode, HashMap<String, Publisher<Int32MultiArray>> pubschannel, Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, ComeToHeadingStamped heading) throws IOException {
+	private void publishRobotMoveRelative(ConnectedNode connectedNode, Publisher<geometry_msgs.Twist> twistpub, geometry_msgs.Twist twistmsg, ComeToHeadingStamped heading) throws IOException {
 		int[] speeds = null;
 		synchronized(euler) {
 			if((System.currentTimeMillis()-euler.eulerTime) > (System.currentTimeMillis()-heading.getTime().getData())) {
@@ -2122,7 +2012,7 @@ public class MotionController extends AbstractNodeMain {
 		}
 		speedL = speeds[0];
 		speedR = speeds[1];
-		publishPropulsion(connectedNode, pubschannel, twistpub, twistmsg, (int)speedL, (int)speedR);
+		publishPropulsion(connectedNode, twistpub, twistmsg, (int)speedL, (int)speedR);
 	}
 	/**
 	 * Configure the GPIO direct service.
@@ -2267,61 +2157,6 @@ public class MotionController extends AbstractNodeMain {
 		}
 	}
 
-	/**
-	* Configure a subscriber to receive status events and pass them along on the diagnostic bus.
-	* We are primarily concerned with master registration failure.
-	* @param connectedNode the Ros node we are using
-	* @param tstatpub the diagnostic channel if error, called through creation of new PublishDiagnosticResponse
-	*/
-	private void configureSubscriberListener(ConnectedNode connectedNode, Publisher<DiagnosticStatus> tstatpub) {
-		// Iterate the list of device demuxxers we put together in configureMarlinspikeManager method.
-		// for each Device , create a subscriber on the channel <demuxer device name> of type Int32MultiArray
-		//
-		robot.getManager().getDevices().keySet().forEach(ndd -> {
-			Subscriber<std_msgs.Int32MultiArray> subscr = connectedNode.newSubscriber(ndd.getTopicName(), std_msgs.Int32MultiArray._TYPE);
-			subscriberDevice.put(subscr, ndd);
-			if(DEBUG)
-				System.out.printf("%s Creating Handler for device %s subscriber:%s%n", this.getClass().getName(), ndd.getTopicName(), subscr);
-			subscr.addSubscriberListener(new SubscriberListener<std_msgs.Int32MultiArray>() {
-				@Override
-				public void onNewPublisher(Subscriber<Int32MultiArray> subs, PublisherIdentifier pubs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s new publisher %s%n", this.getClass().getName(), subs, pubs);				
-				}
-				@Override
-				public void onShutdown(Subscriber<std_msgs.Int32MultiArray> subs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s SHUTDOWN%n", this.getClass().getName(), subs);	
-				}
-				@Override
-				public void onMasterRegistrationFailure(Subscriber<Int32MultiArray> subs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);
-					synchronized(statPub) {
-						statPub.add(String.format("Subscsriber %s failed to register with master!%n", subs));
-						new PublishDiagnosticResponse(connectedNode, tstatpub, statusQueue, "MARLINSPIKE STATUS", 
-								diagnostic_msgs.DiagnosticStatus.ERROR, statPub);
-					}
-				}
-				@Override
-				public void onMasterRegistrationSuccess(Subscriber<Int32MultiArray> subs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s successfully registered with master%n", this.getClass().getName(), subs);
-					//final int affector = ((ArrayList<Subscriber<Int32MultiArray>>)subschannel).indexOf(subs);
-				}
-				@Override
-				public void onMasterUnregistrationFailure(Subscriber<Int32MultiArray> subs) {			
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s failed to unregister with master!%n", this.getClass().getName(), subs);	
-				}
-				@Override
-				public void onMasterUnregistrationSuccess(Subscriber<Int32MultiArray> subs) {
-					if(DEBUG)
-						System.out.printf("%s Subscsriber %s failed to register with master!%n", this.getClass().getName(), subs);	
-				}
-			});
-		});
-	}
 
 	/*
 	 // Create Roll Pitch Yaw Angles from Quaternions 

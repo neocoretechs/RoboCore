@@ -58,14 +58,15 @@ public class MarlinspikeControl implements MarlinspikeControlInterface, Serializ
 
 	/**
 	 * Multi channel device control
-	 * @param deviceName The deviceName as it appears in the configuration 
+	 * @param deviceName The topicName as it appears in the configuration 
 	 * @param deviceLevel the values to set the levels of the device, int array one entry per channel
 	 * @throws IOException
 	 */
 	public synchronized void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException {
 		if(DEBUG) 
 			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevels:"+Arrays.toString(deviceLevel)+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getName());
-		List<TypeSlotChannelEnable> tsceList = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
+		//List<TypeSlotChannelEnable> tsceList = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
+		List<TypeSlotChannelEnable> tsceList = asynchDemuxer.getTopicToTypeSlotChannel(deviceName);
 		// even though we may define multiple tsce per device, we will send multiple values to control for one G5 or other command, so just take first channel entry
 		TypeSlotChannelEnable tsce = tsceList.get(0);
 		if(DEBUG) 
