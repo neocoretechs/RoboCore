@@ -140,6 +140,10 @@ public class Robot implements RobotInterface, Serializable {
 		if(DEBUG)
 			System.out.printf("%s.configureMarlinspike marlinSpikeManager=%s asynchDemuxer=%s%n", this.getClass().getName(), marlinspikeManager, marlinspikeManager.getDemuxer());
 		marlinspikeManager.createControllers(true);
+		if(getDiffDrive() != null)
+			System.out.println("Robot "+getName()+" has differential drive of "+getDiffDrive().getWheels()+" wheels."); // configure wheelbase
+		else
+			System.out.println("Robot "+getName()+" has no differential drive detected.");
 		//robotDrive.createControllers(this);
 		isActive = new boolean[marlinspikeManager.getDevices().size()];
 		// the collection of NodeDeviceDemuxer will be accumulated based on the node name entries in the properties file,

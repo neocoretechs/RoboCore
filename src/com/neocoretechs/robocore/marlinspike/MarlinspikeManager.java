@@ -87,6 +87,10 @@ public class MarlinspikeManager implements Serializable {
 		configureDemuxer();
 	}
 	
+	public RobotInterface getRobot() {
+		return robot;
+	}
+	
 	public AsynchDemuxer getDemuxer() {
 		return asynchDemuxer[0];
 	}

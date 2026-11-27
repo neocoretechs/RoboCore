@@ -77,7 +77,20 @@ public class MarlinspikeControl implements MarlinspikeControlInterface, Serializ
 			else
 				throw new IOException("bad activation");
 		} else {
-			throw new IOException("unsupported type");
+				if(item instanceof Integer[]) {
+					Integer[] it = (Integer[])item;
+					int[] primitive = new int[it.length];
+					for (int i = 0; i < it.length; i++) {
+					    primitive[i] = it[i];
+					}
+					String act = tsce.genActivate(primitive);
+					if(act != null)
+						asynchDemuxer.addWrite(act);
+					else
+						throw new IOException("bad activation");
+				} else {
+					throw new IOException("unsupported type:"+item.getClass());
+				}
 		}
 	}
 

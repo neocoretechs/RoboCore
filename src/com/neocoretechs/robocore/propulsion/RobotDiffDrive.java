@@ -37,6 +37,7 @@ import com.neocoretechs.robocore.propulsion.MotionController.InternalPayload;
 */
 public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface, Serializable {
 	public static boolean DEBUG = false;
+	private boolean DEBUGBEARING = true;
 	private static final long serialVersionUID = 1L;
 	RobotInterface robot;
 	TypedWrapper[] LUN;
@@ -44,17 +45,13 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 	TypedWrapper[] AXIS;
 	TypedWrapper[] PID;
 	int channels = 0;
-	private boolean shouldMove = true;
-	private int targetPitch;
-	private int targetDist;
-	private float targetYaw;
-	public static float WHEELBASE = 1000.0f;
-	private boolean DEBUGBEARING;
-	private float compassHeading;
+
+	private static float WHEELBASE = 1000.0f;
+	private transient float compassHeading;
 	
 	// slope speed change over time analysis
-	private CircularBlockingDeque<Float> speedQueueL = new CircularBlockingDeque<Float>(5);
-	private CircularBlockingDeque<Float> speedQueueR = new CircularBlockingDeque<Float>(5);
+	private transient CircularBlockingDeque<Float> speedQueueL = new CircularBlockingDeque<Float>(5);
+	private transient CircularBlockingDeque<Float> speedQueueR = new CircularBlockingDeque<Float>(5);
 	private float maxSpeedSlope = 100;
 	static boolean wasPid = true; // used to determine crossing from geometric to PID to preload integral windup
 	static boolean holdBearing = false; // hold steering to current bearing
@@ -75,9 +72,6 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 		this.WHEEL = wHEEL;
 		this.AXIS = aXIS;
 		this.PID = pID;
-		Object[] wheels = getWheels().toArray();
-		// wheelbase refers to max speed, both wheels averaged channels 1 and 2, 1 left, 2 right
-		WHEELBASE = (((DrivenWheelInterface) wheels[0]).getSpeedsetPointInfo().getMaximum()+((DrivenWheelInterface) wheels[1]).getSpeedsetPointInfo().getMaximum())/2.0f;
 	}
 
 	/**
@@ -827,6 +821,8 @@ public class RobotDiffDrive extends SlotEntry implements RobotDiffDriveInterface
 	@Override
 	public ArrayList<DrivenWheelInterface> getWheels() {
 		 ArrayList<TypeSlotChannelEnable> atsce = robot.getManager().getTypeSlotChannelEnable(this);
+		 // wheelbase refers to max speed, both wheels averaged channels 1 and 2, 1 left, 2 right
+		 WHEELBASE = (((DrivenWheelInterface) atsce.get(0)).getSpeedsetPointInfo().getMaximum()+((DrivenWheelInterface) atsce.get(1)).getSpeedsetPointInfo().getMaximum())/2.0f;
 		 return atsce.stream().filter(RobotWheel.class::isInstance).map(RobotWheel.class::cast).collect(Collectors.toCollection(ArrayList::new));
 	}	
 	
