@@ -27,8 +27,15 @@ public final class SlotHandler implements Serializable {
 			System.out.printf("%s got DeviceName:%s Slot:%d Control %s from MarlinspikeManager%n", this.getClass().getName(),deviceName, slot, control);
 	}
 	
+	public MarlinspikeControlInterface getControl() {
+		return control;
+	}
+	
 	public int getSlot() {
 		return slot;
 	}
 	
+	public String getName() {
+		return deviceName;
+	}
 }

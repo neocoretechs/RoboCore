@@ -852,7 +852,7 @@ public class AsynchDemuxer implements Runnable {
 					System.out.println("AsynchDemux "+this+" queue="+requestQueue.size());
 				long cmdTime = System.nanoTime();
 				payload = dataPort.sendCommand(requestQueue.takeFirst());
-				System.out.println("Marlinspike time="+(System.nanoTime()-cmdTime));
+				System.out.println("AsynchDemuxer Marlinspike Dataport elapsed command time="+(System.nanoTime()-cmdTime));
 				if(DEBUG)
 					System.out.println("AsynchDemux "+this+" response:"+payload+" from dataport:"+dataPort);
 				if(payload == null || payload.size() == 0 ) {

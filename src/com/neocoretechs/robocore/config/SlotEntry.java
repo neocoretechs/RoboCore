@@ -40,8 +40,8 @@ public class SlotEntry extends DeviceEntry implements Serializable {
 	 * @param slot the "Slot" property that corresponds to the Marlinspike slot in the M10 Z(slot) code
 	 * @param Name DeviceName entry in properties configuration file, such as "BoomActuator"
 	 */
-	public SlotEntry(String deviceName, String NodeName, int LUN, MarlinspikeControlInterface controller, int slot) {
-		super(deviceName, NodeName, LUN, controller);
+	public SlotEntry(RobotInterface robot, String deviceName, String NodeName, int LUN, MarlinspikeControlInterface controller, int slot) {
+		super(robot, deviceName, NodeName, LUN, controller);
 		for(SlotHandler sh : slotHandler)
 			if(sh.getSlot() != slot)
 				throw new RuntimeException("Slots must be homogeneous in SlotEntry collection. Attempt to insert "+slot+" for collection based on "+sh.getSlot());
@@ -57,15 +57,21 @@ public class SlotEntry extends DeviceEntry implements Serializable {
 		this.topicName = "Slot"+String.valueOf(slot);
 	}
 	
-	public SlotHandler getMarlinspikeControl(int slot) {
+	public MarlinspikeControlInterface getMarlinspikeControl(int slot) {
 		for(SlotHandler s: slotHandler)
 			if(s.getSlot() == slot) 
-				return s;
+				return s.getControl();
 		return null;
 	}
 	
 	public List<SlotHandler> getSlotHandlers() {
 		return slotHandler;
+	}
+	
+	@Override
+	public void setOperating() {
+		for(SlotHandler sh : slotHandler)
+			robot.getOperating().replace(sh.getName(), true);
 	}
 	
 	@Override

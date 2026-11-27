@@ -181,9 +181,9 @@ public class MarlinspikeManager implements Serializable {
 							if(((SlotEntry)deviceEntry).getMarlinspikeControl(slot.get()) == null)
 									((SlotEntry)deviceEntry).setMarlinspikeControl(controller, (String)name.get(), slot.get());
 						}
+						tsce = RobotDiffDrive.setDrive(lun, wheel, pid, (String)name.get(), i, slot.get(), ochannel.get());
 						int ti = sl.indexOf(tsce);
 						if(ti == -1) {
-							tsce = RobotDiffDrive.setDrive(lun, wheel, pid, (String)name.get(), i, slot.get(), ochannel.get());
 							sl.add(tsce);
 							configureMarlinspike(deviceEntry, lun[i], tsce);
 						} else {
@@ -202,7 +202,7 @@ public class MarlinspikeManager implements Serializable {
 							tsce.setMaxValue(omaxValue.get());
 						controller = createController(tsce.getMaxValue(), asynchDemuxer[controllerInst.get()]);
 						// creates SlotHandler
-						deviceEntry = new SlotEntry((String)name.get(), (String)nodeName.get(), i, controller, slot.get());
+						deviceEntry = new SlotEntry(robot, (String)name.get(), (String)nodeName.get(), i, controller, slot.get());
 						ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
 						if(sl == null) {
 							sl = new ArrayList<TypeSlotChannelEnable>();
@@ -234,7 +234,7 @@ public class MarlinspikeManager implements Serializable {
 					if(oToggle.isPresent() && Boolean.parseBoolean((String)oToggle.get()))
 						tsce.setPinToggle();
 					controller = createController(tsce.getMaxValue(), asynchDemuxer[controllerInst.get()]);
-					deviceEntry = new DeviceEntry((String)name.get(), (String)nodeName.get(), i, controller);
+					deviceEntry = new DeviceEntry(robot, (String)name.get(), (String)nodeName.get(), i, controller);
 					ArrayList<TypeSlotChannelEnable> sl = deviceToType.get(deviceEntry);
 					if(sl == null)
 						sl = new ArrayList<TypeSlotChannelEnable>();
@@ -581,10 +581,11 @@ public class MarlinspikeManager implements Serializable {
 	public ArrayList<TypeSlotChannelEnable> getSlot(int slot) {
 		for(Map.Entry<DeviceEntry,ArrayList<TypeSlotChannelEnable>> kv : deviceToType.entrySet()) {
 			if(kv.getKey() instanceof SlotEntry) {
-				SlotHandler sh = ((SlotEntry)(kv.getKey())).getMarlinspikeControl(slot);
-				// if it contains the slot we are looking for, we can then retrieve the associated array of TypeSlotChannelEnable
-				if(sh != null) {
-					return kv.getValue();
+				for(SlotHandler sh: ((SlotEntry)(kv.getKey())).getSlotHandlers()) {
+					// if it contains the slot we are looking for, we can then retrieve the associated array of TypeSlotChannelEnable
+					if(sh.getSlot() == slot) {
+						return kv.getValue();
+					}
 				}
 			}
 		}

@@ -1,9 +1,10 @@
 package com.neocoretechs.robocore.propulsion;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 import com.neocoretechs.robocore.config.AxisInterface;
-import com.neocoretechs.robocore.marlinspike.SlotHandler;
+import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
 
 /**
  * Interface to represent a differential drive for a robot. Presumes 2 driven wheels
@@ -17,15 +18,18 @@ import com.neocoretechs.robocore.marlinspike.SlotHandler;
  *
  */
 public interface RobotDiffDriveInterface {
-	public AxisInterface getManualControl(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
+	public AxisInterface<?> getManualControl(); //derived by Props.toInt(getControllerAxisPropertyName()+"X");
 	public String getTopicName();
 	public int getChannels();
-	public ArrayList<DrivenWheelInterface> getWheels();
-	public SlotHandler getMarlinspikeControl(int slot);
+	public MarlinspikeControlInterface getMarlinspikeControl(int slot);
 	/**
 	 * Return the wheel channels for a given slot
 	 * @param slot target slot
 	 * @return ArrayList of channels of DriveWheelInterface for this slot or null if slot wasnt found
 	 */
 	public ArrayList<DrivenWheelInterface> getWheels(int slot);
+	public ArrayList<DrivenWheelInterface> getWheels();
+	public void setCompassHeading(float compassheading);
+	public int[] moveRobotRelative(float yawIMUDegrees, float yawTargetDegrees, int targetDistance) throws IOException;
+	public void commandMotorPower(int speedL, int speedR) throws IOException;
 }

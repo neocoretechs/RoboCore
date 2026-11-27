@@ -26,6 +26,7 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
 public class RoboteqSerialDataPort implements DataPortCommandInterface {
 	private static boolean DEBUG = true;
 	private static boolean PORTDEBUG = true;
+	private static boolean TIMERDEBUG = true;
 	private SerialPort serialPort;
 	private OutputStream outStream;
 	private InputStream inStream;
@@ -358,6 +359,9 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 	 * @return ArrayList of lines read until we consume all input
 	 */
 	public ArrayList<String> sendCommand(String command) throws IOException {
+		long writeTime = System.nanoTime();
+		long writeSleepTime = 0L;
+		long readSleepTime = 0L;
 		/*String[] pcommand = command.split(" ");
 		String rcommand = lastCommand.get(pcommand[0]);
 		if(rcommand != null && rcommand.equals(command)) {
@@ -368,18 +372,24 @@ public class RoboteqSerialDataPort implements DataPortCommandInterface {
 		lastCommand.put(pcommand[0], command);
 		lastTime.put(pcommand[0], System.currentTimeMillis());*/
 		writeLine(command);
+		writeTime = System.nanoTime() - writeTime;
 		ArrayList<String> ret = new ArrayList<String>();
 		while(bytesToRead() <= 0) {
 			try {
-				Thread.sleep(0,50000);
+				Thread.sleep(0,5000);
+				readSleepTime += 5000;
 			} catch (InterruptedException e) {}
 		}
+		long readTime = System.nanoTime();
 		while(bytesToRead() > 0) {
 			if(READ_TIMEOUT != -1)
 				ret.add(readLine(READ_TIMEOUT));
 			else
 				ret.add(readLine());
 		}
+		readTime = System.nanoTime() - readTime;
+		if(TIMERDEBUG)
+			System.out.println("Marlinspike comm time read:"+readTime+" read sleep:"+readSleepTime+" | write:"+writeTime+" write sleep:"+writeSleepTime+" command:"+command);
 		return ret;
 	}
 	

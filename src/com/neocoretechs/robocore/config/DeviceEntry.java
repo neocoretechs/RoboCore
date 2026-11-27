@@ -10,8 +10,8 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
  * Assembled into collection in {@link MarlinspikeManager}<p>
  * Generic device entries are for effector that dont use slots, and are not part of the drive.
  * These are a handled by derived class of specialized classes such as {@link com.neocoretechs.robocore.propulsion.RobotDiffDrive} subclasses.
- * Slotted devices not part of drive are designated by {@link com.neocoretechs.robocore.config.SlotEntry}.
- * Contains the name entry in properties configuration file, such as "LEDPin", the NodeName which is 
+ * Slotted devices not part of drive are designated 
+ file, such as "LEDPin", the NodeName which is 
  * the node attached to the host computer name of the Ros node, such as "CONTROL1", the Controller which is
  * the physical device port the microcontroller for this entry is attached to, such as /dev/ttyACM0 using 
  * {@link com.neocoretechs.robocore.serialreader.ByteSerialDataPort}, or a class that
@@ -23,6 +23,7 @@ import com.neocoretechs.robocore.marlinspike.MarlinspikeControlInterface;
  */
 public class DeviceEntry implements Serializable {
 	private static final long serialVersionUID = 1L;
+	protected RobotInterface robot;
 	protected String Name; // name entry in properties configuration file, such as "BoomActuator"
 	private String NodeName; // the node attached to, the host computer name of the Ros node, such as "CONTROL1"
 	protected String topicName; // pub/sub bus topic name
@@ -33,11 +34,13 @@ public class DeviceEntry implements Serializable {
 	public DeviceEntry() {}
 	/**
 	 * topicName pub/sub bus name, for basic device same as deviceName, for slotted device, slot name Slot+slot number
+	 * @param robot 
 	 * @param Name Slot name entry in properties configuration file, such as "0"
 	 * @param NodeName the node attached to, typically the SSID name of the Ros node, such as "ROSCOE1"
 	 * @param controller alternate controller implementing MarlinspikeControlInterface
 	 */
-	public DeviceEntry(String Name, String NodeName, int LUN, MarlinspikeControlInterface controller) {
+	public DeviceEntry(RobotInterface robot, String Name, String NodeName, int LUN, MarlinspikeControlInterface controller) {
+		this.robot = robot;
 		this.Name = Name;
 		this.NodeName = NodeName;
 		this.LUN = LUN;
@@ -89,6 +92,10 @@ public class DeviceEntry implements Serializable {
 		this.manualControl = manualControl;
 	}
 
+	public void setOperating() {
+		robot.getOperating().replace(getName(), true);
+	}
+	
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj)
@@ -106,7 +113,7 @@ public class DeviceEntry implements Serializable {
 	}
 	@Override
 	public String toString() {
-		return String.format("%s %s Node=%s Topic=%s LUN=%d Control=%s%n", this.getClass().getName(), Name, NodeName, topicName, LUN, controlHost);
+		return String.format("%s %s %s Node=%s Topic=%s LUN=%d Control=%s%n", this.getClass().getName(), robot, Name, NodeName, topicName, LUN, controlHost);
 	}
 
 }

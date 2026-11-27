@@ -62,17 +62,23 @@ public class MarlinspikeControl implements MarlinspikeControlInterface, Serializ
 	 * @param deviceLevel the values to set the levels of the device, int array one entry per channel
 	 * @throws IOException
 	 */
-	public synchronized void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException {
-		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevels:"+Arrays.toString(deviceLevel)+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getName());
+	public synchronized <T> void setDeviceLevels(String deviceName, T item) throws IOException {
 		//List<TypeSlotChannelEnable> tsceList = asynchDemuxer.getNameToTypeSlotChannel(deviceName);
 		List<TypeSlotChannelEnable> tsceList = asynchDemuxer.getTopicToTypeSlotChannel(deviceName);
 		// even though we may define multiple tsce per device, we will send multiple values to control for one G5 or other command, so just take first channel entry
 		TypeSlotChannelEnable tsce = tsceList.get(0);
 		if(DEBUG) 
-			System.out.println(this.getClass().getName()+" Device:"+deviceName+" deviceLevels:"+Arrays.toString(deviceLevel)+" slot:"+tsce.getSlot()+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getName()+" Id:"+Thread.currentThread().getName());
+			System.out.println(this.getClass().getName()+" Device:"+deviceName+" slot:"+tsce.getSlot()+" channel:"+tsce.channel+" Thread:"+Thread.currentThread().getName());
 		//String affectorCommand = "G5 Z"+tsce.slot+" C"+tsce.channel+" P"+String.valueOf(deviceLevel);
-		asynchDemuxer.addWrite(tsce.genActivate(deviceLevel));
+		if(item instanceof int[]) {
+			String act = tsce.genActivate((int[])item);
+			if(act != null)
+				asynchDemuxer.addWrite(act);
+			else
+				throw new IOException("bad activation");
+		} else {
+			throw new IOException("unsupported type");
+		}
 	}
 
 	/**
@@ -206,5 +212,6 @@ public class MarlinspikeControl implements MarlinspikeControlInterface, Serializ
 		String motorCommand1 = "M81";
 		asynchDemuxer.addWrite(motorCommand1);	
 	}
+
 }
 

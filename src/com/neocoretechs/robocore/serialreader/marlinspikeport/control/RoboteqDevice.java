@@ -787,8 +787,8 @@ public class RoboteqDevice extends AbstractSmartMotorControl implements Marlinsp
 		commandEmergencyStop(0);
 	}
 	@Override
-	public void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException {
-		commandMotorPower(deviceLevel);	
+	public <T> void setDeviceLevels(String topicName, T item) throws IOException {
+		commandMotorPower((int[])item);	
 	}
 
 	public static void main(String[] args) throws IOException {

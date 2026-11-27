@@ -71,7 +71,7 @@ public class VideoPubStereo extends AbstractNodeMain {
 
 		@Override
 		protected void loop() throws InterruptedException {
-			
+
 			std_msgs.Header imghead = connectedNode.getTopicMessageFactory().newFromType(std_msgs.Header._TYPE);
 			imghead.setSeq(sequenceNumber);
 			tst = connectedNode.getCurrentTime();
@@ -87,8 +87,8 @@ public class VideoPubStereo extends AbstractNodeMain {
 			rimghead.setStamp(tst);
 			rimghead.setFrameId(tst.toString());
 			sensor_msgs.Image rimagemess = rimgpub.newMessage();
- 			*/
-						
+			 */
+
 			//if( imageReadyL && imageReadyR ) {
 			if( SAMPLERATE && System.currentTimeMillis() - time1 >= 1000) {
 				time1 = System.currentTimeMillis();
@@ -98,17 +98,21 @@ public class VideoPubStereo extends AbstractNodeMain {
 			if( DEBUG )
 				System.out.println(sequenceNumber+":Added frame "+imwidth+","+imheight);
 			byte[][] images = frameGrabber.getStereoJPEGFrames(handle);
-			imagemess.setData(ByteBuffer.wrap(images[0]));
-			imagemess.setData2(ByteBuffer.wrap(images[1]));
-			imagemess.setEncoding("JPG");
-			imagemess.setWidth(imwidth);
-			imagemess.setHeight(imheight);
-			imagemess.setStep(imwidth);
-			imagemess.setIsBigendian((byte)0);
-			imagemess.setHeader(imghead);
-			imgpub.publish(imagemess);
-				
-					/*
+			if(images[0] != null && images[1] != null) {
+				imagemess.setData(ByteBuffer.wrap(images[0]));
+				imagemess.setData2(ByteBuffer.wrap(images[1]));
+				imagemess.setEncoding("JPG");
+				imagemess.setWidth(imwidth);
+				imagemess.setHeight(imheight);
+				imagemess.setStep(imwidth);
+				imagemess.setIsBigendian((byte)0);
+				imagemess.setHeader(imghead);
+				imgpub.publish(imagemess);
+			} else {
+				System.out.println("Image sequence "+sequenceNumber+" came back null..");
+				Thread.sleep(10);
+			}			
+			/*
 					rimagemess.setData(bbR);
 					rimagemess.setEncoding("JPG");
 					rimagemess.setWidth(imwidth);
@@ -117,20 +121,20 @@ public class VideoPubStereo extends AbstractNodeMain {
 					rimagemess.setIsBigendian((byte)0);
 					rimagemess.setHeader(rimghead);
 					rimgpub.publish(rimagemess);
-					*/
-					//
-					if( DEBUG )
-						System.out.println("Pub. Image:"+sequenceNumber);	
-				//}
-				//
-				//caminfomsg.setHeader(imghead);
-				//caminfomsg.setWidth(imwidth);
-				//caminfomsg.setHeight(imheight);
-				//caminfomsg.setDistortionModel("plumb_bob");
-				//caminfomsg.setK(K);
-				//caminfomsg.setP(P);
-				//caminfopub.publish(caminfomsg);
-				//System.out.println("Pub cam:"+imagemess);
+			 */
+			//
+			if( DEBUG )
+				System.out.println("Pub. Image:"+sequenceNumber);	
+			//}
+			//
+			//caminfomsg.setHeader(imghead);
+			//caminfomsg.setWidth(imwidth);
+			//caminfomsg.setHeight(imheight);
+			//caminfomsg.setDistortionModel("plumb_bob");
+			//caminfomsg.setK(K);
+			//caminfomsg.setP(P);
+			//caminfopub.publish(caminfomsg);
+			//System.out.println("Pub cam:"+imagemess);
 			//} else {
 			//	if(DEBUG)
 			//		System.out.println("Image(s) not ready "+sequenceNumber);
@@ -141,6 +145,5 @@ public class VideoPubStereo extends AbstractNodeMain {
 		}
 	});
 	}
-
 
 }

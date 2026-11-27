@@ -43,7 +43,15 @@ public final class StickAxis implements AxisInterface<Integer[]> {
 		return res;
 	}
 	@Override
-	public Boolean matches(int[] buttons) {
+	public Integer[] matches(int[] buttons) {
+		return new Integer[0];
+	}
+	@Override
+	public boolean isAxis() {
+		return true;
+	}
+	@Override
+	public boolean isButton() {
 		return false;
 	}
 }

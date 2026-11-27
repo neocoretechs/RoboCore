@@ -293,6 +293,7 @@ public class TypeSlotChannelEnable implements Serializable {
 	public String genActivate(int... deviceLevel) {
 		return activator.getActivation(deviceLevel);
 	}
+	
 	/**
 	 * Generate preamble to control 
 	 * sequence is genTypeAndSlot().genDrivePins(pri,sec).genChannelDirDefaultEncoder(encoder);

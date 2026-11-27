@@ -21,5 +21,6 @@ public interface MarlinspikeControlInterface {
 	public String reportSystemId() throws IOException;
 	public void commandStop() throws IOException;
 	public int commandReset() throws IOException;
-	public void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException;
+	//public void setDeviceLevels(String deviceName, int... deviceLevel) throws IOException;
+	public <T> void setDeviceLevels(String topicName, T item) throws IOException;
 }

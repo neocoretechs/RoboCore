@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.concurrent.TimeUnit;
 
+import com.neocoretechs.robocore.RosArrayUtilities;
 import com.neocoretechs.robocore.SynchronizedThreadManager;
 
 /**
@@ -25,6 +26,7 @@ import com.neocoretechs.robocore.SynchronizedThreadManager;
 public class ByteSerialDataPort implements DataPortCommandInterface {
 	private static boolean DEBUG = false;
 	private static boolean PORTDEBUG = false;
+	private static boolean TIMERDEBUG = true;
 	private SerialPort serialPort;
 	private OutputStream outStream;
 	private InputStream inStream;
@@ -336,6 +338,7 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		lastTime.put(pcommand[0], System.currentTimeMillis());*/
 		byte[] buffer = new byte[1024];
 		long writeTime = System.nanoTime();
+		long startTime = writeTime;
 		long writeSleepTime = 0L;
 		long readSleepTime = 0L;
 		ArrayList<String> ret = new ArrayList<String>();
@@ -370,9 +373,12 @@ public class ByteSerialDataPort implements DataPortCommandInterface {
 		}
 		ret.add(new String(Arrays.copyOf(buffer, num)));
 		readTime = System.nanoTime() - readTime;
-		System.out.println("Marlinspike comm time read:"+readTime+" read sleep:"+readSleepTime+" | write:"+writeTime+" write sleep:"+writeSleepTime);
+		if(TIMERDEBUG)
+			System.out.println(RosArrayUtilities.nanoTimer(startTime)+" Marlinspike comm time read:"+RosArrayUtilities.nanoTimer(readTime)+
+					" read sleep:"+readSleepTime+" | write:"+RosArrayUtilities.nanoTimer(writeTime)+" write sleep:"+writeSleepTime+" command:"+command+" result:"+Arrays.toString(ret.toArray()));
 		return ret;
 	}
+	
 	/*
 	public ArrayList<String> sendCommand(String command) throws IOException {
 		writeLine(command);

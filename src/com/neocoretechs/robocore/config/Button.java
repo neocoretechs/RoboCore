@@ -17,7 +17,7 @@ package com.neocoretechs.robocore.config;
  *		</pre>
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2026
  */
-public final class Button implements AxisInterface<Boolean> {
+public final class Button implements AxisInterface<Integer[]> {
 	private static final long serialVersionUID = 1L;
 	private static final String type = "Button";
 	private static final String[] nameArray= {"Button"};
@@ -57,11 +57,23 @@ public final class Button implements AxisInterface<Boolean> {
 		positionArray = values;
 	}
 	@Override
-	public Boolean matches(float[] axes) {
-		return axes[positionArray[0]] != 0;
+	public Integer[] matches(float[] axes) {
+		return new Integer[0];
 	}
 	@Override
-	public Boolean matches(int[] buttons) {
-		return buttons[positionArray[0]] != 0;
+	public Integer[] matches(int[] buttons) {
+		Integer[] res = new Integer[positionArray.length];
+		for(int i = 0; i < positionArray.length; i++) {
+			res[i] = Integer.valueOf(buttons[positionArray[i]]);
+		}
+		return res;
+	}
+	@Override
+	public boolean isAxis() {
+		return false;
+	}
+	@Override
+	public boolean isButton() {
+		return true;
 	}
 }

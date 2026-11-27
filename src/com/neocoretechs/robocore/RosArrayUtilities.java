@@ -147,5 +147,19 @@ public class RosArrayUtilities {
 		System.out.println("Returned status "+statmsg.getMessage());
 		return statmsg;
 	}
+	
+	public static String nanoTimer(long elapsed) {
+		long hours = elapsed / 3_600_000_000_000L;
+		long minutes = (elapsed / 60_000_000_000L) % 60;
+		long seconds = (elapsed / 1_000_000_000L) % 60;
+		long nanos = elapsed % 1_000_000_000L;
+		return String.format(
+		    "%02d:%02d:%02d.%09d%n",
+		    hours,
+		    minutes,
+		    seconds,
+		    nanos
+		);
+	}
 
 }

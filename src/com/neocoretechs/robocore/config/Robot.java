@@ -71,6 +71,7 @@ public class Robot implements RobotInterface, Serializable {
 	private static final long serialVersionUID = 1L;
 	private int powerScale;
 	private String robotName = "UNDEFINED";
+	private String hostName;
 	private int temperatureThreshold;
 	private MotionPIDController motionPIDController;
 	private RobotDiffDriveInterface robotDrive;
@@ -88,7 +89,6 @@ public class Robot implements RobotInterface, Serializable {
 	boolean[] isActive;
 	
 	public Robot(String robotName) throws IOException {
-		this.robotName = robotName;
 		try {
 			globalConfigs = Props.collectivizeProps();
 		} catch (IllegalAccessException e) {
@@ -96,6 +96,15 @@ public class Robot implements RobotInterface, Serializable {
 		}
 		if(globalConfigs == null)
 			throw new RuntimeException("Global property configuration failed in starting Robot, possibly data directory:"+Props.dataDirectory+" or property file:"+Props.getPropFile()+" is invalid");
+		String name =  Props.toString("Name");
+		if(name == null)
+			throw new RuntimeException("Configuration file omits Name property to designate robot.");
+		if(!name.equals(robotName))
+			throw new RuntimeException("Configuration file indicates robot Name property:"+name+" which differs from target name:"+robotName+" provided.");
+		this.robotName = robotName;
+		this.hostName = Props.toString("HostName");
+		if(hostName == null)
+			throw new RuntimeException("Configuration file omits HostName property to designate robot host computer.");
 		extractPORT();
 		extractLUN();
 		extractWHEEL();
@@ -385,7 +394,7 @@ public class Robot implements RobotInterface, Serializable {
 
 	@Override
 	public String getName() {
-		return Props.toString("Name");
+		return robotName;
 	}
 
 	@Override
@@ -419,7 +428,7 @@ public class Robot implements RobotInterface, Serializable {
 
 	@Override
 	public String getHostName() {
-		return robotName;
+		return hostName;
 	}
 
 }

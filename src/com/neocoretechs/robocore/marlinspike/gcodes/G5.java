@@ -8,6 +8,7 @@ import com.neocoretechs.robocore.marlinspike.ActivationInterface;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer;
 import com.neocoretechs.robocore.marlinspike.AsynchDemuxer.topicNames;
 import com.neocoretechs.robocore.marlinspike.TypeSlotChannelEnable;
+import com.neocoretechs.robocore.propulsion.RobotDiffDrive;
 /**
  * The list of channel power levels is a variable list depending on the number of channels the device is configured with.
  * 10 possible channels, P-Y parameters in the G5 directive.
@@ -29,6 +30,7 @@ public class G5 extends AbstractBasicResponse implements ActivationInterface, Se
 	public G5(TypeSlotChannelEnable tsce) {
 		this.tsce = tsce;
 	}
+
 	@Override
 	public String getActivation(int... deviceLevel) {
 		StringBuilder sb = new StringBuilder();

@@ -4,7 +4,7 @@ package com.neocoretechs.robocore.config;
  * We do this through the constructor.
  * @author Jonathan Groff Copyright (C) NeoCoreTechs 2026
  */
-public final class TriggerAxis implements AxisInterface<Integer> {
+public final class TriggerAxis implements AxisInterface<Integer[]> {
 	private static final long serialVersionUID = 1L;
 	private static final String type = "Trigger";
 	private static final String[] nameArray= {"Axis"};
@@ -29,11 +29,21 @@ public final class TriggerAxis implements AxisInterface<Integer> {
 		positionArray = values;
 	}
 	@Override
-	public Integer matches(float[] axes) {
-		return (int)(axes[positionArray[0]]*1000.0f);
+	public Integer[] matches(float[] axes) {
+		Integer[] ret = new Integer[1];
+		ret[0] = (int)(axes[positionArray[0]]*1000.0f);
+		return ret;
 	}
 	@Override
-	public Boolean matches(int[] buttons) {
+	public Integer[] matches(int[] buttons) {
+		return new Integer[0];
+	}
+	@Override
+	public boolean isAxis() {
+		return true;
+	}
+	@Override
+	public boolean isButton() {
 		return false;
 	}
 }
